@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome</title>
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            background: #efebeb;
+            background-size: cover;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: #efebeb;
+        }
+
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(238, 235, 235, 0.4); /* Dark overlay for better contrast */
+        }
+
+        .container {
+            position: relative;
+            background: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+            width: 90%;
+            max-width: 800px;
+            padding: 40px;
+            text-align: center;
+            z-index: 1;
+        }
+
+        h1 {
+            font-size: 32px;
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        p {
+            font-size: 18px;
+            color: #555;
+            margin-bottom: 30px;
+        }
+
+        button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 50%;
+            max-width: 250px;
+            padding: 10px;
+            margin: 10px 0;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            border-radius: 5px;
+            background: #34495e;
+            color: #ffffff;
+            text-transform: uppercase;
+            transition: background 0.3s, box-shadow 0.3s, transform 0.3s;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        button:hover {
+            background: #2980b9;
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.25);
+            transform: scale(1.05);
+        }
+
+        button:active {
+            background: #00274d;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+            transform: scale(0.98);
+        }
+
+        .button-icon {
+            margin-right: 8px;
+        }
+
+        .button-icon img {
+            width: 20px; /* Adjust the size of the SVG */
+            height: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="overlay"></div>
+    <div class="container">
+        <h1>Welcome to Lock System Configuration Interface</h1>
+        <p>Select a section to configure:</p>
+
+        <button onclick="location.href='/settings'">
+            <span class="button-icon"><img src="icons/settings-5-16.png" alt="Info Icon"></span> Device Settings
+        </button>
+
+        <button onclick="location.href='/wifiCredentialsPage'">
+            <span class="button-icon"><img src="icons/wireless-16.png" alt="WiFi Icon"></span> Set Wi-Fi
+        </button>
+
+        <button onclick="restartESP()">
+            <span class="button-icon"><img src="icons/power-16.png" alt="Restart Icon"></span> Restart Device
+        </button>
+        
+        <button onclick="resetESP()">
+            <span class="button-icon"><img src="icons/redo-5-16.png" alt="Reset Icon"></span> Reset Device
+        </button>
+    </div>
+    <script>
+function restartESP() {
+    fetch('/restart')
+        .then(response => response.text())  // Get the text response from the server
+        .then(message => {
+            if (message === "Restarting...") {
+                // Redirect to the thank you page after successful restart
+                window.location.href = "/thankyou";
+            } else {
+                throw new Error('Failed to restart device.');
+            }
+        })
+        .catch(error => {
+            alert(error.message);
+        });
+}
+
+function resetESP() {
+    fetch('/reset')
+        .then(response => response.text())  // Get the text response from the server
+        .then(message => {
+            if (message === "Resetting...") {
+                // Redirect to the thank you page after successful reset
+                window.location.href = '/thankyou';
+            } else {
+                throw new Error('Failed to reset device.');
+            }
+        })
+        .catch(error => {
+            alert(error.message);
+        });
+}
+
+fetch('/thankyou_page')
+        .then(response => response.text())  // Get page content
+        .then(html => {
+            localStorage.setItem('thankYouPage', html);  // Store in localStorage
+        });
+    </script>
+</body>
+</html>
