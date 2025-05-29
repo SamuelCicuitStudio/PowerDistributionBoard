@@ -65,7 +65,7 @@
 // Debugging and Logging Configuration
 // ==================================================
 
-#define DEBUGMODE                      false                // Set to true to enable debugging mode
+#define DEBUGMODE                      true                // Set to true to enable debugging mode
 #define LOGFILE_PATH                   "/Log/log.json"      // Default log file path
 
 // ==================================================

@@ -194,8 +194,6 @@ void WiFiManager::startAccessPoint() {
     });
 
     server.serveStatic("/", SPIFFS, "/");  // Serve all files from SPIFFS root
-        
-
 /*************************************************************************************** */
     // Serve static files like icons, CSS, JS, etc.
     server.serveStatic("/icons/", SPIFFS, "/icons/").setCacheControl("max-age=86400");

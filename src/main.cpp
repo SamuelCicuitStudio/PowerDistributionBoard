@@ -63,7 +63,7 @@ void setup() {
     Log->Begin();
 
     Sleep = new SleepTimer(RTC, config, Log);
-    Sleep->timerLoop();
+    //Sleep->timerLoop();
 
     // Power management
     powerMgr = new PowerManager(config, Log,Temp);
@@ -75,6 +75,8 @@ void setup() {
 }
 
 void loop() {
-    return;
+   // Small delay to avoid multiple triggers in quick succession (debounce)
+   // vTaskDelay(pdMS_TO_TICKS(5000)); // Optional delay to avoid multiple triggers in quick succession
+
 }
 
