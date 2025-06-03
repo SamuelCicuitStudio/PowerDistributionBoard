@@ -95,7 +95,7 @@ void WiFiManager::startAccessPoint() {
         Serial.print("WiFiManager: AP Started - IP Address: ");
         Serial.println(WiFi.softAPIP());
     };
-    Sleep->reset();
+    //Sleep->reset();
 
 
     server.on("/", HTTP_GET, [this](AsyncWebServerRequest* request) { handleSettings(request); });
@@ -128,7 +128,7 @@ void WiFiManager::startAccessPoint() {
         uint32_t onTime = onTimeStr.toInt();
         uint32_t offTime = offTimeStr.toInt();
         // Call the function to set the timing
-        Pow->setCycleTime(onTime, offTime);
+       // Pow->setCycleTime(onTime, offTime);
         // Respond with a confirmation
         request->send(200, "application/json", "{\"status\": \"Timing updated\"}");
     });
@@ -142,7 +142,7 @@ void WiFiManager::startAccessPoint() {
         bool ledOn = (ledState == "true");
 
         // Set the LED feedback state (example function call)
-        Pow->setLedFeedback(ledOn); 
+        //Pow->setLedFeedback(ledOn); 
 
         // Respond with a JSON confirmation
         request->send(200, "application/json", "{\"status\": \"LED state toggled\"}");

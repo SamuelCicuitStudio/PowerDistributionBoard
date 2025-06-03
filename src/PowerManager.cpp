@@ -68,14 +68,14 @@ void PowerManager::begin() {
     pinMode(INA_E_PIN, OUTPUT);   digitalWrite(INA_E_PIN, LOW);
 
     // 3) PWM for bypass inrush control
-    ledcSetup(BYPASS_PWM_CHANNEL, PWM_FREQ, PWM_RESOLUTION);
+    /*ledcSetup(BYPASS_PWM_CHANNEL, PWM_FREQ, PWM_RESOLUTION);
     ledcAttachPin(INA_E_PIN, BYPASS_PWM_CHANNEL);
     ledcWrite(BYPASS_PWM_CHANNEL, 0);
 
     // 4) PWM for nichrome power level
     ledcSetup(OPT_PWM_CHANNEL, PWM_FREQ, PWM_RESOLUTION);
     ledcAttachPin(INA_OPT_PWM_PIN, OPT_PWM_CHANNEL);
-    ledcWrite(OPT_PWM_CHANNEL, CHANNEL_POWER_DUTY);
+    ledcWrite(OPT_PWM_CHANNEL, CHANNEL_POWER_DUTY);*/
 
     // 5) Ready / Power-off LEDs
     pinMode(READY_LED_PIN,    OUTPUT); digitalWrite(READY_LED_PIN,    LOW);
@@ -84,13 +84,13 @@ void PowerManager::begin() {
     // 6) Inputs
     pinMode(POWER_ON_SWITCH_PIN, INPUT);
     lastState = digitalRead(POWER_ON_SWITCH_PIN);
-    pinMode(DETECT_12V_PIN, INPUT);
+    pinMode(DETECT_12V_PIN, INPUT_PULLDOWN);
 
     // 7) Launch non-blocking startup manager
-    if (!startupHandle) 
+  /*if (!startupHandle) 
     {
         xTaskCreate(startupTask, "StartupMgr", 8192, this, 4, &startupHandle);
-    }
+    }*/
 }
 
 //----------------------------------------------------------------------
@@ -100,9 +100,10 @@ void PowerManager::startupTask(void* pv) {
     auto* self = static_cast<PowerManager*>(pv);
 
     // Wait for gate-drive rail (12 V)
-    while (digitalRead(DETECT_12V_PIN) == LOW) {
+    while (digitalRead(DETECT_12V_PIN) == HIGH) {
         vTaskDelay(pdMS_TO_TICKS(600));
     }
+    Serial.println("DETECTED 12V");
 
     // ADC peak calibration over one AC cycle
     TickType_t period = pdMS_TO_TICKS(1000 / self->AcFreq);
@@ -113,11 +114,12 @@ void PowerManager::startupTask(void* pv) {
         if (raw > self->calibMax) self->calibMax = raw;
         vTaskDelay(pdMS_TO_TICKS(1));
     }
+    Serial.println("startVoltageMonitorTask");
+    // Spawn always-on background monitors
+    instance ->startVoltageMonitorTask();
 
-// Spawn always-on background monitors
-instance ->startVoltageMonitorTask();
 // Spawn always-on monitors, but only if not already created
-if (!self->tempHandle) 
+/*if (!self->tempHandle) 
 {
     xTaskCreate(self->tempMonitorTask,"TempMon",4096,self,2,&self->tempHandle);
 }
@@ -125,7 +127,7 @@ if (!self->tempHandle)
 if (!self->safetyHandle) 
 {
     xTaskCreate(self->safetyMonitorTask,"SafetyMon",4096,self,3,&self->safetyHandle);
-}
+}*/
 
 #ifndef TEST_MODE
 #ifdef NO_HARD_RESISTOR
@@ -138,7 +140,7 @@ if (!self->capMaintHandle)
 
 
     // Exit this one-shot task
-    if(self->startupHandle)
+   if(self->startupHandle)
     {
         vTaskDelete(&self->startupHandle);
     }

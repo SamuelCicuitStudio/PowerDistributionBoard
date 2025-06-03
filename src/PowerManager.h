@@ -53,7 +53,7 @@ public:
 
     // Heating sequence params
     volatile  bool                 systemOn,systemOnwifi;
-private:
+
     // --- Startup + control tasks ---
     static void startupTask(void* pv);
     static void switchMonitorTask(void* pv);
