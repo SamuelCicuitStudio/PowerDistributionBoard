@@ -1,112 +1,160 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
-// ==================================================
-// Device Configuration Keys for ESP32 Preferences
-// ==================================================
-
-#define DEVICE_WIFI_HOTSPOT_NAME_KEY   "APNAM"             // Partition key for Hotspot name
-#define DEVICE_WIFI_HOTSPOT_NAME       "Serto_PDis01"      // Default Hotspot name
-
-#define DEVICE_AP_AUTH_PASS_KEY        "APPSS"             // Partition key: Default WiFi AP authentication password
-#define DEVICE_AP_AUTH_PASS_DEFAULT    "1234567890"
-
-#define RESET_FLAG                     "RTFLG"             // Flag indicating a device reset
-
-#define CONFIG_PARTITION               "config"            // Partition name for device configuration data
-
-#define LAST_TIME_SAVED                "LSTV"              // Last saved timestamp
-#define CURRENT_TIME_SAVED             "CAVTT"             // Current saved timestamp
-
-#define SLAVE_CONFIG_PATH              "/config/SlaveConfig.json"  ///< Path for slave configuration
-
-// ==================================================
-// User Preferences for Cycle, Inrush & Temperature Management
-// ==================================================
-
-#define ON_TIME_KEY                    "ONTIM"             // Key for storing the ON time duration of cycles (in milliseconds)
-#define OFF_TIME_KEY                   "OFFTIM"            // Key for storing the OFF time duration of cycles (in milliseconds)
-#define INRUSH_DELAY_KEY               "INSHDY"            // Key for storing the delay used to control the inrush current (in milliseconds)
-#define LED_FEEDBACK_KEY               "LEDFB"             // Key for enabling/disabling LED feedback during nichrome wire activation
-#define TEMP_THRESHOLD_KEY             "TMPTH"             // Key for storing the over-temperature shutdown threshold (in Celsius)
-#define CHARGE_RESISTOR_KEY            "CHRES"
-#define AC_FREQUENCY_KEY              "ACFRQ"   // Key for line frequency (Hz)     
-// Default Values for ON_TIME, OFF_TIME, INRUSH_DELAY, LED Feedback & Temperature Threshold
-#define DEFAULT_ON_TIME                10                  // Default ON time for cycles in ms
-#define DEFAULT_OFF_TIME               9                   // Default OFF time for cycles in ms
-#define DEFAULT_INRUSH_DELAY           100                 // Default inrush delay in ms
-#define DEFAULT_LED_FEEDBACK           true                // Default state of LED feedback (true = enabled)
-#define DEFAULT_TEMP_THRESHOLD         75.0f               // Default temperature threshold for shutdown in °C
- 
-#define DEFAULT_CHARGE_RESISTOR_OHMS 10000.0f  // 10 kΩ
-#define DEFAULT_AC_FREQUENCY          50        // Default to 50 Hz
-
-// ==================================================
-// APMODE Definitions
-// ==================================================
-
-#define LOCAL_IP                       IPAddress(192, 168, 4, 1)   // Fixed AP IP address
-#define GATEWAY                        IPAddress(192, 168, 4, 1)   // Usually the same as LOCAL_IP
-#define SUBNET                         IPAddress(255, 255, 255, 0) // Subnet mask for the AP
-
-// ==================================================
-// Time Configuration
-// ==================================================
-
-#define DEFAULT_CURRENT_TIME_SAVED     1736121600           // Default current time (Unix timestamp)
-#define DEFAULT_LAST_TIME_SAVED        1736121600           // Default last saved time (Unix timestamp)
-#define TIMEOFFSET                     3600                 // Time offset for UTC+1 (3600 seconds)
-#define NTP_SERVER                     "pool.ntp.org"       // NTP server address for time synchronization
-#define NTP_UPDATE_INTERVAL            60000                // Interval for NTP updates (ms)
-#define SERIAL_BAUD_RATE               115200               // Serial communication baud rate
-#define SLEEP_TIMER                    1800000              // WiFi Sleep timer interval in ms (30 min)
+#include <Arduino.h>
 
 // ==================================================
 // Debugging and Logging Configuration
 // ==================================================
 
-#define DEBUGMODE                      true                // Set to true to enable debugging mode
-#define LOGFILE_PATH                   "/Log/log.json"      // Default log file path
+#define DEBUGMODE                      true
+#define ENABLE_SERIAL_DEBUG
+
+#ifdef ENABLE_SERIAL_DEBUG
+  #define DEBUG_PRINT(x)              if (DEBUGMODE) Serial.print(x)
+  #define DEBUG_PRINTF                Serial.printf
+  #define DEBUG_PRINTLN(x)            if (DEBUGMODE) Serial.println(x)
+#else
+  #define DEBUG_PRINT(x)
+  #define DEBUG_PRINTF(...)
+  #define DEBUG_PRINTLN(x)
+#endif
+
+#define CONFIG_PARTITION               "config"    // NVS partition name
+
+// ==================================================
+// Device Configuration Keys & Defaults for Preferences
+// ==================================================
+
+// ---------- Wi-Fi & Storage ----------
+#define DEVICE_WIFI_HOTSPOT_NAME_KEY   "APNAM"     // Hotspot SSID key
+#define DEVICE_AP_AUTH_PASS_KEY        "APPSS"     // Hotspot password key
+#define RESET_FLAG                     "RTFLG"     // Preferences reset flag
+
+// ---------- Authentication (Max 1 Admin, 1 User) ----------
+#define ADMIN_ID_KEY                   "ADMID"     // Admin login username
+#define ADMIN_PASS_KEY                 "ADMPW"     // Admin login password
+#define USER_ID_KEY                    "USRID"     // Single customer login username
+#define USER_PASS_KEY                  "USRPW"     // Single customer login password
+
+// ---------- Preference Keys ----------
+#define ON_TIME_KEY                    "ONTIM"     // ON time duration key
+#define OFF_TIME_KEY                   "OFFTIM"    // OFF time duration key
+#define INRUSH_DELAY_KEY               "INSHDY"    // Inrush delay duration key
+#define LED_FEEDBACK_KEY               "LEDFB"     // LED feedback toggle key
+#define TEMP_THRESHOLD_KEY             "TMPTH"     // Over-temperature shutdown key
+#define CHARGE_RESISTOR_KEY            "CHRES"     // Charge resistor value key
+#define AC_FREQUENCY_KEY               "ACFRQ"     // AC line frequency key
+#define AC_VOLTAGE_KEY                 "ACVLT"     // AC line voltage key
+#define DC_VOLTAGE_KEY                 "DCVLT"     // Target DC output voltage key
+#define DESIRED_OUTPUT_VOLTAGE_KEY     "DOUTV"    // User-defined target output voltage
+
+
+// ---------- Output Access Flags ----------
+#define OUT01_ACCESS_KEY               "OUT1F"
+#define OUT02_ACCESS_KEY               "OUT2F"
+#define OUT03_ACCESS_KEY               "OUT3F"
+#define OUT04_ACCESS_KEY               "OUT4F"
+#define OUT05_ACCESS_KEY               "OUT5F"
+#define OUT06_ACCESS_KEY               "OUT6F"
+#define OUT07_ACCESS_KEY               "OUT7F"
+#define OUT08_ACCESS_KEY               "OUT8F"
+#define OUT09_ACCESS_KEY               "OUT9F"
+#define OUT10_ACCESS_KEY              "OUT01F"
+
+// ==================================================
+// Default Values for Preferences
+// ==================================================
+
+// ---------- Wi-Fi Defaults ----------
+#define DEVICE_WIFI_HOTSPOT_NAME       "Serto_PDis01"   // Default SSID
+#define DEVICE_AP_AUTH_PASS_DEFAULT    "1234567890"     // Default password
+
+// ---------- Timing & Behavior Defaults ----------
+#define DEFAULT_ON_TIME                10               // ms
+#define DEFAULT_OFF_TIME               9                // ms
+#define DEFAULT_INRUSH_DELAY           100              // ms
+#define DEFAULT_LED_FEEDBACK           true             // true = LED feedback enabled
+#define DEFAULT_TEMP_THRESHOLD         75.0f            // °C
+#define DEFAULT_CHARGE_RESISTOR_OHMS   10000.0f         // Ohms
+#define DEFAULT_AC_FREQUENCY           50               // Hz
+#define DEFAULT_AC_VOLTAGE             230.0f           // Volts
+#define DEFAULT_DC_VOLTAGE             325.0f           // Volts
+#define DEFAULT_DESIRED_OUTPUT_VOLTAGE 180.0f     // Volts (safe default power level)
+
+
+// ---------- Output Access Defaults ----------
+#define DEFAULT_OUT01_ACCESS           false
+#define DEFAULT_OUT02_ACCESS           false
+#define DEFAULT_OUT03_ACCESS           false
+#define DEFAULT_OUT04_ACCESS           false
+#define DEFAULT_OUT05_ACCESS           false
+#define DEFAULT_OUT06_ACCESS           false
+#define DEFAULT_OUT07_ACCESS           false
+#define DEFAULT_OUT08_ACCESS           false
+#define DEFAULT_OUT09_ACCESS           false
+#define DEFAULT_OUT10_ACCESS           false
+
+// ---------- Authentication Defaults ----------
+#define DEFAULT_ADMIN_ID               "admin"          // Default admin username
+#define DEFAULT_ADMIN_PASS             "admin123"       // Default admin password
+#define DEFAULT_USER_ID                "user0"          // Default customer username
+#define DEFAULT_USER_PASS              "admin123"               // Blank password (set via UI)
+
+// ==================================================
+// APMODE Definitions
+// ==================================================
+
+#define LOCAL_IP                       IPAddress(192, 168, 4, 1)
+#define GATEWAY                        IPAddress(192, 168, 4, 1)
+#define SUBNET                         IPAddress(255, 255, 255, 0)
+
+// ==================================================
+// Time Configuration
+// ==================================================
+
+#define SERIAL_BAUD_RATE               115200
 
 // ==================================================
 // Switch Configuration
 // ==================================================
 
-#define SW_USER_BOOT_PIN               0                    // Boot button
+#define SW_USER_BOOT_PIN               0                    // Boot button pin
 #define POWER_ON_SWITCH_PIN            6                    // Physical power button
 
 // ==================================================
 // LED Configuration
 // ==================================================
 
-#define READY_LED_PIN                  16                   // Indicates system ready
-#define POWER_OFF_LED_PIN              2                    // Power OFF indicator
-                   
+#define READY_LED_PIN                  16                   // System ready indicator
+#define POWER_OFF_LED_PIN              2                    // Power off indicator LED
+
 // ==================================================
 // Floor Heater LED Indicators
 // ==================================================
 
-#define FL01_LED_PIN                   48
-#define FL02_LED_PIN                   47
-#define FL03_LED_PIN                   21
-#define FL04_LED_PIN                   14
-#define FL05_LED_PIN                   13
-#define FL06_LED_PIN                   12
-#define FL07_LED_PIN                   11
-#define FL08_LED_PIN                   10
-#define FL09_LED_PIN                   9
-#define FL10_LED_PIN                   15
+// 8 LEDs connected to a shift register (74HC595)
+#define SHIFT_SER_PIN                  10                   // Serial data input (SER)
+#define SHIFT_SCK_PIN                  11                   // Shift clock (SCK)
+#define SHIFT_RCK_PIN                  12                   // Latch clock (RCK)
+
+// 2 LEDs controlled directly via GPIO
+#define FL06_LED_PIN                   15
+#define FL08_LED_PIN                   9
 
 // ==================================================
 // Sensor & Detection Pins
 // ==================================================
 
-#define DETECT_12V_PIN                 4                    // Input pin to detect 12V presence
-#define CAPACITOR_ADC_PIN              5                    // ADC pin to measure capacitor voltage
-#define CHARGE_THRESHOLD_PERCENT     85.0f                  // ADC pin to measure capacitor voltage
-#define ONE_WIRE_BUS                   3                    // tTemperature sensor
+#define DETECT_12V_PIN                 4                    // Detect 12V input presence
+#define ACS_LOAD_CURRENT_VOUT_PIN      5                    // Analog output from ACS781 current sensor
+#define CAPACITOR_ADC_PIN              13                   // ADC input for monitoring capacitor voltage
+#define CHARGE_THRESHOLD_PERCENT       85.0f                // Percentage threshold for capacitor charge
+#define ONE_WIRE_BUS                   3                    // DS18B20 temperature sensor bus
+#define FLAG_INPUT_PIN                 3                    // Input pin for external flag signal
+
 // ==================================================
-// Nichrome Wire Control - Opto Enable Pins
+// Nichrome Wire Control - Opto Enable Pins (active low)
 // ==================================================
 
 #define ENA01_E_PIN                    37
@@ -118,24 +166,30 @@
 #define ENA07_E_PIN                    40
 #define ENA08_E_PIN                    7
 #define ENA09_E_PIN                    41
-#define ENA010_E_PIN                   42
+#define ENA10_E_PIN                    42
 
 // ==================================================
-// Nichrome Wire Control - PWM
+// PWM Control Configuration
 // ==================================================
 
-#define INA_OPT_PWM_PIN                1                    // PWM control for heating
-#define INA_E_PIN                      2                    // PWM control for second channel (INA_E_PIN)
-#define PWM_FREQ                       50000                 // PWM frequency set to 5 kHz
-#define PWM_RESOLUTION                 8                    // 8-bit resolution for PWM (0-255)
-#define PWM_CHANNEL                    1                    // PWM Channel 1 for INA_OPT_PWM_PIN control
-#define PWM_DUTY_CYCLE                 173                  // Duty cycle set to 68% (173 out of 255)
+#define INA_OPT_PWM_PIN                1                    // INA_OPT controls nichrome overdrive
+#define INA_OPT_PWM_CHANNEL            1
+
+#define FAN_PWM_PIN                    14                   // FAN output
+#define FAN_PWM_CHANNEL                2
+
+#define INB_CAP_DISCHARGE_PIN          48                   // Discharge MOSFET control
+#define INB_PWM_CHANNEL                3                    // PWM channel for INB
+
+#define PWM_FREQ                       50000                // 50 kHz for all PWM signals
+#define PWM_RESOLUTION                 8                    // 8-bit resolution (0–255)
+#define PWM_DUTY_CYCLE                 173                  // Default duty (68%)
 
 // ==================================================
 // Capacitor Bank Charging Control
 // ==================================================
 
-#define ENA_E_PIN                      35                   // Enable pin for capacitor bank charging control (UCC27524DR)
-#define INA_E_PIN                      36                   // Enable pin for capacitor bank charging control (UCC27524DR)
+#define RELAY_CONTROL_PIN              21                   // Relay controlling capacitor input power
+#define INA_RELAY_BYPASS_PIN           47                   // INA controls bypass MOSFET for inrush resistor
 
 #endif // CONFIG_H

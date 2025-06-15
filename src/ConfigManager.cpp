@@ -2,6 +2,7 @@
 #include "ConfigManager.h"
 
 
+
 /************************************************************************************************/
 /*                           Config Manager class definition                                    */
 /************************************************************************************************/
@@ -37,31 +38,22 @@ ConfigManager::~ConfigManager() {
  */
 void ConfigManager::RestartSysDelayDown(unsigned long delayTime) {
     unsigned long startTime = millis();  // Record the start time
-
-    if (DEBUGMODE) {
-        Serial.println("################################");
-        Serial.print("Restarting the Device in: ");
-        Serial.print(delayTime / 1000);  // Convert delayTime to seconds
-        Serial.println(" Sec");
-    }
-
+       DEBUG_PRINTLN("###########################################################");
+        DEBUG_PRINTLN("#           Restarting the Device in: " + String(delayTime / 1000)+ " Sec              #" );
+        DEBUG_PRINTLN("###########################################################");
     // Ensure 32 '#' are printed after the countdown
-    unsigned long interval = delayTime / 32;  // Divide delayTime by 32 to get interval
+    unsigned long interval = delayTime / 30;  // Divide delayTime by 32 to get interval
 
-    if (DEBUGMODE) {
-        for (int i = 0; i < 32; i++) {  // Print 32 '#' characters
-            Serial.print("#");
+    
+        for (int i = 0; i < 30; i++) {  // Print 32 '#' characters
+            DEBUG_PRINT("🔵");
             delay(interval);  // Delay for visibility of each '#' character
             esp_task_wdt_reset();  // Reset watchdog timer
         }
-        Serial.println();  // Move to the next line after printing
-    }
+        DEBUG_PRINTLN();  // Move to the next line after printing
+        DEBUG_PRINTLN("Restarting now...");
 
-    if (DEBUGMODE) {
-        Serial.println("Restarting now...");
-    }
     simulatePowerDown();  // Simulate power down before restart
-    
 }
 /**
  * @brief Restarts the system after a specified delay.
@@ -75,29 +67,20 @@ void ConfigManager::RestartSysDelayDown(unsigned long delayTime) {
  */
 void ConfigManager::RestartSysDelay(unsigned long delayTime) {
     unsigned long startTime = millis();  // Record the start time
-
-    if (DEBUGMODE) {
-        Serial.println("################################");
-        Serial.print("Restarting the Device in: ");
-        Serial.print(delayTime / 1000);  // Convert delayTime to seconds
-        Serial.println(" Sec");
-    }
-
+    DEBUG_PRINTLN("###########################################################");
+    DEBUG_PRINTLN("#           Restarting the Device in: " + String(delayTime / 1000)+ " Sec              #" );
+    DEBUG_PRINTLN("###########################################################");
     // Ensure 32 '#' are printed after the countdown
-    unsigned long interval = delayTime / 32;  // Divide delayTime by 32 to get interval
+    unsigned long interval = delayTime / 30;  // Divide delayTime by 32 to get interval
 
-    if (DEBUGMODE) {
-        for (int i = 0; i < 32; i++) {  // Print 32 '#' characters
-            Serial.print("#");
+        for (int i = 0; i < 30; i++) {  // Print 32 '#' characters
+            DEBUG_PRINT("🔵");
             delay(interval);  // Delay for visibility of each '#' character
             esp_task_wdt_reset();  // Reset watchdog timer
         }
-        Serial.println();  // Move to the next line after printing
-    }
+        DEBUG_PRINTLN();  // Move to the next line after printing
 
-    if (DEBUGMODE) {
-        Serial.println("Restarting now...");
-    }
+        DEBUG_PRINTLN("Restarting now...");
     //simulatePowerDown();  // Simulate power down before restart
      ESP.restart();
 }
@@ -114,25 +97,19 @@ void ConfigManager::RestartSysDelay(unsigned long delayTime) {
  */
 void ConfigManager::CountdownDelay(unsigned long delayTime) {
     unsigned long startTime = millis();  // Record the start time
-
-    if (DEBUGMODE) {
-        Serial.println("################################");
-        Serial.print("Waiting User Action: ");
-        Serial.print(delayTime / 1000);  // Convert delayTime to seconds
-        Serial.println(" Sec");
-    }
-
+    DEBUG_PRINTLN("###########################################################");
+    DEBUG_PRINT("Waiting User Action: ");
+    DEBUG_PRINT(delayTime / 1000);  // Convert delayTime to seconds
+    DEBUG_PRINTLN(" Sec");
     // Ensure 32 '#' are printed after the countdown
-    if (DEBUGMODE) {
-        unsigned long interval = delayTime / 32;  // Divide delayTime by 32 to get interval
+    unsigned long interval = delayTime / 32;  // Divide delayTime by 32 to get interval
 
-        for (int i = 0; i < 32; i++) {  // Print 32 '#' characters
-            Serial.print("#");
-            delay(interval);  // Delay dynamically based on the given delayTime
-            esp_task_wdt_reset();  // Reset watchdog timer
-        }
-        Serial.println();  // Move to the next line after printing
+    for (int i = 0; i < 32; i++) {  // Print 32 '#' characters
+        DEBUG_PRINT("#");
+        delay(interval);  // Delay dynamically based on the given delayTime
+        esp_task_wdt_reset();  // Reset watchdog timer
     }
+    DEBUG_PRINTLN();  // Move to the next line after printing
 }
 
 /**
@@ -156,7 +133,8 @@ void ConfigManager::simulatePowerDown() {
  */
 void ConfigManager::startPreferencesReadWrite() {
     preferences->begin(CONFIG_PARTITION, false);  // false = read-write mode
-    Serial.println("Preferences opened in write mode.");
+    DEBUG_PRINTLN("Preferences opened in write mode.");
+
 }
 
 /**
@@ -168,7 +146,7 @@ void ConfigManager::startPreferencesReadWrite() {
  */
 void ConfigManager::startPreferencesRead() {
     preferences->begin(CONFIG_PARTITION, true);  // true = read-only mode
-    if (DEBUGMODE)Serial.println("Preferences opened in read mode.");
+    DEBUG_PRINTLN("Preferences opened in read mode.");
 }
 
 /**
@@ -181,29 +159,20 @@ void ConfigManager::startPreferencesRead() {
  * use existing configurations.
  */
 void ConfigManager::begin() {
-    if (DEBUGMODE) {
-        Serial.println("###########################################################");
-        Serial.println("#               Starting CONFIG Manager                   #");
-        Serial.println("###########################################################");
-    }
-    
+    DEBUG_PRINTLN("###########################################################");
+    DEBUG_PRINTLN("#               Starting CONFIG Manager ⚙️                 #");
+    DEBUG_PRINTLN("###########################################################");
     bool resetFlag = GetBool(RESET_FLAG, true);  // Default to true if not set
-
     if (resetFlag) {
         // Only print once, if necessary, then reset device
-        if (DEBUGMODE) {
-            Serial.println("ConfigManager: Initializing the device...");
-        };
+            DEBUG_PRINTLN("ConfigManager: Initializing the device... 🔄");
         initializeDefaults();  // Reset preferences if the flag is set
-        RestartSysDelay(7000);  // Use a delay for restart after reset
+        RestartSysDelay(2000);  // Use a delay for restart after reset
     } else {
         // Use existing configuration, no need for unnecessary delay
-        if (DEBUGMODE) {
-            Serial.println("ConfigManager: Using existing configuration...");
-        }
+            DEBUG_PRINTLN("ConfigManager: Using existing configuration... ✅");
     }
 }
-
 
 
 /**
@@ -250,44 +219,48 @@ void ConfigManager::initializeDefaults() {
  * 
  * This function sets the initial values for various boolean and string 
  * variables used by the ConfigManager. It includes settings for GPIO, 
- * Wi-Fi SSID, password, and inrush current management. Debug messages 
- * are printed if DEBUGMODE is enabled.
+ * Wi-Fi SSID, and password. Debug messages are printed if DEBUGMODE is enabled.
  */
 void ConfigManager::initializeVariables() {
-    // Assign default values to configuration variables
-    PutBool(RESET_FLAG, false);                                         // Reset flag is set to false after initialization
-    
-    // RTC time and date default values
-    PutULong64(CURRENT_TIME_SAVED, DEFAULT_CURRENT_TIME_SAVED);         // Default current time
-    PutULong64(LAST_TIME_SAVED,    DEFAULT_LAST_TIME_SAVED);            // Default last saved time
-    
-    // Wi-Fi Hotspot settings
-    PutString(DEVICE_WIFI_HOTSPOT_NAME_KEY, DEVICE_WIFI_HOTSPOT_NAME);  // Default device Hotspot name
-    PutString(DEVICE_AP_AUTH_PASS_KEY,        DEVICE_AP_AUTH_PASS_DEFAULT); // Default hotspot Password
+  // Reset flag
+  PutBool(RESET_FLAG, false);
 
-    // ==================================================
-    // Inrush Current & Cycle Settings
-    // ==================================================
-    PutInt(ON_TIME_KEY,          DEFAULT_ON_TIME);              // Default ON time for cycles in ms
-    PutInt(OFF_TIME_KEY,         DEFAULT_OFF_TIME);             // Default OFF time for cycles in ms
-    PutInt(INRUSH_DELAY_KEY,     DEFAULT_INRUSH_DELAY);         // Default inrush current delay in ms
-    PutBool(LED_FEEDBACK_KEY,    DEFAULT_LED_FEEDBACK);         // Default LED feedback state (true = enabled)
+  // Wi-Fi
+  PutString(DEVICE_WIFI_HOTSPOT_NAME_KEY, DEVICE_WIFI_HOTSPOT_NAME);
+  PutString(DEVICE_AP_AUTH_PASS_KEY, DEVICE_AP_AUTH_PASS_DEFAULT);
 
-    // ==================================================
-    // Temperature Safety Settings
-    // ==================================================
-    PutFloat(TEMP_THRESHOLD_KEY, DEFAULT_TEMP_THRESHOLD);        // Default over-temperature shutdown threshold in °C
+  // Admin/User login
+  PutString(ADMIN_ID_KEY, DEFAULT_ADMIN_ID);
+  PutString(ADMIN_PASS_KEY, DEFAULT_ADMIN_PASS);
+  PutString(USER_ID_KEY, DEFAULT_USER_ID);
+  PutString(USER_PASS_KEY, DEFAULT_USER_PASS);
 
-    // ==================================================
-    // Charge Resistor Value
-    // ==================================================
-    PutFloat(CHARGE_RESISTOR_KEY, DEFAULT_CHARGE_RESISTOR_OHMS); // Default series resistor value in ohms
+  // Timing and behavior
+  PutInt(ON_TIME_KEY, DEFAULT_ON_TIME);
+  PutInt(OFF_TIME_KEY, DEFAULT_OFF_TIME);
+  PutInt(INRUSH_DELAY_KEY, DEFAULT_INRUSH_DELAY);
+  PutBool(LED_FEEDBACK_KEY, DEFAULT_LED_FEEDBACK);
+  PutFloat(TEMP_THRESHOLD_KEY, DEFAULT_TEMP_THRESHOLD);
+  PutFloat(CHARGE_RESISTOR_KEY, DEFAULT_CHARGE_RESISTOR_OHMS);
+  PutInt(AC_FREQUENCY_KEY, DEFAULT_AC_FREQUENCY);
+  PutFloat(AC_VOLTAGE_KEY, DEFAULT_AC_VOLTAGE);
+  PutFloat(DC_VOLTAGE_KEY, DEFAULT_DC_VOLTAGE);
 
-    // ==================================================
-    // AC Line Frequency
-    // ==================================================
-    PutInt(AC_FREQUENCY_KEY, DEFAULT_AC_FREQUENCY);              // Default mains frequency in Hz
+  // Output access (admin-controlled)
+  PutBool(OUT01_ACCESS_KEY, DEFAULT_OUT01_ACCESS);
+  PutBool(OUT02_ACCESS_KEY, DEFAULT_OUT02_ACCESS);
+  PutBool(OUT03_ACCESS_KEY, DEFAULT_OUT03_ACCESS);
+  PutBool(OUT04_ACCESS_KEY, DEFAULT_OUT04_ACCESS);
+  PutBool(OUT05_ACCESS_KEY, DEFAULT_OUT05_ACCESS);
+  PutBool(OUT06_ACCESS_KEY, DEFAULT_OUT06_ACCESS);
+  PutBool(OUT07_ACCESS_KEY, DEFAULT_OUT07_ACCESS);
+  PutBool(OUT08_ACCESS_KEY, DEFAULT_OUT08_ACCESS);
+  PutBool(OUT09_ACCESS_KEY, DEFAULT_OUT09_ACCESS);
+  PutBool(OUT10_ACCESS_KEY, DEFAULT_OUT10_ACCESS);
+  PutFloat(DESIRED_OUTPUT_VOLTAGE_KEY, DEFAULT_DESIRED_OUTPUT_VOLTAGE);  // <--- new
 }
+
+
 
 
 
@@ -501,13 +474,14 @@ void ConfigManager::RemoveKey(const char * key) {
     // Check if the key exists before removing it
     if (preferences->isKey(key)) {
         preferences->remove(key);  // Remove the key if it exists
-        if (DEBUGMODE) {
-            Serial.print("Removed key: ");
-            Serial.println(key);
-        }
-    } else if (DEBUGMODE) {
-        Serial.print("Key not found, skipping: ");
-        Serial.println(key);
+        #ifdef ENABLE_SERIAL_DEBUG
+            //DEBUG_PRINT("Removed key: ");
+            //DEBUG_PRINTLN(key);
+        #endif
+    } else {
+
+            DEBUG_PRINT("Key not found, skipping: ");
+            DEBUG_PRINTLN(key);
     }
 }
 

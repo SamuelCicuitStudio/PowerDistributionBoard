@@ -61,7 +61,10 @@
 
 #define ENA_E_PIN                      35                   // Enable pin for capacitor bank charging control (UCC27524DR)
 #define INA_E_PIN                      36                   // Enable pin for capacitor bank charging control (UCC27524DR)
-
+#define OPT_E_PIN                      1
+#define PWM_CH     0         // PWM channel (0–15 for ESP32)
+#define PWM_FREQ   2000      // 2 kHz
+#define PWM_RES    8         // 8-bit resolution (0–255)
 // Pin lists
 const int nichromePins[10] = {
     ENA01_E_PIN, ENA02_E_PIN, ENA03_E_PIN, ENA04_E_PIN, ENA05_E_PIN,
@@ -74,8 +77,8 @@ const int floorLedPins[10] = {
 
     volatile  bool  systemOn =false,systemOnwifi =false;
     volatile  bool  ledFeedbackEnabled  = false;
-    uint32_t             onTime  = 10;
-    uint32_t             offTime   = 9;
+    uint32_t             onTime  = 3000;
+    uint32_t             offTime   = 200;
 
     // Voltage calibration
     uint8_t                AcFreq = 50;            // frequency
@@ -94,13 +97,23 @@ volatile unsigned long last230VACCheckTime = 0;
 void setup() {
     Serial.begin(115200);  ///< Initialize serial communication for debugging
 
+    // 2) Bypass driver pins (UCC27524): ENA_E_PIN = enable, INA_E_PIN = PWM input
+    //pinMode(ENA_E_PIN, OUTPUT);   digitalWrite(ENA_E_PIN, LOW);
+    pinMode(INA_E_PIN, OUTPUT);   digitalWrite(INA_E_PIN, LOW);// DEACTIVATE THE BYPASS RESISTOR
+    pinMode(OPT_E_PIN, OUTPUT); //  digitalWrite(OPT_E_PIN, HIGH);
+
     // 1) Nichrome outputs & floor LEDs off
     for (auto p : nichromePins)   pinMode(p, OUTPUT), digitalWrite(p, LOW);
     for (auto p : floorLedPins)   pinMode(p, OUTPUT), digitalWrite(p, LOW);
 
-    // 2) Bypass driver pins (UCC27524): ENA_E_PIN = enable, INA_E_PIN = PWM input
-    pinMode(ENA_E_PIN, OUTPUT);   digitalWrite(ENA_E_PIN, LOW);
-    pinMode(INA_E_PIN, OUTPUT);   digitalWrite(INA_E_PIN, LOW);
+      // Set up the PWM channel
+    ledcSetup(PWM_CH, PWM_FREQ, PWM_RES);
+
+    // Attach the pin to the PWM channel
+    ledcAttachPin(OPT_E_PIN, PWM_CH);
+
+    // Send 50% duty cycle
+    ledcWrite(PWM_CH, 75);  // 128 = 50% of 255
 
     // 5) Ready / Power-off LEDs
     pinMode(READY_LED_PIN,    OUTPUT); digitalWrite(READY_LED_PIN,    LOW);
@@ -130,19 +143,6 @@ void loop() {
     // Small delay to avoid multiple triggers in quick succession (debounce)
     // Wait for gate-drive rail (12 V)
 
-    while (true) {
-        Serial.println("Turning both pins ON");
-        // Turn both pins ON
-        digitalWrite(ENA_E_PIN, HIGH);
-        digitalWrite(INA_E_PIN, HIGH);
-        delay(2000);  // keep them ON for 2000 milliseconds
-
-        Serial.println("Turning both pins OFF");
-        // Turn both pins OFF
-        digitalWrite(ENA_E_PIN, LOW);
-        digitalWrite(INA_E_PIN, LOW);
-        delay(2000);  // keep them OFF for 2000 milliseconds
-    }
     Serial.println("Waiting for 12V detection...");
     while (digitalRead(DETECT_12V_PIN) == LOW) {
         delay(500);
