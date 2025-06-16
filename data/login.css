@@ -1,0 +1,164 @@
+body {
+  margin: 0;
+  padding: 0;
+  font-family: 'Arial', sans-serif;
+  background: linear-gradient(135deg, rgba(12, 12, 12, 0.8), rgba(38, 38, 38, 0.6)), url('background-image.jpg') no-repeat center center fixed;
+  background-size: cover;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  color: #fff;
+  overflow: hidden;
+}
+
+.login-container {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 20px;
+  padding: 40px 30px;
+  width: 320px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  animation: fadeFloat 1s ease-out forwards;
+  opacity: 0;
+  transform: translateY(40px);
+  transition: box-shadow 0.4s ease-in-out;
+}
+
+.login-container:hover {
+  box-shadow: 0 0 30px rgba(76, 175, 80, 0.3);
+}
+
+@keyframes fadeFloat {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.logo-circle {
+  width: 100px;
+  height: 100px;
+  background-color: rgba(255, 255, 255, 0.1);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 30px;
+  box-shadow: 0 0 12px rgba(76, 175, 80, 0.3);
+  transition: box-shadow 0.4s ease-in-out;
+}
+
+.logo-circle img {
+  width: 60%;
+  height: 60%;
+  object-fit: contain;
+  filter: drop-shadow(0 0 4px rgba(0, 0, 0, 0.3));
+}
+
+/* Input group with icon and text perfectly aligned */
+.input-group {
+  width: 80%;
+  display: flex;
+  align-items: center;
+  background-color: rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  margin-bottom: 20px;
+  padding: 0 12px;
+  height: 48px;
+  box-sizing: border-box;
+  transition: box-shadow 0.3s ease-in-out;
+}
+
+.input-group img {
+  width: 20px;
+  height: 20px;
+  margin-right: 10px;
+  filter: brightness(0.9);
+  flex-shrink: 0;
+}
+
+.input-group input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: #fff;
+  font-size: 1em;
+  padding: 0;
+  margin: 0;
+  height: 100%;
+  line-height: 48px;
+}
+
+.input-group input::placeholder {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.input-group input:focus {
+  outline: none;
+}
+
+.input-group:focus-within {
+  border-color: #4caf50;
+  box-shadow: 0 0 8px #4caf50;
+}
+
+/* Button styling */
+.login-container button {
+  position: relative;
+  overflow: hidden;
+  width: 80%;
+  padding: 12px;
+  font-size: 1.1em;
+  background-color: #4caf50;
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.3s ease;
+}
+
+.login-container button img {
+  width: 24px;
+  height: 24px;
+  margin-right: 10px;
+}
+
+.login-container button:hover {
+  background-color: #45a049;
+}
+
+.login-container button::after {
+  content: '';
+  position: absolute;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  width: 0;
+  height: 0;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  transition: width 0.4s ease-out, height 0.4s ease-out;
+}
+
+.login-container button:active::after {
+  width: 200%;
+  height: 200%;
+}
+
+/* Footer text */
+.login-container .footer {
+  margin-top: 20px;
+  font-size: 0.85em;
+  color: rgba(255, 255, 255, 0.7);
+}

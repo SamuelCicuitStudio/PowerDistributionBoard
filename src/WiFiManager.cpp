@@ -18,7 +18,6 @@ void WiFiManager::begin() {
     StartWifiAP();
 }
 
-
 // ─────────────────────────────────────────────────────────────
 // Start Access Point
 // ─────────────────────────────────────────────────────────────
@@ -50,9 +49,200 @@ void WiFiManager::StartWifiAP() {
 
 
     // ── Web routes ───────────────────────────────────────────
+    
     server.on("/", HTTP_GET, [this](AsyncWebServerRequest* request) {
+        resetTimer();// reset activity timer
         handleRoot(request);
     });
+    // ─────────────────────────────────────────────────────────────
+    // REST API Callbacks – WiFiManager
+    // ─────────────────────────────────────────────────────────────
+
+    // 1. Heartbeat – Update keep-alive
+    server.on("/heartbeat", HTTP_GET, [this](AsyncWebServerRequest* request) {
+        keepAlive = true;
+        request->send(200, "text/plain", "alive");
+    });
+
+    // 2. Connect – Authenticate user or admin via JSON body
+    server.on("/connect", HTTP_POST,[this](AsyncWebServerRequest* request) {
+            // Not used for POST body in AsyncWebServer
+        },
+        nullptr,
+        [this](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
+            static String body = "";
+
+            body += String((char*)data);
+
+            // Wait until full body is received
+            if (index + len == total) {
+                DynamicJsonDocument doc(512);
+                DeserializationError error = deserializeJson(doc, body);
+                resetTimer();// reset activity timer
+
+                if (error) {
+                    request->send(400, "application/json", "{\"error\":\"Invalid JSON\"}");
+                    body = "";
+                    return;
+                }
+
+                // Extract credentials
+                String username = doc["username"] | "";
+                String password = doc["password"] | "";
+
+                // Validate presence
+                if (username == "" || password == "") {
+                    request->send(400, "application/json", "{\"error\":\"Missing username or password\"}");
+                    body = "";
+                    return;
+                }
+
+                // Check stored credentials
+                String adminUser = dev->config->GetString(ADMIN_ID_KEY, "");
+                String adminPass = dev->config->GetString(ADMIN_PASS_KEY, "");
+                String userUser  = dev->config->GetString(USER_ID_KEY, "");
+                String userPass  = dev->config->GetString(USER_PASS_KEY, "");
+
+                if (wifiStatus != WiFiStatus::NotConnected) {
+                    request->send(403, "application/json", "{\"error\":\"Already connected\"}");
+                    body = "";
+                    return;
+                }
+
+                if (username == adminUser && password == adminPass) {
+                    onAdminConnected();
+                    request->redirect("/admin.html");
+                    body = "";
+                    return;
+                }
+
+                if (username == userUser && password == userPass) {
+                    onUserConnected();
+                    request->redirect("/user.html");
+                    body = "";
+                    return;
+                }
+
+                request->redirect("/login_failed.html");  // ❌ Invalid credentials
+                body = "";
+            }
+        }
+    );
+
+
+    // 3. Disconnect
+    server.on("/disconnect", HTTP_GET, [this](AsyncWebServerRequest* request) {
+        onDisconnected();
+        resetTimer();// reset activity timer
+        keepAlive = false;
+        request->send(200, "application/json", "{\"status\":\"disconnected\"}");
+    });
+
+    // 4. Monitor – Return live readings
+    server.on("/monitor", HTTP_GET, [this](AsyncWebServerRequest* request) {
+        if (!isAuthenticated(request)) return;
+        StaticJsonDocument<512> doc;
+        resetTimer();// reset activity timer
+        doc["capVoltage"] = readCapVoltage();
+        doc["current"] = dev->currentSensor->readCurrent();
+
+        JsonArray temps = doc.createNestedArray("temperatures");
+        for (uint8_t i = 0; i < dev->tempSensor->getSensorCount(); ++i) {
+            temps.add(dev->tempSensor->getTemperature(i));
+        }
+        String json;
+        serializeJson(doc, json);
+        request->send(200, "application/json", json);
+    });
+
+    // 5. Control – Unified command handler with JSON body
+    server.on("/control", HTTP_POST,[this](AsyncWebServerRequest* request) {
+            // Nothing here; handled in body lambda
+        },
+        nullptr,
+        [this](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
+            static String body = "";
+            body += String((char*)data);
+
+            // Wait until full body is received
+            if (index + len == total) {
+                if (!isAuthenticated(request)) return;
+                StaticJsonDocument<1024> doc;
+                DeserializationError error = deserializeJson(doc, body);
+                resetTimer();// reset activity timer
+                body = "";  // Clear buffer
+
+                if (error) {
+                    request->send(400, "application/json", "{\"error\":\"Invalid JSON\"}");
+                    return;
+                }
+
+                String action = doc["action"] | "";
+                String target = doc["target"] | "";
+                auto value    = doc["value"];
+
+                if (action == "set") {
+                    if (target == "reboot") {
+                        dev->config->RestartSysDelayDown(3000);
+                    } else if (target == "reset") {
+                        blink(POWER_OFF_LED_PIN, 100);
+                        DEBUG_PRINTLN("Long press detected 🕒");
+                        DEBUG_PRINTLN("###########################################################");
+                        DEBUG_PRINTLN("#                   Resetting device 🔄                   #");
+                        DEBUG_PRINTLN("###########################################################");
+                        dev->config->PutBool(RESET_FLAG, true);
+                        dev->config->RestartSysDelayDown(3000);
+                    } else if (target == "ledFeedback") {
+                        dev->config->PutBool(LED_FEEDBACK_KEY, value.as<bool>());
+                    } else if (target == "onTime") {
+                        dev->config->PutInt(ON_TIME_KEY, value.as<int>());
+                    } else if (target == "offTime") {
+                        dev->config->PutInt(OFF_TIME_KEY, value.as<int>());
+                    } else if (target == "relay") {
+                        value.as<bool>() ? dev->relayControl->turnOn() : dev->relayControl->turnOff();
+                    } else if (target.startsWith("output")) {
+                        int index = target.substring(6).toInt();
+                        if (index >= 1 && index <= 10) {
+                            dev->heaterManager->setOutput(index, value.as<bool>());
+                        }
+                    } else if (target == "desiredVoltage") {
+                        dev->config->PutFloat(DESIRED_OUTPUT_VOLTAGE_KEY, value.as<float>());
+                    } else if (target == "acFrequency") {
+                        dev->config->PutInt(AC_FREQUENCY_KEY, value.as<int>());
+                    } else if (target == "chargeResistor") {
+                        dev->config->PutFloat(CHARGE_RESISTOR_KEY, value.as<float>());
+                    } else if (target == "dcVoltage") {
+                        dev->config->PutFloat(DC_VOLTAGE_KEY, value.as<float>());
+                    } else if (target == "outputAccess") {
+                        for (int i = 1; i <= 10; ++i) {
+                            String key = "OUT0" + String(i) + "F";
+                            dev->config->PutBool(key.c_str(), value[key].as<bool>());
+                        }
+                    } else {
+                        request->send(400, "application/json", "{\"error\":\"Unknown target\"}");
+                        return;
+                    }
+
+                    request->send(200, "application/json", "{\"status\":\"ok\"}");
+
+                } else if (action == "get" && target == "status") {
+                    String statusStr;
+                    switch (dev->currentState) {
+                        case DeviceState::Idle:     statusStr = "Idle"; break;
+                        case DeviceState::Running:  statusStr = "Running"; break;
+                        case DeviceState::Error:    statusStr = "Error"; break;
+                        case DeviceState::Shutdown: statusStr = "Shutdown"; break;
+                        default:                    statusStr = "Unknown"; break;
+                    }
+
+                    request->send(200, "application/json", "{\"state\":\"" + statusStr + "\"}");
+
+                } else {
+                    request->send(400, "application/json", "{\"error\":\"Invalid action or target\"}");
+                }
+            }
+        }
+    );
 
     server.on("/favicon.ico", HTTP_GET, [this](AsyncWebServerRequest* request) {
         keepAlive = true;
@@ -171,4 +361,48 @@ bool WiFiManager::isUserConnected() const {
 
 bool WiFiManager::isAdminConnected() const {
     return wifiStatus == WiFiStatus::AdminConnected;
+}
+
+bool WiFiManager::isAuthenticated(AsyncWebServerRequest* request) {
+    if (wifiStatus == WiFiStatus::NotConnected) {
+        request->send(403, "application/json", "{\"error\":\"Not authenticated\"}");
+        return false;
+    }
+    return true;
+}
+
+void WiFiManager::heartbeat() {
+    static TaskHandle_t heartbeatTaskHandle = nullptr;
+
+    // Only start if not already running
+    if (heartbeatTaskHandle) return;
+
+    xTaskCreatePinnedToCore(
+        [](void* param) {
+            WiFiManager* self = static_cast<WiFiManager*>(param);
+            const TickType_t interval = pdMS_TO_TICKS(6000); // 6s interval
+
+            while (true) {
+                vTaskDelay(interval);
+
+                if (!self->keepAlive) {
+                    Serial.println("[WiFiManager] ⚠️  Heartbeat timeout – disconnecting");
+                    self->onDisconnected();
+
+                    // Delete this task after use
+                    TaskHandle_t currentTask = xTaskGetCurrentTaskHandle();
+                    vTaskDelete(currentTask);
+                    return;
+                }
+                // Reset for next heartbeat
+                self->keepAlive = false;
+            }
+        },
+        "HeartbeatTask",        // Task name
+        2048,                   // Stack size
+        this,                   // Parameter
+        1,                      // Priority
+        &heartbeatTaskHandle,   // Save handle for later reference
+        APP_CPU_NUM             // Pin to core
+    );
 }

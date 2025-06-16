@@ -10,40 +10,46 @@
 
 class Device;
 
-
-
 class WiFiManager {
 public:
+    // Constructor
     explicit WiFiManager(WiFiClass* WFi, Device* dev)
-    : WFi(WFi), dev(dev), server(80) {}
+        : WFi(WFi), dev(dev), server(80) {}
 
-    void begin();                                         // Initialize and start Wi-Fi manager
-    void disableWiFiAP();                                 // Disable the Access Point
-    void StartWifiAP();                                   // Start the Access Point and web server
+    // ───── Public Interface ─────
+    void begin();                                         // 🔧 Initialize and start Wi-Fi manager
+    void disableWiFiAP();                                 // 📴 Disable the Access Point
+    void StartWifiAP();                                   // 📡 Start the Access Point and web server
     void resetTimer();                                    // 🔄 Call this when user activity is detected
     void onUserConnected();                               // ✅ Mark user as connected
     void onAdminConnected();                              // ✅ Mark admin as connected
-    void onDisconnected();                                // ✅ Handle disconnection
-    bool isUserConnected() const;                         // ✅ Check if any user is connected
-    bool isAdminConnected() const;                        // ✅ Check if admin is connected
+    void onDisconnected();                                // ❌ Handle disconnection
+    bool isUserConnected() const;                         // 🔐 Check if a user is connected
+    bool isAdminConnected() const;                        // 🔐 Check if admin is connected
+    bool isAuthenticated(AsyncWebServerRequest* request); // 🔐 Validate session access
+    void heartbeat();                                     // ⏱ Monitor client keep-alive every 3s
 
-    bool keepAlive;                                       // Set by ping (favicon or keep-alive req)
-    bool WifiState;                                       // Current Wi-Fi state
-    bool prev_WifiState;                                  // Previous Wi-Fi state
+    // ───── Status Flags ─────
+    bool keepAlive = false;                               // 📶 Updated by /heartbeat ping
+    bool WifiState = false;                               // 📶 Current Wi-Fi connection state
+    bool prev_WifiState = false;                          // 📶 Previous Wi-Fi connection state
 
 private:
-    void handleRoot(AsyncWebServerRequest* request);      // Serve index.html at root
+    // ───── Internal Handlers ─────
+    void handleRoot(AsyncWebServerRequest* request);      // 🌐 Serve index.html on root path
 
-    AsyncWebServer server;                                // HTTP server instance
-    WiFiClass* WFi;                                       // Pointer to global WiFi instance
+    // ───── Wi-Fi Components ─────
+    AsyncWebServer server;                                // 🌐 HTTP server instance
+    WiFiClass* WFi;                                       // 📶 WiFi interface pointer
 
+    // ───── Inactivity Timeout ─────
+    static void inactivityTask(void* param);              // ⏱ RTOS task to monitor inactivity
+    TaskHandle_t inactivityTaskHandle = nullptr;          // ⏱ RTOS task handle
+    unsigned long lastActivityMillis = 0;                 // ⏱ Last activity timestamp
+    void startInactivityTimer();                          // ⏱ Start monitoring inactivity
 
-    static void inactivityTask(void* param);              // RTOS task for inactivity timeout
-    TaskHandle_t inactivityTaskHandle = nullptr;          // Handle to inactivity task
-    unsigned long lastActivityMillis = 0;                 // Last time of activity
-    void startInactivityTimer();                          // Start the inactivity timer task
-
-    Device* dev          ;                             // Pointer to main device manager
+    // ───── Link to Device Core ─────
+    Device* dev;                                          // 🔗 Pointer to main device manager
 };
 
 #endif // WIFI_MANAGER_H
