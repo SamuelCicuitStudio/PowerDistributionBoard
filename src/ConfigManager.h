@@ -23,14 +23,8 @@
  */
 
  #include <Arduino.h>
- #include <time.h>
- #include <WiFi.h>
- #include <WiFiUdp.h>
- #include <ArduinoJson.h>
  #include <Preferences.h>
- #include <NTPClient.h>
- 
- // ESP32-specific includes
+  // ESP32-specific includes
  #include <esp_task_wdt.h>
  #include <esp_sleep.h>
  #include <driver/rtc_io.h>

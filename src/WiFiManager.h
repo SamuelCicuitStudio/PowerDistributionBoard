@@ -6,30 +6,44 @@
 #include <SPIFFS.h>
 #include <ESPAsyncWebServer.h>
 #include <ArduinoJson.h>
-#include "ConfigManager.h"
+#include "Device.h"
+
+class Device;
+
+
 
 class WiFiManager {
 public:
-    WiFiManager(WiFiClass* WFi, ConfigManager* Config);           // Constructor with dependencies
-    void begin();                                                 // Initialize and start Wi-Fi manager
-    void disableWiFiAP();                                         // Disable the Access Point
-    void StartWifiAP();                                           // Start the Access Point and web server
-    void resetTimer();                                            // 🔄 Call this when user activity is detected
+    explicit WiFiManager(WiFiClass* WFi, Device* dev)
+    : WFi(WFi), dev(dev), server(80) {}
 
-    bool keepAlive;                                               // Flag set by ping (favicon request)
-    bool WifiState, prev_WifiState;                               // Current and previous Wi-Fi states
+    void begin();                                         // Initialize and start Wi-Fi manager
+    void disableWiFiAP();                                 // Disable the Access Point
+    void StartWifiAP();                                   // Start the Access Point and web server
+    void resetTimer();                                    // 🔄 Call this when user activity is detected
+    void onUserConnected();                               // ✅ Mark user as connected
+    void onAdminConnected();                              // ✅ Mark admin as connected
+    void onDisconnected();                                // ✅ Handle disconnection
+    bool isUserConnected() const;                         // ✅ Check if any user is connected
+    bool isAdminConnected() const;                        // ✅ Check if admin is connected
+
+    bool keepAlive;                                       // Set by ping (favicon or keep-alive req)
+    bool WifiState;                                       // Current Wi-Fi state
+    bool prev_WifiState;                                  // Previous Wi-Fi state
 
 private:
-    void handleRoot(AsyncWebServerRequest* request);              // Serve index.html at root
+    void handleRoot(AsyncWebServerRequest* request);      // Serve index.html at root
 
-    AsyncWebServer server;                                        // HTTP server on port 80
-    WiFiClass* WFi;                                               // Pointer to global WiFi instance
-    ConfigManager* Config;                                        // Pointer to configuration system
+    AsyncWebServer server;                                // HTTP server instance
+    WiFiClass* WFi;                                       // Pointer to global WiFi instance
 
-    static void inactivityTask(void* param);                      // RTOS task to auto-disable Wi-Fi
-    TaskHandle_t inactivityTaskHandle = nullptr;                  // Handle to inactivity task
-    unsigned long lastActivityMillis = 0;                         // Timestamp of last activity
-    void startInactivityTimer();                                  // Create the inactivity timer task
+
+    static void inactivityTask(void* param);              // RTOS task for inactivity timeout
+    TaskHandle_t inactivityTaskHandle = nullptr;          // Handle to inactivity task
+    unsigned long lastActivityMillis = 0;                 // Last time of activity
+    void startInactivityTimer();                          // Start the inactivity timer task
+
+    Device* dev          ;                             // Pointer to main device manager
 };
 
 #endif // WIFI_MANAGER_H

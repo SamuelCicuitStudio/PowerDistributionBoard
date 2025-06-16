@@ -2,20 +2,19 @@
 #include "config.h"
 
 // ──────────────────────────────────────────────────────────────
-//                      Module Headers
+//                        Module Headers
 // ──────────────────────────────────────────────────────────────
 #include "ConfigManager.h"
 #include "WiFiManager.h"
 #include "SwitchManager.h"
-#include "Device.h"  // ✅ Include Device Manager
+#include "Device.h"  // ✅ Central system controller
 
 // ──────────────────────────────────────────────────────────────
-//                      Global Instances
+//                    Global Object Pointers
 // ──────────────────────────────────────────────────────────────
-Preferences     prefs;  // NVS storage for configuration
+Preferences       prefs;           // NVS storage for preferences
 
 ConfigManager*    config        = nullptr;
-WiFiManager*      wifi          = nullptr;
 Indicator*        indicator     = nullptr;
 HeaterManager*    heater        = nullptr;
 CpDischg*         discharger    = nullptr;
@@ -25,48 +24,80 @@ TempSensor*       tempSensor    = nullptr;
 Relay*            mainRelay     = nullptr;
 BypassMosfet*     bypassFET     = nullptr;
 Device*           device        = nullptr;
+WiFiManager*      wifi          = nullptr;
 SwitchManager*    sw            = nullptr;
 
 // ──────────────────────────────────────────────────────────────
-//                           Setup
+//                          Setup()
 // ──────────────────────────────────────────────────────────────
 void setup() {
     Serial.begin(115200);
-    // Initialize NVS storage
+
+    // 🔧 Initialize NVS (must happen before using preferences)
     prefs.begin(CONFIG_PARTITION, false);
 
-    // Instantiate all modules
-    config        = new ConfigManager(&prefs);
-    wifi          = new WiFiManager(&WiFi, config);
-    sw            = new SwitchManager(config,wifi);
-    indicator     = new Indicator();
-    heater        = new HeaterManager();
-    discharger    = new CpDischg();
-    fan           = new FanManager();
-    currentSensor = new CurrentSensor();
-    tempSensor    = new TempSensor();
-    mainRelay     = new Relay();
-    bypassFET     = new BypassMosfet();
-    device        = new Device(config, heater, fan, tempSensor, currentSensor, mainRelay, bypassFET, discharger, indicator);  // ✅ Instantiate Device
-
-    // Begin all module services
+    // 🧠 Core Config Manager (must be first)
+    config = new ConfigManager(&prefs);
     config->begin();
+
+    // 💡 LED Indicators
+    indicator = new Indicator();
     indicator->begin();
-    heater->begin(config);
+
+    // 🔥 Heater Outputs
+    heater = new HeaterManager(config);
+    heater->begin();
+
+    // ⚡ Capacitor Discharge Manager
+    discharger = new CpDischg(heater);
+    discharger->begin();
+
+    // 🌀 Fan PWM Control
+    fan = new FanManager();
     fan->begin();
+
+    // ⚙️ Current Monitoring
+    currentSensor = new CurrentSensor();
     currentSensor->begin();
-    tempSensor->begin(config);
+
+    // 🌡️ Temperature Sensors (DS18B20)
+    tempSensor = new TempSensor(config);
+    tempSensor->begin();
+
+    // 🔌 Main Power Relay
+    mainRelay = new Relay();
     mainRelay->begin();
+
+    // ⛔ Inrush Bypass MOSFET
+    bypassFET = new BypassMosfet();
     bypassFET->begin();
-    discharger->begin(heater);
+
+    // 📦 Main Device Logic (core controller)
+    device = new Device(
+        config,
+        heater,
+        fan,
+        tempSensor,
+        currentSensor,
+        mainRelay,
+        bypassFET,
+        discharger,
+        indicator
+    );
+    device->begin();
+
+    // 🌐 Wi-Fi Access Point & Web Interface
+    wifi = new WiFiManager(&WiFi, device);
     wifi->begin();
-    sw->TapDetect();// start the tap detect 
-    device->begin();  // ✅ Launch Device logic (handles startup sequence)
+
+    // 🔘 Switch Detection (power button tap detection)
+    sw = new SwitchManager(config, wifi);
+    sw->TapDetect();
 }
 
 // ──────────────────────────────────────────────────────────────
-//                            Loop
+//                           Loop()
 // ──────────────────────────────────────────────────────────────
 void loop() {
-    vTaskDelay(5000);  // Event-based system; main loop idle
+    vTaskDelay(5000);  // 💤 System runs on tasks; loop stays idle
 }

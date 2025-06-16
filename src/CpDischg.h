@@ -1,20 +1,30 @@
 #ifndef CPDISCHG_H
 #define CPDISCHG_H
 
-#include <Arduino.h>
+
 #include "HeaterManager.h"
 #include "Utils.h"
- #include "Config.h"  // Include Config.h for default values
-// Voltage divider setup: 470k / 4.7k = ~100:1
+
+// ───────────────────────────────────────────────
+// Voltage divider constants for capacitor sensing
+// ───────────────────────────────────────────────
 #define ADC_REF_VOLTAGE         3.3f
 #define ADC_MAX                 4095.0f
-#define VOLTAGE_DIVIDER_RATIO   100.0f  // Adjust based on actual hardware divider
-#define SAFE_VOLTAGE_THRESHOLD  5.0f    // Target voltage to consider "discharged"
+#define VOLTAGE_DIVIDER_RATIO   100.0f   // Adjust if resistors change
+#define SAFE_VOLTAGE_THRESHOLD  5.0f     // Considered discharged below this
 
+/**
+ * CpDischg
+ * --------
+ * Manages safe capacitor discharge by sequentially enabling heater outputs
+ * to dissipate energy. Uses voltage sensing to terminate operation.
+ */
 class CpDischg {
 public:
-    void begin(HeaterManager* heater);
-    void discharge();  // Now blocking
+    explicit CpDischg(HeaterManager* heater) : heaterManager(heater) {}
+
+    void begin();        // Optional init if needed
+    void discharge();    // Blocking discharge logic
 
 private:
     HeaterManager* heaterManager = nullptr;

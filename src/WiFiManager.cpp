@@ -1,10 +1,5 @@
 #include "WiFiManager.h"
-
-// ─────────────────────────────────────────────────────────────
-// Constructor
-// ─────────────────────────────────────────────────────────────
-WiFiManager::WiFiManager(WiFiClass* WFi, ConfigManager* Config)
-    : server(80), WFi(WFi), Config(Config) {}
+#include "Utils.h"
 
 
 // ─────────────────────────────────────────────────────────────
@@ -19,7 +14,7 @@ void WiFiManager::begin() {
         DEBUG_PRINTLN("❌ SPIFFS initialization failed!");
         return;
     }
-
+    wifiStatus= WiFiStatus::NotConnected;; // global variable from utils 
     StartWifiAP();
 }
 
@@ -34,8 +29,8 @@ void WiFiManager::StartWifiAP() {
 
     DEBUG_PRINTLN("[WiFiManager] Starting Access Point ✅");
 
-    String ssid     = Config->GetString(DEVICE_WIFI_HOTSPOT_NAME_KEY, DEVICE_WIFI_HOTSPOT_NAME);
-    String password = Config->GetString(DEVICE_AP_AUTH_PASS_KEY, DEVICE_AP_AUTH_PASS_DEFAULT);
+    String ssid     = dev->config->GetString(DEVICE_WIFI_HOTSPOT_NAME_KEY, DEVICE_WIFI_HOTSPOT_NAME);
+    String password = dev->config->GetString(DEVICE_AP_AUTH_PASS_KEY, DEVICE_AP_AUTH_PASS_DEFAULT);
 
     if (!WiFi.softAP(ssid.c_str(), password.c_str())) {
         DEBUG_PRINTLN("[WiFiManager] Failed to start AP ❌");
@@ -49,10 +44,10 @@ void WiFiManager::StartWifiAP() {
         return;
     }
 
-    if (DEBUGMODE) {
-        Serial.print("[WiFiManager] AP IP Address: ");
-        Serial.println(WFi->softAPIP());
-    }
+
+    DEBUG_PRINT("[WiFiManager] AP IP Address: ");
+    DEBUG_PRINTLN(WFi->softAPIP());
+
 
     // ── Web routes ───────────────────────────────────────────
     server.on("/", HTTP_GET, [this](AsyncWebServerRequest* request) {
@@ -149,4 +144,31 @@ void WiFiManager::startInactivityTimer() {
         );
         DEBUG_PRINTLN("[WiFiManager] Inactivity timer started ⏱️");
     }
+}
+
+
+void WiFiManager::onUserConnected() {
+    wifiStatus = WiFiStatus::UserConnected;
+    DEBUG_PRINTLN("[WiFiManager] User connected 🌐");
+}
+
+void WiFiManager::onAdminConnected() {
+    wifiStatus = WiFiStatus::AdminConnected;
+    DEBUG_PRINTLN("[WiFiManager] Admin connected 🔐");
+
+}
+
+void WiFiManager::onDisconnected() {
+
+    wifiStatus = WiFiStatus::NotConnected;
+    DEBUG_PRINTLN("[WiFiManager] All clients disconnected ❌");
+
+}
+
+bool WiFiManager::isUserConnected() const {
+    return wifiStatus != WiFiStatus::NotConnected;
+}
+
+bool WiFiManager::isAdminConnected() const {
+    return wifiStatus == WiFiStatus::AdminConnected;
 }

@@ -1,9 +1,7 @@
 #ifndef HEATER_MANAGER_H
 #define HEATER_MANAGER_H
 
-#include <Arduino.h>
-#include "ConfigManager.h"
-#include "config.h"  // Needed for ENAxx pin defines and PWM settings
+#include "Utils.h"
 
 /**
  * HeaterManager
@@ -20,10 +18,15 @@
 class HeaterManager {
 public:
   /**
-   * Initialize GPIOs and set PWM power from config
+   * Constructor
    * @param cfg Pointer to ConfigManager (for preferences access)
    */
-  void begin(ConfigManager* cfg);
+  explicit HeaterManager(ConfigManager* cfg) : config(cfg) {}
+
+  /**
+   * Initialize GPIOs and set PWM power from config
+   */
+  void begin();
 
   /**
    * Enable or disable one of the 10 outputs

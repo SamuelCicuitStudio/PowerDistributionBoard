@@ -1,8 +1,7 @@
 #ifndef BYPASS_MOSFET_H
 #define BYPASS_MOSFET_H
 
-#include <Arduino.h>
-#include "config.h"  // for INA_RELAY_BYPASS_PIN
+#include "Utils.h"
 
 class BypassMosfet {
 public:

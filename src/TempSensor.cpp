@@ -1,14 +1,10 @@
 #include "TempSensor.h"
 
-TempSensor::TempSensor()
-    : oneWire(ONE_WIRE_BUS), sensors(&oneWire) {}
 
-void TempSensor::begin(ConfigManager* config) {
+void TempSensor::begin() {
     Serial.println("###########################################################");
     Serial.println("#               Starting Temperature Manager 🌡️          #");
     Serial.println("###########################################################");
-
-    cfg = config;
     sensors.begin();
     sensorCount = sensors.getDeviceCount();
 

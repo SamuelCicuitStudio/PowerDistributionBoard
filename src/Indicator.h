@@ -1,8 +1,7 @@
 #ifndef INDICATOR_H
 #define INDICATOR_H
 
-#include <Arduino.h>
-#include "Config.h"
+#include "Utils.h"
 
 // ==================================================
 // Floor Heater LED Mapping and Control Overview

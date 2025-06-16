@@ -1,11 +1,10 @@
 #include "CpDischg.h"
 
-void CpDischg::begin(HeaterManager* heater) {
+void CpDischg::begin() {
     DEBUG_PRINTLN("###########################################################");
     DEBUG_PRINTLN("#                 Starting CPDis Manager ⚙️               #");
     DEBUG_PRINTLN("###########################################################");
 
-    heaterManager = heater;
     pinMode(CAPACITOR_ADC_PIN, INPUT);
     DEBUG_PRINTLN("[CpDischg] Ready to discharge using heater banks 🔥");
 }

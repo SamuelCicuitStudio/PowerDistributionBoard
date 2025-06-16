@@ -1,4 +1,5 @@
 #include "Device.h"
+#include "Utils.h"
 
 // Map of output keys (0-indexed for outputs 1 to 10)
 const char* outputKeys[10] = {
@@ -23,8 +24,7 @@ Device::Device(ConfigManager* cfg,
                Relay* relay,
                BypassMosfet* bypass,
                CpDischg* discharger,
-               Indicator* ledIndicator,
-               WiFiManager* wifi)
+               Indicator* ledIndicator)
     : config(cfg),
       heaterManager(heater),
       fanManager(fan),
@@ -33,12 +33,12 @@ Device::Device(ConfigManager* cfg,
       relayControl(relay),
       bypassFET(bypass),
       discharger(discharger),
-      indicator(ledIndicator),      // ✅ Initialize Indicator
-      wifiManager(wifi)             // ✅ Initialize WiFiManager
+      indicator(ledIndicator)
 {}
 
 void Device::begin() {
     currentState = DeviceState::Idle;
+    wifiStatus= WiFiStatus::NotConnected; // global variable from utils 
 
     DEBUG_PRINTLN("###########################################################");
     DEBUG_PRINTLN("#                 Starting Device Manager ⚙️              #");

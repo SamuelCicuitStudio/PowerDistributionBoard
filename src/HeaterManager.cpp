@@ -1,13 +1,11 @@
 #include "HeaterManager.h"
 
-void HeaterManager::begin(ConfigManager* cfg) {
+void HeaterManager::begin() {
     DEBUG_PRINTLN("###########################################################");
     DEBUG_PRINTLN("#                Starting Heater Manager                  #");
     DEBUG_PRINTLN("###########################################################");
 
-    config = cfg;
-
-    // Set ENA pins as outputs and disable all (LOW = inactive for UCC27524ADR)
+     // Set ENA pins as outputs and disable all (LOW = inactive for UCC27524ADR)
     for (uint8_t i = 0; i < 10; ++i) {
         pinMode(enaPins[i], OUTPUT);
         digitalWrite(enaPins[i], LOW);

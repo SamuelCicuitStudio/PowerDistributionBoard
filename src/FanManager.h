@@ -1,8 +1,7 @@
 #ifndef FAN_MANAGER_H
 #define FAN_MANAGER_H
 
-#include <Arduino.h>
-#include "config.h"  // For FAN_PWM_PIN and FAN_PWM_CHANNEL
+#include "Utils.h"
 
 class FanManager {
 public:

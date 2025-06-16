@@ -1,8 +1,7 @@
 #ifndef CURRENT_SENSOR_H
 #define CURRENT_SENSOR_H
 
-#include <Arduino.h>
-#include "config.h"
+#include "Utils.h"
 
 // Sensor characteristics (for ACS781LLRTR-100B-T)
 #define ACS781_SENSITIVITY_MV_PER_A   13.2f
