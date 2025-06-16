@@ -48,7 +48,7 @@
 #define AC_VOLTAGE_KEY                 "ACVLT"     // AC line voltage key
 #define DC_VOLTAGE_KEY                 "DCVLT"     // Target DC output voltage key
 #define DESIRED_OUTPUT_VOLTAGE_KEY     "DOUTV"    // User-defined target output voltage
-
+#define TEMP_SENSOR_COUNT_KEY          "TMPCNT"    // Number of temperature sensors detected
 
 // ---------- Output Access Flags ----------
 #define OUT01_ACCESS_KEY               "OUT1F"
@@ -67,7 +67,7 @@
 // ==================================================
 
 // ---------- Wi-Fi Defaults ----------
-#define DEVICE_WIFI_HOTSPOT_NAME       "Serto_PDis01"   // Default SSID
+#define DEVICE_WIFI_HOTSPOT_NAME       "PDis_"   // Default SSID
 #define DEVICE_AP_AUTH_PASS_DEFAULT    "1234567890"     // Default password
 
 // ---------- Timing & Behavior Defaults ----------
@@ -81,6 +81,7 @@
 #define DEFAULT_AC_VOLTAGE             230.0f           // Volts
 #define DEFAULT_DC_VOLTAGE             325.0f           // Volts
 #define DEFAULT_DESIRED_OUTPUT_VOLTAGE 180.0f     // Volts (safe default power level)
+#define DEFAULT_TEMP_SENSOR_COUNT      2           // Default to 2 sensor unless discovered otherwise
 
 
 // ---------- Output Access Defaults ----------
@@ -108,7 +109,7 @@
 #define LOCAL_IP                       IPAddress(192, 168, 4, 1)
 #define GATEWAY                        IPAddress(192, 168, 4, 1)
 #define SUBNET                         IPAddress(255, 255, 255, 0)
-
+#define INACTIVITY_TIMEOUT_MS 300000  // 5 minutes
 // ==================================================
 // Time Configuration
 // ==================================================
@@ -177,9 +178,6 @@
 
 #define FAN_PWM_PIN                    14                   // FAN output
 #define FAN_PWM_CHANNEL                2
-
-#define INB_CAP_DISCHARGE_PIN          48                   // Discharge MOSFET control
-#define INB_PWM_CHANNEL                3                    // PWM channel for INB
 
 #define PWM_FREQ                       50000                // 50 kHz for all PWM signals
 #define PWM_RESOLUTION                 8                    // 8-bit resolution (0–255)

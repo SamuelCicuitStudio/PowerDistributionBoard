@@ -38,9 +38,9 @@ ConfigManager::~ConfigManager() {
  */
 void ConfigManager::RestartSysDelayDown(unsigned long delayTime) {
     unsigned long startTime = millis();  // Record the start time
-       DEBUG_PRINTLN("###########################################################");
-        DEBUG_PRINTLN("#           Restarting the Device in: " + String(delayTime / 1000)+ " Sec              #" );
-        DEBUG_PRINTLN("###########################################################");
+    DEBUG_PRINTLN("###########################################################");
+    DEBUG_PRINTLN("#           Restarting the Device in: " + String(delayTime / 1000)+ " Sec              #" );
+    DEBUG_PRINTLN("###########################################################");
     // Ensure 32 '#' are printed after the countdown
     unsigned long interval = delayTime / 30;  // Divide delayTime by 32 to get interval
 
@@ -221,12 +221,21 @@ void ConfigManager::initializeDefaults() {
  * variables used by the ConfigManager. It includes settings for GPIO, 
  * Wi-Fi SSID, and password. Debug messages are printed if DEBUGMODE is enabled.
  */
-void ConfigManager::initializeVariables() {
+void ConfigManager::initializeVariables() { 
   // Reset flag
   PutBool(RESET_FLAG, false);
 
-  // Wi-Fi
-  PutString(DEVICE_WIFI_HOTSPOT_NAME_KEY, DEVICE_WIFI_HOTSPOT_NAME);
+  // Create a unique SSID by appending the last 3 bytes of MAC address
+  uint8_t mac[6];
+  esp_read_mac(mac, ESP_MAC_WIFI_SOFTAP);  // or ESP_MAC_WIFI_STA if preferred
+
+  char macSuffix[13];  // 6 bytes * 2 hex chars + null terminator
+  snprintf(macSuffix, sizeof(macSuffix), "%02X%02X%02X", mac[3], mac[4], mac[5]);
+
+  String ssid = String(DEVICE_WIFI_HOTSPOT_NAME) + macSuffix;
+
+  // Wi-Fi credentials
+  PutString(DEVICE_WIFI_HOTSPOT_NAME_KEY, ssid);
   PutString(DEVICE_AP_AUTH_PASS_KEY, DEVICE_AP_AUTH_PASS_DEFAULT);
 
   // Admin/User login
@@ -257,10 +266,13 @@ void ConfigManager::initializeVariables() {
   PutBool(OUT08_ACCESS_KEY, DEFAULT_OUT08_ACCESS);
   PutBool(OUT09_ACCESS_KEY, DEFAULT_OUT09_ACCESS);
   PutBool(OUT10_ACCESS_KEY, DEFAULT_OUT10_ACCESS);
-  PutFloat(DESIRED_OUTPUT_VOLTAGE_KEY, DEFAULT_DESIRED_OUTPUT_VOLTAGE);  // <--- new
+
+  // Desired voltage setting
+  PutFloat(DESIRED_OUTPUT_VOLTAGE_KEY, DEFAULT_DESIRED_OUTPUT_VOLTAGE);
+
+  // Temperature sensor count
+  PutInt(TEMP_SENSOR_COUNT_KEY, DEFAULT_TEMP_SENSOR_COUNT);
 }
-
-
 
 
 

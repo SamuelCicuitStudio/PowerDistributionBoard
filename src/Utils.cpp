@@ -32,3 +32,61 @@ void blink(uint8_t pin, int durationMs) {
         nullptr              // Task handle
     );
 }
+
+void disableAllPins() {
+    DEBUG_PRINTLN("[DEBUG] Disabling all system control pins...");
+
+    // Disable Nichrome wire control (active HIGH)
+    DEBUG_PRINTLN("Disabling Nichrome wire control...");
+    digitalWrite(ENA01_E_PIN, LOW);
+    digitalWrite(ENA02_E_PIN, LOW);
+    digitalWrite(ENA03_E_PIN, LOW);
+    digitalWrite(ENA04_E_PIN, LOW);
+    digitalWrite(ENA05_E_PIN, LOW);
+    digitalWrite(ENA06_E_PIN, LOW);
+    digitalWrite(ENA07_E_PIN, LOW);
+    digitalWrite(ENA08_E_PIN, LOW);
+    digitalWrite(ENA09_E_PIN, LOW);
+    digitalWrite(ENA10_E_PIN, LOW);
+
+    // LEDs off
+    DEBUG_PRINTLN("Turning off LEDs...");
+    digitalWrite(READY_LED_PIN, LOW);
+    digitalWrite(POWER_OFF_LED_PIN, LOW);
+    digitalWrite(FL06_LED_PIN, LOW);
+    digitalWrite(FL08_LED_PIN, LOW);
+
+    // Capacitor charge control
+    DEBUG_PRINTLN("Disabling capacitor charge controls...");
+    digitalWrite(RELAY_CONTROL_PIN, LOW);
+    digitalWrite(INA_RELAY_BYPASS_PIN, LOW);
+
+    // PWM outputs stop (set LOW)
+    DEBUG_PRINTLN("Stopping PWM outputs...");
+    digitalWrite(INA_OPT_PWM_PIN, LOW);
+    digitalWrite(FAN_PWM_PIN, LOW);
+
+    // Shift register control lines (safe state LOW)
+    DEBUG_PRINTLN("Resetting shift register control lines...");
+    digitalWrite(SHIFT_SER_PIN, LOW);
+    digitalWrite(SHIFT_SCK_PIN, LOW);
+    digitalWrite(SHIFT_RCK_PIN, LOW);
+
+    DEBUG_PRINTLN("[DEBUG] All control pins disabled.");
+}
+
+float readCapVoltage() {
+    const uint16_t samples = 64;                      // Number of samples for averaging
+    uint32_t total = 0;
+
+    for (uint16_t i = 0; i < samples; ++i) {
+        total += analogRead(CAPACITOR_ADC_PIN);
+        delayMicroseconds(200);                       // Small delay between reads (adjust if needed)
+    }
+
+    float avgADC = total / static_cast<float>(samples);
+    float voltage = (avgADC / ADC_MAX) * ADC_REF_VOLTAGE * VOLTAGE_DIVIDER_RATIO;
+
+    DEBUG_PRINTF("[CpDischg] Avg ADC: %.2f, Voltage: %.2fV 🧪\n", avgADC, voltage);
+    return voltage;
+}
