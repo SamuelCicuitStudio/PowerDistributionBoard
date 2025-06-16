@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>User Dashboard</title>
+  <link rel="stylesheet" href="css/user.css" />
+</head>
+<body>
+  <div class="ui-container">
+    <!-- Sidebar -->
+    <div class="sidebar">
+      <div class="tab active" onclick="switchTab(0)">Auto Mode</div>
+      <div class="tab" onclick="switchTab(1)">Manual Mode</div>
+    </div>
+
+    <!-- Auto Mode Content -->
+    <div class="content active" id="autoTab">
+      <div class="content-header">
+        <h2>Dashboard</h2>
+        <div class="user-status">
+          <div class="status-dot" title="Auto Mode"></div>
+          <div class="user-icon" onclick="toggleUserMenu()">👤</div>
+          <!-- Dropdown Menu -->
+          <div class="user-menu" id="userMenu">
+            <button id="editCredentialsBtn">Edit Credentials</button>
+            <button onclick="alert('Disconnected')">Disconnect</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="mode-toggle">
+        <label>Auto</label>
+        <label class="switch">
+          <input type="checkbox" id="modeToggle" onchange="toggleMode()">
+          <span class="slider"></span>
+        </label>
+        <label>Manual</label>
+
+        <label style="margin-left: auto;">LT</label>
+        <label class="switch">
+          <input type="checkbox" id="ltToggle" onchange="toggleLT()">
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <div class="gauges">
+        <div class="gauge-card">
+          <div class="disc voltage">230V</div>
+          <div class="gauge-label">Voltage</div>
+        </div>
+        <div class="gauge-card">
+          <div class="disc current">1.2A</div>
+          <div class="gauge-label">Current</div>
+        </div>
+        <div class="gauge-card">
+          <div class="disc temperature">35°C</div>
+          <div class="gauge-label">Temp 1</div>
+        </div>
+        <div class="gauge-card">
+          <div class="disc temperature">34°C</div>
+          <div class="gauge-label">Temp 2</div>
+        </div>
+        <div class="gauge-card">
+          <div class="disc temperature">36°C</div>
+          <div class="gauge-label">Temp 3</div>
+        </div>
+        <div class="gauge-card">
+          <div class="disc temperature">37°C</div>
+          <div class="gauge-label">Temp 4</div>
+        </div>
+      </div>
+
+      <div class="controls round-buttons">
+        <div class="round-button start" onclick="startSystem()">
+          <img src="icons/redo-5-16.png" alt="Start">
+        </div>
+        <div class="round-button stop" onclick="shutdownSystem()">
+          <img src="icons/power.png" alt="Shutdown">
+        </div>
+      </div>
+    </div>
+
+    <!-- Manual Mode Content -->
+    <div class="content" id="manualTab">
+      <div class="content-header">
+        <h2>Manual Control</h2>
+      </div>
+      <div class="manual-outputs" id="manualOutputs"></div>
+    </div>
+  </div>
+
+  <!-- Modal for editing credentials -->
+  <div class="user-modal" id="userModal">
+    <div class="user-modal-content">
+      <h3>Update Credentials</h3>
+      <input type="password" id="currentPassword" placeholder="Current Password" />
+      <input type="password" id="newPassword" placeholder="New Password" />
+      <input type="text" id="newId" placeholder="New Device ID" />
+      <div class="user-modal-actions round-actions">
+        <div class="round-button save" onclick="saveUserSettings()">
+          <img src="icons/ok_tank.png" alt="Save">
+        </div>
+        <div class="round-button cancel" onclick="closeUserModal()">
+          <img src="icons/close.png" alt="Cancel">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    &copy; 2025 Power Distribution Interface
+  </div>
+
+  <script src="js/user.js"></script>
+</body>
+</html>

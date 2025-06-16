@@ -51,3 +51,11 @@ void HeaterManager::setPower(float desiredVoltage) {
     ledcWrite(INA_OPT_PWM_CHANNEL, duty);
     DEBUG_PRINTF("PWM duty set to %d (%.1f%% of %.1fV) 🔋\n", duty, ratio * 100.0f, dcMax);
 }
+
+bool HeaterManager::getOutputState(uint8_t index) const {
+    if (index < 1 || index > 10) {
+        return false;
+    }
+    return digitalRead(enaPins[index - 1]) == HIGH;
+}
+

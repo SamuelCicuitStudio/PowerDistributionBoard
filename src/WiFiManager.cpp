@@ -129,7 +129,6 @@ void WiFiManager::StartWifiAP() {
         }
     );
 
-
     // 3. Disconnect
     server.on("/disconnect", HTTP_GET, [this](AsyncWebServerRequest* request) {
         onDisconnected();
@@ -244,6 +243,125 @@ void WiFiManager::StartWifiAP() {
         }
     );
 
+    // 6. Load all controllable states for UI initialization
+    server.on("/load_controls", HTTP_GET, [this](AsyncWebServerRequest* request) {
+        if (!isAuthenticated(request)) return;
+        resetTimer();
+
+        StaticJsonDocument<1024> doc;
+
+        // Basic control states
+        doc["ledFeedback"]     = dev->config->GetBool(LED_FEEDBACK_KEY, false);
+        doc["onTime"]          = dev->config->GetInt(ON_TIME_KEY, 500);
+        doc["offTime"]         = dev->config->GetInt(OFF_TIME_KEY, 500);
+        doc["desiredVoltage"]  = dev->config->GetFloat(DESIRED_OUTPUT_VOLTAGE_KEY, 0);
+        doc["acFrequency"]     = dev->config->GetInt(AC_FREQUENCY_KEY, 50);
+        doc["chargeResistor"]  = dev->config->GetFloat(CHARGE_RESISTOR_KEY, 0.0f);
+        doc["dcVoltage"]       = dev->config->GetFloat(DC_VOLTAGE_KEY, 0.0f);
+
+        // Relay state
+        doc["relay"] = dev->relayControl->isOn();
+
+        // Output states 1–10
+        JsonObject outputs = doc.createNestedObject("outputs");
+        for (int i = 1; i <= 10; ++i) {
+            outputs["output" + String(i)] = dev->heaterManager->getOutputState(i);
+        }
+
+        // Output access flags 1–10
+        JsonObject access = doc.createNestedObject("outputAccess");
+        for (int i = 1; i <= 10; ++i) {
+            String key = "OUT0" + String(i) + "F";
+            access["output" + String(i)] = dev->config->GetBool(key.c_str(), false);
+        }
+
+        String json;
+        serializeJson(doc, json);
+        request->send(200, "application/json", json);
+    });
+
+    // 7. Set Admin Credentials
+    server.on("/SetAdminCred", HTTP_POST, [this](AsyncWebServerRequest* request) { },
+        nullptr,
+        [this](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
+            static String body = "";
+            body += String((char*)data);
+
+            if (index + len == total) {
+                resetTimer();
+
+                if (!isAdminConnected()) {
+                    request->send(403, "application/json", "{\"error\":\"Not allowed\"}");
+                    body = "";
+                    return;
+                }
+
+                DynamicJsonDocument doc(512);
+                DeserializationError error = deserializeJson(doc, body);
+                body = "";
+
+                if (error) {
+                    request->send(400, "application/json", "{\"error\":\"Invalid JSON\"}");
+                    return;
+                }
+
+                String username = doc["username"] | "";
+                String password = doc["password"] | "";
+
+                if (username == "" || password == "") {
+                    request->send(400, "application/json", "{\"error\":\"Missing username or password\"}");
+                    return;
+                }
+
+                dev->config->PutString(ADMIN_ID_KEY, username);
+                dev->config->PutString(ADMIN_PASS_KEY, password);
+
+                request->send(200, "application/json", "{\"status\":\"admin credentials updated\"}");
+            }
+        }
+    );
+
+    // 8. Set User Credentials
+    server.on("/SetUserCred", HTTP_POST, [this](AsyncWebServerRequest* request) { },
+        nullptr,
+        [this](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
+            static String body = "";
+            body += String((char*)data);
+
+            if (index + len == total) {
+                resetTimer();
+
+                if (!isUserConnected()) {
+                    request->send(403, "application/json", "{\"error\":\"Not allowed\"}");
+                    body = "";
+                    return;
+                }
+
+                DynamicJsonDocument doc(512);
+                DeserializationError error = deserializeJson(doc, body);
+                body = "";
+
+                if (error) {
+                    request->send(400, "application/json", "{\"error\":\"Invalid JSON\"}");
+                    return;
+                }
+
+                String username = doc["username"] | "";
+                String password = doc["password"] | "";
+
+                if (username == "" || password == "") {
+                    request->send(400, "application/json", "{\"error\":\"Missing username or password\"}");
+                    return;
+                }
+
+                dev->config->PutString(USER_ID_KEY, username);
+                dev->config->PutString(USER_PASS_KEY, password);
+
+                request->send(200, "application/json", "{\"status\":\"user credentials updated\"}");
+            }
+        }
+    );
+
     server.on("/favicon.ico", HTTP_GET, [this](AsyncWebServerRequest* request) {
         keepAlive = true;
         request->send(204);  // No Content
@@ -251,6 +369,9 @@ void WiFiManager::StartWifiAP() {
 
     server.serveStatic("/", SPIFFS, "/");
     server.serveStatic("/icons/", SPIFFS, "/icons/").setCacheControl("max-age=86400");
+    server.serveStatic("/css/", SPIFFS, "/css/").setCacheControl("max-age=86400");
+    server.serveStatic("/js/", SPIFFS, "/js/").setCacheControl("max-age=86400");
+    server.serveStatic("/fonts/", SPIFFS, "/fonts/").setCacheControl("max-age=86400");
 
     server.begin();
 
@@ -349,14 +470,13 @@ void WiFiManager::onAdminConnected() {
 }
 
 void WiFiManager::onDisconnected() {
-
     wifiStatus = WiFiStatus::NotConnected;
     DEBUG_PRINTLN("[WiFiManager] All clients disconnected ❌");
 
 }
 
 bool WiFiManager::isUserConnected() const {
-    return wifiStatus != WiFiStatus::NotConnected;
+    return wifiStatus == WiFiStatus::UserConnected;
 }
 
 bool WiFiManager::isAdminConnected() const {

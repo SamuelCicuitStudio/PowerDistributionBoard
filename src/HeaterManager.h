@@ -45,6 +45,13 @@ public:
    * @param desiredVoltage Target voltage to scale against DC supply
    */
   void setPower(float desiredVoltage);
+  /**
+   * Get the current state of an output (true if ON, false if OFF)
+   * @param index 1–10 (corresponds to ENA01–ENA10)
+   * @return bool current state of the output pin
+   */
+  bool getOutputState(uint8_t index) const;
+
 
 private:
   ConfigManager* config = nullptr;

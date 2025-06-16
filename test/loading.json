@@ -1,0 +1,34 @@
+{
+  "ledFeedback": true,
+  "onTime": 800,
+  "offTime": 1200,
+  "desiredVoltage": 48.0,
+  "acFrequency": 50,
+  "chargeResistor": 12.5,
+  "dcVoltage": 325.0,
+  "relay": true,
+  "outputs": {
+    "output1": true,
+    "output2": false,
+    "output3": false,
+    "output4": true,
+    "output5": false,
+    "output6": true,
+    "output7": false,
+    "output8": false,
+    "output9": true,
+    "output10": false
+  },
+  "outputAccess": {
+    "output1": true,
+    "output2": false,
+    "output3": true,
+    "output4": true,
+    "output5": false,
+    "output6": true,
+    "output7": false,
+    "output8": true,
+    "output9": false,
+    "output10": true
+  }
+}
