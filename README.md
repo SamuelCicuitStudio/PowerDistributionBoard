@@ -1,7 +1,3 @@
-
----
-
-````markdown
 # 🔌 ESP32 WiFiManager REST API – Control & Monitoring Interface
 
 This repository implements a fully embedded HTTP server hosted on an ESP32 device for managing a power delivery controller. The system exposes a RESTful API via Wi-Fi for device monitoring and control. This document describes the available API endpoints and their functionality.
