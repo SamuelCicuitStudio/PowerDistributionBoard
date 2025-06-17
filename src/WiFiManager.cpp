@@ -300,7 +300,7 @@ void WiFiManager::StartWifiAP() {
                     }
 
                     request->send(200, "application/json", "{\"status\":\"ok\"}");
-                    
+
                 } else if (action == "get" && target == "status") {
                     String statusStr;
                     switch (dev->currentState) {
@@ -361,7 +361,7 @@ void WiFiManager::StartWifiAP() {
         request->send(200, "application/json", json);
     });
 
-/*
+
     // 7. Set Admin Credentials
     server.on("/SetAdminCred", HTTP_POST, [this](AsyncWebServerRequest* request) { },
         nullptr,
@@ -450,7 +450,7 @@ void WiFiManager::StartWifiAP() {
             }
         }
     );
-*/
+
 
     server.on("/favicon.ico", HTTP_GET, [this](AsyncWebServerRequest* request) {
         keepAlive = true;
@@ -458,11 +458,10 @@ void WiFiManager::StartWifiAP() {
     });
 
     server.serveStatic("/", SPIFFS, "/");
-    server.serveStatic("/icons/", SPIFFS, "/icons/").setCacheControl("max-age=86400");
-    server.serveStatic("/css/", SPIFFS, "/css/").setCacheControl("max-age=86400");
+    server.serveStatic("/icons/", SPIFFS, "/icons/").setCacheControl("no-store, must-revalidate");
+    server.serveStatic("/css/", SPIFFS, "/css/").setCacheControl("no-store, must-revalidate");
     server.serveStatic("/js/", SPIFFS, "/js/").setCacheControl("no-store, must-revalidate");
-    server.serveStatic("/fonts/", SPIFFS, "/fonts/").setCacheControl("max-age=86400");
-
+    server.serveStatic("/fonts/", SPIFFS, "/fonts/").setCacheControl("no-store, must-revalidate");
     server.begin();
 
     //Start auto-disable timer

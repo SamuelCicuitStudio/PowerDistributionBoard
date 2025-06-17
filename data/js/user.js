@@ -74,20 +74,30 @@ async function loadControls() {
     const res = await fetch("/load_controls");
     const data = await res.json();
 
+    console.log("Fetched config:", data);  // <== Confirm this in browser console
+
+    // === LT Toggle update ===
+    const ltToggle = document.getElementById("ltToggle");
+    if (ltToggle) {
+      ltToggle.checked = !!data.ledFeedback;  // Cast to boolean just in case
+      console.log(`LT toggle set to: ${ltToggle.checked}`);
+    } else {
+      console.warn("LT toggle element not found in DOM!");
+    }
+
+    // === Manual outputs code unchanged ===
     const manualOutputs = document.getElementById("manualOutputs");
     manualOutputs.innerHTML = "";
 
     const access = data.outputAccess || {};
     const states = data.outputs || {};
 
-    // Only include outputs that are both accessible and actively ON (true)
     Object.keys(access).forEach((key, i) => {
       const outputIndex = i + 1;
       const outputName = `output${outputIndex}`;
       const isAccessible = access[key] === true;
       const isChecked = states[outputName] === true;
 
-      // Only show accessible outputs
       if (isAccessible) {
         const item = document.createElement("div");
         item.className = "manual-item";
@@ -102,10 +112,12 @@ async function loadControls() {
         manualOutputs.appendChild(item);
       }
     });
+
   } catch (err) {
     console.error("Failed to load controls:", err);
   }
 }
+
 
 // Called by dynamically generated switches
 function handleOutputToggle(index, checkbox) {
