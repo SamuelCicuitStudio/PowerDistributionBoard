@@ -2,9 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <meta http-equiv="Cache-Control" content="no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>User Dashboard</title>
-  <link rel="stylesheet" href="css/user.css" />
+  <link rel="stylesheet" href="css/user.css?v=2" />
 </head>
 <body>
   <div class="ui-container">
@@ -12,6 +15,16 @@
     <div class="sidebar">
       <div class="tab active" onclick="switchTab(0)">Auto Mode</div>
       <div class="tab" onclick="switchTab(1)">Manual Mode</div>
+
+      <!-- Start/Stop buttons in sidebar -->
+      <div class="sidebar-controls" style="margin-top: 30px; display: flex; flex-direction: column; align-items: center; gap: 12px;">
+        <div class="round-button start" onclick="startSystem()" title="Start System">
+          <img src="icons/redo-5-16.png" alt="Start">
+        </div>
+        <div class="round-button stop" onclick="shutdownSystem()" title="Shutdown System">
+          <img src="icons/power.png" alt="Shutdown">
+        </div>
+      </div>
     </div>
 
     <!-- Auto Mode Content -->
@@ -21,123 +34,125 @@
         <div class="user-status">
           <div class="status-dot" title="Auto Mode"></div>
           <div class="user-icon" onclick="toggleUserMenu()">👤</div>
-            <!-- Dropdown Menu -->
-            <div class="user-menu" id="userMenu">
-              <button id="editCredentialsBtn" type="button">Edit Credentials</button>
-              <button id="disconnectBtn" type="button">Disconnect</button> <!-- ✅ fixed -->
-            </div>
-
+          <!-- Dropdown Menu -->
+          <div class="user-menu" id="userMenu">
+            <button id="editCredentialsBtn" type="button">Edit Credentials</button>
+            <button id="disconnectBtn" type="button">Disconnect</button>
+          </div>
         </div>
       </div>
 
-        <div class="mode-toggle">
+      <div class="mode-toggle" style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
         <label>Auto</label>
         <label class="switch">
-            <input type="checkbox" id="modeToggle" onchange="toggleMode()">
-            <span class="slider"></span>
+          <input type="checkbox" id="modeToggle" onchange="toggleMode()">
+          <span class="slider"></span>
         </label>
         <label>Manual</label>
 
         <label style="margin-left: 20px;">LT</label>
         <label class="switch">
-            <input type="checkbox" id="ltToggle" onchange="toggleLT()">
-            <span class="slider"></span>
+          <input type="checkbox" id="ltToggle" onchange="toggleLT()">
+          <span class="slider"></span>
         </label>
-        </div>
 
-        <div class="gauges">
+        <span style="margin-left: 30px;">Ready</span>
+        <div id="readyLed" style="width: 12px; height: 12px; background-color: gray; border-radius: 50%;"></div>
+        <span style="margin-left: 20px;">OFF</span>
+        <div id="offLed" style="width: 12px; height: 12px; background-color: gray; border-radius: 50%;"></div>
+      </div>
+
+      <!-- Gauges Section -->
+      <div class="gauges">
+        <!-- Voltage -->
         <div class="gauge-card">
-            <div class="gauge">
+          <div class="gauge">
             <svg viewBox="0 0 36 36" class="gauge-svg">
-                <g transform="rotate(-90 18 18)">
+              <g transform="rotate(-90 18 18)">
                 <path class="gauge-bg" d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"/>
                 <path class="gauge-fg voltage" stroke-dasharray="92, 100"
-                    d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"/>
-                </g>
-                <text x="18" y="18" class="gauge-value" transform="rotate(90 18 18)" id="voltageValue">230V</text>
+                      d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"/>
+              </g>
+              <text x="18" y="18" class="gauge-value" transform="rotate(90 18 18)" id="voltageValue">230V</text>
             </svg>
-            </div>
-            <div class="gauge-label">Voltage</div>
+          </div>
+          <div class="gauge-label">Voltage</div>
         </div>
 
+        <!-- Current -->
         <div class="gauge-card">
-            <div class="gauge">
+          <div class="gauge">
             <svg viewBox="0 0 36 36" class="gauge-svg">
-                <g transform="rotate(-90 18 18)">
+              <g transform="rotate(-90 18 18)">
                 <path class="gauge-bg" d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"/>
                 <path class="gauge-fg current" stroke-dasharray="60, 100"
-                    d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"/>
-                </g>
-                <text x="18" y="18" class="gauge-value" transform="rotate(90 18 18)" id="currentValue">1.2A</text>
+                      d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"/>
+              </g>
+              <text x="18" y="18" class="gauge-value" transform="rotate(90 18 18)" id="currentValue">1.2A</text>
             </svg>
-            </div>
-            <div class="gauge-label">Current</div>
+          </div>
+          <div class="gauge-label">Current</div>
         </div>
 
+        <!-- Temperature Gauges -->
+        <!-- Temp 1 -->
         <div class="gauge-card">
-            <div class="gauge">
+          <div class="gauge">
             <svg viewBox="0 0 36 36" class="gauge-svg">
-                <g transform="rotate(-90 18 18)">
+              <g transform="rotate(-90 18 18)">
                 <path class="gauge-bg" d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"/>
                 <path class="gauge-fg temperature" stroke-dasharray="70, 100"
-                    d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"/>
-                </g>
-                <text x="18" y="18" class="gauge-value" transform="rotate(90 18 18)" id="temp1Value">35°C</text>
+                      d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"/>
+              </g>
+              <text x="18" y="18" class="gauge-value" transform="rotate(90 18 18)" id="temp1Value">35°C</text>
             </svg>
-            </div>
-            <div class="gauge-label">Temp 1</div>
+          </div>
+          <div class="gauge-label">Temp 1</div>
         </div>
 
+        <!-- Temp 2 -->
         <div class="gauge-card">
-            <div class="gauge">
+          <div class="gauge">
             <svg viewBox="0 0 36 36" class="gauge-svg">
-                <g transform="rotate(-90 18 18)">
+              <g transform="rotate(-90 18 18)">
                 <path class="gauge-bg" d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"/>
                 <path class="gauge-fg temperature" stroke-dasharray="68, 100"
-                    d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"/>
-                </g>
-                <text x="18" y="18" class="gauge-value" transform="rotate(90 18 18)" id="temp2Value">34°C</text>
+                      d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"/>
+              </g>
+              <text x="18" y="18" class="gauge-value" transform="rotate(90 18 18)" id="temp2Value">34°C</text>
             </svg>
-            </div>
-            <div class="gauge-label">Temp 2</div>
+          </div>
+          <div class="gauge-label">Temp 2</div>
         </div>
 
+        <!-- Temp 3 -->
         <div class="gauge-card">
-            <div class="gauge">
+          <div class="gauge">
             <svg viewBox="0 0 36 36" class="gauge-svg">
-                <g transform="rotate(-90 18 18)">
+              <g transform="rotate(-90 18 18)">
                 <path class="gauge-bg" d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"/>
                 <path class="gauge-fg temperature" stroke-dasharray="72, 100"
-                    d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"/>
-                </g>
-                <text x="18" y="18" class="gauge-value" transform="rotate(90 18 18)" id="temp3Value">36°C</text>
+                      d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"/>
+              </g>
+              <text x="18" y="18" class="gauge-value" transform="rotate(90 18 18)" id="temp3Value">36°C</text>
             </svg>
-            </div>
-            <div class="gauge-label">Temp 3</div>
+          </div>
+          <div class="gauge-label">Temp 3</div>
         </div>
 
+        <!-- Temp 4 -->
         <div class="gauge-card">
-            <div class="gauge">
+          <div class="gauge">
             <svg viewBox="0 0 36 36" class="gauge-svg">
-                <g transform="rotate(-90 18 18)">
+              <g transform="rotate(-90 18 18)">
                 <path class="gauge-bg" d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"/>
                 <path class="gauge-fg temperature" stroke-dasharray="74, 100"
-                    d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"/>
-                </g>
-                <text x="18" y="18" class="gauge-value" transform="rotate(90 18 18)" id="temp4Value">37°C</text>
+                      d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"/>
+              </g>
+              <text x="18" y="18" class="gauge-value" transform="rotate(90 18 18)" id="temp4Value">37°C</text>
             </svg>
-            </div>
-            <div class="gauge-label">Temp 4</div>
-        </div>
-        </div>
-
-
-      <div class="controls round-buttons">
-        <div class="round-button start" onclick="startSystem()">
-          <img src="icons/redo-5-16.png" alt="Start">
-        </div>
-        <div class="round-button stop" onclick="shutdownSystem()">
-          <img src="icons/power.png" alt="Shutdown">
+          </div>
+          <div class="gauge-label">Temp 4</div>
         </div>
       </div>
     </div>
@@ -151,7 +166,7 @@
     </div>
   </div>
 
-  <!-- Modal for editing credentials -->
+  <!-- Modal -->
   <div class="user-modal" id="userModal">
     <div class="user-modal-content">
       <h3>Update Credentials</h3>
@@ -174,6 +189,6 @@
     &copy; 2025 Power Distribution Interface
   </div>
 
-  <script src="js/user.js"></script>
+  <script src="js/user.js?v=2"></script>
 </body>
 </html>

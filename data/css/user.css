@@ -27,7 +27,7 @@
 
   .ui-container {
     width: 720px;
-    height: 560px;
+    height: 500px;
     display: flex;
     background: rgba(255, 255, 255, 0.04);
     backdrop-filter: blur(10px);

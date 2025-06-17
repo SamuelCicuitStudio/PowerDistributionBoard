@@ -43,6 +43,7 @@ public:
     // ───── Inactivity Timeout ─────
     static void inactivityTask(void* param);              // ⏱ RTOS task to monitor inactivity
     TaskHandle_t inactivityTaskHandle = nullptr;          // ⏱ RTOS task handle
+    TaskHandle_t heartbeatTaskHandle = nullptr;
     unsigned long lastActivityMillis = 0;                 // ⏱ Last activity timestamp
     void startInactivityTimer();                          // ⏱ Start monitoring inactivity
 

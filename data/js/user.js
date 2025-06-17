@@ -177,10 +177,58 @@ function updateGauge(id, value, unit, maxValue) {
   const display = document.getElementById(id);
   const stroke = display.closest('svg').querySelector('path.gauge-fg');
 
-  const percent = Math.min((value / maxValue) * 100, 100);
+  if (value === "Off") {
+    stroke.setAttribute("stroke-dasharray", `0, 100`);
+    display.textContent = "Off";
+    return;
+  }
+
+  const percent = Math.min((parseFloat(value) / maxValue) * 100, 100);
   stroke.setAttribute("stroke-dasharray", `${percent}, 100`);
   display.textContent = `${value}${unit}`;
 }
+
+// === LIVE DATA POLLER ===
+function startMonitorPolling(intervalMs = 1000) {
+  setInterval(() => {
+    fetch("/monitor")
+      .then(res => res.json())
+      .then(data => {
+        const voltage = parseFloat(data.capVoltage).toFixed(2);
+
+        let rawCurrent = parseFloat(data.current);
+        if (isNaN(rawCurrent)) rawCurrent = 0;
+        const clampedCurrent = Math.max(0, Math.min(100, rawCurrent)).toFixed(2);
+
+        updateGauge("voltageValue", voltage, "V", 400);
+        updateGauge("currentValue", clampedCurrent, "A", 100);
+
+        const temps = data.temperatures || [];
+        updateGauge("temp1Value", temps[0] === -127 ? "Off" : parseFloat(temps[0]).toFixed(2), "°C", 150);
+        updateGauge("temp2Value", temps[1] === -127 ? "Off" : parseFloat(temps[1]).toFixed(2), "°C", 150);
+        updateGauge("temp3Value", temps[2] === -127 ? "Off" : parseFloat(temps[2]).toFixed(2), "°C", 150);
+        updateGauge("temp4Value", temps[3] === -127 ? "Off" : parseFloat(temps[3]).toFixed(2), "°C", 150);
+
+        // Update LED indicators
+        const readyLed = document.getElementById("readyLed");
+        const offLed = document.getElementById("offLed");
+
+        if (data.ready) {
+          readyLed.style.backgroundColor = "limegreen";
+        } else {
+          readyLed.style.backgroundColor = "gray";
+        }
+
+        if (data.off) {
+          offLed.style.backgroundColor = "red";
+        } else {
+          offLed.style.backgroundColor = "gray";
+        }
+      })
+      .catch(err => console.error("Monitor error:", err));
+  }, intervalMs);
+}
+
 
 // === HEARTBEAT PINGER ===
 function startHeartbeat(intervalMs = 3000) {
@@ -190,32 +238,13 @@ function startHeartbeat(intervalMs = 3000) {
       .then(text => {
         if (text !== "alive") {
           console.warn("Unexpected heartbeat:", text);
-          window.location.href = "/";  // fallback in case of invalid response
+          window.location.href = "http://192.168.4.1/login";  // fallback to AP mode login
         }
       })
       .catch(err => {
         console.error("Heartbeat error:", err);
-        window.location.href = "/";  // fallback on network error
+        window.location.href = "http://192.168.4.1/login";  // fallback on network error
       });
-  }, intervalMs);
-}
-
-// === LIVE DATA POLLER ===
-function startMonitorPolling(intervalMs = 1000) {
-  setInterval(() => {
-    fetch("/monitor")
-      .then(res => res.json())
-      .then(data => {
-        updateGauge("voltageValue", data.capVoltage, "V", 400);
-        updateGauge("currentValue", data.current, "A", 100);
-
-        const temps = data.temperatures || [];
-        if (temps[0]) updateGauge("temp1Value", temps[0], "°C", 150);
-        if (temps[1]) updateGauge("temp2Value", temps[1], "°C", 150);
-        if (temps[2]) updateGauge("temp3Value", temps[2], "°C", 150);
-        if (temps[3]) updateGauge("temp4Value", temps[3], "°C", 150);
-      })
-      .catch(err => console.error("Monitor error:", err));
   }, intervalMs);
 }
 
@@ -242,7 +271,6 @@ function sendControlCommand(action, target, value) {
     .catch(err => console.error("Control error:", err));
 }
 // === DISCONNECT FUNCTION ===
-
 function disconnectDevice() {
   fetch("/disconnect", {
     method: "POST",
@@ -283,4 +311,14 @@ window.addEventListener("DOMContentLoaded", () => {
     document.getElementById("userModal").style.display = "flex";
     document.getElementById("userMenu").style.display = "none";
   });
+});
+
+const REQUIRED_VERSION = "v2";
+
+window.addEventListener("load", () => {
+  const localVersion = localStorage.getItem("ui_version");
+  if (localVersion !== REQUIRED_VERSION) {
+    localStorage.setItem("ui_version", REQUIRED_VERSION);
+    alert("Please refresh the page using Ctrl+F5 or clear your browser cache to load the latest interface.");
+  }
 });

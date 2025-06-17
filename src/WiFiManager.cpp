@@ -46,7 +46,7 @@ void WiFiManager::StartWifiAP() {
 
     // ── Web routes ───────────────────────────────────────────
     
-    server.on("/", HTTP_GET, [this](AsyncWebServerRequest* request) {
+    server.on("/login", HTTP_GET, [this](AsyncWebServerRequest* request) {
         resetTimer();// reset activity timer
         handleRoot(request);
     });
@@ -57,13 +57,16 @@ void WiFiManager::StartWifiAP() {
     // 1. Heartbeat – Update keep-alive and verify auth
     server.on("/heartbeat", HTTP_GET, [this](AsyncWebServerRequest* request) {
         if (!isAuthenticated(request)) {
-            request->redirect("/");  // Redirect to root if not authenticated
+            DEBUG_PRINTLN("[Heartbeat] Not authenticated ❌ → Redirecting to root");
+            request->redirect("/login");
             return;
         }
-
+        DEBUG_PRINTLN("[Heartbeat❤️ ]");
+        heartbeat();// start heartbeat
         keepAlive = true;
         request->send(200, "text/plain", "alive");
     });
+
 
     // 2. Connect – Authenticate user or admin via JSON body
     server.on("/connect", HTTP_POST,[this](AsyncWebServerRequest* request) {
@@ -169,24 +172,30 @@ void WiFiManager::StartWifiAP() {
     );
 
 
-/*
     // 4. Monitor – Return live readings
     server.on("/monitor", HTTP_GET, [this](AsyncWebServerRequest* request) {
         if (!isAuthenticated(request)) return;
+        
+        resetTimer();  // Reset activity timer
+
         StaticJsonDocument<512> doc;
-        resetTimer();// reset activity timer
         doc["capVoltage"] = readCapVoltage();
         doc["current"] = dev->currentSensor->readCurrent();
 
         JsonArray temps = doc.createNestedArray("temperatures");
-        for (uint8_t i = 0; i < dev->tempSensor->getSensorCount(); ++i) {
-            temps.add(dev->tempSensor->getTemperature(i));
+
+        for (uint8_t i = 0; i < 4; ++i) {
+            float temp = (i < dev->tempSensor->getSensorCount()) ? dev->tempSensor->getTemperature(i) : -127;
+            temps.add((temp == -127) ? -127 : temp);
         }
+
         String json;
         serializeJson(doc, json);
+        DEBUG_PRINTLN("[Update] Monitor data sent 🚀");
         request->send(200, "application/json", json);
     });
-*/ 
+
+
     // 5. Control – Unified command handler with JSON body
     server.on("/control", HTTP_POST,[this](AsyncWebServerRequest* request) {
             // Nothing here; handled in body lambda
@@ -250,6 +259,7 @@ void WiFiManager::StartWifiAP() {
                             DEBUG_PRINT("🔥 Output "); DEBUG_PRINT(index);
                             DEBUG_PRINT(" set to: "); DEBUG_PRINTLN(value.as<bool>() ? "ON" : "OFF");
                             dev->heaterManager->setOutput(index, value.as<bool>());
+                            dev->indicator->setLED(index, value.as<bool>());
                         }
 
                     } else if (target == "desiredVoltage") {
@@ -280,6 +290,8 @@ void WiFiManager::StartWifiAP() {
                     } else if (target == "mode") {
                         DEBUG_PRINTLN("🧭 Mode switch triggered → Going IDLE");
                         dev->currentState = DeviceState::Idle;
+                        dev->indicator->clearAll();
+                        dev->heaterManager->disableAll();
 
                     } else if (target == "systemStart") {
                         DEBUG_PRINTLN("▶️ System Start requested");
@@ -321,45 +333,50 @@ void WiFiManager::StartWifiAP() {
     );
 
     // 6. Load all controllable states for UI initialization
-    server.on("/load_controls", HTTP_GET, [this](AsyncWebServerRequest* request) {
-        if (!isAuthenticated(request)) return;
-        resetTimer();
+server.on("/load_controls", HTTP_GET, [this](AsyncWebServerRequest* request) {
+    if (!isAuthenticated(request)) return;
+    resetTimer();
 
-        StaticJsonDocument<1024> doc;
+    StaticJsonDocument<1024> doc;
 
-        // Basic control states
-        doc["ledFeedback"]     = dev->config->GetBool(LED_FEEDBACK_KEY, false);
-        doc["onTime"]          = dev->config->GetInt(ON_TIME_KEY, 500);
-        doc["offTime"]         = dev->config->GetInt(OFF_TIME_KEY, 500);
-        doc["desiredVoltage"]  = dev->config->GetFloat(DESIRED_OUTPUT_VOLTAGE_KEY, 0);
-        doc["acFrequency"]     = dev->config->GetInt(AC_FREQUENCY_KEY, 50);
-        doc["chargeResistor"]  = dev->config->GetFloat(CHARGE_RESISTOR_KEY, 0.0f);
-        doc["dcVoltage"]       = dev->config->GetFloat(DC_VOLTAGE_KEY, 0.0f);
+    // Basic control states
+    doc["ledFeedback"]     = dev->config->GetBool(LED_FEEDBACK_KEY, false);
+    doc["onTime"]          = dev->config->GetInt(ON_TIME_KEY, 500);
+    doc["offTime"]         = dev->config->GetInt(OFF_TIME_KEY, 500);
+    doc["desiredVoltage"]  = dev->config->GetFloat(DESIRED_OUTPUT_VOLTAGE_KEY, 0);
+    doc["acFrequency"]     = dev->config->GetInt(AC_FREQUENCY_KEY, 50);
+    doc["chargeResistor"]  = dev->config->GetFloat(CHARGE_RESISTOR_KEY, 0.0f);
+    doc["dcVoltage"]       = dev->config->GetFloat(DC_VOLTAGE_KEY, 0.0f);
 
-        // Relay state
-        doc["relay"] = dev->relayControl->isOn();
+    // Relay state
+    bool relayOn = dev->relayControl->isOn();
+    doc["relay"] = relayOn;
 
-        // Output states 1–10
-        JsonObject outputs = doc.createNestedObject("outputs");
-        for (int i = 1; i <= 10; ++i) {
-            outputs["output" + String(i)] = dev->heaterManager->getOutputState(i);
-        }
+    // Ready and OFF LED indicators
+    doc["ready"] = digitalRead(READY_LED_PIN);     // true if system is in ready state
+    doc["off"]   =  digitalRead(POWER_OFF_LED_PIN);          // true if system is off
 
-        // Output access flags (non-padded keys like "OUT1F", "OUT2F", ...)
-        const char* accessKeys[10] = {
-            OUT01_ACCESS_KEY, OUT02_ACCESS_KEY, OUT03_ACCESS_KEY, OUT04_ACCESS_KEY, OUT05_ACCESS_KEY,
-            OUT06_ACCESS_KEY, OUT07_ACCESS_KEY, OUT08_ACCESS_KEY, OUT09_ACCESS_KEY, OUT10_ACCESS_KEY
-        };
+    // Output states 1–10
+    JsonObject outputs = doc.createNestedObject("outputs");
+    for (int i = 1; i <= 10; ++i) {
+        outputs["output" + String(i)] = dev->heaterManager->getOutputState(i);
+    }
 
-        JsonObject access = doc.createNestedObject("outputAccess");
-        for (int i = 0; i < 10; ++i) {
-            access["output" + String(i + 1)] = dev->config->GetBool(accessKeys[i], false);
-        }
+    // Output access flags (non-padded keys like "OUT1F", "OUT2F", ...)
+    const char* accessKeys[10] = {
+        OUT01_ACCESS_KEY, OUT02_ACCESS_KEY, OUT03_ACCESS_KEY, OUT04_ACCESS_KEY, OUT05_ACCESS_KEY,
+        OUT06_ACCESS_KEY, OUT07_ACCESS_KEY, OUT08_ACCESS_KEY, OUT09_ACCESS_KEY, OUT10_ACCESS_KEY
+    };
 
-        String json;
-        serializeJson(doc, json);
-        request->send(200, "application/json", json);
-    });
+    JsonObject access = doc.createNestedObject("outputAccess");
+    for (int i = 0; i < 10; ++i) {
+        access["output" + String(i + 1)] = dev->config->GetBool(accessKeys[i], false);
+    }
+
+    String json;
+    serializeJson(doc, json);
+    request->send(200, "application/json", json);
+});
 
 
     // 7. Set Admin Credentials
@@ -372,7 +389,10 @@ void WiFiManager::StartWifiAP() {
             if (index + len == total) {
                 resetTimer();
 
+                DEBUG_PRINTLN("[AdminCred] Received request ✅");
+
                 if (!isAdminConnected()) {
+                    DEBUG_PRINTLN("[AdminCred] Admin not connected ❌");
                     request->send(403, "application/json", "{\"error\":\"Not allowed\"}");
                     body = "";
                     return;
@@ -383,6 +403,7 @@ void WiFiManager::StartWifiAP() {
                 body = "";
 
                 if (error) {
+                    DEBUG_PRINTLN("[AdminCred] Invalid JSON ❌");
                     request->send(400, "application/json", "{\"error\":\"Invalid JSON\"}");
                     return;
                 }
@@ -391,13 +412,18 @@ void WiFiManager::StartWifiAP() {
                 String password = doc["password"] | "";
 
                 if (username == "" || password == "") {
+                    DEBUG_PRINTLN("[AdminCred] Missing username or password ❌");
                     request->send(400, "application/json", "{\"error\":\"Missing username or password\"}");
                     return;
                 }
 
+                DEBUG_PRINTLN("[AdminCred] Saving new admin credentials ✅");
+                DEBUG_PRINT("[AdminCred] Username: "); DEBUG_PRINTLN(username);
+
                 dev->config->PutString(ADMIN_ID_KEY, username);
                 dev->config->PutString(ADMIN_PASS_KEY, password);
 
+                DEBUG_PRINTLN("[AdminCred] Admin credentials updated ✅");
                 request->send(200, "application/json", "{\"status\":\"admin credentials updated\"}");
             }
         }
@@ -413,7 +439,10 @@ void WiFiManager::StartWifiAP() {
             if (index + len == total) {
                 resetTimer();
 
-                if (!isUserConnected()) {
+                DEBUG_PRINTLN("[UserCred] Received request ✅");
+
+                if (!isUserConnected() || !isAdminConnected()) {
+                    DEBUG_PRINTLN("[UserCred] User not connected ❌");
                     request->send(403, "application/json", "{\"error\":\"Not allowed\"}");
                     body = "";
                     return;
@@ -424,6 +453,7 @@ void WiFiManager::StartWifiAP() {
                 body = "";
 
                 if (error) {
+                    DEBUG_PRINTLN("[UserCred] Invalid JSON ❌");
                     request->send(400, "application/json", "{\"error\":\"Invalid JSON\"}");
                     return;
                 }
@@ -433,24 +463,29 @@ void WiFiManager::StartWifiAP() {
                 String newPass = doc["password"] | "";
 
                 if (current == "" || newUser == "" || newPass == "") {
+                    DEBUG_PRINTLN("[UserCred] Missing required fields ❌");
                     request->send(400, "application/json", "{\"error\":\"Missing required fields\"}");
                     return;
                 }
 
                 String stored = dev->config->GetString(USER_PASS_KEY, "");
                 if (stored != current) {
+                    DEBUG_PRINTLN("[UserCred] Incorrect current password ❌");
                     request->send(403, "application/json", "{\"error\":\"Incorrect current password\"}");
                     return;
                 }
 
+                DEBUG_PRINTLN("[UserCred] Updating user credentials ✅");
+                DEBUG_PRINT("[UserCred] New User ID: "); DEBUG_PRINTLN(newUser);
+
                 dev->config->PutString(USER_ID_KEY, newUser);
                 dev->config->PutString(USER_PASS_KEY, newPass);
 
+                DEBUG_PRINTLN("[UserCred] User credentials updated ✅");
                 request->send(200, "application/json", "{\"status\":\"Credentials updated\"}");
             }
         }
     );
-
 
     server.on("/favicon.ico", HTTP_GET, [this](AsyncWebServerRequest* request) {
         keepAlive = true;
@@ -465,7 +500,7 @@ void WiFiManager::StartWifiAP() {
     server.begin();
 
     //Start auto-disable timer
-    //startInactivityTimer();
+    startInactivityTimer();
 }
 
 
@@ -581,10 +616,10 @@ bool WiFiManager::isAuthenticated(AsyncWebServerRequest* request) {
 }
 
 void WiFiManager::heartbeat() {
-    static TaskHandle_t heartbeatTaskHandle = nullptr;
-
     // Only start if not already running
-    if (heartbeatTaskHandle) return;
+    if (heartbeatTaskHandle != nullptr) return;
+
+    DEBUG_PRINTLN("[WiFiManager] Heartbeat Create 🟢");
 
     xTaskCreatePinnedToCore(
         [](void* param) {
@@ -595,16 +630,16 @@ void WiFiManager::heartbeat() {
                 vTaskDelay(interval);
 
                 if (!self->keepAlive) {
-                    Serial.println("[WiFiManager] ⚠️  Heartbeat timeout – disconnecting");
+                    DEBUG_PRINTLN("[WiFiManager] ⚠️  Heartbeat timeout – disconnecting");
                     self->onDisconnected();
 
-                    // Delete this task after use
-                    TaskHandle_t currentTask = xTaskGetCurrentTaskHandle();
-                    vTaskDelete(currentTask);
+                    DEBUG_PRINTLN("[WiFiManager] Heartbeat deleted 🔴");
+                    self->heartbeatTaskHandle = nullptr;
+                    vTaskDelete(nullptr);
                     return;
                 }
-                // Reset for next heartbeat
-                self->keepAlive = false;
+
+                self->keepAlive = false; // Reset for next round
             }
         },
         "HeartbeatTask",        // Task name

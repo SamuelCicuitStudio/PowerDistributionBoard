@@ -81,7 +81,7 @@
 #define DEFAULT_AC_VOLTAGE             230.0f           // Volts
 #define DEFAULT_DC_VOLTAGE             325.0f           // Volts
 #define DEFAULT_DESIRED_OUTPUT_VOLTAGE 180.0f     // Volts (safe default power level)
-#define DEFAULT_TEMP_SENSOR_COUNT      2           // Default to 2 sensor unless discovered otherwise
+#define DEFAULT_TEMP_SENSOR_COUNT      4           // Default to 4 sensor unless discovered otherwise
 
 
 // ---------- Output Access Defaults ----------
