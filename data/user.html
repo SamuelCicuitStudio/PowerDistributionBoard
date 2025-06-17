@@ -29,47 +29,107 @@
         </div>
       </div>
 
-      <div class="mode-toggle">
+        <div class="mode-toggle">
         <label>Auto</label>
         <label class="switch">
-          <input type="checkbox" id="modeToggle" onchange="toggleMode()">
-          <span class="slider"></span>
+            <input type="checkbox" id="modeToggle" onchange="toggleMode()">
+            <span class="slider"></span>
         </label>
         <label>Manual</label>
 
-        <label style="margin-left: auto;">LT</label>
+        <label style="margin-left: 20px;">LT</label>
         <label class="switch">
-          <input type="checkbox" id="ltToggle" onchange="toggleLT()">
-          <span class="slider"></span>
+            <input type="checkbox" id="ltToggle" onchange="toggleLT()">
+            <span class="slider"></span>
         </label>
-      </div>
+        </div>
 
-      <div class="gauges">
+        <div class="gauges">
         <div class="gauge-card">
-          <div class="disc voltage">230V</div>
-          <div class="gauge-label">Voltage</div>
+            <div class="gauge">
+            <svg viewBox="0 0 36 36" class="gauge-svg">
+                <g transform="rotate(-90 18 18)">
+                <path class="gauge-bg" d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"/>
+                <path class="gauge-fg voltage" stroke-dasharray="92, 100"
+                    d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"/>
+                </g>
+                <text x="18" y="18" class="gauge-value" transform="rotate(90 18 18)" id="voltageValue">230V</text>
+            </svg>
+            </div>
+            <div class="gauge-label">Voltage</div>
         </div>
+
         <div class="gauge-card">
-          <div class="disc current">1.2A</div>
-          <div class="gauge-label">Current</div>
+            <div class="gauge">
+            <svg viewBox="0 0 36 36" class="gauge-svg">
+                <g transform="rotate(-90 18 18)">
+                <path class="gauge-bg" d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"/>
+                <path class="gauge-fg current" stroke-dasharray="60, 100"
+                    d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"/>
+                </g>
+                <text x="18" y="18" class="gauge-value" transform="rotate(90 18 18)" id="currentValue">1.2A</text>
+            </svg>
+            </div>
+            <div class="gauge-label">Current</div>
         </div>
+
         <div class="gauge-card">
-          <div class="disc temperature">35°C</div>
-          <div class="gauge-label">Temp 1</div>
+            <div class="gauge">
+            <svg viewBox="0 0 36 36" class="gauge-svg">
+                <g transform="rotate(-90 18 18)">
+                <path class="gauge-bg" d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"/>
+                <path class="gauge-fg temperature" stroke-dasharray="70, 100"
+                    d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"/>
+                </g>
+                <text x="18" y="18" class="gauge-value" transform="rotate(90 18 18)" id="temp1Value">35°C</text>
+            </svg>
+            </div>
+            <div class="gauge-label">Temp 1</div>
         </div>
+
         <div class="gauge-card">
-          <div class="disc temperature">34°C</div>
-          <div class="gauge-label">Temp 2</div>
+            <div class="gauge">
+            <svg viewBox="0 0 36 36" class="gauge-svg">
+                <g transform="rotate(-90 18 18)">
+                <path class="gauge-bg" d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"/>
+                <path class="gauge-fg temperature" stroke-dasharray="68, 100"
+                    d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"/>
+                </g>
+                <text x="18" y="18" class="gauge-value" transform="rotate(90 18 18)" id="temp2Value">34°C</text>
+            </svg>
+            </div>
+            <div class="gauge-label">Temp 2</div>
         </div>
+
         <div class="gauge-card">
-          <div class="disc temperature">36°C</div>
-          <div class="gauge-label">Temp 3</div>
+            <div class="gauge">
+            <svg viewBox="0 0 36 36" class="gauge-svg">
+                <g transform="rotate(-90 18 18)">
+                <path class="gauge-bg" d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"/>
+                <path class="gauge-fg temperature" stroke-dasharray="72, 100"
+                    d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"/>
+                </g>
+                <text x="18" y="18" class="gauge-value" transform="rotate(90 18 18)" id="temp3Value">36°C</text>
+            </svg>
+            </div>
+            <div class="gauge-label">Temp 3</div>
         </div>
+
         <div class="gauge-card">
-          <div class="disc temperature">37°C</div>
-          <div class="gauge-label">Temp 4</div>
+            <div class="gauge">
+            <svg viewBox="0 0 36 36" class="gauge-svg">
+                <g transform="rotate(-90 18 18)">
+                <path class="gauge-bg" d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"/>
+                <path class="gauge-fg temperature" stroke-dasharray="74, 100"
+                    d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"/>
+                </g>
+                <text x="18" y="18" class="gauge-value" transform="rotate(90 18 18)" id="temp4Value">37°C</text>
+            </svg>
+            </div>
+            <div class="gauge-label">Temp 4</div>
         </div>
-      </div>
+        </div>
+
 
       <div class="controls round-buttons">
         <div class="round-button start" onclick="startSystem()">

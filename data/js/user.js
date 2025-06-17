@@ -57,9 +57,13 @@ const manualScrollArea = document.querySelector('.manual-outputs');
 manualScrollArea.addEventListener('wheel', function (e) {
   if (!e.shiftKey) {
     e.preventDefault();
-    manualScrollArea.scrollLeft += e.deltaY;
+    manualScrollArea.scrollBy({
+      left: e.deltaY,
+      behavior: 'smooth'
+    });
   }
 });
+
 
 // Manual outputs generation
 const manualOutputs = document.getElementById("manualOutputs");
@@ -106,3 +110,31 @@ window.addEventListener("DOMContentLoaded", () => {
     document.getElementById("userMenu").style.display = "none";
   });
 });
+
+  // Helper: sets the gauge value and stroke
+  function updateGauge(id, value, unit, maxValue) {
+    const display = document.getElementById(id);
+    const stroke = display.closest('svg').querySelector('path.gauge-fg');
+
+    // Ensure value doesn't exceed 100%
+    const percent = Math.min((value / maxValue) * 100, 100);
+    const dash = `${percent}, 100`;
+
+    stroke.setAttribute("stroke-dasharray", dash);
+    display.textContent = `${value}${unit}`;
+  }
+
+  // Simulated update every second (replace this with real data)
+  setInterval(() => {
+    // Simulated values (replace with real sensor data)
+    const voltage = Math.floor(Math.random() * 31) + 210; // 210–240V
+    const current = (Math.random() * 5).toFixed(1);        // 0–5A
+    const temps = Array.from({ length: 4 }, () => (Math.random() * 30 + 20).toFixed(1)); // 20–50°C
+
+    updateGauge("voltageValue", voltage, "V", 250);
+    updateGauge("currentValue", current, "A", 10);
+    updateGauge("temp1Value", temps[0], "°C", 100);
+    updateGauge("temp2Value", temps[1], "°C", 100);
+    updateGauge("temp3Value", temps[2], "°C", 100);
+    updateGauge("temp4Value", temps[3], "°C", 100);
+  }, 1000);

@@ -26,8 +26,8 @@
   }
 
   .ui-container {
-    width: 820px;
-    height: 540px;
+    width: 720px;
+    height: 560px;
     display: flex;
     background: rgba(255, 255, 255, 0.04);
     backdrop-filter: blur(10px);
@@ -46,7 +46,7 @@
 
 
   .sidebar {
-    width: 180px;
+    width: 130px;
     background: rgba(255, 255, 255, 0.02);
     border-right: 1px solid rgba(255, 255, 255, 0.08);
     padding: 20px 0;
@@ -152,20 +152,6 @@
     gap: 10px;
   }
 
-  .gauges {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 20px;
-    margin-top: 15px;
-  }
-
-  .gauge-card {
-    background: rgba(255, 255, 255, 0.02);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 12px;
-    padding: 10px;
-    text-align: center;
-  }
 
   .disc {
     width: 100px;
@@ -185,10 +171,7 @@
   .current { background: #FF9900; }
   .temperature { background: #FF3333; }
 
-  .gauge-label {
-    font-size: 13px;
-    color: #ccc;
-  }
+
 
   .controls {
     margin-top: 15px;
@@ -281,10 +264,9 @@
     gap: 16px;
     width: 100px;
     min-width: 90px;
-    height: 280px;
+    height: 380px;
     flex-shrink: 0;
   }
-
 
   .manual-outputs::-webkit-scrollbar {
     height: 6px;
@@ -474,3 +456,73 @@
       0 0 20px rgba(0, 255, 180, 0.5),
       0 0 10px rgba(0, 255, 180, 0.2) inset;
   }
+  .gauges {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+    margin-top: 15px;
+  }
+
+.gauge-card {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 10px;
+  text-align: center;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.gauge-card:hover {
+  transform: scale(1.05);
+  box-shadow: 0 0 20px rgba(0, 255, 180, 0.2);
+}
+
+
+  .gauge {
+  width: 100px;
+  height: 100px;
+  margin: 0 auto 8px;
+}
+
+.gauge-svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.gauge-bg {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.1);
+  stroke-width: 2.8;
+}
+
+.gauge-fg {
+  fill: none;
+  stroke-width: 2.8;
+  stroke-linecap: round;
+  transition: stroke-dasharray 0.4s ease;
+}
+
+.gauge-fg.voltage {
+  stroke: #0077ff;
+}
+.gauge-fg.current {
+  stroke: #ff9900;
+}
+.gauge-fg.temperature {
+  stroke: #ff3333;
+}
+
+.gauge-value {
+  fill: white;
+  font-size: 8px;
+  text-anchor: middle;
+  dominant-baseline: middle;
+}
+
+.mode-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 15px;
+}
