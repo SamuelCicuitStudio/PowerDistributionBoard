@@ -1,5 +1,5 @@
 {
-    "idf.portWin": "COM24",
+    "idf.portWin": "COM13",
     "files.associations": {
         "*.dbclient-js": "javascript",
         "new": "cpp"

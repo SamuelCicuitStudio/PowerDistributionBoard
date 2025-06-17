@@ -1,7 +1,9 @@
 #include "WiFiManager.h"
 #include "Utils.h"
 
-
+// Constructor
+WiFiManager:: WiFiManager( Device* dev)
+        : dev(dev), server(80) {}
 // ─────────────────────────────────────────────────────────────
 // Begin WiFi Manager
 // ─────────────────────────────────────────────────────────────
@@ -10,10 +12,7 @@ void WiFiManager::begin() {
     DEBUG_PRINTLN("#                 Starting WIFI Manager 🌐               #");
     DEBUG_PRINTLN("###########################################################");
 
-    if (!SPIFFS.begin(true)) {
-        DEBUG_PRINTLN("❌ SPIFFS initialization failed!");
-        return;
-    }
+
     wifiStatus= WiFiStatus::NotConnected;; // global variable from utils 
     StartWifiAP();
 }
@@ -28,24 +27,21 @@ void WiFiManager::StartWifiAP() {
 
     DEBUG_PRINTLN("[WiFiManager] Starting Access Point ✅");
 
-    String ssid     = dev->config->GetString(DEVICE_WIFI_HOTSPOT_NAME_KEY, DEVICE_WIFI_HOTSPOT_NAME);
-    String password = dev->config->GetString(DEVICE_AP_AUTH_PASS_KEY, DEVICE_AP_AUTH_PASS_DEFAULT);
-
-    if (!WiFi.softAP(ssid.c_str(), password.c_str())) {
+    if (!WiFi.softAP(dev->config->GetString(DEVICE_WIFI_HOTSPOT_NAME_KEY, DEVICE_WIFI_HOTSPOT_NAME).c_str(),dev->config->GetString(DEVICE_AP_AUTH_PASS_KEY, DEVICE_AP_AUTH_PASS_DEFAULT).c_str())) {
         DEBUG_PRINTLN("[WiFiManager] Failed to start AP ❌");
         return;
     }
 
-    DEBUG_PRINTF("✅ AP Started: %s\n", ssid.c_str());
+    DEBUG_PRINTF("✅ AP Started: %s\n", dev->config->GetString(DEVICE_WIFI_HOTSPOT_NAME_KEY, DEVICE_WIFI_HOTSPOT_NAME).c_str());
 
-    if (!WFi->softAPConfig(LOCAL_IP, GATEWAY, SUBNET)) {
+    if (!WiFi.softAPConfig(LOCAL_IP, GATEWAY, SUBNET)) {
         DEBUG_PRINTLN("[WiFiManager] Failed to set AP config ❌");
         return;
     }
 
 
     DEBUG_PRINT("[WiFiManager] AP IP Address: ");
-    DEBUG_PRINTLN(WFi->softAPIP());
+    DEBUG_PRINTLN(WiFi.softAPIP());
 
 
     // ── Web routes ───────────────────────────────────────────
@@ -58,8 +54,13 @@ void WiFiManager::StartWifiAP() {
     // REST API Callbacks – WiFiManager
     // ─────────────────────────────────────────────────────────────
 
-    // 1. Heartbeat – Update keep-alive
+    // 1. Heartbeat – Update keep-alive and verify auth
     server.on("/heartbeat", HTTP_GET, [this](AsyncWebServerRequest* request) {
+        if (!isAuthenticated(request)) {
+            request->redirect("/");  // Redirect to root if not authenticated
+            return;
+        }
+
         keepAlive = true;
         request->send(200, "text/plain", "alive");
     });
@@ -130,13 +131,45 @@ void WiFiManager::StartWifiAP() {
     );
 
     // 3. Disconnect
-    server.on("/disconnect", HTTP_GET, [this](AsyncWebServerRequest* request) {
-        onDisconnected();
-        resetTimer();// reset activity timer
-        keepAlive = false;
-        request->send(200, "application/json", "{\"status\":\"disconnected\"}");
-    });
+    server.on("/disconnect", HTTP_POST,
+        [](AsyncWebServerRequest* request) {
+            // Unused for POST body
+        },
+        nullptr,
+        [this](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
+            static String body = "";
+            body += String((char*)data);
 
+            if (index + len == total) {
+                body.trim();  // Clean up formatting
+                DynamicJsonDocument doc(256);
+                DeserializationError error = deserializeJson(doc, body);
+                body = ""; // clear after use
+
+                if (error) {
+                    request->send(400, "application/json", "{\"error\":\"Invalid JSON format\"}");
+                    return;
+                }
+
+                String action = doc["action"] | "";
+                if (action != "disconnect") {
+                    request->send(400, "application/json", "{\"error\":\"Invalid action\"}");
+                    return;
+                }
+
+                DEBUG_PRINTLN("[Device] 🔌 Valid disconnect request received");
+
+                onDisconnected();  // Clear any session state
+                resetTimer();      // Reset watchdog
+                keepAlive = false;
+
+                request->redirect("/login.html");  // Trigger redirect
+            }
+        }
+    );
+
+
+/*
     // 4. Monitor – Return live readings
     server.on("/monitor", HTTP_GET, [this](AsyncWebServerRequest* request) {
         if (!isAuthenticated(request)) return;
@@ -153,7 +186,7 @@ void WiFiManager::StartWifiAP() {
         serializeJson(doc, json);
         request->send(200, "application/json", json);
     });
-
+*/ 
     // 5. Control – Unified command handler with JSON body
     server.on("/control", HTTP_POST,[this](AsyncWebServerRequest* request) {
             // Nothing here; handled in body lambda
@@ -178,52 +211,96 @@ void WiFiManager::StartWifiAP() {
 
                 String action = doc["action"] | "";
                 String target = doc["target"] | "";
-                auto value    = doc["value"];
+                JsonVariant value = doc["value"];
+
 
                 if (action == "set") {
                     if (target == "reboot") {
+                        DEBUG_PRINTLN("⚙️ Reboot requested");
                         dev->config->RestartSysDelayDown(3000);
+
                     } else if (target == "reset") {
                         blink(POWER_OFF_LED_PIN, 100);
-                        DEBUG_PRINTLN("Long press detected 🕒");
+                        DEBUG_PRINTLN("🔁 Reset command received:");
                         DEBUG_PRINTLN("###########################################################");
                         DEBUG_PRINTLN("#                   Resetting device 🔄                   #");
                         DEBUG_PRINTLN("###########################################################");
                         dev->config->PutBool(RESET_FLAG, true);
                         dev->config->RestartSysDelayDown(3000);
+
                     } else if (target == "ledFeedback") {
+                        DEBUG_PRINT("🔘 LED Feedback: "); DEBUG_PRINTLN(value.as<bool>());
                         dev->config->PutBool(LED_FEEDBACK_KEY, value.as<bool>());
+
                     } else if (target == "onTime") {
+                        DEBUG_PRINT("⏱️ ON Time: "); DEBUG_PRINTLN(value.as<int>());
                         dev->config->PutInt(ON_TIME_KEY, value.as<int>());
+
                     } else if (target == "offTime") {
+                        DEBUG_PRINT("⏱️ OFF Time: "); DEBUG_PRINTLN(value.as<int>());
                         dev->config->PutInt(OFF_TIME_KEY, value.as<int>());
+
                     } else if (target == "relay") {
+                        DEBUG_PRINT("🔌 Relay set to: "); DEBUG_PRINTLN(value.as<bool>() ? "ON" : "OFF");
                         value.as<bool>() ? dev->relayControl->turnOn() : dev->relayControl->turnOff();
+
                     } else if (target.startsWith("output")) {
                         int index = target.substring(6).toInt();
                         if (index >= 1 && index <= 10) {
+                            DEBUG_PRINT("🔥 Output "); DEBUG_PRINT(index);
+                            DEBUG_PRINT(" set to: "); DEBUG_PRINTLN(value.as<bool>() ? "ON" : "OFF");
                             dev->heaterManager->setOutput(index, value.as<bool>());
                         }
+
                     } else if (target == "desiredVoltage") {
+                        DEBUG_PRINT("🔋 Desired Voltage: "); DEBUG_PRINTLN(value.as<float>());
                         dev->config->PutFloat(DESIRED_OUTPUT_VOLTAGE_KEY, value.as<float>());
+
                     } else if (target == "acFrequency") {
+                        DEBUG_PRINT("🔄 AC Frequency: "); DEBUG_PRINTLN(value.as<int>());
                         dev->config->PutInt(AC_FREQUENCY_KEY, value.as<int>());
+
                     } else if (target == "chargeResistor") {
+                        DEBUG_PRINT("⚡ Charge Resistor: "); DEBUG_PRINTLN(value.as<float>());
                         dev->config->PutFloat(CHARGE_RESISTOR_KEY, value.as<float>());
+
                     } else if (target == "dcVoltage") {
+                        DEBUG_PRINT("🔋 DC Voltage: "); DEBUG_PRINTLN(value.as<float>());
                         dev->config->PutFloat(DC_VOLTAGE_KEY, value.as<float>());
+
                     } else if (target == "outputAccess") {
+                        DEBUG_PRINTLN("🔐 Updating Output Access Flags:");
                         for (int i = 1; i <= 10; ++i) {
-                            String key = "OUT0" + String(i) + "F";
-                            dev->config->PutBool(key.c_str(), value[key].as<bool>());
+                            String key = "OUT" + String(i) + "F";
+                            bool flag = value["output" + String(i)];
+                            DEBUG_PRINT("  - "); DEBUG_PRINT(key); DEBUG_PRINT(": "); DEBUG_PRINTLN(flag);
+                            dev->config->PutBool(key.c_str(), flag);
                         }
+
+                    } else if (target == "mode") {
+                        DEBUG_PRINTLN("🧭 Mode switch triggered → Going IDLE");
+                        dev->currentState = DeviceState::Idle;
+
+                    } else if (target == "systemStart") {
+                        DEBUG_PRINTLN("▶️ System Start requested");
+                        if (dev->loopTaskHandle != nullptr && dev->currentState == DeviceState::Idle) {
+                            dev->startLoopTask();
+                        }
+                        dev->startLoopTask(); // Ensure it's called at least once
+
+                    } else if (target == "systemShutdown") {
+                        DEBUG_PRINTLN("⏹️ System Shutdown requested");
+                        if (dev->currentState == DeviceState::Running) {
+                            dev->currentState = DeviceState::Idle;
+                        }
+
                     } else {
                         request->send(400, "application/json", "{\"error\":\"Unknown target\"}");
                         return;
                     }
 
                     request->send(200, "application/json", "{\"status\":\"ok\"}");
-
+                    
                 } else if (action == "get" && target == "status") {
                     String statusStr;
                     switch (dev->currentState) {
@@ -268,11 +345,15 @@ void WiFiManager::StartWifiAP() {
             outputs["output" + String(i)] = dev->heaterManager->getOutputState(i);
         }
 
-        // Output access flags 1–10
+        // Output access flags (non-padded keys like "OUT1F", "OUT2F", ...)
+        const char* accessKeys[10] = {
+            OUT01_ACCESS_KEY, OUT02_ACCESS_KEY, OUT03_ACCESS_KEY, OUT04_ACCESS_KEY, OUT05_ACCESS_KEY,
+            OUT06_ACCESS_KEY, OUT07_ACCESS_KEY, OUT08_ACCESS_KEY, OUT09_ACCESS_KEY, OUT10_ACCESS_KEY
+        };
+
         JsonObject access = doc.createNestedObject("outputAccess");
-        for (int i = 1; i <= 10; ++i) {
-            String key = "OUT0" + String(i) + "F";
-            access["output" + String(i)] = dev->config->GetBool(key.c_str(), false);
+        for (int i = 0; i < 10; ++i) {
+            access["output" + String(i + 1)] = dev->config->GetBool(accessKeys[i], false);
         }
 
         String json;
@@ -280,6 +361,7 @@ void WiFiManager::StartWifiAP() {
         request->send(200, "application/json", json);
     });
 
+/*
     // 7. Set Admin Credentials
     server.on("/SetAdminCred", HTTP_POST, [this](AsyncWebServerRequest* request) { },
         nullptr,
@@ -346,21 +428,29 @@ void WiFiManager::StartWifiAP() {
                     return;
                 }
 
-                String username = doc["username"] | "";
-                String password = doc["password"] | "";
+                String current = doc["current"] | "";
+                String newUser = doc["username"] | "";
+                String newPass = doc["password"] | "";
 
-                if (username == "" || password == "") {
-                    request->send(400, "application/json", "{\"error\":\"Missing username or password\"}");
+                if (current == "" || newUser == "" || newPass == "") {
+                    request->send(400, "application/json", "{\"error\":\"Missing required fields\"}");
                     return;
                 }
 
-                dev->config->PutString(USER_ID_KEY, username);
-                dev->config->PutString(USER_PASS_KEY, password);
+                String stored = dev->config->GetString(USER_PASS_KEY, "");
+                if (stored != current) {
+                    request->send(403, "application/json", "{\"error\":\"Incorrect current password\"}");
+                    return;
+                }
 
-                request->send(200, "application/json", "{\"status\":\"user credentials updated\"}");
+                dev->config->PutString(USER_ID_KEY, newUser);
+                dev->config->PutString(USER_PASS_KEY, newPass);
+
+                request->send(200, "application/json", "{\"status\":\"Credentials updated\"}");
             }
         }
     );
+*/
 
     server.on("/favicon.ico", HTTP_GET, [this](AsyncWebServerRequest* request) {
         keepAlive = true;
@@ -370,13 +460,13 @@ void WiFiManager::StartWifiAP() {
     server.serveStatic("/", SPIFFS, "/");
     server.serveStatic("/icons/", SPIFFS, "/icons/").setCacheControl("max-age=86400");
     server.serveStatic("/css/", SPIFFS, "/css/").setCacheControl("max-age=86400");
-    server.serveStatic("/js/", SPIFFS, "/js/").setCacheControl("max-age=86400");
+    server.serveStatic("/js/", SPIFFS, "/js/").setCacheControl("no-store, must-revalidate");
     server.serveStatic("/fonts/", SPIFFS, "/fonts/").setCacheControl("max-age=86400");
 
     server.begin();
 
-    // Start auto-disable timer
-    startInactivityTimer();
+    //Start auto-disable timer
+    //startInactivityTimer();
 }
 
 
@@ -386,7 +476,7 @@ void WiFiManager::StartWifiAP() {
 void WiFiManager::handleRoot(AsyncWebServerRequest* request) {
     DEBUG_PRINTLN("[WiFiManager] Handling root request 🌐");
     keepAlive = true;
-    request->send(SPIFFS, "/index.html", "text/html");
+    request->send(SPIFFS, "/login.html", "text/html");
 }
 
 
@@ -399,8 +489,8 @@ void WiFiManager::disableWiFiAP() {
     WifiState = false;
     prev_WifiState = true;
 
-    WFi->softAPdisconnect(true);
-    WFi->mode(WIFI_OFF);
+    WiFi.softAPdisconnect(true);
+    WiFi.mode(WIFI_OFF);
 
     if (inactivityTaskHandle != nullptr) {
         vTaskDelete(inactivityTaskHandle);

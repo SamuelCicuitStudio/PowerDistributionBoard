@@ -44,12 +44,52 @@ void Device::begin() {
     DEBUG_PRINTLN("#                 Starting Device Manager ⚙️              #");
     DEBUG_PRINTLN("###########################################################");
 
-    DEBUG_PRINTLN("[Device] Configuring system I/O pins 🧰");
+
     pinMode(DETECT_12V_PIN, INPUT);
     pinMode(READY_LED_PIN, OUTPUT);
     pinMode(POWER_OFF_LED_PIN, OUTPUT);
+    DEBUG_PRINTLN("[Device] Configuring system I/O pins 🧰");
+
+}
+
+void Device::startLoopTask() {
+    if (loopTaskHandle == nullptr) {
+        DEBUG_PRINTLN("[Device] Starting main loop task on RTOS 🧵");
+
+        BaseType_t result = xTaskCreatePinnedToCore(
+            Device::loopTaskWrapper,    // Task entry function
+            "DeviceLoopTask",           // Task name
+            8192,                       // Stack size in words
+            this,                       // Task parameter
+            1,                          // Task priority
+            &loopTaskHandle,            // Store task handle
+            APP_CPU_NUM                 // Target CPU core
+        );
+
+        if (result != pdPASS) {
+            DEBUG_PRINTLN("[Device] Failed to create DeviceLoopTask ❌");
+            loopTaskHandle = nullptr;
+        }
+    } else {
+        DEBUG_PRINTLN("[Device] Loop task is already running ⏳");
+    }
+}
+
+
+void Device::loopTaskWrapper(void* param) {
+    Device* self = static_cast<Device*>(param);
+    self->loopTask();  // Execute member function
+}
+void Device::loopTask() {
+    DEBUG_PRINTLN("[Device] 🔁 Device start task started");
+
     digitalWrite(READY_LED_PIN, LOW);
     digitalWrite(POWER_OFF_LED_PIN, HIGH);
+    relayControl->turnOff();
+    bypassFET->disable();
+    tempSensor->stopTemperatureTask();
+
+    currentState = DeviceState::Idle;
 
     DEBUG_PRINTLN("[Device] Waiting for 12V input... 🔋");
     while (digitalRead(DETECT_12V_PIN)) {
@@ -81,19 +121,23 @@ void Device::begin() {
     pinMode(POWER_ON_SWITCH_PIN, INPUT_PULLUP);
     DEBUG_PRINTLN("[Device] Waiting for user to press POWER ON button 🔘");
     while (digitalRead(POWER_ON_SWITCH_PIN)) {
-        delay(50);
+        if (StartFromremote) break;
+        delay(100);
     }
 
     DEBUG_PRINTLN("[Device] POWER ON button pressed ▶️ Launching main loop");
-    currentState = DeviceState::Running;
+
     StartLoop();
 
     DEBUG_PRINTLN("[Device] Main loop finished, proceeding to shutdown 🛑");
     shutdown();
-}
 
-void Device::loop() {
-    // Reserved for monitoring tasks if needed
+    // Self-cleanup and safe termination
+    TaskHandle_t handle = loopTaskHandle;
+    loopTaskHandle = nullptr;
+
+    DEBUG_PRINTLN("[Device] Loop task terminating and freeing handle ✅");
+    vTaskDelete(handle);  // Delete self
 }
 
 void Device::checkAllowedOutputs() {
@@ -220,5 +264,15 @@ void Device::monitorTemperatureTask(void* param) {
         }
 
         vTaskDelay(pdMS_TO_TICKS(2000));
+    }
+}
+
+void Device::stopLoopTask() {
+    if (loopTaskHandle != nullptr) {
+        DEBUG_PRINTLN("[Device] Stopping Device Loop Task 🧵❌");
+        vTaskDelete(loopTaskHandle);
+        loopTaskHandle = nullptr;
+    } else {
+        DEBUG_PRINTLN("[Device] Loop Task not running – no action taken 💤");
     }
 }

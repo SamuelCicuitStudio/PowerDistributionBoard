@@ -8,50 +8,57 @@
 #include "Relay.h"
 #include "BypassMosfet.h"
 #include "CpDischg.h"
-#include "Indicator.h"         // ✅ Include for LED status management
-#include "WiFiManager.h"       // ✅ Include for WiFi management
-
-
+#include "Indicator.h"
+#include "WiFiManager.h"
+#include "ConfigManager.h"
+#include "utils.h"
+#include <Arduino.h>
 
 class Device {
 public:
-    Device(ConfigManager* cfg,             // Pointer to configuration manager
-           HeaterManager* heater,          // Pointer to heater manager
-           FanManager* fan,                // Pointer to fan manager
-           TempSensor* temp,               // Pointer to temperature manager
-           CurrentSensor* current,         // Pointer to current sensor
-           Relay* relay,                   // Pointer to main relay
-           BypassMosfet* bypass,           // Pointer to bypass MOSFET
-           CpDischg* discharger,           // Pointer to capacitor discharge handler
-           Indicator* ledIndicator        // ✅ Pointer to Indicator manager (for feedback LEDs)
-            );
+    Device(ConfigManager* cfg,
+           HeaterManager* heater,
+           FanManager* fan,
+           TempSensor* temp,
+           CurrentSensor* current,
+           Relay* relay,
+           BypassMosfet* bypass,
+           CpDischg* discharger,
+           Indicator* ledIndicator);
 
     void begin();                          // System startup sequence
-    void loop();                           // Optional runtime tasks
-    void checkAllowedOutputs();            // Updates allowedOutputs[] from config
     void StartLoop();                      // Main output cycle loop
     void shutdown();                       // Clean shutdown and discharge
+    void checkAllowedOutputs();            // Updates allowedOutputs[] from config
+
+    // RTOS management
+    void startLoopTask();                              // Starts the loop as RTOS task
+    static void loopTaskWrapper(void* pvParameters);   // Wrapper for RTOS
+    void loopTask();                                   // Actual loop logic
+
+    void startTemperatureMonitor();                    // Starts temperature monitor
+    static void monitorTemperatureTask(void* param);   // Temperature task handler
+    void stopLoopTask();  // Add this to the public section of the Device class
 
 
-    ConfigManager* config;                 // System preferences manager
-    HeaterManager* heaterManager;          // Heater output control
-    FanManager* fanManager;                // Fan speed and temp control
-    TempSensor* tempSensor;                // Temperature sensors
-    CurrentSensor* currentSensor;          // Current sensor (load monitor)
-    Relay* relayControl;                   // Power input relay control
-    BypassMosfet* bypassFET;               // Bypass MOSFET control
-    CpDischg* discharger;                  // Capacitor discharge controller
-    Indicator* indicator;                  // ✅ LED feedback controller
+    // Subsystem pointers
+    ConfigManager* config;
+    HeaterManager* heaterManager;
+    FanManager* fanManager;
+    TempSensor* tempSensor;
+    CurrentSensor* currentSensor;
+    Relay* relayControl;
+    BypassMosfet* bypassFET;
+    CpDischg* discharger;
+    Indicator* indicator;
 
+    // State tracking
+    volatile DeviceState currentState = DeviceState::Idle;
+    bool allowedOutputs[10] = {false};
 
-    volatile DeviceState currentState = DeviceState::Idle;       // Current operating state
-    
-    bool allowedOutputs[10] = {false};     // Cached state of outputs (true if user-enabled)
-
-    TaskHandle_t tempMonitorTaskHandle = nullptr;        // RTOS task handle for temperature monitor
-    static void monitorTemperatureTask(void* param);     // RTOS monitor loop
-    void startTemperatureMonitor();                      // Starts RTOS temperature monitor
-
+    // RTOS task handles
+    TaskHandle_t loopTaskHandle = nullptr;         // ✅ Main loop RTOS task
+    TaskHandle_t tempMonitorTaskHandle = nullptr;  // Temp monitor RTOS task
 };
 
 #endif // DEVICE_H

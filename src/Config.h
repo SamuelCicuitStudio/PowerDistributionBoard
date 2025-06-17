@@ -60,7 +60,7 @@
 #define OUT07_ACCESS_KEY               "OUT7F"
 #define OUT08_ACCESS_KEY               "OUT8F"
 #define OUT09_ACCESS_KEY               "OUT9F"
-#define OUT10_ACCESS_KEY              "OUT01F"
+#define OUT10_ACCESS_KEY              "OUT10F"
 
 // ==================================================
 // Default Values for Preferences
@@ -85,14 +85,14 @@
 
 
 // ---------- Output Access Defaults ----------
-#define DEFAULT_OUT01_ACCESS           false
-#define DEFAULT_OUT02_ACCESS           false
+#define DEFAULT_OUT01_ACCESS           true
+#define DEFAULT_OUT02_ACCESS           true
 #define DEFAULT_OUT03_ACCESS           false
-#define DEFAULT_OUT04_ACCESS           false
+#define DEFAULT_OUT04_ACCESS           true
 #define DEFAULT_OUT05_ACCESS           false
-#define DEFAULT_OUT06_ACCESS           false
+#define DEFAULT_OUT06_ACCESS           true
 #define DEFAULT_OUT07_ACCESS           false
-#define DEFAULT_OUT08_ACCESS           false
+#define DEFAULT_OUT08_ACCESS           true
 #define DEFAULT_OUT09_ACCESS           false
 #define DEFAULT_OUT10_ACCESS           false
 
@@ -158,7 +158,7 @@
 // Nichrome Wire Control - Opto Enable Pins (active low)
 // ==================================================
 
-#define ENA01_E_PIN                    37
+#define ENA01_E_PIN                    20
 #define ENA02_E_PIN                    38
 #define ENA03_E_PIN                    8
 #define ENA04_E_PIN                    18

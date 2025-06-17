@@ -5,6 +5,7 @@ void TempSensor::begin() {
     Serial.println("###########################################################");
     Serial.println("#               Starting Temperature Manager 🌡️          #");
     Serial.println("###########################################################");
+
     sensors.begin();
     sensorCount = sensors.getDeviceCount();
 
@@ -12,19 +13,29 @@ void TempSensor::begin() {
         sensorCount = DEFAULT_TEMP_SENSOR_COUNT;
 
     cfg->PutInt(TEMP_SENSOR_COUNT_KEY, sensorCount);
-    DEBUG_PRINTF("[TempSensor] Initialized with %u sensors 📡\n", sensorCount);
+    DEBUG_PRINTF("[TempSensor] Detected %u sensors 📡\n", sensorCount);
+
+    uint8_t validSensors = 0;
 
     for (uint8_t i = 0; i < sensorCount && i < MAX_TEMP_SENSORS; ++i) {
         if (sensors.getAddress(sensorAddresses[i], i)) {
             DEBUG_PRINTF("[TempSensor] Sensor %u address: ", i);
             printAddress(sensorAddresses[i]);
+            validSensors++;
         } else {
             DEBUG_PRINTF("[TempSensor] Sensor %u address not found ❌\n", i);
         }
     }
 
-    startTemperatureTask();  // Start with default interval
+    if (validSensors == 0) {
+        DEBUG_PRINTLN("[TempSensor] No valid sensors found. Monitoring will not start.❌");
+        return;  // Exit early, don't start the task
+    }
+
+    DEBUG_PRINTF("[TempSensor]  %u valid sensor(s) found. Starting monitor task...✅\n", validSensors);
+    startTemperatureTask();  // Start with default interval only if at least 1 sensor is valid
 }
+
 
 void TempSensor::startTemperatureTask(uint32_t intervalMs) {
     stopTemperatureTask();  // Stop if already running

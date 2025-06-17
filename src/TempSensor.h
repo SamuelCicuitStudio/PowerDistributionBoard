@@ -28,7 +28,6 @@ public:
     void stopTemperatureTask();                             // Stop background task
     void startTemperatureTask(uint32_t intervalMs = 3000);  // Start with custom delay
 
-private:
     static void temperatureTask(void* param);               // RTOS loop
     void printAddress(DeviceAddress address);               // Debug helper
 

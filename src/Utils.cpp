@@ -1,7 +1,7 @@
 #include "Utils.h"
 
 volatile WiFiStatus wifiStatus = WiFiStatus::NotConnected;
-
+volatile bool StartFromremote =  false;
 // RTOS task that blinks a pin and restores its original state
 void BlinkTask(void* parameter) {
     BlinkParams* params = static_cast<BlinkParams*>(parameter);

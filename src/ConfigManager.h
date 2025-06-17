@@ -28,7 +28,7 @@
  #include <esp_task_wdt.h>
  #include <esp_sleep.h>
  #include <driver/rtc_io.h>
- 
+ #include <WiFi.h>
  // Custom includes
  #include "Config.h"  // Include Config.h for default values
  

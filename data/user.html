@@ -21,11 +21,12 @@
         <div class="user-status">
           <div class="status-dot" title="Auto Mode"></div>
           <div class="user-icon" onclick="toggleUserMenu()">👤</div>
-          <!-- Dropdown Menu -->
-          <div class="user-menu" id="userMenu">
-            <button id="editCredentialsBtn">Edit Credentials</button>
-            <button onclick="alert('Disconnected')">Disconnect</button>
-          </div>
+            <!-- Dropdown Menu -->
+            <div class="user-menu" id="userMenu">
+              <button id="editCredentialsBtn" type="button">Edit Credentials</button>
+              <button id="disconnectBtn" type="button">Disconnect</button> <!-- ✅ fixed -->
+            </div>
+
         </div>
       </div>
 

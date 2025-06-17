@@ -33,14 +33,14 @@ void SwitchManager::detectTapOrHold() {
 
             // If press lasted longer than threshold → HOLD
             if (pressDuration >= HOLD_THRESHOLD_MS) {
-                blink(POWER_OFF_LED_PIN,100);
+                blink(POWER_OFF_LED_PIN, 100);
                 DEBUG_PRINTLN("Long press detected 🕒");
                 DEBUG_PRINTLN("###########################################################");
                 DEBUG_PRINTLN("#                   Resetting device 🔄                   #");
                 DEBUG_PRINTLN("###########################################################");
-                Conf->PutBool(RESET_FLAG, true);                 // Set the reset flag
-                Conf->RestartSysDelayDown(3000);                 // Delayed restart
-                tapCount = 0;  // Cancel any tap sequence
+                Conf->PutBool(RESET_FLAG, true);   // Set the reset flag
+                Conf->RestartSysDelayDown(3000);   // Delayed restart
+                tapCount = 0;                      // Cancel any tap sequence
             }
             // Otherwise → count as tap
             else {
@@ -51,25 +51,37 @@ void SwitchManager::detectTapOrHold() {
             // Triple-tap detection
             if (tapCount == 3) {
                 if ((millis() - lastTapTime) <= TAP_WINDOW_MS) {
-                    blink(POWER_OFF_LED_PIN,100);  // Call when needed;
+                    blink(POWER_OFF_LED_PIN, 100);
                     DEBUG_PRINTLN("Triple tap detected 🖱️🖱️🖱️");
                     wifi->begin();
-                    tapCount = 0; // Reset after successful detection
+                    tapCount = 0;
                 } else {
-                    tapCount = 0; // Reset if not within time
+                    tapCount = 0;
                 }
             }
         }
 
         // Timeout to reset tap sequence
         if ((millis() - lastTapTime) > 1500 && tapCount > 0) {
-            tapCount = 0;
-            DEBUG_PRINTLN("Tap timeout ⏱️");
+            if (tapCount == 1) {
+                if (wifi->dev->currentState != DeviceState::Running)
+                    wifi->dev->startLoopTask();
+
+                if (wifi->dev->currentState == DeviceState::Running)
+                    wifi->dev->currentState = DeviceState::Idle;
+
+                tapCount = 0;
+                DEBUG_PRINTLN("One tap detected 🖱️");
+            } else {
+                tapCount = 0;
+                DEBUG_PRINTLN("Tap timeout ⏱️");
+            }
         }
 
         vTaskDelay(pdMS_TO_TICKS(20));
     }
 }
+
 
 // Global C-style FreeRTOS task function
 void SwitchManager::SwitchTask(void* pvParameters) {

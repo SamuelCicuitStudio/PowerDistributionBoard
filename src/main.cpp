@@ -31,11 +31,25 @@ SwitchManager*    sw            = nullptr;
 //                          Setup()
 // ──────────────────────────────────────────────────────────────
 void setup() {
-    Serial.begin(115200);
+    Serial.begin(921600);
+
+    DEBUG_PRINTLN("###########################################################");
+    DEBUG_PRINTLN("#          Starting System Setup 921600 Baud⚙️            #");
+    DEBUG_PRINTLN("###########################################################");
 
     // 🔧 Initialize NVS (must happen before using preferences)
+    DEBUG_PRINTLN("[Setup] Initializing NVS (Preferences)...");
     prefs.begin(CONFIG_PARTITION, false);
+    DEBUG_PRINTLN("[Setup] NVS Initialized. ✅");
 
+    // 📁 Mount SPIFFS filesystem
+    DEBUG_PRINTLN("[Setup] Mounting SPIFFS...");
+    if (!SPIFFS.begin(true)) {
+        DEBUG_PRINTLN("SPIFFS initialization failed! ❌");
+        return;
+    }
+    DEBUG_PRINTLN("✅ SPIFFS successfully mounted.");
+    delay(500);  // Allow time for Serial to stabilize
     // 🧠 Core Config Manager (must be first)
     config = new ConfigManager(&prefs);
     config->begin();
@@ -87,7 +101,7 @@ void setup() {
     device->begin();
 
     // 🌐 Wi-Fi Access Point & Web Interface
-    wifi = new WiFiManager(&WiFi, device);
+    wifi = new WiFiManager(device);
     wifi->begin();
 
     // 🔘 Switch Detection (power button tap detection)

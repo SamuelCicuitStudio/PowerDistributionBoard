@@ -167,7 +167,7 @@ void ConfigManager::begin() {
         // Only print once, if necessary, then reset device
             DEBUG_PRINTLN("ConfigManager: Initializing the device... 🔄");
         initializeDefaults();  // Reset preferences if the flag is set
-        RestartSysDelay(2000);  // Use a delay for restart after reset
+        RestartSysDelay(10000);  // Use a delay for restart after reset
     } else {
         // Use existing configuration, no need for unnecessary delay
             DEBUG_PRINTLN("ConfigManager: Using existing configuration... ✅");
@@ -225,14 +225,11 @@ void ConfigManager::initializeVariables() {
   // Reset flag
   PutBool(RESET_FLAG, false);
 
-  // Create a unique SSID by appending the last 3 bytes of MAC address
-  uint8_t mac[6];
-  esp_read_mac(mac, ESP_MAC_WIFI_SOFTAP);  // or ESP_MAC_WIFI_STA if preferred
-
-  char macSuffix[13];  // 6 bytes * 2 hex chars + null terminator
-  snprintf(macSuffix, sizeof(macSuffix), "%02X%02X%02X", mac[3], mac[4], mac[5]);
-
-  String ssid = String(DEVICE_WIFI_HOTSPOT_NAME) + macSuffix;
+  // Generate unique SSID using last 3 bytes of MAC address
+  String mac = WiFi.macAddress();        // Example: "24:6F:28:1A:2B:3C"
+  mac.replace(":", "");                  // Remove colons → "246F281A2B3C"
+  String suffix = mac.substring(6);      // Take last 6 hex characters → "1A2B3C"
+  String ssid = String(DEVICE_WIFI_HOTSPOT_NAME) + suffix;  // Final SSID → "PDis_1A2B3C"
 
   // Wi-Fi credentials
   PutString(DEVICE_WIFI_HOTSPOT_NAME_KEY, ssid);

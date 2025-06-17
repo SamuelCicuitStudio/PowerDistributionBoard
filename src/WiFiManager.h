@@ -13,8 +13,7 @@ class Device;
 class WiFiManager {
 public:
     // Constructor
-    explicit WiFiManager(WiFiClass* WFi, Device* dev)
-        : WFi(WFi), dev(dev), server(80) {}
+    WiFiManager(Device* dev);
 
     // ───── Public Interface ─────
     void begin();                                         // 🔧 Initialize and start Wi-Fi manager
@@ -34,13 +33,12 @@ public:
     bool WifiState = false;                               // 📶 Current Wi-Fi connection state
     bool prev_WifiState = false;                          // 📶 Previous Wi-Fi connection state
 
-private:
+
     // ───── Internal Handlers ─────
     void handleRoot(AsyncWebServerRequest* request);      // 🌐 Serve index.html on root path
 
     // ───── Wi-Fi Components ─────
     AsyncWebServer server;                                // 🌐 HTTP server instance
-    WiFiClass* WFi;                                       // 📶 WiFi interface pointer
 
     // ───── Inactivity Timeout ─────
     static void inactivityTask(void* param);              // ⏱ RTOS task to monitor inactivity

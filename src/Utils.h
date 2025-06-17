@@ -37,6 +37,7 @@ struct BlinkParams {
 
 extern volatile WiFiStatus wifiStatus;  // Declare, do not define here
 
+extern volatile bool StartFromremote;
 
 // Blink utility function
 void blink(uint8_t pin, int durationMs = 100);
