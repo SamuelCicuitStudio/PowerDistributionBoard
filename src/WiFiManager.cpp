@@ -183,11 +183,14 @@ void WiFiManager::StartWifiAP() {
         doc["current"] = dev->currentSensor->readCurrent();
 
         JsonArray temps = doc.createNestedArray("temperatures");
-
         for (uint8_t i = 0; i < 4; ++i) {
             float temp = (i < dev->tempSensor->getSensorCount()) ? dev->tempSensor->getTemperature(i) : -127;
             temps.add((temp == -127) ? -127 : temp);
         }
+
+        // ✅ Add LED status fields
+        doc["ready"] = true;                    // true if system is ready
+        doc["off"]   = true;        // true if relay is OFF
 
         String json;
         serializeJson(doc, json);
@@ -333,50 +336,50 @@ void WiFiManager::StartWifiAP() {
     );
 
     // 6. Load all controllable states for UI initialization
-server.on("/load_controls", HTTP_GET, [this](AsyncWebServerRequest* request) {
-    if (!isAuthenticated(request)) return;
-    resetTimer();
+    server.on("/load_controls", HTTP_GET, [this](AsyncWebServerRequest* request) {
+        if (!isAuthenticated(request)) return;
+        resetTimer();
 
-    StaticJsonDocument<1024> doc;
+        StaticJsonDocument<1024> doc;
 
-    // Basic control states
-    doc["ledFeedback"]     = dev->config->GetBool(LED_FEEDBACK_KEY, false);
-    doc["onTime"]          = dev->config->GetInt(ON_TIME_KEY, 500);
-    doc["offTime"]         = dev->config->GetInt(OFF_TIME_KEY, 500);
-    doc["desiredVoltage"]  = dev->config->GetFloat(DESIRED_OUTPUT_VOLTAGE_KEY, 0);
-    doc["acFrequency"]     = dev->config->GetInt(AC_FREQUENCY_KEY, 50);
-    doc["chargeResistor"]  = dev->config->GetFloat(CHARGE_RESISTOR_KEY, 0.0f);
-    doc["dcVoltage"]       = dev->config->GetFloat(DC_VOLTAGE_KEY, 0.0f);
+        // Basic control states
+        doc["ledFeedback"]     = dev->config->GetBool(LED_FEEDBACK_KEY, false);
+        doc["onTime"]          = dev->config->GetInt(ON_TIME_KEY, 500);
+        doc["offTime"]         = dev->config->GetInt(OFF_TIME_KEY, 500);
+        doc["desiredVoltage"]  = dev->config->GetFloat(DESIRED_OUTPUT_VOLTAGE_KEY, 0);
+        doc["acFrequency"]     = dev->config->GetInt(AC_FREQUENCY_KEY, 50);
+        doc["chargeResistor"]  = dev->config->GetFloat(CHARGE_RESISTOR_KEY, 0.0f);
+        doc["dcVoltage"]       = dev->config->GetFloat(DC_VOLTAGE_KEY, 0.0f);
 
-    // Relay state
-    bool relayOn = dev->relayControl->isOn();
-    doc["relay"] = relayOn;
+        // Relay state
+        bool relayOn = dev->relayControl->isOn();
+        doc["relay"] = relayOn;
 
-    // Ready and OFF LED indicators
-    doc["ready"] = digitalRead(READY_LED_PIN);     // true if system is in ready state
-    doc["off"]   =  digitalRead(POWER_OFF_LED_PIN);          // true if system is off
+        // Ready and OFF LED indicators
+        doc["ready"] = true;     // true if system is in ready state
+        doc["off"]   =  true;          // true if system is off
 
-    // Output states 1–10
-    JsonObject outputs = doc.createNestedObject("outputs");
-    for (int i = 1; i <= 10; ++i) {
-        outputs["output" + String(i)] = dev->heaterManager->getOutputState(i);
-    }
+        // Output states 1–10
+        JsonObject outputs = doc.createNestedObject("outputs");
+        for (int i = 1; i <= 10; ++i) {
+            outputs["output" + String(i)] = dev->heaterManager->getOutputState(i);
+        }
 
-    // Output access flags (non-padded keys like "OUT1F", "OUT2F", ...)
-    const char* accessKeys[10] = {
-        OUT01_ACCESS_KEY, OUT02_ACCESS_KEY, OUT03_ACCESS_KEY, OUT04_ACCESS_KEY, OUT05_ACCESS_KEY,
-        OUT06_ACCESS_KEY, OUT07_ACCESS_KEY, OUT08_ACCESS_KEY, OUT09_ACCESS_KEY, OUT10_ACCESS_KEY
-    };
+        // Output access flags (non-padded keys like "OUT1F", "OUT2F", ...)
+        const char* accessKeys[10] = {
+            OUT01_ACCESS_KEY, OUT02_ACCESS_KEY, OUT03_ACCESS_KEY, OUT04_ACCESS_KEY, OUT05_ACCESS_KEY,
+            OUT06_ACCESS_KEY, OUT07_ACCESS_KEY, OUT08_ACCESS_KEY, OUT09_ACCESS_KEY, OUT10_ACCESS_KEY
+        };
 
-    JsonObject access = doc.createNestedObject("outputAccess");
-    for (int i = 0; i < 10; ++i) {
-        access["output" + String(i + 1)] = dev->config->GetBool(accessKeys[i], false);
-    }
+        JsonObject access = doc.createNestedObject("outputAccess");
+        for (int i = 0; i < 10; ++i) {
+            access["output" + String(i + 1)] = dev->config->GetBool(accessKeys[i], false);
+        }
 
-    String json;
-    serializeJson(doc, json);
-    request->send(200, "application/json", json);
-});
+        String json;
+        serializeJson(doc, json);
+        request->send(200, "application/json", json);
+    });
 
 
     // 7. Set Admin Credentials
@@ -629,17 +632,25 @@ void WiFiManager::heartbeat() {
             while (true) {
                 vTaskDelay(interval);
 
+                // Delete if only admin remains
+                if (!self->isUserConnected() && !self->isAdminConnected()) {
+                    DEBUG_PRINTLN("[WiFiManager] Heartbeat deleted 🔴");
+                    self->heartbeatTaskHandle = nullptr;
+                    vTaskDelete(nullptr);
+                    return;
+                }
+                // Delete on timeout
                 if (!self->keepAlive) {
                     DEBUG_PRINTLN("[WiFiManager] ⚠️  Heartbeat timeout – disconnecting");
                     self->onDisconnected();
-
                     DEBUG_PRINTLN("[WiFiManager] Heartbeat deleted 🔴");
                     self->heartbeatTaskHandle = nullptr;
                     vTaskDelete(nullptr);
                     return;
                 }
 
-                self->keepAlive = false; // Reset for next round
+                // Reset for next round
+                self->keepAlive = false;
             }
         },
         "HeartbeatTask",        // Task name

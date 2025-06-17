@@ -68,6 +68,7 @@ manualScrollArea?.addEventListener('wheel', function (e) {
   }
 });
 
+
 // === MANUAL OUTPUTS LOADER ===
 async function loadControls() {
   try {
@@ -85,7 +86,23 @@ async function loadControls() {
       console.warn("LT toggle element not found in DOM!");
     }
 
-    // === Manual outputs code unchanged ===
+    // === Ready / OFF LED updates ===
+    const readyLed = document.getElementById("readyLed");
+    const offLed = document.getElementById("offLed");
+
+    if (readyLed) {
+      readyLed.style.backgroundColor = data.ready ? "limegreen" : "gray";
+    } else {
+      console.warn("Ready LED not found in DOM!");
+    }
+
+    if (offLed) {
+      offLed.style.backgroundColor = data.off ? "red" : "gray";
+    } else {
+      console.warn("OFF LED not found in DOM!");
+    }
+
+    // === Manual outputs rendering ===
     const manualOutputs = document.getElementById("manualOutputs");
     manualOutputs.innerHTML = "";
 
@@ -194,40 +211,41 @@ function startMonitorPolling(intervalMs = 1000) {
     fetch("/monitor")
       .then(res => res.json())
       .then(data => {
+        // Parse and update voltage
         const voltage = parseFloat(data.capVoltage).toFixed(2);
+        updateGauge("voltageValue", voltage, "V", 400);
 
+        // Parse and clamp current
         let rawCurrent = parseFloat(data.current);
         if (isNaN(rawCurrent)) rawCurrent = 0;
         const clampedCurrent = Math.max(0, Math.min(100, rawCurrent)).toFixed(2);
-
-        updateGauge("voltageValue", voltage, "V", 400);
         updateGauge("currentValue", clampedCurrent, "A", 100);
 
+        // Update temperature gauges
         const temps = data.temperatures || [];
         updateGauge("temp1Value", temps[0] === -127 ? "Off" : parseFloat(temps[0]).toFixed(2), "°C", 150);
         updateGauge("temp2Value", temps[1] === -127 ? "Off" : parseFloat(temps[1]).toFixed(2), "°C", 150);
         updateGauge("temp3Value", temps[2] === -127 ? "Off" : parseFloat(temps[2]).toFixed(2), "°C", 150);
         updateGauge("temp4Value", temps[3] === -127 ? "Off" : parseFloat(temps[3]).toFixed(2), "°C", 150);
 
-        // Update LED indicators
+        // === Update LED indicators from /monitor fields ===
         const readyLed = document.getElementById("readyLed");
         const offLed = document.getElementById("offLed");
 
-        if (data.ready) {
-          readyLed.style.backgroundColor = "limegreen";
-        } else {
-          readyLed.style.backgroundColor = "gray";
+        if (readyLed) {
+          readyLed.style.backgroundColor = data.ready ? "limegreen" : "gray";
         }
 
-        if (data.off) {
-          offLed.style.backgroundColor = "red";
-        } else {
-          offLed.style.backgroundColor = "gray";
+        if (offLed) {
+          offLed.style.backgroundColor = data.off ? "red" : "gray";
         }
       })
-      .catch(err => console.error("Monitor error:", err));
+      .catch(err => {
+        console.error("Monitor error:", err);
+      });
   }, intervalMs);
 }
+
 
 
 // === HEARTBEAT PINGER ===
@@ -295,8 +313,8 @@ function disconnectDevice() {
 
 window.addEventListener("DOMContentLoaded", () => {
   loadControls();
-  startHeartbeat(); // Uncomment if needed
-  startMonitorPolling();
+ startHeartbeat(); // Uncomment if needed
+ startMonitorPolling();
 
   // 🔧 Bind disconnect button
   const disconnectBtn = document.getElementById("disconnectBtn");
