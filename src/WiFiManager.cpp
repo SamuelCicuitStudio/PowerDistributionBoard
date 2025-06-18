@@ -61,7 +61,7 @@ void WiFiManager::StartWifiAP() {
             request->redirect("/login");
             return;
         }
-        DEBUG_PRINTLN("[Heartbeat❤️ ]");
+        //DEBUG_PRINTLN("[Heartbeat❤️ ]");
         resetTimer();
         heartbeat();// start heartbeat
         keepAlive = true;
@@ -205,13 +205,13 @@ void WiFiManager::StartWifiAP() {
 
         String json;
         serializeJson(doc, json);
-        DEBUG_PRINTLN("[Update] Monitor data sent 🚀");
+        //DEBUG_PRINTLN("[Update] Monitor data sent 🚀");
         request->send(200, "application/json", json);
     });
 
     // 5. Control – Unified command handler with JSON body
     server.on("/control", HTTP_POST, [this](AsyncWebServerRequest* request) {
-        // Empty first-stage handler; actual logic below
+        // Empty handler
     }, nullptr, [this](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
         static String body = "";
         body += String((char*)data);
@@ -219,10 +219,9 @@ void WiFiManager::StartWifiAP() {
         if (index + len == total) {
             if (!isAuthenticated(request)) return;
 
-            //resetTimer();
             StaticJsonDocument<1024> doc;
             DeserializationError error = deserializeJson(doc, body);
-            body = ""; // Clear buffer
+            body = "";
 
             if (error) {
                 request->send(400, "application/json", "{\"error\":\"Invalid JSON\"}");
@@ -236,52 +235,64 @@ void WiFiManager::StartWifiAP() {
             if (action == "set") {
 
                 if (target == "reboot") {
-                    DEBUG_PRINTLN("⚙️ Reboot requested");
+                    DEBUG_PRINTLN("Reboot requested ⚙️");
                     blink(POWER_OFF_LED_PIN, 100);
                     dev->config->RestartSysDelayDown(3000);
 
                 } else if (target == "systemReset") {
                     blink(POWER_OFF_LED_PIN, 100);
-                    DEBUG_PRINTLN("🔁 Resetting device...");
+                    DEBUG_PRINTLN("Resetting device... 🔁");
                     dev->config->PutBool(RESET_FLAG, true);
                     dev->config->RestartSysDelayDown(3000);
 
                 } else if (target == "ledFeedback") {
-                    DEBUG_PRINT("🔘 LED Feedback: ");
-                    DEBUG_PRINTLN(value.as<bool>());
-                    dev->config->PutBool(LED_FEEDBACK_KEY, value.as<bool>());
+                    bool state = value.as<bool>();
+                    DEBUG_PRINTF("LED Feedback: %s 🔘\n", state ? "true" : "false");
+                    dev->config->PutBool(LED_FEEDBACK_KEY, state);
 
                 } else if (target == "onTime") {
-                    dev->config->PutInt(ON_TIME_KEY, value.as<int>());
+                    int t = value.as<int>();
+                    DEBUG_PRINTF("ON time set to %d ms ⏱️\n", t);
+                    dev->config->PutInt(ON_TIME_KEY, t);
 
                 } else if (target == "offTime") {
-                    dev->config->PutInt(OFF_TIME_KEY, value.as<int>());
+                    int t = value.as<int>();
+                    DEBUG_PRINTF("OFF time set to %d ms ⏱️\n", t);
+                    dev->config->PutInt(OFF_TIME_KEY, t);
 
                 } else if (target == "relay") {
-                    DEBUG_PRINT("🔌 Relay: ");
-                    DEBUG_PRINTLN(value.as<bool>() ? "ON" : "OFF");
-                    value.as<bool>() ? dev->relayControl->turnOn() : dev->relayControl->turnOff();
+                    bool state = value.as<bool>();
+                    DEBUG_PRINTF("Relay: %s 🔌\n", state ? "ON" : "OFF");
+                    state ? dev->relayControl->turnOn() : dev->relayControl->turnOff();
 
                 } else if (target.startsWith("output")) {
                     int index = target.substring(6).toInt();
                     if (index >= 1 && index <= 10) {
                         bool state = value.as<bool>();
-                        DEBUG_PRINTF("🔥 Output %d → %s\n", index, state ? "ON" : "OFF");
+                        DEBUG_PRINTF("Output %d → %s 🔥\n", index, state ? "ON" : "OFF");
                         dev->heaterManager->setOutput(index, state);
                         dev->indicator->setLED(index, state);
                     }
 
                 } else if (target == "desiredVoltage") {
-                    dev->config->PutFloat(DESIRED_OUTPUT_VOLTAGE_KEY, value.as<float>());
+                    float v = value.as<float>();
+                    DEBUG_PRINTF("Desired Output Voltage set to %.2f V ⚡\n", v);
+                    dev->config->PutFloat(DESIRED_OUTPUT_VOLTAGE_KEY, v);
 
                 } else if (target == "acFrequency") {
-                    dev->config->PutInt(AC_FREQUENCY_KEY, value.as<int>());
+                    int f = value.as<int>();
+                    DEBUG_PRINTF("AC Frequency set to %d Hz 🔄\n", f);
+                    dev->config->PutInt(AC_FREQUENCY_KEY, f);
 
                 } else if (target == "chargeResistor") {
-                    dev->config->PutFloat(CHARGE_RESISTOR_KEY, value.as<float>());
+                    float r = value.as<float>();
+                    DEBUG_PRINTF("Charge Resistor set to %.2f Ω 🧯\n", r);
+                    dev->config->PutFloat(CHARGE_RESISTOR_KEY, r);
 
                 } else if (target == "dcVoltage") {
-                    dev->config->PutFloat(DC_VOLTAGE_KEY, value.as<float>());
+                    float v = value.as<float>();
+                    DEBUG_PRINTF("DC Output Voltage set to %.2f V ⚡\n", v);
+                    dev->config->PutFloat(DC_VOLTAGE_KEY, v);
 
                 } else if (target.startsWith("Access")) {
                     int index = target.substring(6).toInt();
@@ -290,20 +301,19 @@ void WiFiManager::StartWifiAP() {
                             OUT01_ACCESS_KEY, OUT02_ACCESS_KEY, OUT03_ACCESS_KEY, OUT04_ACCESS_KEY, OUT05_ACCESS_KEY,
                             OUT06_ACCESS_KEY, OUT07_ACCESS_KEY, OUT08_ACCESS_KEY, OUT09_ACCESS_KEY, OUT10_ACCESS_KEY
                         };
-
                         bool flag = value.as<bool>();
-                        DEBUG_PRINTF("🔐 Access %d → %s\n", index, flag ? "true" : "false");
+                        DEBUG_PRINTF("Access %d → %s 🔐\n", index, flag ? "true" : "false");
                         dev->config->PutBool(accessKeys[index - 1], flag);
                     }
 
                 } else if (target == "mode") {
-                    DEBUG_PRINTLN("🧭 Mode switched → IDLE");
+                    DEBUG_PRINTLN("Mode switched to IDLE 🧭");
                     dev->currentState = DeviceState::Idle;
                     dev->indicator->clearAll();
                     dev->heaterManager->disableAll();
 
                 } else if (target == "systemStart") {
-                    DEBUG_PRINTLN("▶️ System Start requested");
+                    DEBUG_PRINTLN("System Start requested ▶️");
                     if (dev->loopTaskHandle != nullptr && dev->currentState == DeviceState::Idle) {
                         dev->startLoopTask();
                     }
@@ -312,20 +322,19 @@ void WiFiManager::StartWifiAP() {
                     }
 
                 } else if (target == "systemShutdown") {
-                    DEBUG_PRINTLN("⏹️ System Shutdown requested");
+                    DEBUG_PRINTLN("System Shutdown requested ⏹️");
                     if (dev->currentState == DeviceState::Running) {
                         dev->currentState = DeviceState::Idle;
                     }
 
                 } else if (target == "bypass") {
                     bool state = value.as<bool>();
-                    DEBUG_PRINT("🛠️ Bypass: ");
-                    DEBUG_PRINTLN(state ? "ENABLED" : "DISABLED");
+                    DEBUG_PRINTF("Bypass: %s 🛠️\n", state ? "ENABLED" : "DISABLED");
                     state ? dev->bypassFET->enable() : dev->bypassFET->disable();
 
                 } else if (target == "fanSpeed") {
                     int speed = constrain(value.as<int>(), 0, 100);
-                    DEBUG_PRINTF("🌀 Fan speed set to: %d%%\n", speed);
+                    DEBUG_PRINTF("Fan speed set to %d%% 🌀\n", speed);
                     dev->fanManager->setSpeedPercent(speed);
 
                 } else {
@@ -351,6 +360,7 @@ void WiFiManager::StartWifiAP() {
             }
         }
     });
+
     // 6. Load all controllable states for UI initialization
     server.on("/load_controls", HTTP_GET, [this](AsyncWebServerRequest* request) {
         if (!isAuthenticated(request)) return;

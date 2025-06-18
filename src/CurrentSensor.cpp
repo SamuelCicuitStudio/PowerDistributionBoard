@@ -16,7 +16,7 @@ float CurrentSensor::readCurrent() {
 
     float current = delta_mv / ACS781_SENSITIVITY_MV_PER_A;
 
-    DEBUG_PRINTF("[CurrentSensor] ADC=%d, V=%.2fmV, I=%.2fA ⚡\n", adc, voltage_mv, current);
+   // DEBUG_PRINTF("[CurrentSensor] ADC=%d, V=%.2fmV, I=%.2fA ⚡\n", adc, voltage_mv, current);
     return current;
 }
 

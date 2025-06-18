@@ -49,57 +49,57 @@
     </div>
 
     <!-- Sidebar -->
-  <div class="sidebar">
-    <div class="tab active" onclick="switchTab(0)">Dashboard</div>
-    <div class="tab" onclick="switchTab(1)">User Settings</div>
-    <div class="tab" onclick="switchTab(2)">Manual Control</div>
-    <div class="tab" onclick="switchTab(3)">Admin Settings</div>
+    <div class="sidebar">
+      <div class="tab active" onclick="switchTab(0)">Dashboard</div>
+      <div class="tab" onclick="switchTab(1)">User Settings</div>
+      <div class="tab" onclick="switchTab(2)">Manual Control</div>
+      <div class="tab" onclick="switchTab(3)">Admin Settings</div>
+      <div class="tab" onclick="switchTab(4)">Device Settings</div>
 
-    <div class="sidebar-controls-vertical">
-      <div class="round-button stop" onclick="shutdownSystem()" title="Shutdown">
-        <img src="icons/power.png" alt="Shutdown" />
-      </div>
-      <div class="round-button reset" onclick="rebootSystem()" title="Reboot">
-        <img src="icons/redo-5-16.png" alt="Reset" />
-      </div>
-      <div class="round-button start" onclick="startSystem()" title="Ready Start System">
-        <img src="icons/ok_tank.png" alt="Start" />
-      </div>
-      <div class="round-button reset" onclick="resetSystem()" title="Reset">
-        <img src="icons/refresh.png" alt="Reset" />
+      <div class="sidebar-controls-vertical">
+        <div class="round-button stop" onclick="shutdownSystem()" title="Shutdown">
+          <img src="icons/power.png" alt="Shutdown" />
+        </div>
+        <div class="round-button reset" onclick="rebootSystem()" title="Reboot">
+          <img src="icons/redo-5-16.png" alt="Reset" />
+        </div>
+        <div class="round-button start" onclick="startSystem()" title="Ready Start System">
+          <img src="icons/ok_tank.png" alt="Start" />
+        </div>
+        <div class="round-button reset" onclick="resetSystem()" title="Reset">
+          <img src="icons/refresh.png" alt="Reset" />
+        </div>
       </div>
     </div>
-  </div>
 
     <!-- Dashboard Tab -->
     <div class="content active" id="dashboardTab">
-    <div class="content-header">
+      <div class="content-header">
         <h2>System Dashboard</h2>
-    </div>
+      </div>
 
-    <!-- Mode Controls in Box -->
-    <div class="mode-box" style="background: rgba(255, 255, 255, 0.05); padding: 20px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 0 5px rgba(255, 255, 255, 0.05);">
+      <div class="mode-box" style="background: rgba(255, 255, 255, 0.05); padding: 20px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 0 5px rgba(255, 255, 255, 0.05);">
         <div class="mode-toggle" style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
-        <label>Auto</label>
-        <label class="switch">
+          <label>Auto</label>
+          <label class="switch">
             <input type="checkbox" id="modeToggle" onchange="toggleMode()" />
             <span class="slider"></span>
-        </label>
-        <label>Manual</label>
+          </label>
+          <label>Manual</label>
 
-        <label style="margin-left: 20px;">LT</label>
-        <label class="switch">
+          <label style="margin-left: 20px;">LT</label>
+          <label class="switch">
             <input type="checkbox" id="ltToggle" onchange="toggleLT()" />
             <span class="slider"></span>
-        </label>
+          </label>
 
-        <span style="margin-left: 30px;">Ready</span>
-        <div id="readyLed" class="led"></div>
-        <span style="margin-left: 20px;">OFF</span>
-        <div id="offLed" class="led"></div>
+          <span style="margin-left: 30px;">Ready</span>
+          <div id="readyLed" class="led"></div>
+          <span style="margin-left: 20px;">OFF</span>
+          <div id="offLed" class="led"></div>
         </div>
-    </div>
-      <!-- Gauges Section -->
+      </div>
+
       <div class="gauges">
         <!-- Voltage -->
         <div class="gauge-card">
@@ -194,95 +194,140 @@
       </div>
     </div>
 
-<!-- User Settings Tab -->
-<div class="content" id="userSettingsTab">
-  <div class="content-header">
-    <h2>User Settings</h2>
-  </div>
-
-
-  <div class="user-modal-content zoom-box" style="width: 100%; max-width: 400px;">
-    <input type="password" id="userCurrentPassword" placeholder="Current Password" />
-    <input type="password" id="userNewPassword" placeholder="New Password" />
-    <input type="text" id="userDeviceId" placeholder="New Device ID" />
-    <div class="user-modal-actions round-actions">
-      <div class="round-button save" onclick="saveUserSettings()">
-        <img src="icons/ok_tank.png" alt="Save" />
+    <!-- User Settings Tab -->
+    <div class="content" id="userSettingsTab">
+      <div class="content-header">
+        <h2>User Settings</h2>
       </div>
-      <div class="round-button cancel" onclick="resetUserSettings()">
-        <img src="icons/close.png" alt="Cancel" />
+
+      <div class="user-modal-content zoom-box" style="width: 100%; max-width: 400px;">
+        <input type="password" id="userCurrentPassword" placeholder="Current Password" />
+        <input type="password" id="userNewPassword" placeholder="New Password" />
+        <input type="text" id="userDeviceId" placeholder="New Device ID" />
+        <div class="user-modal-actions round-actions">
+          <div class="round-button save" onclick="saveUserSettings()">
+            <img src="icons/ok_tank.png" alt="Save" />
+          </div>
+          <div class="round-button cancel" onclick="resetUserSettings()">
+            <img src="icons/close.png" alt="Cancel" />
+          </div>
+        </div>
       </div>
+
+      <div class="section-header">Output Access</div>
+      <div class="manual-outputs" id="userAccessGrid"></div>
     </div>
-  </div>
-
-  <div class="section-header">Output Access</div>
-  <div class="manual-outputs" id="userAccessGrid"></div>
-</div>
-
 
     <!-- Manual Control Tab -->
     <div class="content" id="manualControlTab">
-    <div class="content-header">
+      <div class="content-header">
         <h2>Manual Control</h2>
-    </div>
+      </div>
 
-    <!-- Controls inside styled box -->
-    <div class="mode-box">
+      <div class="mode-box">
         <div class="controls" style="display: flex; align-items: center; gap: 20px; flex-wrap: wrap;">
-        <label>Fan</label>
-        <input type="range" min="0" max="100" id="fanSlider" />
-
-        <label>Relay</label>
-        <label class="switch">
+          <label>Fan</label>
+          <input type="range" min="0" max="100" id="fanSlider" />
+          <label>Relay</label>
+          <label class="switch">
             <input type="checkbox" id="relayToggle" />
             <span class="slider"></span>
-        </label>
-
-        <label>Bypass</label>
-        <label class="switch">
+          </label>
+          <label>Bypass</label>
+          <label class="switch">
             <input type="checkbox" id="bypassToggle" />
             <span class="slider"></span>
-        </label>
+          </label>
         </div>
+      </div>
+
+      <div class="manual-outputs" id="manualOutputs"></div>
     </div>
 
-    <!-- Outputs -->
-    <div class="manual-outputs" id="manualOutputs"></div>
+    <!-- Admin Settings Tab -->
+    <div class="content" id="adminSettingsTab">
+      <div class="content-header">
+        <h2>Admin Settings</h2>
+      </div>
+
+      <div style="display: flex; justify-content: center; align-items: center; height: calc(100% - 80px);">
+        <div class="user-modal-content zoom-box" style="width: 100%; max-width: 400px;">
+          <input type="password" id="adminCurrentPassword" placeholder="Current Password" />
+          <input type="text" id="adminUsername" placeholder="New Admin Username" />
+          <input type="password" id="adminPassword" placeholder="New Admin Password" />
+
+          <hr style="margin: 20px 0; opacity: 0.2;" />
+
+          <input type="text" id="wifiSSID" placeholder="Wi-Fi SSID" />
+          <input type="password" id="wifiPassword" placeholder="Wi-Fi Password" />
+
+          <div class="user-modal-actions round-actions">
+            <div class="round-button save" onclick="saveAdminSettings()">
+              <img src="icons/ok_tank.png" alt="Save" />
+            </div>
+            <div class="round-button cancel" onclick="resetAdminSettings()">
+              <img src="icons/close.png" alt="Cancel" />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  <!-- Device Settings Tab -->
+  <div class="content" id="deviceSettingsTab">
+    <div class="content-header">
+      <h2>Device Settings</h2>
     </div>
 
+    <div style="display: flex; justify-content: center; align-items: center; height: calc(100% - 80px);">
+      <div class="user-modal-content zoom-box" style="width: 100%; max-width: 400px;">
 
-<!-- Admin Settings Tab -->
-<div class="content" id="adminSettingsTab">
-  <div class="content-header">
-    <h2>Admin Settings</h2>
-  </div>
-
-  <!-- Center Wrapper -->
-  <div style="display: flex; justify-content: center; align-items: center; height: calc(100% - 80px);">
-    <div class="user-modal-content zoom-box" style="width: 100%; max-width: 400px;">
-      <input type="password" id="adminCurrentPassword" placeholder="Current Password" />
-      <input type="text" id="adminUsername" placeholder="New Admin Username" />
-      <input type="password" id="adminPassword" placeholder="New Admin Password" />
-
-      <hr style="margin: 20px 0; opacity: 0.2;" />
-
-      <input type="text" id="wifiSSID" placeholder="Wi-Fi SSID" />
-      <input type="password" id="wifiPassword" placeholder="Wi-Fi Password" />
-
-      <div class="user-modal-actions round-actions">
-        <div class="round-button save" onclick="saveAdminSettings()">
-          <img src="icons/ok_tank.png" alt="Save" />
+        <div class="input-with-unit">
+          <input type="number" id="desiredVoltage" placeholder="Desired Output Voltage" />
+          <span class="unit-label">V</span>
         </div>
-        <div class="round-button cancel" onclick="resetAdminSettings()">
-          <img src="icons/close.png" alt="Cancel" />
+
+        <div class="input-with-unit">
+          <input type="number" id="acFrequency" placeholder="AC Frequency" />
+          <span class="unit-label">Hz</span>
+        </div>
+
+        <div class="input-with-unit">
+          <input type="number" id="chargeResistor" placeholder="Charge Resistor" />
+          <span class="unit-label">Ω</span>
+        </div>
+
+        <div class="input-with-unit">
+          <input type="number" id="dcVoltage" placeholder="DC Output Voltage" />
+          <span class="unit-label">V</span>
+        </div>
+
+        <div class="input-with-unit">
+          <input type="number" id="onTime" placeholder="ON Time" />
+          <span class="unit-label">ms</span>
+        </div>
+
+        <div class="input-with-unit">
+          <input type="number" id="offTime" placeholder="OFF Time" />
+          <span class="unit-label">ms</span>
+        </div>
+
+        <div class="user-modal-actions round-actions">
+          <div class="round-button save" onclick="saveDeviceSettings()">
+            <img src="icons/ok_tank.png" alt="Save" />
+          </div>
+          <div class="round-button cancel" onclick="resetDeviceSettings()">
+            <img src="icons/close.png" alt="Cancel" />
+          </div>
         </div>
       </div>
     </div>
   </div>
-</div>
 
-  <div class="footer">
-    &copy; 2025 Power Distribution Admin Interface
+
+    <!-- Footer -->
+    <div class="footer">
+      &copy; 2025 Power Distribution Admin Interface
+    </div>
   </div>
 
   <script src="js/admin.js?v=2"></script>

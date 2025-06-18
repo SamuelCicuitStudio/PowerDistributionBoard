@@ -260,7 +260,7 @@ async function loadControls() {
     if (readyLed) readyLed.style.backgroundColor = data.ready ? "limegreen" : "gray";
     if (offLed) offLed.style.backgroundColor = data.off ? "red" : "gray";
 
-    // ── Update Manual Control toggles (assumes pre-rendered with renderAllOutputs) ──
+    // ── Update Manual Control toggles ──
     for (let i = 1; i <= 10; i++) {
       const checked = !!states[`output${i}`];
       const checkbox = document.querySelector(`#manualOutputs .manual-item:nth-child(${i}) input[type="checkbox"]`);
@@ -270,13 +270,21 @@ async function loadControls() {
       if (led) led.classList.toggle("active", checked);
     }
 
-    // ── Update User Settings → Output Access toggles ──
+    // ── Update Output Access (User Settings tab) ──
     for (let i = 1; i <= 10; i++) {
       const checkbox = document.querySelector(`#userAccessGrid .manual-item:nth-child(${i}) input[type="checkbox"]`);
       if (checkbox) {
         checkbox.checked = !!access[`output${i}`];
       }
     }
+
+    // ── Update Device Settings Tab ──
+    document.getElementById("desiredVoltage").value   = data.desiredVoltage ?? "";
+    document.getElementById("acFrequency").value      = data.acFrequency ?? "";
+    document.getElementById("chargeResistor").value   = data.chargeResistor ?? "";
+    document.getElementById("dcVoltage").value        = data.dcVoltage ?? "";
+    document.getElementById("onTime").value           = data.onTime ?? "";
+    document.getElementById("offTime").value          = data.offTime ?? "";
 
   } catch (err) {
     console.error("Failed to load controls:", err);
@@ -423,13 +431,43 @@ function startMonitorPolling(intervalMs = 1000) {
           fanSlider.value = data.fanSpeed;
         }
       })
-      .catch(err => {
+      .catch(err => { 
         console.error("Monitor error:", err);
       });
   }, intervalMs);
 }
+function saveDeviceSettings() {
+  const desiredVoltage = parseFloat(document.getElementById("desiredVoltage").value);
+  const acFrequency = parseInt(document.getElementById("acFrequency").value);
+  const chargeResistor = parseFloat(document.getElementById("chargeResistor").value);
+  const dcVoltage = parseFloat(document.getElementById("dcVoltage").value);
+  const onTime = parseInt(document.getElementById("onTime").value);
+  const offTime = parseInt(document.getElementById("offTime").value);
 
+  if (
+    isNaN(desiredVoltage) ||
+    isNaN(acFrequency) ||
+    isNaN(chargeResistor) ||
+    isNaN(dcVoltage) ||
+    isNaN(onTime) ||
+    isNaN(offTime)
+  ) {
+    alert("⚠️ Please enter valid numeric values for all fields.");
+    return;
+  }
 
+  sendControlCommand("set", "desiredVoltage", desiredVoltage);
+  sendControlCommand("set", "acFrequency", acFrequency);
+  sendControlCommand("set", "chargeResistor", chargeResistor);
+  sendControlCommand("set", "dcVoltage", dcVoltage);
+  sendControlCommand("set", "onTime", onTime);
+  sendControlCommand("set", "offTime", offTime);
+
+}
+
+function resetDeviceSettings() {
+  loadControls(); // Reload from backend to restore defaults
+}
 window.addEventListener("DOMContentLoaded", () => {
   // Existing initializations...
   renderAllOutputs("manualOutputs", true);

@@ -8,7 +8,7 @@ volatile bool StartFromremote =  false;
 void BlinkTask(void* parameter) {
     BlinkParams* params = static_cast<BlinkParams*>(parameter);
     
-    DEBUG_PRINTF("[BLINK] Pin %u blink for %dms (original state: %s)\n", params->pin, params->durationMs, params->originalState ? "HIGH" : "LOW");
+    //DEBUG_PRINTF("[BLINK] Pin %u blink for %dms (original state: %s)\n", params->pin, params->durationMs, params->originalState ? "HIGH" : "LOW");
 
     pinMode(params->pin, OUTPUT);  // Ensure output mode
     digitalWrite(params->pin, !params->originalState);  // Toggle state

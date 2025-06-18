@@ -19,8 +19,8 @@ void TempSensor::begin() {
 
     for (uint8_t i = 0; i < sensorCount && i < MAX_TEMP_SENSORS; ++i) {
         if (sensors.getAddress(sensorAddresses[i], i)) {
-            DEBUG_PRINTF("[TempSensor] Sensor %u address: ", i);
-            printAddress(sensorAddresses[i]);
+            //DEBUG_PRINTF("[TempSensor] Sensor %u address: ", i);
+            //printAddress(sensorAddresses[i]);
             validSensors++;
         } else {
             DEBUG_PRINTF("[TempSensor] Sensor %u address not found ❌\n", i);
@@ -64,7 +64,7 @@ void TempSensor::stopTemperatureTask() {
 }
 
 void TempSensor::requestTemperatures() {
-    DEBUG_PRINTLN("[TempSensor] Requesting temperatures... 🔄");
+    //DEBUG_PRINTLN("[TempSensor] Requesting temperatures... 🔄");
     sensors.requestTemperatures();
 }
 
@@ -75,9 +75,9 @@ float TempSensor::getTemperature(uint8_t index) {
     }
 
     float temp = sensors.getTempCByIndex(index);
-    DEBUG_PRINTF("[TempSensor] Sensor %u (", index);
-    printAddress(sensorAddresses[index]);
-    Serial.printf(") = %.2f°C 🌡️\n", temp);
+   // DEBUG_PRINTF("[TempSensor] Sensor %u (", index);
+    //printAddress(sensorAddresses[index]);
+    //Serial.printf(") = %.2f°C 🌡️\n", temp);
     return temp;
 }
 

@@ -624,3 +624,24 @@
   transform: scale(1.03);
   box-shadow: 0 0 10px rgba(0, 255, 180, 0.25);
 }
+
+.input-with-unit {
+  position: relative;
+  margin-bottom: 14px;
+}
+
+.input-with-unit input {
+  width: 100%;
+  padding-right: 40px;
+  box-sizing: border-box;
+}
+
+.unit-label {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #ccc;
+  font-size: 0.9em;
+  pointer-events: none;
+}
