@@ -62,6 +62,7 @@ void WiFiManager::StartWifiAP() {
             return;
         }
         DEBUG_PRINTLN("[Heartbeat❤️ ]");
+        resetTimer();
         heartbeat();// start heartbeat
         keepAlive = true;
         request->send(200, "text/plain", "alive");
@@ -218,7 +219,7 @@ void WiFiManager::StartWifiAP() {
         if (index + len == total) {
             if (!isAuthenticated(request)) return;
 
-            resetTimer();
+            //resetTimer();
             StaticJsonDocument<1024> doc;
             DeserializationError error = deserializeJson(doc, body);
             body = ""; // Clear buffer
@@ -530,7 +531,7 @@ void WiFiManager::StartWifiAP() {
     server.serveStatic("/fonts/", SPIFFS, "/fonts/").setCacheControl("no-store, must-revalidate");
     server.begin();
     //Start auto-disable timer
-   // startInactivityTimer();
+    startInactivityTimer();
 }
 
 
@@ -553,18 +554,18 @@ void WiFiManager::disableWiFiAP() {
     WifiState = false;
     prev_WifiState = true;
 
-    WiFi.softAPdisconnect(true);
-    WiFi.mode(WIFI_OFF);
+    WiFi.softAPdisconnect(true);     // Disconnect AP
+    WiFi.disconnect(true);           // Disconnect STA (if connected)
+    delay(1000);                      // Let stack settle
+    //WiFi.mode(WIFI_OFF);             // Turn off WiFi
+    //esp_wifi_deinit();               // 💥 Fully deinitialize WiFi
 
     if (inactivityTaskHandle != nullptr) {
-        vTaskDelete(inactivityTaskHandle);
         inactivityTaskHandle = nullptr;
         DEBUG_PRINTLN("[WiFiManager] Inactivity timer stopped 🛑");
     }
-
     DEBUG_PRINTLN("[WiFiManager] WiFi Access Point disabled ❌");
 }
-
 
 // ─────────────────────────────────────────────────────────────
 // Reset Inactivity Timer
@@ -584,13 +585,13 @@ void WiFiManager::inactivityTask(void* param) {
             unsigned long now = millis();
             if ((now - self->lastActivityMillis) > INACTIVITY_TIMEOUT_MS) {
                 DEBUG_PRINTLN("[WiFiManager] Inactivity timeout reached ⏳");
-                self->disableWiFiAP();
+                self->disableWiFiAP();     // Disables Wi-Fi and clears task handle
+                vTaskDelete(nullptr);      // ✅ Kill this task
             }
         }
         vTaskDelay(pdMS_TO_TICKS(5000));
     }
 }
-
 
 // ─────────────────────────────────────────────────────────────
 // Start Inactivity Timer Task
@@ -687,4 +688,10 @@ void WiFiManager::heartbeat() {
         &heartbeatTaskHandle,   // Save handle for later reference
         APP_CPU_NUM             // Pin to core
     );
+}
+
+void WiFiManager::restartWiFiAP() {
+    disableWiFiAP();  // Turn off WiFi & cleanup
+    delay(100);       // Small delay to let WiFi stack clean up
+    begin();          // Restart AP and all callbacks
 }

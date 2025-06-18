@@ -57,7 +57,7 @@ void CpDischg::startCapVoltageTask() {
 
                 self->g_capVoltage = voltage;  // ⬅️ Update member
 
-                DEBUG_PRINTF("[CapTask] Avg ADC: %.2f, Voltage: %.2fV 🧪\n", avgADC, voltage);
+                //DEBUG_PRINTF("[CapTask] Avg ADC: %.2f, Voltage: %.2fV 🧪\n", avgADC, voltage);
                 vTaskDelay(delayTicks);
             }
         },

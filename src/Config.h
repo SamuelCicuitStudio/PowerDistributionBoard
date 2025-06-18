@@ -113,7 +113,7 @@
 #define LOCAL_IP                       IPAddress(192, 168, 4, 1)
 #define GATEWAY                        IPAddress(192, 168, 4, 1)
 #define SUBNET                         IPAddress(255, 255, 255, 0)
-#define INACTIVITY_TIMEOUT_MS 300000  // 5 minutes
+#define INACTIVITY_TIMEOUT_MS 60000  // 5 minutes
 // ==================================================
 // Time Configuration
 // ==================================================
