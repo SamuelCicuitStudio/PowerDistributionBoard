@@ -23,3 +23,7 @@ void FanManager::stop() {
     ledcWrite(FAN_PWM_CHANNEL, 0);
     DEBUG_PRINTLN("[FanManager] Fan stopped ⛔");
 }
+
+uint8_t FanManager::getSpeedPercent() const {
+    return static_cast<uint8_t>((currentDuty / 255.0f) * 100.0f + 0.5f); // Rounded %
+}

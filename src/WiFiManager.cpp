@@ -193,11 +193,14 @@ void WiFiManager::StartWifiAP() {
         doc["ready"] = digitalRead(READY_LED_PIN);
         doc["off"]   = digitalRead(POWER_OFF_LED_PIN);
 
-        // ✅ Output states 1–10
+        // Output states 1–10
         JsonObject outputs = doc.createNestedObject("outputs");
         for (int i = 1; i <= 10; ++i) {
             outputs["output" + String(i)] = dev->heaterManager->getOutputState(i);
         }
+
+        // Fan speed
+        doc["fanSpeed"] = dev->fanManager->getSpeedPercent();
 
         String json;
         serializeJson(doc, json);
@@ -233,9 +236,10 @@ void WiFiManager::StartWifiAP() {
 
                 if (target == "reboot") {
                     DEBUG_PRINTLN("⚙️ Reboot requested");
+                    blink(POWER_OFF_LED_PIN, 100);
                     dev->config->RestartSysDelayDown(3000);
 
-                } else if (target == "reset") {
+                } else if (target == "systemReset") {
                     blink(POWER_OFF_LED_PIN, 100);
                     DEBUG_PRINTLN("🔁 Resetting device...");
                     dev->config->PutBool(RESET_FLAG, true);
@@ -420,8 +424,11 @@ void WiFiManager::StartWifiAP() {
                     return;
                 }
 
-                String username = doc["username"] | "";
-                String password = doc["password"] | "";
+                String username     = doc["username"]     | "";
+                String password     = doc["password"]     | "";
+                String current      = doc["current"]      | "";
+                String ssid         = doc["ssid"]         | "";
+                String wifiPassword = doc["wifiPassword"] | "";
 
                 if (username == "" || password == "") {
                     DEBUG_PRINTLN("[AdminCred] Missing username or password ❌");
@@ -429,17 +436,32 @@ void WiFiManager::StartWifiAP() {
                     return;
                 }
 
-                DEBUG_PRINTLN("[AdminCred] Saving new admin credentials ✅");
-                DEBUG_PRINT("[AdminCred] Username: "); DEBUG_PRINTLN(username);
+                // Optionally verify current password
+                String stored = dev->config->GetString(ADMIN_PASS_KEY, "");
+                if (current != "" && stored != current) {
+                    DEBUG_PRINTLN("[AdminCred] Incorrect current password ❌");
+                    request->send(403, "application/json", "{\"error\":\"Incorrect current password\"}");
+                    return;
+                }
 
+                DEBUG_PRINTLN("[AdminCred] Saving admin credentials ✅");
+                DEBUG_PRINT("[AdminCred] Username: "); DEBUG_PRINTLN(username);
                 dev->config->PutString(ADMIN_ID_KEY, username);
                 dev->config->PutString(ADMIN_PASS_KEY, password);
+
+                // Optional Wi-Fi update
+                if (ssid != "" && wifiPassword != "") {
+                    DEBUG_PRINTLN("[AdminCred] Saving Wi-Fi settings ✅");
+                    dev->config->PutString(STA_SSID_KEY, ssid);
+                    dev->config->PutString(STA_PASS_KEY, wifiPassword);
+                }
 
                 DEBUG_PRINTLN("[AdminCred] Admin credentials updated ✅");
                 request->send(200, "application/json", "{\"status\":\"admin credentials updated\"}");
             }
         }
     );
+
     // 8. Set User Credentials
     server.on("/SetUserCred", HTTP_POST, [this](AsyncWebServerRequest* request) { },
         nullptr,
@@ -452,7 +474,7 @@ void WiFiManager::StartWifiAP() {
 
                 DEBUG_PRINTLN("[UserCred] Received request ✅");
 
-                if (!isUserConnected() || !isAdminConnected()) {
+                if (!isUserConnected() && !isAdminConnected()) {
                     DEBUG_PRINTLN("[UserCred] User not connected ❌");
                     request->send(403, "application/json", "{\"error\":\"Not allowed\"}");
                     body = "";
@@ -508,7 +530,7 @@ void WiFiManager::StartWifiAP() {
     server.serveStatic("/fonts/", SPIFFS, "/fonts/").setCacheControl("no-store, must-revalidate");
     server.begin();
     //Start auto-disable timer
-    startInactivityTimer();
+   // startInactivityTimer();
 }
 
 

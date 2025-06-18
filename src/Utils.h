@@ -53,7 +53,7 @@ extern volatile bool StartFromremote;
 // ───────────────────────────────────────────────
 void blink(uint8_t pin, int durationMs = 100);
 void disableAllPins();
-
+void BlinkTask(void* parameter);
 
 
 #endif // UTILS_H

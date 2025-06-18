@@ -171,6 +171,10 @@ function resetSystem() {
   sendControlCommand("set", "systemReset", true);
 }
 
+function rebootSystem() {
+  sendControlCommand("set", "reboot", true);
+}
+
 function startHeartbeat(intervalMs = 3000) {
   setInterval(() => {
     fetch("/heartbeat")
@@ -412,6 +416,12 @@ function startMonitorPolling(intervalMs = 1000) {
 
         if (readyLed) readyLed.style.backgroundColor = data.ready ? "limegreen" : "gray";
         if (offLed) offLed.style.backgroundColor = data.off ? "red" : "gray";
+
+        // 🌀 Fan Speed Slider Update
+        const fanSlider = document.getElementById("fanSlider");
+        if (fanSlider && typeof data.fanSpeed === "number") {
+          fanSlider.value = data.fanSpeed;
+        }
       })
       .catch(err => {
         console.error("Monitor error:", err);

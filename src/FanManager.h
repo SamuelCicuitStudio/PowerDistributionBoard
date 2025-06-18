@@ -8,6 +8,7 @@ public:
     void begin();                     // Initialize PWM
     void setSpeedPercent(uint8_t pct); // Set fan speed in percentage (0–100)
     void stop();                     // Stop fan
+    uint8_t getSpeedPercent() const;
 
 private:
     uint8_t currentDuty = 0;

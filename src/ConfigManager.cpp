@@ -129,6 +129,10 @@ void ConfigManager::initializeVariables() {
   PutString(DEVICE_WIFI_HOTSPOT_NAME_KEY, ssid);
   PutString(DEVICE_AP_AUTH_PASS_KEY, DEVICE_AP_AUTH_PASS_DEFAULT);
 
+  // New: Station mode credentials
+  PutString(STA_SSID_KEY, DEFAULT_STA_SSID);
+  PutString(STA_PASS_KEY, DEFAULT_STA_PASS);
+
   // Admin/User login
   PutString(ADMIN_ID_KEY, DEFAULT_ADMIN_ID);
   PutString(ADMIN_PASS_KEY, DEFAULT_ADMIN_PASS);

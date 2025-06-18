@@ -31,6 +31,8 @@
 #define DEVICE_AP_AUTH_PASS_KEY        "APPSS"     // Hotspot password key
 #define RESET_FLAG                     "RTFLG"     // Preferences reset flag
 
+#define STA_SSID_KEY                   "WIFSSD"  // Station Mode SSID key
+#define STA_PASS_KEY                   "WIFPASS"  // Station Mode password key
 // ---------- Authentication (Max 1 Admin, 1 User) ----------
 #define ADMIN_ID_KEY                   "ADMID"     // Admin login username
 #define ADMIN_PASS_KEY                 "ADMPW"     // Admin login password
@@ -69,6 +71,8 @@
 // ---------- Wi-Fi Defaults ----------
 #define DEVICE_WIFI_HOTSPOT_NAME       "PDis_"   // Default SSID
 #define DEVICE_AP_AUTH_PASS_DEFAULT    "1234567890"     // Default password
+#define DEFAULT_STA_SSID               "nothing"              // Optional default station SSID (blank)
+#define DEFAULT_STA_PASS               "nothing"              // Optional default station password (blank)
 
 // ---------- Timing & Behavior Defaults ----------
 #define DEFAULT_ON_TIME                10               // ms

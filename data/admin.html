@@ -49,24 +49,27 @@
     </div>
 
     <!-- Sidebar -->
-    <div class="sidebar">
-      <div class="tab active" onclick="switchTab(0)">Dashboard</div>
-      <div class="tab" onclick="switchTab(1)">User Settings</div>
-      <div class="tab" onclick="switchTab(2)">Manual Control</div>
-      <div class="tab" onclick="switchTab(3)">Admin Settings</div>
+  <div class="sidebar">
+    <div class="tab active" onclick="switchTab(0)">Dashboard</div>
+    <div class="tab" onclick="switchTab(1)">User Settings</div>
+    <div class="tab" onclick="switchTab(2)">Manual Control</div>
+    <div class="tab" onclick="switchTab(3)">Admin Settings</div>
 
-      <div class="sidebar-controls-vertical">
-        <div class="round-button start" onclick="startSystem()" title="Start System">
-          <img src="icons/power.png" alt="Start" />
-        </div>
-        <div class="round-button stop" onclick="shutdownSystem()" title="Shutdown" />
-          <img src="icons/redo-5-16.png" alt="Shutdown" />
-        </div>
-        <div class="round-button reset" onclick="resetSystem()" title="Reset" />
-          <img src="icons/refresh.png" alt="Reset" />
-        </div>
+    <div class="sidebar-controls-vertical">
+      <div class="round-button stop" onclick="shutdownSystem()" title="Shutdown">
+        <img src="icons/power.png" alt="Shutdown" />
+      </div>
+      <div class="round-button reset" onclick="rebootSystem()" title="Reboot">
+        <img src="icons/redo-5-16.png" alt="Reset" />
+      </div>
+      <div class="round-button start" onclick="startSystem()" title="Ready Start System">
+        <img src="icons/ok_tank.png" alt="Start" />
+      </div>
+      <div class="round-button reset" onclick="resetSystem()" title="Reset">
+        <img src="icons/refresh.png" alt="Reset" />
       </div>
     </div>
+  </div>
 
     <!-- Dashboard Tab -->
     <div class="content active" id="dashboardTab">

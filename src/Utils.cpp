@@ -30,7 +30,7 @@ void blink(uint8_t pin, int durationMs) {
     xTaskCreate(
         BlinkTask,           // Task function
         "BlinkTask",         // Task name
-        1024,                // Stack size
+        2048,                // Stack size
         params,              // Parameters
         1,                   // Priority
         nullptr              // Task handle
