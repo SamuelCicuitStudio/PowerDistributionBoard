@@ -26,8 +26,8 @@
   }
 
   .ui-container {
-    width: 750px;
-    height: 500px;
+    width: 820px;
+    height: 600px;
     display: flex;
     background: rgba(255, 255, 255, 0.04);
     backdrop-filter: blur(10px);
@@ -45,15 +45,29 @@
 
 
 
-  .sidebar {
-    width: 130px;
-    background: rgba(255, 255, 255, 0.02);
-    border-right: 1px solid rgba(255, 255, 255, 0.08);
-    padding: 20px 0;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  width: 165px;
+  background: rgba(0, 0, 0, 0.2);
+  box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.05);
+  padding: 12px;
+  overflow: hidden;
+}
+
+.sidebar-controls-vertical {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: auto;
+  padding-top: 20px;
+  padding-bottom: 12px; /* prevent bottom overflow */
+}
+
+.sidebar-controls-vertical .round-button {
+  align-self: center;
+}
 
   .tab {
     padding: 12px 20px;
@@ -73,14 +87,16 @@
     color: #00ffae;
   }
 
-  .content {
-    flex: 1;
-    display: none;
-    flex-direction: column;
-    padding: 20px 25px;
-    overflow: hidden;
-    height: 100%;
-  }
+.content {
+  flex: 1;
+  display: none;
+  flex-direction: column;
+  padding: 20px 25px;
+  overflow: hidden;
+  height: 100%;
+  padding-bottom: 40px; /* prevent overlap with footer */
+}
+
 
   .content.active {
     display: flex;
@@ -152,6 +168,19 @@
     gap: 10px;
   }
 
+.mode-box {
+  background: rgba(255, 255, 255, 0.05);
+  padding: 20px;
+  border-radius: 12px;
+  margin-bottom: 20px;
+  box-shadow: 0 0 5px rgba(255, 255, 255, 0.05);
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+
+.mode-box:hover {
+  transform: scale(1.03);
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.15);
+}
 
   .disc {
     width: 100px;
@@ -237,7 +266,6 @@
   input:checked + .slider:before {
     transform: translateX(20px);
   }
-
 .manual-outputs {
   scroll-behavior: smooth;
   display: flex;
@@ -288,6 +316,7 @@
 .manual-outputs:active {
   cursor: grabbing;
 }
+
 
   .led {
     width: 14px;
@@ -537,4 +566,61 @@
   align-items: center;
   gap: 10px;
   margin-top: 15px;
+}
+.access-style {
+  border-radius: 14px;
+  background: rgba(0, 255, 180, 0.04);
+  box-shadow: 0 0 8px rgba(0, 255, 180, 0.1);
+  transition: box-shadow 0.3s ease-in-out;
+  height: 120px; /* Shorter than manual control height */
+}
+
+.access-style:hover {
+  box-shadow: 0 0 14px rgba(0, 255, 180, 0.2);
+}
+
+#fanSlider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 160px;
+  height: 8px;
+  background: #333;
+  border-radius: 8px;
+  outline: none;
+  cursor: pointer;
+  transition: background 0.3s ease;
+}
+
+#fanSlider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 20px;
+  width: 20px;
+  border-radius: 50%;
+  background: #00ffae;
+  cursor: pointer;
+  box-shadow: 0 0 10px rgba(0, 255, 174, 0.5);
+  transition: background 0.3s ease;
+}
+
+#fanSlider::-moz-range-thumb {
+  height: 20px;
+  width: 20px;
+  border-radius: 50%;
+  background: #00ffae;
+  cursor: pointer;
+  box-shadow: 0 0 10px rgba(0, 255, 174, 0.5);
+}
+
+.round-button.reset img {
+  filter: brightness(1.2);
+}
+
+.zoom-box {
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+
+.zoom-box:hover {
+  transform: scale(1.03);
+  box-shadow: 0 0 10px rgba(0, 255, 180, 0.25);
 }

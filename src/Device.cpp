@@ -44,11 +44,13 @@ void Device::begin() {
     DEBUG_PRINTLN("#                 Starting Device Manager ⚙️              #");
     DEBUG_PRINTLN("###########################################################");
 
-
     pinMode(DETECT_12V_PIN, INPUT);
     pinMode(READY_LED_PIN, OUTPUT);
     pinMode(POWER_OFF_LED_PIN, OUTPUT);
+    digitalWrite(READY_LED_PIN, LOW);
+    digitalWrite(POWER_OFF_LED_PIN, HIGH);
     DEBUG_PRINTLN("[Device] Configuring system I/O pins 🧰");
+ 
 
 }
 
@@ -75,11 +77,11 @@ void Device::startLoopTask() {
     }
 }
 
-
 void Device::loopTaskWrapper(void* param) {
     Device* self = static_cast<Device*>(param);
     self->loopTask();  // Execute member function
 }
+
 void Device::loopTask() {
     DEBUG_PRINTLN("[Device] 🔁 Device start task started");
 
@@ -88,7 +90,7 @@ void Device::loopTask() {
     relayControl->turnOff();
     bypassFET->disable();
     tempSensor->stopTemperatureTask();
-
+    discharger->startCapVoltageTask();
     currentState = DeviceState::Idle;
 
     DEBUG_PRINTLN("[Device] Waiting for 12V input... 🔋");
@@ -98,15 +100,13 @@ void Device::loopTask() {
 
     DEBUG_PRINTLN("[Device] 12V Detected – Enabling input relay ✅");
     relayControl->turnOn();
+   
+    DEBUG_PRINTF("[Device] Initial Capacitor Voltage: %.2fV 🧠\n", discharger->readCapVoltage());
 
-    float dc = config->GetFloat(DC_VOLTAGE_KEY, DEFAULT_DC_VOLTAGE);
-    float capVoltage = readCapVoltage();
-    DEBUG_PRINTF("[Device] Initial Capacitor Voltage: %.2fV 🧠\n", capVoltage);
-
-    while (capVoltage < 0.78f * dc) {
-        DEBUG_PRINTF("[Device] Charging... Cap Voltage: %.2fV / Target: %.2fV ⏳\n", capVoltage, 0.78f * dc);
+    while (discharger->readCapVoltage() < GO_THRESHOLD_RATIO ) {
+        DEBUG_PRINTF("[Device] Charging... Cap Voltage: %.2fV / Target: %.2fV ⏳\n", discharger->readCapVoltage(), GO_THRESHOLD_RATIO );
         delay(500);
-        capVoltage = readCapVoltage();
+        discharger->readCapVoltage();
     }
 
     DEBUG_PRINTLN("[Device] Voltage threshold met ✅ Bypassing inrush resistor 🔄");
@@ -123,7 +123,8 @@ void Device::loopTask() {
     while (digitalRead(POWER_ON_SWITCH_PIN)) {
         if (StartFromremote) break;
         delay(100);
-    }
+    };
+    StartFromremote = false;// reset the start from remote flag
 
     DEBUG_PRINTLN("[Device] POWER ON button pressed ▶️ Launching main loop");
 
@@ -204,6 +205,7 @@ void Device::shutdown() {
 
     DEBUG_PRINTLN("[Device] Starting Capacitor Discharge ⚡");
     discharger->discharge();
+    discharger->stopCapVoltageTask();
 
     DEBUG_PRINTLN("[Device] Disabling Inrush Bypass MOSFET ⛔");
     bypassFET->disable();
@@ -276,3 +278,4 @@ void Device::stopLoopTask() {
         DEBUG_PRINTLN("[Device] Loop Task not running – no action taken 💤");
     }
 }
+

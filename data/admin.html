@@ -2,12 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Cache-Control" content="no-store, must-revalidate">
-  <meta http-equiv="Pragma" content="no-cache">
-  <meta http-equiv="Expires" content="0">
+  <meta http-equiv="Cache-Control" content="no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>User Dashboard</title>
-  <link rel="stylesheet" href="css/user.css?v=2" />
+  <title>Admin Dashboard</title>
+  <link rel="stylesheet" href="css/admin.css?v=2" />
   <style>
     .user-status-global {
       position: absolute;
@@ -18,11 +18,6 @@
       gap: 10px;
       z-index: 1000;
     }
-
-    .user-icon {
-      cursor: pointer;
-    }
-
     .user-menu {
       position: absolute;
       top: 35px;
@@ -31,73 +26,77 @@
       background: rgba(0, 0, 0, 0.7);
       border-radius: 8px;
       padding: 10px;
-      box-shadow: 0 0 8px rgba(0, 0, 0, 0.4);
+      box-shadow: 0 0 8px rgba(0,0,0,0.4);
     }
-
     .user-menu button {
       background: none;
       border: none;
       color: white;
       cursor: pointer;
-      display: block;
-      margin: 5px 0;
     }
   </style>
 </head>
 <body>
-  <div class="ui-container">
 
-    <!-- User icon and dropdown always on top-right -->
+  <div class="ui-container">
+    <!-- Global User Icon / Menu -->
     <div class="user-status-global">
       <div class="status-dot" title="Auto Mode"></div>
       <div class="user-icon" onclick="toggleUserMenu()">👤</div>
       <div class="user-menu" id="userMenu">
-        <button id="editCredentialsBtn" type="button">Edit Credentials</button>
         <button id="disconnectBtn" type="button">Disconnect</button>
       </div>
     </div>
 
     <!-- Sidebar -->
     <div class="sidebar">
-      <div class="tab active" onclick="switchTab(0)">Auto Mode</div>
-      <div class="tab" onclick="switchTab(1)">Manual Mode</div>
+      <div class="tab active" onclick="switchTab(0)">Dashboard</div>
+      <div class="tab" onclick="switchTab(1)">User Settings</div>
+      <div class="tab" onclick="switchTab(2)">Manual Control</div>
+      <div class="tab" onclick="switchTab(3)">Admin Settings</div>
 
-      <div class="sidebar-controls" style="margin-top: 30px; display: flex; flex-direction: column; align-items: center; gap: 12px;">
+      <div class="sidebar-controls-vertical">
         <div class="round-button start" onclick="startSystem()" title="Start System">
-          <img src="icons/power.png" alt="Start">
+          <img src="icons/power.png" alt="Start" />
         </div>
-        <div class="round-button stop" onclick="shutdownSystem()" title="Shutdown System">
-          <img src="icons/redo-5-16.png" alt="Shutdown">
+        <div class="round-button stop" onclick="shutdownSystem()" title="Shutdown" />
+          <img src="icons/redo-5-16.png" alt="Shutdown" />
+        </div>
+        <div class="round-button reset" onclick="resetSystem()" title="Reset" />
+          <img src="icons/refresh.png" alt="Reset" />
         </div>
       </div>
     </div>
 
-    <!-- Auto Mode Content -->
-    <div class="content active" id="autoTab">
-      <div class="content-header">
-        <h2>Dashboard</h2>
-      </div>
+    <!-- Dashboard Tab -->
+    <div class="content active" id="dashboardTab">
+    <div class="content-header">
+        <h2>System Dashboard</h2>
+    </div>
 
-      <div class="mode-toggle" style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
+    <!-- Mode Controls in Box -->
+    <div class="mode-box" style="background: rgba(255, 255, 255, 0.05); padding: 20px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 0 5px rgba(255, 255, 255, 0.05);">
+        <div class="mode-toggle" style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
         <label>Auto</label>
         <label class="switch">
-          <input type="checkbox" id="modeToggle" onchange="toggleMode()">
-          <span class="slider"></span>
+            <input type="checkbox" id="modeToggle" onchange="toggleMode()" />
+            <span class="slider"></span>
         </label>
         <label>Manual</label>
 
         <label style="margin-left: 20px;">LT</label>
         <label class="switch">
-          <input type="checkbox" id="ltToggle" onchange="toggleLT()">
-          <span class="slider"></span>
+            <input type="checkbox" id="ltToggle" onchange="toggleLT()" />
+            <span class="slider"></span>
         </label>
 
         <span style="margin-left: 30px;">Ready</span>
-        <div id="readyLed" style="width: 12px; height: 12px; background-color: gray; border-radius: 50%;"></div>
+        <div id="readyLed" class="led"></div>
         <span style="margin-left: 20px;">OFF</span>
-        <div id="offLed" style="width: 12px; height: 12px; background-color: gray; border-radius: 50%;"></div>
-      </div>
-
+        <div id="offLed" class="led"></div>
+        </div>
+    </div>
+      <!-- Gauges Section -->
       <div class="gauges">
         <!-- Voltage -->
         <div class="gauge-card">
@@ -192,37 +191,97 @@
       </div>
     </div>
 
-    <!-- Manual Mode Content -->
-    <div class="content" id="manualTab">
-      <div class="content-header">
-        <h2>Manual Control</h2>
+<!-- User Settings Tab -->
+<div class="content" id="userSettingsTab">
+  <div class="content-header">
+    <h2>User Settings</h2>
+  </div>
+
+
+  <div class="user-modal-content zoom-box" style="width: 100%; max-width: 400px;">
+    <input type="password" id="userCurrentPassword" placeholder="Current Password" />
+    <input type="password" id="userNewPassword" placeholder="New Password" />
+    <input type="text" id="userDeviceId" placeholder="New Device ID" />
+    <div class="user-modal-actions round-actions">
+      <div class="round-button save" onclick="saveUserSettings()">
+        <img src="icons/ok_tank.png" alt="Save" />
       </div>
-      <div class="manual-outputs" id="manualOutputs"></div>
+      <div class="round-button cancel" onclick="resetUserSettings()">
+        <img src="icons/close.png" alt="Cancel" />
+      </div>
     </div>
   </div>
 
-  <!-- Modal -->
-  <div class="user-modal" id="userModal">
-    <div class="user-modal-content">
-      <h3>Update Credentials</h3>
-      <input type="password" id="currentPassword" placeholder="Current Password" />
-      <input type="password" id="newPassword" placeholder="New Password" />
-      <input type="text" id="newId" placeholder="New Device ID" />
-      <div class="user-modal-actions round-actions">
-        <div class="round-button save" onclick="saveUserSettings()">
-          <img src="icons/ok_tank.png" alt="Save">
+  <div class="section-header">Output Access</div>
+  <div class="manual-outputs" id="userAccessGrid"></div>
+</div>
+
+
+    <!-- Manual Control Tab -->
+    <div class="content" id="manualControlTab">
+    <div class="content-header">
+        <h2>Manual Control</h2>
+    </div>
+
+    <!-- Controls inside styled box -->
+    <div class="mode-box">
+        <div class="controls" style="display: flex; align-items: center; gap: 20px; flex-wrap: wrap;">
+        <label>Fan</label>
+        <input type="range" min="0" max="100" id="fanSlider" />
+
+        <label>Relay</label>
+        <label class="switch">
+            <input type="checkbox" id="relayToggle" />
+            <span class="slider"></span>
+        </label>
+
+        <label>Bypass</label>
+        <label class="switch">
+            <input type="checkbox" id="bypassToggle" />
+            <span class="slider"></span>
+        </label>
         </div>
-        <div class="round-button cancel" onclick="closeUserModal()">
-          <img src="icons/close.png" alt="Cancel">
+    </div>
+
+    <!-- Outputs -->
+    <div class="manual-outputs" id="manualOutputs"></div>
+    </div>
+
+
+<!-- Admin Settings Tab -->
+<div class="content" id="adminSettingsTab">
+  <div class="content-header">
+    <h2>Admin Settings</h2>
+  </div>
+
+  <!-- Center Wrapper -->
+  <div style="display: flex; justify-content: center; align-items: center; height: calc(100% - 80px);">
+    <div class="user-modal-content zoom-box" style="width: 100%; max-width: 400px;">
+      <input type="password" id="adminCurrentPassword" placeholder="Current Password" />
+      <input type="text" id="adminUsername" placeholder="New Admin Username" />
+      <input type="password" id="adminPassword" placeholder="New Admin Password" />
+
+      <hr style="margin: 20px 0; opacity: 0.2;" />
+
+      <input type="text" id="wifiSSID" placeholder="Wi-Fi SSID" />
+      <input type="password" id="wifiPassword" placeholder="Wi-Fi Password" />
+
+      <div class="user-modal-actions round-actions">
+        <div class="round-button save" onclick="saveAdminSettings()">
+          <img src="icons/ok_tank.png" alt="Save" />
+        </div>
+        <div class="round-button cancel" onclick="resetAdminSettings()">
+          <img src="icons/close.png" alt="Cancel" />
         </div>
       </div>
     </div>
   </div>
+</div>
 
   <div class="footer">
-    &copy; 2025 Power Distribution Interface
+    &copy; 2025 Power Distribution Admin Interface
   </div>
 
-  <script src="js/user.js?v=2"></script>
+  <script src="js/admin.js?v=2"></script>
 </body>
 </html>

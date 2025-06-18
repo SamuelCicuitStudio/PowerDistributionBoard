@@ -1,8 +1,13 @@
-// === UI TAB LOGIC ===
+// ───────────────────────────────────────────────────────────────
+// 📁 UI TAB LOGIC — Handles sidebar tab switching and manual mode visibility
+// ───────────────────────────────────────────────────────────────
 const tabs = document.querySelectorAll(".tab");
 const contents = document.querySelectorAll(".content");
-document.querySelector('.sidebar .tab:nth-child(2)').style.display = "none"; // Hide Manual by default
 
+// Hide Manual tab by default (index 1)
+document.querySelector('.sidebar .tab:nth-child(2)').style.display = "none";
+
+// Switch between tabs based on index
 function switchTab(index) {
   tabs.forEach((tab, i) => {
     tab.classList.toggle("active", i === index);
@@ -10,33 +15,36 @@ function switchTab(index) {
   });
 }
 
+// Toggle between Auto and Manual mode
 function toggleMode() {
   const isManual = document.getElementById('modeToggle').checked;
   const dot = document.querySelector('.status-dot');
 
-  // UI updates
+  // UI update: show/hide manual tab
   document.querySelector('.sidebar .tab:nth-child(2)').style.display = isManual ? "block" : "none";
   switchTab(isManual ? 1 : 0);
 
+  // Update status dot
   dot.title = isManual ? "Manual Mode" : "Auto Mode";
   dot.style.backgroundColor = isManual ? "#ffa500" : "#00ff80";
   dot.style.boxShadow = `0 0 6px ${dot.style.backgroundColor}`;
 
-  // Send to server
+  // Notify backend
   sendControlCommand("set", "mode", isManual);
 }
 
-// === LT TOGGLE ===
+// ───────────────────────────────────────────────────────────────
+// 💡 LT TOGGLE — Sends LED feedback toggle state to the server
+// ───────────────────────────────────────────────────────────────
 function toggleLT() {
   const isOn = document.getElementById('ltToggle').checked;
-
-  // Send the proper control command to the server
   sendControlCommand("set", "ledFeedback", isOn);
-
-  // Optional: show feedback
   console.log(`LT Toggle switched to ${isOn ? "ON" : "OFF"}`);
 }
-// === SYSTEM CONTROLS ===
+
+// ───────────────────────────────────────────────────────────────
+// ⚡ SYSTEM CONTROLS — Trigger start and shutdown events
+// ───────────────────────────────────────────────────────────────
 function startSystem() {
   sendControlCommand("set", "systemStart", true);
 }
@@ -45,7 +53,9 @@ function shutdownSystem() {
   sendControlCommand("set", "systemShutdown", true);
 }
 
-// === USER MENU ===
+// ───────────────────────────────────────────────────────────────
+// 👤 USER MENU — Toggles user dropdown and auto-hides on outside click
+// ───────────────────────────────────────────────────────────────
 function toggleUserMenu() {
   const menu = document.getElementById("userMenu");
   menu.style.display = (menu.style.display === "block") ? "none" : "block";
@@ -54,12 +64,15 @@ function toggleUserMenu() {
 document.addEventListener("click", function (e) {
   const menu = document.getElementById("userMenu");
   const icon = document.querySelector(".user-icon");
+
   if (!icon.contains(e.target) && !menu.contains(e.target)) {
     menu.style.display = "none";
   }
 });
 
-// === MANUAL OUTPUT SCROLLING ===
+// ───────────────────────────────────────────────────────────────
+// 🎛️ MANUAL OUTPUT SCROLLING — Enables horizontal scroll with mouse
+// ───────────────────────────────────────────────────────────────
 const manualScrollArea = document.querySelector('.manual-outputs');
 manualScrollArea?.addEventListener('wheel', function (e) {
   if (!e.shiftKey) {
@@ -68,41 +81,35 @@ manualScrollArea?.addEventListener('wheel', function (e) {
   }
 });
 
-
-// === MANUAL OUTPUTS LOADER ===
+// ───────────────────────────────────────────────────────────────
+// 🔄 LOAD CONTROLS — Fetch initial UI control states and populate interface
+// ───────────────────────────────────────────────────────────────
 async function loadControls() {
   try {
     const res = await fetch("/load_controls");
     const data = await res.json();
+    console.log("Fetched config:", data);  // Debug info
 
-    console.log("Fetched config:", data);  // <== Confirm this in browser console
-
-    // === LT Toggle update ===
+    // ── Update LT toggle switch ──
     const ltToggle = document.getElementById("ltToggle");
     if (ltToggle) {
-      ltToggle.checked = !!data.ledFeedback;  // Cast to boolean just in case
+      ltToggle.checked = !!data.ledFeedback;
       console.log(`LT toggle set to: ${ltToggle.checked}`);
     } else {
       console.warn("LT toggle element not found in DOM!");
     }
 
-    // === Ready / OFF LED updates ===
+    // ── Update Ready / OFF LED indicators ──
     const readyLed = document.getElementById("readyLed");
     const offLed = document.getElementById("offLed");
 
-    if (readyLed) {
-      readyLed.style.backgroundColor = data.ready ? "limegreen" : "gray";
-    } else {
-      console.warn("Ready LED not found in DOM!");
-    }
+    if (readyLed) readyLed.style.backgroundColor = data.ready ? "limegreen" : "gray";
+    else console.warn("Ready LED not found in DOM!");
 
-    if (offLed) {
-      offLed.style.backgroundColor = data.off ? "red" : "gray";
-    } else {
-      console.warn("OFF LED not found in DOM!");
-    }
+    if (offLed) offLed.style.backgroundColor = data.off ? "red" : "gray";
+    else console.warn("OFF LED not found in DOM!");
 
-    // === Manual outputs rendering ===
+    // ── Render manual output switches ──
     const manualOutputs = document.getElementById("manualOutputs");
     manualOutputs.innerHTML = "";
 
@@ -135,25 +142,28 @@ async function loadControls() {
   }
 }
 
-
-// Called by dynamically generated switches
+// ───────────────────────────────────────────────────────────────
+// 🔘 OUTPUT SWITCH TOGGLE HANDLER — Called on each checkbox change
+// ───────────────────────────────────────────────────────────────
 function handleOutputToggle(index, checkbox) {
   const led = checkbox.parentElement.nextElementSibling;
   const isOn = checkbox.checked;
 
-  // Update visual feedback
-  led.classList.toggle("active", isOn);
-
-  // Send control command
-  sendControlCommand("set", `output${index}`, isOn);
+  led.classList.toggle("active", isOn);  // Visual feedback
+  sendControlCommand("set", `output${index}`, isOn);  // Send command
 }
-// === LED FEEDBACK ===
+
+// ───────────────────────────────────────────────────────────────
+// 💡 LED FEEDBACK — Toggles indicator next to LT switch
+// ───────────────────────────────────────────────────────────────
 function toggleLED(input) {
   const led = input.parentElement.nextElementSibling;
   led.classList.toggle("active", input.checked);
 }
 
-// === USER MODAL ===
+// ───────────────────────────────────────────────────────────────
+// 👤 USER MODAL — Open, close and save user credentials
+// ───────────────────────────────────────────────────────────────
 function closeUserModal() {
   document.getElementById("userModal").style.display = "none";
 }
@@ -189,7 +199,9 @@ function saveUserSettings() {
     });
 }
 
-// === GAUGE RENDERING ===
+// ───────────────────────────────────────────────────────────────
+// 🧭 GAUGE RENDERING — Updates visual gauges with live values
+// ───────────────────────────────────────────────────────────────
 function updateGauge(id, value, unit, maxValue) {
   const display = document.getElementById(id);
   const stroke = display.closest('svg').querySelector('path.gauge-fg');
@@ -205,40 +217,33 @@ function updateGauge(id, value, unit, maxValue) {
   display.textContent = `${value}${unit}`;
 }
 
-// === LIVE DATA POLLER ===
+// ───────────────────────────────────────────────────────────────
+// 📡 LIVE DATA POLLER — Fetches and updates live telemetry
+// ───────────────────────────────────────────────────────────────
 function startMonitorPolling(intervalMs = 1000) {
   setInterval(() => {
     fetch("/monitor")
       .then(res => res.json())
       .then(data => {
-        // Parse and update voltage
         const voltage = parseFloat(data.capVoltage).toFixed(2);
         updateGauge("voltageValue", voltage, "V", 400);
 
-        // Parse and clamp current
         let rawCurrent = parseFloat(data.current);
         if (isNaN(rawCurrent)) rawCurrent = 0;
         const clampedCurrent = Math.max(0, Math.min(100, rawCurrent)).toFixed(2);
         updateGauge("currentValue", clampedCurrent, "A", 100);
 
-        // Update temperature gauges
         const temps = data.temperatures || [];
         updateGauge("temp1Value", temps[0] === -127 ? "Off" : parseFloat(temps[0]).toFixed(2), "°C", 150);
         updateGauge("temp2Value", temps[1] === -127 ? "Off" : parseFloat(temps[1]).toFixed(2), "°C", 150);
         updateGauge("temp3Value", temps[2] === -127 ? "Off" : parseFloat(temps[2]).toFixed(2), "°C", 150);
         updateGauge("temp4Value", temps[3] === -127 ? "Off" : parseFloat(temps[3]).toFixed(2), "°C", 150);
 
-        // === Update LED indicators from /monitor fields ===
         const readyLed = document.getElementById("readyLed");
         const offLed = document.getElementById("offLed");
 
-        if (readyLed) {
-          readyLed.style.backgroundColor = data.ready ? "limegreen" : "gray";
-        }
-
-        if (offLed) {
-          offLed.style.backgroundColor = data.off ? "red" : "gray";
-        }
+        if (readyLed) readyLed.style.backgroundColor = data.ready ? "limegreen" : "gray";
+        if (offLed) offLed.style.backgroundColor = data.off ? "red" : "gray";
       })
       .catch(err => {
         console.error("Monitor error:", err);
@@ -246,9 +251,9 @@ function startMonitorPolling(intervalMs = 1000) {
   }, intervalMs);
 }
 
-
-
-// === HEARTBEAT PINGER ===
+// ───────────────────────────────────────────────────────────────
+// ❤️ HEARTBEAT PINGER — Ensures server connection is alive
+// ───────────────────────────────────────────────────────────────
 function startHeartbeat(intervalMs = 3000) {
   setInterval(() => {
     fetch("/heartbeat")
@@ -256,17 +261,19 @@ function startHeartbeat(intervalMs = 3000) {
       .then(text => {
         if (text !== "alive") {
           console.warn("Unexpected heartbeat:", text);
-          window.location.href = "http://192.168.4.1/login";  // fallback to AP mode login
+          window.location.href = "http://192.168.4.1/login";
         }
       })
       .catch(err => {
         console.error("Heartbeat error:", err);
-        window.location.href = "http://192.168.4.1/login";  // fallback on network error
+        window.location.href = "http://192.168.4.1/login";
       });
   }, intervalMs);
 }
 
-// === UNIFIED CONTROL ===
+// ───────────────────────────────────────────────────────────────
+// 🛠️ UNIFIED CONTROL — Sends control commands to the backend
+// ───────────────────────────────────────────────────────────────
 function sendControlCommand(action, target, value) {
   const payload = { action, target };
   if (value !== undefined) payload.value = value;
@@ -288,7 +295,10 @@ function sendControlCommand(action, target, value) {
     })
     .catch(err => console.error("Control error:", err));
 }
-// === DISCONNECT FUNCTION ===
+
+// ───────────────────────────────────────────────────────────────
+// 🔌 DISCONNECT FUNCTION — Terminates session and redirects
+// ───────────────────────────────────────────────────────────────
 function disconnectDevice() {
   fetch("/disconnect", {
     method: "POST",
@@ -296,27 +306,29 @@ function disconnectDevice() {
     body: JSON.stringify({ action: "disconnect" }),
     redirect: "follow"
   })
-  .then(response => {
-    if (response.redirected) {
-      window.location.href = response.url; // Redirect to login page
-    } else {
-      return response.json().then(data => {
-        alert(data.error || "Unexpected response");
-      });
-    }
-  })
-  .catch(err => {
-    console.error("Disconnect failed:", err);
-    window.location.href = "/login.html"; // Fallback redirect
-  });
+    .then(response => {
+      if (response.redirected) {
+        window.location.href = response.url;
+      } else {
+        return response.json().then(data => {
+          alert(data.error || "Unexpected response");
+        });
+      }
+    })
+    .catch(err => {
+      console.error("Disconnect failed:", err);
+      window.location.href = "/login.html";
+    });
 }
 
+// ───────────────────────────────────────────────────────────────
+// 🧩 DOM INITIALIZATION — Binds UI actions after DOM load
+// ───────────────────────────────────────────────────────────────
 window.addEventListener("DOMContentLoaded", () => {
   loadControls();
- startHeartbeat(); // Uncomment if needed
- startMonitorPolling();
+  startHeartbeat(); // Uncomment if needed
+  startMonitorPolling();
 
-  // 🔧 Bind disconnect button
   const disconnectBtn = document.getElementById("disconnectBtn");
   if (disconnectBtn) {
     disconnectBtn.addEventListener("click", disconnectDevice);
@@ -331,6 +343,9 @@ window.addEventListener("DOMContentLoaded", () => {
   });
 });
 
+// ───────────────────────────────────────────────────────────────
+// 🔁 UI VERSION CHECK — Forces UI cache refresh if outdated
+// ───────────────────────────────────────────────────────────────
 const REQUIRED_VERSION = "v2";
 
 window.addEventListener("load", () => {

@@ -85,6 +85,7 @@ void setup() {
     // ⛔ Inrush Bypass MOSFET
     bypassFET = new BypassMosfet();
     bypassFET->begin();
+    
 
     // 📦 Main Device Logic (core controller)
     device = new Device(

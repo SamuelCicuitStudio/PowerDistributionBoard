@@ -2,6 +2,8 @@
 
 volatile WiFiStatus wifiStatus = WiFiStatus::NotConnected;
 volatile bool StartFromremote =  false;
+
+
 // RTOS task that blinks a pin and restores its original state
 void BlinkTask(void* parameter) {
     BlinkParams* params = static_cast<BlinkParams*>(parameter);
@@ -77,18 +79,3 @@ void disableAllPins() {
     DEBUG_PRINTLN("[DEBUG] All control pins disabled.");
 }
 
-float readCapVoltage() {
-    const uint16_t samples = 64;                      // Number of samples for averaging
-    uint32_t total = 0;
-
-    for (uint16_t i = 0; i < samples; ++i) {
-        total += analogRead(CAPACITOR_ADC_PIN);
-        delayMicroseconds(200);                       // Small delay between reads (adjust if needed)
-    }
-
-    float avgADC = total / static_cast<float>(samples);
-    float voltage = (avgADC / ADC_MAX) * ADC_REF_VOLTAGE * VOLTAGE_DIVIDER_RATIO;
-
-    DEBUG_PRINTF("[CpDischg] Avg ADC: %.2f, Voltage: %.2fV 🧪\n", avgADC, voltage);
-    return voltage;
-}

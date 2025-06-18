@@ -67,7 +67,6 @@ void WiFiManager::StartWifiAP() {
         request->send(200, "text/plain", "alive");
     });
 
-
     // 2. Connect – Authenticate user or admin via JSON body
     server.on("/connect", HTTP_POST,[this](AsyncWebServerRequest* request) {
             // Not used for POST body in AsyncWebServer
@@ -160,37 +159,45 @@ void WiFiManager::StartWifiAP() {
                     return;
                 }
 
-                DEBUG_PRINTLN("[Device] 🔌 Valid disconnect request received");
+                DEBUG_PRINTLN("[Device]  Valid disconnect request received 🔌");
 
                 onDisconnected();  // Clear any session state
                 resetTimer();      // Reset watchdog
                 keepAlive = false;
-
                 request->redirect("/login.html");  // Trigger redirect
             }
         }
     );
 
-
     // 4. Monitor – Return live readings
     server.on("/monitor", HTTP_GET, [this](AsyncWebServerRequest* request) {
         if (!isAuthenticated(request)) return;
-        
+
         resetTimer();  // Reset activity timer
 
-        StaticJsonDocument<512> doc;
-        doc["capVoltage"] = readCapVoltage();
+        StaticJsonDocument<768> doc;
+
+        // Measurements
+        dev->discharger->startCapVoltageTask();
+        doc["capVoltage"] = dev->discharger->readCapVoltage();
         doc["current"] = dev->currentSensor->readCurrent();
 
+        // Temperatures
         JsonArray temps = doc.createNestedArray("temperatures");
         for (uint8_t i = 0; i < 4; ++i) {
             float temp = (i < dev->tempSensor->getSensorCount()) ? dev->tempSensor->getTemperature(i) : -127;
             temps.add((temp == -127) ? -127 : temp);
         }
 
-        // ✅ Add LED status fields
-        doc["ready"] = true;                    // true if system is ready
-        doc["off"]   = true;        // true if relay is OFF
+        // LED status
+        doc["ready"] = digitalRead(READY_LED_PIN);
+        doc["off"]   = digitalRead(POWER_OFF_LED_PIN);
+
+        // ✅ Output states 1–10
+        JsonObject outputs = doc.createNestedObject("outputs");
+        for (int i = 1; i <= 10; ++i) {
+            outputs["output" + String(i)] = dev->heaterManager->getOutputState(i);
+        }
 
         String json;
         serializeJson(doc, json);
@@ -198,143 +205,147 @@ void WiFiManager::StartWifiAP() {
         request->send(200, "application/json", json);
     });
 
-
     // 5. Control – Unified command handler with JSON body
-    server.on("/control", HTTP_POST,[this](AsyncWebServerRequest* request) {
-            // Nothing here; handled in body lambda
-        },
-        nullptr,
-        [this](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
-            static String body = "";
-            body += String((char*)data);
+    server.on("/control", HTTP_POST, [this](AsyncWebServerRequest* request) {
+        // Empty first-stage handler; actual logic below
+    }, nullptr, [this](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
+        static String body = "";
+        body += String((char*)data);
 
-            // Wait until full body is received
-            if (index + len == total) {
-                if (!isAuthenticated(request)) return;
-                StaticJsonDocument<1024> doc;
-                DeserializationError error = deserializeJson(doc, body);
-                resetTimer();// reset activity timer
-                body = "";  // Clear buffer
+        if (index + len == total) {
+            if (!isAuthenticated(request)) return;
 
-                if (error) {
-                    request->send(400, "application/json", "{\"error\":\"Invalid JSON\"}");
+            resetTimer();
+            StaticJsonDocument<1024> doc;
+            DeserializationError error = deserializeJson(doc, body);
+            body = ""; // Clear buffer
+
+            if (error) {
+                request->send(400, "application/json", "{\"error\":\"Invalid JSON\"}");
+                return;
+            }
+
+            String action = doc["action"] | "";
+            String target = doc["target"] | "";
+            JsonVariant value = doc["value"];
+
+            if (action == "set") {
+
+                if (target == "reboot") {
+                    DEBUG_PRINTLN("⚙️ Reboot requested");
+                    dev->config->RestartSysDelayDown(3000);
+
+                } else if (target == "reset") {
+                    blink(POWER_OFF_LED_PIN, 100);
+                    DEBUG_PRINTLN("🔁 Resetting device...");
+                    dev->config->PutBool(RESET_FLAG, true);
+                    dev->config->RestartSysDelayDown(3000);
+
+                } else if (target == "ledFeedback") {
+                    DEBUG_PRINT("🔘 LED Feedback: ");
+                    DEBUG_PRINTLN(value.as<bool>());
+                    dev->config->PutBool(LED_FEEDBACK_KEY, value.as<bool>());
+
+                } else if (target == "onTime") {
+                    dev->config->PutInt(ON_TIME_KEY, value.as<int>());
+
+                } else if (target == "offTime") {
+                    dev->config->PutInt(OFF_TIME_KEY, value.as<int>());
+
+                } else if (target == "relay") {
+                    DEBUG_PRINT("🔌 Relay: ");
+                    DEBUG_PRINTLN(value.as<bool>() ? "ON" : "OFF");
+                    value.as<bool>() ? dev->relayControl->turnOn() : dev->relayControl->turnOff();
+
+                } else if (target.startsWith("output")) {
+                    int index = target.substring(6).toInt();
+                    if (index >= 1 && index <= 10) {
+                        bool state = value.as<bool>();
+                        DEBUG_PRINTF("🔥 Output %d → %s\n", index, state ? "ON" : "OFF");
+                        dev->heaterManager->setOutput(index, state);
+                        dev->indicator->setLED(index, state);
+                    }
+
+                } else if (target == "desiredVoltage") {
+                    dev->config->PutFloat(DESIRED_OUTPUT_VOLTAGE_KEY, value.as<float>());
+
+                } else if (target == "acFrequency") {
+                    dev->config->PutInt(AC_FREQUENCY_KEY, value.as<int>());
+
+                } else if (target == "chargeResistor") {
+                    dev->config->PutFloat(CHARGE_RESISTOR_KEY, value.as<float>());
+
+                } else if (target == "dcVoltage") {
+                    dev->config->PutFloat(DC_VOLTAGE_KEY, value.as<float>());
+
+                } else if (target.startsWith("Access")) {
+                    int index = target.substring(6).toInt();
+                    if (index >= 1 && index <= 10) {
+                        const char* accessKeys[10] = {
+                            OUT01_ACCESS_KEY, OUT02_ACCESS_KEY, OUT03_ACCESS_KEY, OUT04_ACCESS_KEY, OUT05_ACCESS_KEY,
+                            OUT06_ACCESS_KEY, OUT07_ACCESS_KEY, OUT08_ACCESS_KEY, OUT09_ACCESS_KEY, OUT10_ACCESS_KEY
+                        };
+
+                        bool flag = value.as<bool>();
+                        DEBUG_PRINTF("🔐 Access %d → %s\n", index, flag ? "true" : "false");
+                        dev->config->PutBool(accessKeys[index - 1], flag);
+                    }
+
+                } else if (target == "mode") {
+                    DEBUG_PRINTLN("🧭 Mode switched → IDLE");
+                    dev->currentState = DeviceState::Idle;
+                    dev->indicator->clearAll();
+                    dev->heaterManager->disableAll();
+
+                } else if (target == "systemStart") {
+                    DEBUG_PRINTLN("▶️ System Start requested");
+                    if (dev->loopTaskHandle != nullptr && dev->currentState == DeviceState::Idle) {
+                        dev->startLoopTask();
+                    }
+                    if (dev->discharger->readCapVoltage() < 0.78f * dev->config->GetFloat(DC_VOLTAGE_KEY, DEFAULT_DC_VOLTAGE)) {
+                        StartFromremote = true;
+                    }
+
+                } else if (target == "systemShutdown") {
+                    DEBUG_PRINTLN("⏹️ System Shutdown requested");
+                    if (dev->currentState == DeviceState::Running) {
+                        dev->currentState = DeviceState::Idle;
+                    }
+
+                } else if (target == "bypass") {
+                    bool state = value.as<bool>();
+                    DEBUG_PRINT("🛠️ Bypass: ");
+                    DEBUG_PRINTLN(state ? "ENABLED" : "DISABLED");
+                    state ? dev->bypassFET->enable() : dev->bypassFET->disable();
+
+                } else if (target == "fanSpeed") {
+                    int speed = constrain(value.as<int>(), 0, 100);
+                    DEBUG_PRINTF("🌀 Fan speed set to: %d%%\n", speed);
+                    dev->fanManager->setSpeedPercent(speed);
+
+                } else {
+                    request->send(400, "application/json", "{\"error\":\"Unknown target\"}");
                     return;
                 }
 
-                String action = doc["action"] | "";
-                String target = doc["target"] | "";
-                JsonVariant value = doc["value"];
+                request->send(200, "application/json", "{\"status\":\"ok\"}");
 
-
-                if (action == "set") {
-                    if (target == "reboot") {
-                        DEBUG_PRINTLN("⚙️ Reboot requested");
-                        dev->config->RestartSysDelayDown(3000);
-
-                    } else if (target == "reset") {
-                        blink(POWER_OFF_LED_PIN, 100);
-                        DEBUG_PRINTLN("🔁 Reset command received:");
-                        DEBUG_PRINTLN("###########################################################");
-                        DEBUG_PRINTLN("#                   Resetting device 🔄                   #");
-                        DEBUG_PRINTLN("###########################################################");
-                        dev->config->PutBool(RESET_FLAG, true);
-                        dev->config->RestartSysDelayDown(3000);
-
-                    } else if (target == "ledFeedback") {
-                        DEBUG_PRINT("🔘 LED Feedback: "); DEBUG_PRINTLN(value.as<bool>());
-                        dev->config->PutBool(LED_FEEDBACK_KEY, value.as<bool>());
-
-                    } else if (target == "onTime") {
-                        DEBUG_PRINT("⏱️ ON Time: "); DEBUG_PRINTLN(value.as<int>());
-                        dev->config->PutInt(ON_TIME_KEY, value.as<int>());
-
-                    } else if (target == "offTime") {
-                        DEBUG_PRINT("⏱️ OFF Time: "); DEBUG_PRINTLN(value.as<int>());
-                        dev->config->PutInt(OFF_TIME_KEY, value.as<int>());
-
-                    } else if (target == "relay") {
-                        DEBUG_PRINT("🔌 Relay set to: "); DEBUG_PRINTLN(value.as<bool>() ? "ON" : "OFF");
-                        value.as<bool>() ? dev->relayControl->turnOn() : dev->relayControl->turnOff();
-
-                    } else if (target.startsWith("output")) {
-                        int index = target.substring(6).toInt();
-                        if (index >= 1 && index <= 10) {
-                            DEBUG_PRINT("🔥 Output "); DEBUG_PRINT(index);
-                            DEBUG_PRINT(" set to: "); DEBUG_PRINTLN(value.as<bool>() ? "ON" : "OFF");
-                            dev->heaterManager->setOutput(index, value.as<bool>());
-                            dev->indicator->setLED(index, value.as<bool>());
-                        }
-
-                    } else if (target == "desiredVoltage") {
-                        DEBUG_PRINT("🔋 Desired Voltage: "); DEBUG_PRINTLN(value.as<float>());
-                        dev->config->PutFloat(DESIRED_OUTPUT_VOLTAGE_KEY, value.as<float>());
-
-                    } else if (target == "acFrequency") {
-                        DEBUG_PRINT("🔄 AC Frequency: "); DEBUG_PRINTLN(value.as<int>());
-                        dev->config->PutInt(AC_FREQUENCY_KEY, value.as<int>());
-
-                    } else if (target == "chargeResistor") {
-                        DEBUG_PRINT("⚡ Charge Resistor: "); DEBUG_PRINTLN(value.as<float>());
-                        dev->config->PutFloat(CHARGE_RESISTOR_KEY, value.as<float>());
-
-                    } else if (target == "dcVoltage") {
-                        DEBUG_PRINT("🔋 DC Voltage: "); DEBUG_PRINTLN(value.as<float>());
-                        dev->config->PutFloat(DC_VOLTAGE_KEY, value.as<float>());
-
-                    } else if (target == "outputAccess") {
-                        DEBUG_PRINTLN("🔐 Updating Output Access Flags:");
-                        for (int i = 1; i <= 10; ++i) {
-                            String key = "OUT" + String(i) + "F";
-                            bool flag = value["output" + String(i)];
-                            DEBUG_PRINT("  - "); DEBUG_PRINT(key); DEBUG_PRINT(": "); DEBUG_PRINTLN(flag);
-                            dev->config->PutBool(key.c_str(), flag);
-                        }
-
-                    } else if (target == "mode") {
-                        DEBUG_PRINTLN("🧭 Mode switch triggered → Going IDLE");
-                        dev->currentState = DeviceState::Idle;
-                        dev->indicator->clearAll();
-                        dev->heaterManager->disableAll();
-
-                    } else if (target == "systemStart") {
-                        DEBUG_PRINTLN("▶️ System Start requested");
-                        if (dev->loopTaskHandle != nullptr && dev->currentState == DeviceState::Idle) {
-                            dev->startLoopTask();
-                        }
-                        dev->startLoopTask(); // Ensure it's called at least once
-
-                    } else if (target == "systemShutdown") {
-                        DEBUG_PRINTLN("⏹️ System Shutdown requested");
-                        if (dev->currentState == DeviceState::Running) {
-                            dev->currentState = DeviceState::Idle;
-                        }
-
-                    } else {
-                        request->send(400, "application/json", "{\"error\":\"Unknown target\"}");
-                        return;
-                    }
-
-                    request->send(200, "application/json", "{\"status\":\"ok\"}");
-
-                } else if (action == "get" && target == "status") {
-                    String statusStr;
-                    switch (dev->currentState) {
-                        case DeviceState::Idle:     statusStr = "Idle"; break;
-                        case DeviceState::Running:  statusStr = "Running"; break;
-                        case DeviceState::Error:    statusStr = "Error"; break;
-                        case DeviceState::Shutdown: statusStr = "Shutdown"; break;
-                        default:                    statusStr = "Unknown"; break;
-                    }
-
-                    request->send(200, "application/json", "{\"state\":\"" + statusStr + "\"}");
-
-                } else {
-                    request->send(400, "application/json", "{\"error\":\"Invalid action or target\"}");
+            } else if (action == "get" && target == "status") {
+                String statusStr;
+                switch (dev->currentState) {
+                    case DeviceState::Idle:     statusStr = "Idle"; break;
+                    case DeviceState::Running:  statusStr = "Running"; break;
+                    case DeviceState::Error:    statusStr = "Error"; break;
+                    case DeviceState::Shutdown: statusStr = "Shutdown"; break;
+                    default:                    statusStr = "Unknown"; break;
                 }
+                request->send(200, "application/json", "{\"state\":\"" + statusStr + "\"}");
+
+            } else {
+                request->send(400, "application/json", "{\"error\":\"Invalid action or target\"}");
             }
         }
-    );
-
+    });
     // 6. Load all controllable states for UI initialization
     server.on("/load_controls", HTTP_GET, [this](AsyncWebServerRequest* request) {
         if (!isAuthenticated(request)) return;
@@ -356,8 +367,8 @@ void WiFiManager::StartWifiAP() {
         doc["relay"] = relayOn;
 
         // Ready and OFF LED indicators
-        doc["ready"] = true;     // true if system is in ready state
-        doc["off"]   =  true;          // true if system is off
+        doc["ready"] = digitalRead(READY_LED_PIN);     // true if system is in ready state
+        doc["off"]   =  digitalRead(POWER_OFF_LED_PIN); ;          // true if system is off
 
         // Output states 1–10
         JsonObject outputs = doc.createNestedObject("outputs");
@@ -380,8 +391,6 @@ void WiFiManager::StartWifiAP() {
         serializeJson(doc, json);
         request->send(200, "application/json", json);
     });
-
-
     // 7. Set Admin Credentials
     server.on("/SetAdminCred", HTTP_POST, [this](AsyncWebServerRequest* request) { },
         nullptr,
@@ -431,7 +440,6 @@ void WiFiManager::StartWifiAP() {
             }
         }
     );
-
     // 8. Set User Credentials
     server.on("/SetUserCred", HTTP_POST, [this](AsyncWebServerRequest* request) { },
         nullptr,
@@ -489,19 +497,16 @@ void WiFiManager::StartWifiAP() {
             }
         }
     );
-
     server.on("/favicon.ico", HTTP_GET, [this](AsyncWebServerRequest* request) {
         keepAlive = true;
         request->send(204);  // No Content
     });
-
     server.serveStatic("/", SPIFFS, "/");
     server.serveStatic("/icons/", SPIFFS, "/icons/").setCacheControl("no-store, must-revalidate");
     server.serveStatic("/css/", SPIFFS, "/css/").setCacheControl("no-store, must-revalidate");
     server.serveStatic("/js/", SPIFFS, "/js/").setCacheControl("no-store, must-revalidate");
     server.serveStatic("/fonts/", SPIFFS, "/fonts/").setCacheControl("no-store, must-revalidate");
     server.begin();
-
     //Start auto-disable timer
     startInactivityTimer();
 }

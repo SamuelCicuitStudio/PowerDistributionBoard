@@ -41,6 +41,7 @@ public:
     void stopLoopTask();  // Add this to the public section of the Device class
 
 
+
     // Subsystem pointers
     ConfigManager* config;
     HeaterManager* heaterManager;

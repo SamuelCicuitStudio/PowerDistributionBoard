@@ -25,6 +25,11 @@ public:
 
     void begin();        // Optional init if needed
     void discharge();    // Blocking discharge logic
+    void startCapVoltageTask();     // Now uses fixed interval internally (200ms)
+    void stopCapVoltageTask();
+    float readCapVoltage();
+    TaskHandle_t capVoltageTaskHandle;
+    volatile float g_capVoltage;
 
 private:
     HeaterManager* heaterManager = nullptr;

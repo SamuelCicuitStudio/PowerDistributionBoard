@@ -190,4 +190,5 @@
 #define RELAY_CONTROL_PIN              21                   // Relay controlling capacitor input power
 #define INA_RELAY_BYPASS_PIN           47                   // INA controls bypass MOSFET for inrush resistor
 
+#define GO_THRESHOLD_RATIO (0.78f * config->GetFloat(DC_VOLTAGE_KEY, DEFAULT_DC_VOLTAGE))
 #endif // CONFIG_H
