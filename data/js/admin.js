@@ -485,7 +485,7 @@ window.addEventListener("DOMContentLoaded", () => {
   enableDragScroll("manualOutputs");
   enableDragScroll("userAccessGrid");
 
-  //startHeartbeat();
+  startHeartbeat();
   startMonitorPolling();
   loadControls();
 
