@@ -24,7 +24,8 @@ Device::Device(ConfigManager* cfg,
                Relay* relay,
                BypassMosfet* bypass,
                CpDischg* discharger,
-               Indicator* ledIndicator)
+               Indicator* ledIndicator,
+               BuzzerManager* buz)
     : config(cfg),
       heaterManager(heater),
       fanManager(fan),
@@ -33,7 +34,8 @@ Device::Device(ConfigManager* cfg,
       relayControl(relay),
       bypassFET(bypass),
       discharger(discharger),
-      indicator(ledIndicator)
+      indicator(ledIndicator),
+      buz(buz)
 {}
 
 void Device::begin() {
@@ -49,6 +51,7 @@ void Device::begin() {
     pinMode(POWER_OFF_LED_PIN, OUTPUT);
     digitalWrite(READY_LED_PIN, LOW);
     digitalWrite(POWER_OFF_LED_PIN, HIGH);
+    buz->bipStartupSequence();
     DEBUG_PRINTLN("[Device] Configuring system I/O pins 🧰");
  
 
@@ -87,11 +90,14 @@ void Device::loopTask() {
 
     digitalWrite(READY_LED_PIN, LOW);
     digitalWrite(POWER_OFF_LED_PIN, HIGH);
+    buz->bip();
     relayControl->turnOff();
     bypassFET->disable();
     tempSensor->stopTemperatureTask();
     discharger->startCapVoltageTask();
     currentState = DeviceState::Idle;
+    buz->bip();
+    buz->bip();
 
     DEBUG_PRINTLN("[Device] Waiting for 12V input... 🔋");
     while (digitalRead(DETECT_12V_PIN)) {
@@ -100,6 +106,7 @@ void Device::loopTask() {
 
     DEBUG_PRINTLN("[Device] 12V Detected – Enabling input relay ✅");
     relayControl->turnOn();
+ 
    
     DEBUG_PRINTF("[Device] Initial Capacitor Voltage: %.2fV 🧠\n", discharger->readCapVoltage());
 
@@ -107,8 +114,8 @@ void Device::loopTask() {
         DEBUG_PRINTF("[Device] Charging... Cap Voltage: %.2fV / Target: %.2fV ⏳\n", discharger->readCapVoltage(), GO_THRESHOLD_RATIO );
         delay(500);
         discharger->readCapVoltage();
-    }
-
+    };
+    buz->bipSystemReady();
     DEBUG_PRINTLN("[Device] Voltage threshold met ✅ Bypassing inrush resistor 🔄");
     bypassFET->enable();
 
@@ -120,6 +127,8 @@ void Device::loopTask() {
 
     pinMode(POWER_ON_SWITCH_PIN, INPUT_PULLUP);
     DEBUG_PRINTLN("[Device] Waiting for user to press POWER ON button 🔘");
+    buz->bip();
+    buz->bip();
     while (digitalRead(POWER_ON_SWITCH_PIN)) {
         if (StartFromremote) break;
         delay(100);
@@ -127,10 +136,11 @@ void Device::loopTask() {
     StartFromremote = false;// reset the start from remote flag
 
     DEBUG_PRINTLN("[Device] POWER ON button pressed ▶️ Launching main loop");
-
+    buz->successSound();
     StartLoop();
 
     DEBUG_PRINTLN("[Device] Main loop finished, proceeding to shutdown 🛑");
+    buz->bipSystemShutdown();
     shutdown();
 
     // Self-cleanup and safe termination
@@ -258,6 +268,7 @@ void Device::monitorTemperatureTask(void* param) {
 
             if (temp >= threshold) {
                 DEBUG_PRINTF("[Device] Overtemperature Detected! Sensor[%u] = %.2f°C ❌\n", i, temp);
+                self->buz->bipOverTemperature();
                 self->currentState = DeviceState::Error;
                 self->heaterManager->disableAll();
                 self->indicator->clearAll();

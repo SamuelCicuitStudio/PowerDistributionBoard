@@ -13,6 +13,7 @@
 #include "ConfigManager.h"
 #include "utils.h"
 #include <Arduino.h>
+#include "Buzzer.h"
 
 class Device {
 public:
@@ -24,7 +25,8 @@ public:
            Relay* relay,
            BypassMosfet* bypass,
            CpDischg* discharger,
-           Indicator* ledIndicator);
+           Indicator* ledIndicator,
+            BuzzerManager* buz);
 
     void begin();                          // System startup sequence
     void StartLoop();                      // Main output cycle loop
@@ -52,6 +54,7 @@ public:
     BypassMosfet* bypassFET;
     CpDischg* discharger;
     Indicator* indicator;
+    BuzzerManager* buz;
 
     // State tracking
     volatile DeviceState currentState = DeviceState::Idle;

@@ -85,7 +85,7 @@
 #define DEFAULT_AC_VOLTAGE             230.0f           // Volts
 #define DEFAULT_DC_VOLTAGE             325.0f           // Volts
 #define DEFAULT_DESIRED_OUTPUT_VOLTAGE 180.0f     // Volts (safe default power level)
-#define DEFAULT_TEMP_SENSOR_COUNT      4           // Default to 4 sensor unless discovered otherwise
+#define DEFAULT_TEMP_SENSOR_COUNT      12           // Default to 4 sensor unless discovered otherwise
 
 
 // ---------- Output Access Defaults ----------
@@ -113,7 +113,7 @@
 #define LOCAL_IP                       IPAddress(192, 168, 4, 1)
 #define GATEWAY                        IPAddress(192, 168, 4, 1)
 #define SUBNET                         IPAddress(255, 255, 255, 0)
-#define INACTIVITY_TIMEOUT_MS 60000  // 5 minutes
+#define INACTIVITY_TIMEOUT_MS           180000  // 3 minutes
 // ==================================================
 // Time Configuration
 // ==================================================
@@ -140,12 +140,12 @@
 
 // 8 LEDs connected to a shift register (74HC595)
 #define SHIFT_SER_PIN                  10                   // Serial data input (SER)
-#define SHIFT_SCK_PIN                  11                   // Shift clock (SCK)
-#define SHIFT_RCK_PIN                  12                   // Latch clock (RCK)
+#define SHIFT_SCK_PIN                  8                   // Shift clock (SCK)
+#define SHIFT_RCK_PIN                  9                   // Latch clock (RCK)
 
 // 2 LEDs controlled directly via GPIO
-#define FL06_LED_PIN                   15
-#define FL08_LED_PIN                   9
+#define FL06_LED_PIN                   18
+#define FL08_LED_PIN                   11
 
 // ==================================================
 // Sensor & Detection Pins
@@ -153,7 +153,7 @@
 
 #define DETECT_12V_PIN                 4                    // Detect 12V input presence
 #define ACS_LOAD_CURRENT_VOUT_PIN      5                    // Analog output from ACS781 current sensor
-#define CAPACITOR_ADC_PIN              13                   // ADC input for monitoring capacitor voltage
+#define CAPACITOR_ADC_PIN              15                   // ADC input for monitoring capacitor voltage
 #define CHARGE_THRESHOLD_PERCENT       85.0f                // Percentage threshold for capacitor charge
 #define ONE_WIRE_BUS                   3                    // DS18B20 temperature sensor bus
 #define FLAG_INPUT_PIN                 3                    // Input pin for external flag signal
@@ -162,16 +162,16 @@
 // Nichrome Wire Control - Opto Enable Pins (active low)
 // ==================================================
 
-#define ENA01_E_PIN                    20
-#define ENA02_E_PIN                    38
-#define ENA03_E_PIN                    8
-#define ENA04_E_PIN                    18
-#define ENA05_E_PIN                    17
-#define ENA06_E_PIN                    39
-#define ENA07_E_PIN                    40
-#define ENA08_E_PIN                    7
+#define ENA01_E_PIN                    47
+#define ENA02_E_PIN                    45
+#define ENA03_E_PIN                    12
+#define ENA04_E_PIN                    13
+#define ENA05_E_PIN                    7
+#define ENA06_E_PIN                    17
+#define ENA07_E_PIN                    39
+#define ENA08_E_PIN                    38
 #define ENA09_E_PIN                    41
-#define ENA10_E_PIN                    42
+#define ENA10_E_PIN                    40
 
 // ==================================================
 // PWM Control Configuration
@@ -192,7 +192,13 @@
 // ==================================================
 
 #define RELAY_CONTROL_PIN              21                   // Relay controlling capacitor input power
-#define INA_RELAY_BYPASS_PIN           47                   // INA controls bypass MOSFET for inrush resistor
+#define INA_RELAY_BYPASS_PIN           42                   // INA controls bypass MOSFET for inrush resistor
 
 #define GO_THRESHOLD_RATIO (0.78f * config->GetFloat(DC_VOLTAGE_KEY, DEFAULT_DC_VOLTAGE))
+
+// ==================================================
+// Additional I/O
+// ==================================================
+
+#define BUZZER_PIN                     46    // Buzzer control output
 #endif // CONFIG_H

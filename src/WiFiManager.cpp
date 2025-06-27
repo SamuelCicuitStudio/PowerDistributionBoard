@@ -1,6 +1,6 @@
 #include "WiFiManager.h"
 #include "Utils.h"
-
+WiFiManager* WiFiManager::instance = nullptr;
 // Constructor
 WiFiManager:: WiFiManager( Device* dev)
         : dev(dev), server(80) {}
@@ -11,10 +11,10 @@ void WiFiManager::begin() {
     DEBUG_PRINTLN("###########################################################");
     DEBUG_PRINTLN("#                 Starting WIFI Manager 🌐               #");
     DEBUG_PRINTLN("###########################################################");
-
-
-    wifiStatus= WiFiStatus::NotConnected;; // global variable from utils 
+    instance = this;
+    wifiStatus= WiFiStatus::NotConnected; // global variable from utils 
     StartWifiAP();
+    dev->buz->bipWiFiConnected();
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -29,6 +29,7 @@ void WiFiManager::StartWifiAP() {
 
     if (!WiFi.softAP(dev->config->GetString(DEVICE_WIFI_HOTSPOT_NAME_KEY, DEVICE_WIFI_HOTSPOT_NAME).c_str(),dev->config->GetString(DEVICE_AP_AUTH_PASS_KEY, DEVICE_AP_AUTH_PASS_DEFAULT).c_str())) {
         DEBUG_PRINTLN("[WiFiManager] Failed to start AP ❌");
+        dev->buz->bipFault();
         return;
     }
 
@@ -36,6 +37,7 @@ void WiFiManager::StartWifiAP() {
 
     if (!WiFi.softAPConfig(LOCAL_IP, GATEWAY, SUBNET)) {
         DEBUG_PRINTLN("[WiFiManager] Failed to set AP config ❌");
+        dev->buz->bipFault();
         return;
     }
 
@@ -58,6 +60,7 @@ void WiFiManager::StartWifiAP() {
     server.on("/heartbeat", HTTP_GET, [this](AsyncWebServerRequest* request) {
         if (!isAuthenticated(request)) {
             DEBUG_PRINTLN("[Heartbeat] Not authenticated ❌ → Redirecting to root");
+            dev->buz->bipFault();
             request->redirect("/login");
             return;
         }
@@ -114,6 +117,7 @@ void WiFiManager::StartWifiAP() {
                 }
 
                 if (username == adminUser && password == adminPass) {
+                    dev->buz->successSound();
                     onAdminConnected();
                     request->redirect("/admin.html");
                     body = "";
@@ -122,11 +126,13 @@ void WiFiManager::StartWifiAP() {
 
                 if (username == userUser && password == userPass) {
                     onUserConnected();
+                    dev->buz->successSound();
                     request->redirect("/user.html");
                     body = "";
                     return;
                 }
 
+                dev->buz->bipFault();
                 request->redirect("/login_failed.html");  // ❌ Invalid credentials
                 body = "";
             }
@@ -185,7 +191,7 @@ void WiFiManager::StartWifiAP() {
 
         // Temperatures
         JsonArray temps = doc.createNestedArray("temperatures");
-        for (uint8_t i = 0; i < 4; ++i) {
+        for (uint8_t i = 0; i < MAX_TEMP_SENSORS; ++i) {
             float temp = (i < dev->tempSensor->getSensorCount()) ? dev->tempSensor->getTemperature(i) : -127;
             temps.add((temp == -127) ? -127 : temp);
         }
@@ -237,36 +243,43 @@ void WiFiManager::StartWifiAP() {
                 if (target == "reboot") {
                     DEBUG_PRINTLN("Reboot requested ⚙️");
                     blink(POWER_OFF_LED_PIN, 100);
+                    dev->buz->bip();
                     dev->config->RestartSysDelayDown(3000);
 
                 } else if (target == "systemReset") {
                     blink(POWER_OFF_LED_PIN, 100);
+                    dev->buz->bip();
                     DEBUG_PRINTLN("Resetting device... 🔁");
                     dev->config->PutBool(RESET_FLAG, true);
                     dev->config->RestartSysDelayDown(3000);
 
                 } else if (target == "ledFeedback") {
                     bool state = value.as<bool>();
+                    dev->buz->bip();
                     DEBUG_PRINTF("LED Feedback: %s 🔘\n", state ? "true" : "false");
                     dev->config->PutBool(LED_FEEDBACK_KEY, state);
 
                 } else if (target == "onTime") {
                     int t = value.as<int>();
+                    dev->buz->bip();
                     DEBUG_PRINTF("ON time set to %d ms ⏱️\n", t);
                     dev->config->PutInt(ON_TIME_KEY, t);
 
                 } else if (target == "offTime") {
                     int t = value.as<int>();
+                    dev->buz->bip();
                     DEBUG_PRINTF("OFF time set to %d ms ⏱️\n", t);
                     dev->config->PutInt(OFF_TIME_KEY, t);
 
                 } else if (target == "relay") {
                     bool state = value.as<bool>();
+                    dev->buz->bip();
                     DEBUG_PRINTF("Relay: %s 🔌\n", state ? "ON" : "OFF");
                     state ? dev->relayControl->turnOn() : dev->relayControl->turnOff();
 
                 } else if (target.startsWith("output")) {
                     int index = target.substring(6).toInt();
+                    dev->buz->bip();
                     if (index >= 1 && index <= 10) {
                         bool state = value.as<bool>();
                         DEBUG_PRINTF("Output %d → %s 🔥\n", index, state ? "ON" : "OFF");
@@ -276,26 +289,31 @@ void WiFiManager::StartWifiAP() {
 
                 } else if (target == "desiredVoltage") {
                     float v = value.as<float>();
+                    dev->buz->bip();
                     DEBUG_PRINTF("Desired Output Voltage set to %.2f V ⚡\n", v);
                     dev->config->PutFloat(DESIRED_OUTPUT_VOLTAGE_KEY, v);
 
                 } else if (target == "acFrequency") {
                     int f = value.as<int>();
+                    dev->buz->bip();
                     DEBUG_PRINTF("AC Frequency set to %d Hz 🔄\n", f);
                     dev->config->PutInt(AC_FREQUENCY_KEY, f);
 
                 } else if (target == "chargeResistor") {
                     float r = value.as<float>();
+                    dev->buz->bip();
                     DEBUG_PRINTF("Charge Resistor set to %.2f Ω 🧯\n", r);
                     dev->config->PutFloat(CHARGE_RESISTOR_KEY, r);
 
                 } else if (target == "dcVoltage") {
                     float v = value.as<float>();
+                    dev->buz->bip();
                     DEBUG_PRINTF("DC Output Voltage set to %.2f V ⚡\n", v);
                     dev->config->PutFloat(DC_VOLTAGE_KEY, v);
 
                 } else if (target.startsWith("Access")) {
                     int index = target.substring(6).toInt();
+                    dev->buz->bip();
                     if (index >= 1 && index <= 10) {
                         const char* accessKeys[10] = {
                             OUT01_ACCESS_KEY, OUT02_ACCESS_KEY, OUT03_ACCESS_KEY, OUT04_ACCESS_KEY, OUT05_ACCESS_KEY,
@@ -309,11 +327,13 @@ void WiFiManager::StartWifiAP() {
                 } else if (target == "mode") {
                     DEBUG_PRINTLN("Mode switched to IDLE 🧭");
                     dev->currentState = DeviceState::Idle;
+                    dev->buz->bip();
                     dev->indicator->clearAll();
                     dev->heaterManager->disableAll();
 
                 } else if (target == "systemStart") {
                     DEBUG_PRINTLN("System Start requested ▶️");
+                    dev->buz->bip();
                     if (dev->loopTaskHandle != nullptr && dev->currentState == DeviceState::Idle) {
                         dev->startLoopTask();
                     }
@@ -323,21 +343,25 @@ void WiFiManager::StartWifiAP() {
 
                 } else if (target == "systemShutdown") {
                     DEBUG_PRINTLN("System Shutdown requested ⏹️");
+                    dev->buz->bip();
                     if (dev->currentState == DeviceState::Running) {
                         dev->currentState = DeviceState::Idle;
                     }
 
                 } else if (target == "bypass") {
                     bool state = value.as<bool>();
+                    dev->buz->bip();
                     DEBUG_PRINTF("Bypass: %s 🛠️\n", state ? "ENABLED" : "DISABLED");
                     state ? dev->bypassFET->enable() : dev->bypassFET->disable();
 
                 } else if (target == "fanSpeed") {
                     int speed = constrain(value.as<int>(), 0, 100);
+
                     DEBUG_PRINTF("Fan speed set to %d%% 🌀\n", speed);
                     dev->fanManager->setSpeedPercent(speed);
 
                 } else {
+                    dev->buz->bipFault();
                     request->send(400, "application/json", "{\"error\":\"Unknown target\"}");
                     return;
                 }
@@ -365,6 +389,7 @@ void WiFiManager::StartWifiAP() {
     server.on("/load_controls", HTTP_GET, [this](AsyncWebServerRequest* request) {
         if (!isAuthenticated(request)) return;
         resetTimer();
+        dev->buz->bip();
 
         StaticJsonDocument<1024> doc;
 
@@ -443,6 +468,7 @@ void WiFiManager::StartWifiAP() {
 
                 if (username == "" || password == "") {
                     DEBUG_PRINTLN("[AdminCred] Missing username or password ❌");
+                    dev->buz->bipFault();
                     request->send(400, "application/json", "{\"error\":\"Missing username or password\"}");
                     return;
                 }
@@ -451,6 +477,7 @@ void WiFiManager::StartWifiAP() {
                 String stored = dev->config->GetString(ADMIN_PASS_KEY, "");
                 if (current != "" && stored != current) {
                     DEBUG_PRINTLN("[AdminCred] Incorrect current password ❌");
+                    dev->buz->bipFault();
                     request->send(403, "application/json", "{\"error\":\"Incorrect current password\"}");
                     return;
                 }
@@ -463,11 +490,13 @@ void WiFiManager::StartWifiAP() {
                 // Optional Wi-Fi update
                 if (ssid != "" && wifiPassword != "") {
                     DEBUG_PRINTLN("[AdminCred] Saving Wi-Fi settings ✅");
+                    
                     dev->config->PutString(STA_SSID_KEY, ssid);
                     dev->config->PutString(STA_PASS_KEY, wifiPassword);
                 }
 
                 DEBUG_PRINTLN("[AdminCred] Admin credentials updated ✅");
+                dev->buz->successSound();
                 request->send(200, "application/json", "{\"status\":\"admin credentials updated\"}");
             }
         }
@@ -508,6 +537,7 @@ void WiFiManager::StartWifiAP() {
 
                 if (current == "" || newUser == "" || newPass == "") {
                     DEBUG_PRINTLN("[UserCred] Missing required fields ❌");
+                    dev->buz->bipFault();
                     request->send(400, "application/json", "{\"error\":\"Missing required fields\"}");
                     return;
                 }
@@ -515,6 +545,7 @@ void WiFiManager::StartWifiAP() {
                 String stored = dev->config->GetString(USER_PASS_KEY, "");
                 if (stored != current) {
                     DEBUG_PRINTLN("[UserCred] Incorrect current password ❌");
+                    dev->buz->bipFault();
                     request->send(403, "application/json", "{\"error\":\"Incorrect current password\"}");
                     return;
                 }
@@ -526,6 +557,7 @@ void WiFiManager::StartWifiAP() {
                 dev->config->PutString(USER_PASS_KEY, newPass);
 
                 DEBUG_PRINTLN("[UserCred] User credentials updated ✅");
+                dev->buz->successSound();
                 request->send(200, "application/json", "{\"status\":\"Credentials updated\"}");
             }
         }
@@ -661,6 +693,7 @@ void WiFiManager::heartbeat() {
     if (heartbeatTaskHandle != nullptr) return;
 
     DEBUG_PRINTLN("[WiFiManager] Heartbeat Create 🟢");
+    dev->buz->bip();
 
     xTaskCreatePinnedToCore(
         [](void* param) {
@@ -673,6 +706,7 @@ void WiFiManager::heartbeat() {
                 // Delete if only admin remains
                 if (!self->isUserConnected() && !self->isAdminConnected()) {
                     DEBUG_PRINTLN("[WiFiManager] Heartbeat deleted 🔴");
+                    self->dev->buz->bipWiFiOff();
                     self->heartbeatTaskHandle = nullptr;
                     vTaskDelete(nullptr);
                     return;
@@ -681,6 +715,7 @@ void WiFiManager::heartbeat() {
                 if (!self->keepAlive) {
                     DEBUG_PRINTLN("[WiFiManager] ⚠️  Heartbeat timeout – disconnecting");
                     self->onDisconnected();
+                    self->dev->buz->bipWiFiOff();
                     DEBUG_PRINTLN("[WiFiManager] Heartbeat deleted 🔴");
                     self->heartbeatTaskHandle = nullptr;
                     vTaskDelete(nullptr);
@@ -705,3 +740,4 @@ void WiFiManager::restartWiFiAP() {
     delay(100);       // Small delay to let WiFi stack clean up
     begin();          // Restart AP and all callbacks
 }
+

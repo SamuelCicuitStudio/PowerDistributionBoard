@@ -400,7 +400,7 @@ function updateGauge(id, value, unit, maxValue) {
   display.textContent = `${value}${unit}`;
 }
 
-function startMonitorPolling(intervalMs = 1000) {
+function startMonitorPolling(intervalMs = 400) {
   setInterval(() => {
     fetch("/monitor")
       .then(res => res.json())
@@ -418,6 +418,14 @@ function startMonitorPolling(intervalMs = 1000) {
         updateGauge("temp2Value", temps[1] === -127 ? "Off" : parseFloat(temps[1]).toFixed(2), "°C", 150);
         updateGauge("temp3Value", temps[2] === -127 ? "Off" : parseFloat(temps[2]).toFixed(2), "°C", 150);
         updateGauge("temp4Value", temps[3] === -127 ? "Off" : parseFloat(temps[3]).toFixed(2), "°C", 150);
+        updateGauge("temp5Value", temps[4] === -127 ? "Off" : parseFloat(temps[4]).toFixed(2), "°C", 150);
+        updateGauge("temp6Value", temps[5] === -127 ? "Off" : parseFloat(temps[5]).toFixed(2), "°C", 150);
+        updateGauge("temp7Value", temps[6] === -127 ? "Off" : parseFloat(temps[6]).toFixed(2), "°C", 150);
+        updateGauge("temp8Value", temps[7] === -127 ? "Off" : parseFloat(temps[7]).toFixed(2), "°C", 150);
+        updateGauge("temp9Value", temps[8] === -127 ? "Off" : parseFloat(temps[8]).toFixed(2), "°C", 150);
+        updateGauge("temp10Value", temps[9] === -127 ? "Off" : parseFloat(temps[9]).toFixed(2), "°C", 150);
+        updateGauge("temp11Value", temps[10] === -127 ? "Off" : parseFloat(temps[10]).toFixed(2), "°C", 150);
+        updateGauge("temp12Value", temps[11] === -127 ? "Off" : parseFloat(temps[11]).toFixed(2), "°C", 150);
 
         const readyLed = document.getElementById("readyLed");
         const offLed = document.getElementById("offLed");
@@ -436,6 +444,7 @@ function startMonitorPolling(intervalMs = 1000) {
       });
   }, intervalMs);
 }
+
 function saveDeviceSettings() {
   const desiredVoltage = parseFloat(document.getElementById("desiredVoltage").value);
   const acFrequency = parseInt(document.getElementById("acFrequency").value);
@@ -476,7 +485,7 @@ window.addEventListener("DOMContentLoaded", () => {
   enableDragScroll("manualOutputs");
   enableDragScroll("userAccessGrid");
 
-  startHeartbeat();
+  //startHeartbeat();
   startMonitorPolling();
   loadControls();
 

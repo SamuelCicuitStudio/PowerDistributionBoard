@@ -7,7 +7,7 @@
 #include "ConfigManager.h"
 #include "config.h"  // Defines ONE_WIRE_BUS
 
-#define MAX_TEMP_SENSORS 4  // Adjust if more sensors are supported
+#define MAX_TEMP_SENSORS 12  // Adjust if more sensors are supported
 
 /**
  * TempSensor
