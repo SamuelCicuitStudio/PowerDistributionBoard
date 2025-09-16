@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include "config.h"
+
 // ──────────────────────────────────────────────────────────────
 //                        Module Headers
 // ──────────────────────────────────────────────────────────────
@@ -7,6 +8,9 @@
 #include "WiFiManager.h"
 #include "SwitchManager.h"
 #include "Device.h"  // ✅ Central system controller
+
+// Setup a oneWire instance to communicate with any OneWire devices
+OneWire oneWire(ONE_WIRE_BUS);
 
 // ──────────────────────────────────────────────────────────────
 //                    Global Object Pointers
@@ -29,12 +33,6 @@ BuzzerManager*    buzz          = nullptr;  // 🔔 Sound feedback (active-low b
 Device*           device        = nullptr;  // 📦 Main device orchestrator
 WiFiManager*      wifi          = nullptr;  // 🌐 Wi-Fi + web interface
 SwitchManager*    sw            = nullptr;  // 🔘 Power button tap detection
-
-// Setup a oneWire instance to communicate with any OneWire device
-OneWire oneWire(ONE_WIRE_BUS);
-
-// Pass oneWire reference to DallasTemperature library
-DallasTemperature sensors(&oneWire);
 
 // ──────────────────────────────────────────────────────────────
 //              Wi-Fi Event Handler for AP Client Events
@@ -80,7 +78,7 @@ void setup() {
         return;
     }
     DEBUG_PRINTLN("✅ SPIFFS successfully mounted.");
-    delay(2500);  // Let Serial settle
+    delay(500);  // Let Serial settle
 
     // 🧠 Load system configuration
     config = new ConfigManager(&prefs);
@@ -107,7 +105,7 @@ void setup() {
     currentSensor->begin();
 
     // 🌡️ Initialize temperature sensors
-    tempSensor = new TempSensor(config,&oneWire,&sensors);
+    tempSensor = new TempSensor(config,&oneWire);
     tempSensor->begin();
 
     // 🔌 Initialize power relay
@@ -146,13 +144,11 @@ void setup() {
     // 🔘 Setup tap detection for the power switch
     sw = new SwitchManager(config, wifi);
     sw->TapDetect();
-
-
 }
 
 // ──────────────────────────────────────────────────────────────
 //                           Loop()
 // ──────────────────────────────────────────────────────────────
 void loop() {
-  //  vTaskDelay(5000);  // 💤 System operates on FreeRTOS tasks
+    vTaskDelay(5000);  // 💤 System operates on FreeRTOS tasks
 }

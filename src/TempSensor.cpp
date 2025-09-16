@@ -5,47 +5,79 @@ void TempSensor::begin() {
     Serial.println("#               Starting Temperature Manager 🌡️          #");
     Serial.println("###########################################################");
 
-    if (!cfg || !ow || !sensors) {
-        Serial.println("[TempSensor] Missing dependencies (cfg/ow/sensors). ❌");
+    if (!cfg || !ow) {
+        Serial.println("[TempSensor] Missing dependencies ❌");
         return;
     }
 
-    sensors->begin();
-    sensorCount = sensors->getDeviceCount();
+    // Discover all devices on the bus
+    sensorCount = 0;
+    ow->reset_search();
+    while (ow->search(sensorAddresses[sensorCount]) && sensorCount < MAX_TEMP_SENSORS) {
+        Serial.printf("[TempSensor] Found sensor %u: ", sensorCount);
+        printAddress(sensorAddresses[sensorCount]);
+        sensorCount++;
+    }
 
-    if (sensorCount < DEFAULT_TEMP_SENSOR_COUNT) {
-        sensorCount = DEFAULT_TEMP_SENSOR_COUNT;
+    if (sensorCount == 0) {
+        Serial.println("[TempSensor] No sensors found ❌");
+        return;
     }
 
     cfg->PutInt(TEMP_SENSOR_COUNT_KEY, sensorCount);
-    DEBUG_PRINTF("[TempSensor] Detected %u sensors 📡\n", sensorCount);
+    Serial.printf("[TempSensor] %u sensor(s) found ✅\n", sensorCount);
 
-    uint8_t validSensors = 0;
+    startTemperatureTask();
+}
 
-    for (uint8_t i = 0; i < sensorCount && i < MAX_TEMP_SENSORS; ++i) {
-        if (sensors->getAddress(sensorAddresses[i], i)) {
-            // DEBUG: printAddress(sensorAddresses[i]);
-            validSensors++;
-        } else {
-            DEBUG_PRINTF("[TempSensor] Sensor %u address not found ❌\n", i);
-        }
+void TempSensor::requestTemperatures() {
+    // Issue conversion command to all devices
+    for (uint8_t i = 0; i < sensorCount; i++) {
+        ow->reset();
+        ow->select(sensorAddresses[i]);
+        ow->write(0x44);  // Start conversion
+    }
+}
+
+float TempSensor::getTemperature(uint8_t index) {
+    if (!ow || index >= sensorCount) {
+        Serial.printf("[TempSensor] Invalid index %u ❌\n", index);
+        return NAN;
     }
 
-    if (validSensors == 0) {
-        DEBUG_PRINTLN("[TempSensor] No valid sensors found. Monitoring will not start.❌");
-        return;
-    }
+    ow->reset();
+    ow->select(sensorAddresses[index]);
+    ow->write(0xBE);  // Read scratchpad
+    ow->read_bytes(scratchpad, 9);
 
-    DEBUG_PRINTF("[TempSensor] %u valid sensor(s) found. Starting monitor task...✅\n", validSensors);
-    startTemperatureTask();  // Start with default interval only if at least 1 sensor is valid
+    int16_t raw = (scratchpad[1] << 8) | scratchpad[0];
+    return (float)raw / 16.0;  // 12-bit resolution
+}
+
+uint8_t TempSensor::getSensorCount() {
+    if (!cfg) return 0;
+    return cfg->GetInt(TEMP_SENSOR_COUNT_KEY, 0);
+}
+
+void TempSensor::printAddress(uint8_t address[8]) {
+    for (uint8_t i = 0; i < 8; i++) {
+        if (address[i] < 0x10) Serial.print("0");
+        Serial.print(address[i], HEX);
+        if (i < 7) Serial.print(":");
+    }
+    Serial.println();
+}
+
+void TempSensor::stopTemperatureTask() {
+    if (tempTaskHandle != nullptr) {
+        vTaskDelete(tempTaskHandle);
+        tempTaskHandle = nullptr;
+    }
 }
 
 void TempSensor::startTemperatureTask(uint32_t intervalMs) {
-    stopTemperatureTask();  // Stop if already running
+    stopTemperatureTask();
     updateIntervalMs = intervalMs;
-
-    DEBUG_PRINTF("[TempSensor] Starting temperature task with %ums interval 🔁\n", updateIntervalMs);
-
     xTaskCreatePinnedToCore(
         TempSensor::temperatureTask,
         "TempUpdateTask",
@@ -55,48 +87,6 @@ void TempSensor::startTemperatureTask(uint32_t intervalMs) {
         &tempTaskHandle,
         TEMP_SENSOR_TASK_CORE
     );
-}
-
-void TempSensor::stopTemperatureTask() {
-    if (tempTaskHandle != nullptr) {
-        DEBUG_PRINTLN("[TempSensor] Stopping temperature task ⛔");
-        vTaskDelete(tempTaskHandle);
-        tempTaskHandle = nullptr;
-    }
-}
-
-void TempSensor::requestTemperatures() {
-    // DEBUG_PRINTLN("[TempSensor] Requesting temperatures... 🔄");
-    if (sensors) sensors->requestTemperatures();
-}
-
-float TempSensor::getTemperature(uint8_t index) {
-    if (!sensors) {
-        DEBUG_PRINTLN("[TempSensor] sensors==nullptr ❌");
-        return NAN;
-    }
-    if (index >= sensorCount) {
-        DEBUG_PRINTF("[TempSensor] Invalid index %u ❌\n", index);
-        return NAN;
-    }
-    float temp = sensors->getTempCByIndex(index);
-    // DEBUG: printAddress(sensorAddresses[index]); Serial.printf(" = %.2f°C\n", temp);
-    return temp;
-}
-
-uint8_t TempSensor::getSensorCount() {
-    if (!cfg) return DEFAULT_TEMP_SENSOR_COUNT;
-    return cfg->GetInt(TEMP_SENSOR_COUNT_KEY, DEFAULT_TEMP_SENSOR_COUNT);
-}
-
-void TempSensor::printAddress(DeviceAddress address) {
-    for (uint8_t i = 0; i < 8; i++) {
-        Serial.print("0x");
-        if (address[i] < 0x10) Serial.print("0");
-        Serial.print(address[i], HEX);
-        if (i < 7) Serial.print(", ");
-    }
-    Serial.println();
 }
 
 void TempSensor::temperatureTask(void* param) {

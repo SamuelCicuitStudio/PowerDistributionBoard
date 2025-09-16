@@ -3,9 +3,8 @@
 
 #include <Arduino.h>
 #include <OneWire.h>
-#include <DallasTemperature.h>
 #include "ConfigManager.h"
-#include "config.h"  // Keeps your keys/macros like TEMP_SENSOR_COUNT_KEY, etc.
+#include "config.h"
 
 #ifndef MAX_TEMP_SENSORS
 #define MAX_TEMP_SENSORS 12
@@ -13,42 +12,29 @@
 
 class TempSensor {
 public:
-    // Inject dependencies: config, OneWire bus, DallasTemperature wrapper
-    explicit TempSensor(ConfigManager* config, OneWire* oneWireBus, DallasTemperature* dallas)
-        : cfg(config), ow(oneWireBus), sensors(dallas) {}
+    explicit TempSensor(ConfigManager* config, OneWire* oneWireBus)
+        : cfg(config), ow(oneWireBus) {}
 
-    // Initializes the DallasTemperature bus and starts task if at least one valid sensor is found
-    void begin();
+    void begin();                               // Discover sensors
+    void requestTemperatures();                 // Start conversions
+    float getTemperature(uint8_t index);        // Read by index
+    uint8_t getSensorCount();                   // Count of sensors
 
-    // Manual trigger (non-blocking request)
-    void requestTemperatures();
-
-    // Read last temperature (in °C) by index; returns NAN if index invalid
-    float getTemperature(uint8_t index);
-
-    // Returns persisted (or default) sensor count
-    uint8_t getSensorCount();
-
-    // RTOS task control
     void stopTemperatureTask();
     void startTemperatureTask(uint32_t intervalMs = 3000);
 
-    // Helper: print an 8-byte DeviceAddress
-    static void printAddress(DeviceAddress address);
-
-    // RTOS worker (static trampoline)
+    static void printAddress(uint8_t address[8]);
     static void temperatureTask(void* param);
 
-    // --- Public state (kept as in your original layout) ---
     ConfigManager* cfg = nullptr;
-    uint8_t  sensorCount       = 0;
-    uint32_t updateIntervalMs  = 2000;
-    DeviceAddress sensorAddresses[MAX_TEMP_SENSORS];
+    uint8_t sensorCount = 0;
+    uint32_t updateIntervalMs = 2000;
+    uint8_t sensorAddresses[MAX_TEMP_SENSORS][8];  // ROM codes
     TaskHandle_t tempTaskHandle = nullptr;
 
 private:
-    OneWire*           ow       = nullptr;   // injected bus
-    DallasTemperature* sensors  = nullptr;   // injected Dallas wrapper
+    OneWire* ow = nullptr;
+    uint8_t scratchpad[9];  // buffer for reads
 };
 
-#endif // TEMP_SENSOR_H
+#endif
