@@ -52,6 +52,7 @@ void WiFiManager::StartWifiAP() {
         resetTimer();// reset activity timer
         handleRoot(request);
     });
+
     // ─────────────────────────────────────────────────────────────
     // REST API Callbacks – WiFiManager
     // ─────────────────────────────────────────────────────────────
@@ -283,8 +284,28 @@ void WiFiManager::StartWifiAP() {
                     if (index >= 1 && index <= 10) {
                         bool state = value.as<bool>();
                         DEBUG_PRINTF("Output %d → %s 🔥\n", index, state ? "ON" : "OFF");
-                        dev->heaterManager->setOutput(index, state);
-                        dev->indicator->setLED(index, state);
+                        if (isAdminConnected()) {
+                            dev->heaterManager->setOutput(index, state);
+                            dev->indicator->setLED(index, state);
+                        } else if (isUserConnected()) {
+                            if (index >= 1 && index <= 10) {
+                                const char* accessKeys[10] = {
+                                    OUT01_ACCESS_KEY, OUT02_ACCESS_KEY, OUT03_ACCESS_KEY, OUT04_ACCESS_KEY, OUT05_ACCESS_KEY,
+                                    OUT06_ACCESS_KEY, OUT07_ACCESS_KEY, OUT08_ACCESS_KEY, OUT09_ACCESS_KEY, OUT10_ACCESS_KEY
+                                };
+                                // Check if user is allowed to control this output
+                                bool allowed = dev->config->GetBool(accessKeys[index - 1], false);
+                                if (allowed) {
+                                    dev->heaterManager->setOutput(index, state);
+                                    dev->indicator->setLED(index, state);
+                                } else {
+                                    DEBUG_PRINTF("Access denied for OUT%02d 🔒\n", index);
+                                }
+                            } else {
+                                DEBUG_PRINTF("Invalid output index: %d ❌\n", index);
+                            }
+                        }
+
                     }
 
                 } else if (target == "desiredVoltage") {
@@ -599,8 +620,8 @@ void WiFiManager::disableWiFiAP() {
     WiFi.softAPdisconnect(true);     // Disconnect AP
     WiFi.disconnect(true);           // Disconnect STA (if connected)
     delay(1000);                      // Let stack settle
-    //WiFi.mode(WIFI_OFF);             // Turn off WiFi
-    //esp_wifi_deinit();               // 💥 Fully deinitialize WiFi
+    //WiFi.mode(WIFI_OFF);            // Turn off WiFi
+    //esp_wifi_deinit();              // 💥 Fully deinitialize WiFi
 
     if (inactivityTaskHandle != nullptr) {
         inactivityTaskHandle = nullptr;

@@ -1,446 +1,749 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta http-equiv="Cache-Control" content="no-store, must-revalidate" />
-  <meta http-equiv="Pragma" content="no-cache" />
-  <meta http-equiv="Expires" content="0" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Admin Dashboard</title>
-  <link rel="stylesheet" href="css/admin.css?v=2" />
-  <style>
-    .user-status-global {
-      position: absolute;
-      top: 10px;
-      right: 20px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      z-index: 1000;
-    }
-    .user-menu {
-      position: absolute;
-      top: 35px;
-      right: 0;
-      display: none;
-      background: rgba(0, 0, 0, 0.7);
-      border-radius: 8px;
-      padding: 10px;
-      box-shadow: 0 0 8px rgba(0,0,0,0.4);
-    }
-    .user-menu button {
-      background: none;
-      border: none;
-      color: white;
-      cursor: pointer;
-    }
-  </style>
-</head>
-<body>
-
-  <div class="ui-container">
-    <!-- Global User Icon / Menu -->
-    <div class="user-status-global">
-      <div class="status-dot" title="Auto Mode"></div>
-      <div class="user-icon" onclick="toggleUserMenu()">👤</div>
-      <div class="user-menu" id="userMenu">
-        <button id="disconnectBtn" type="button">Disconnect</button>
-      </div>
-    </div>
-
-    <!-- Sidebar -->
-    <div class="sidebar">
-      <div class="tab active" onclick="switchTab(0)">Dashboard</div>
-      <div class="tab" onclick="switchTab(1)">User Settings</div>
-      <div class="tab" onclick="switchTab(2)">Manual Control</div>
-      <div class="tab" onclick="switchTab(3)">Admin Settings</div>
-      <div class="tab" onclick="switchTab(4)">Device Settings</div>
-
-      <div class="sidebar-controls-vertical">
-        <div class="round-button stop" onclick="shutdownSystem()" title="Shutdown">
-          <img src="icons/power.png" alt="Shutdown" />
-        </div>
-        <div class="round-button reset" onclick="rebootSystem()" title="Reboot">
-          <img src="icons/redo-5-16.png" alt="Reset" />
-        </div>
-        <div class="round-button start" onclick="startSystem()" title="Ready Start System">
-          <img src="icons/ok_tank.png" alt="Start" />
-        </div>
-        <div class="round-button reset" onclick="resetSystem()" title="Reset">
-          <img src="icons/refresh.png" alt="Reset" />
-        </div>
-      </div>
-    </div>
-
-    <!-- Dashboard Tab -->
-    <div class="content active" id="dashboardTab">
-      <div class="content-header">
-        <h2>System Dashboard</h2>
-      </div>
-
-      <div class="mode-box" style="background: rgba(255, 255, 255, 0.05); padding: 20px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 0 5px rgba(255, 255, 255, 0.05);">
-        <div class="mode-toggle" style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
-          <label>Auto</label>
-          <label class="switch">
-            <input type="checkbox" id="modeToggle" onchange="toggleMode()" />
-            <span class="slider"></span>
-          </label>
-          <label>Manual</label>
-
-          <label style="margin-left: 20px;">LT</label>
-          <label class="switch">
-            <input type="checkbox" id="ltToggle" onchange="toggleLT()" />
-            <span class="slider"></span>
-          </label>
-
-          <span style="margin-left: 30px;">Ready</span>
-          <div id="readyLed" class="led"></div>
-          <span style="margin-left: 20px;">OFF</span>
-          <div id="offLed" class="led"></div>
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="Cache-Control" content="no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin Dashboard</title>
+    <link rel="stylesheet" href="css/admin.css?v=2" />
+    <style>
+      .user-status-global {
+        position: absolute;
+        top: 10px;
+        right: 20px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        z-index: 1000;
+      }
+      .user-menu {
+        position: absolute;
+        top: 35px;
+        right: 0;
+        display: none;
+        background: rgba(0, 0, 0, 0.7);
+        border-radius: 8px;
+        padding: 10px;
+        box-shadow: 0 0 8px rgba(0, 0, 0, 0.4);
+      }
+      .user-menu button {
+        background: none;
+        border: none;
+        color: white;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="ui-container">
+      <!-- Global User Icon / Menu -->
+      <div class="user-status-global">
+        <div class="status-dot" title="Auto Mode"></div>
+        <div class="user-icon" onclick="toggleUserMenu()">👤</div>
+        <div class="user-menu" id="userMenu">
+          <button id="disconnectBtn" type="button">Disconnect</button>
         </div>
       </div>
 
-      <div class="gauge-scroll-area">
-        <div class="gauges">
-          <!-- Voltage -->
-          <div class="gauge-card">
-            <div class="gauge">
-              <svg viewBox="0 0 36 36" class="gauge-svg">
-                <g transform="rotate(-90 18 18)">
-                  <path class="gauge-bg" d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831" />
-                  <path class="gauge-fg voltage" stroke-dasharray="92, 100" d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831" />
-                </g>
-                <text x="18" y="18" class="gauge-value" transform="rotate(90 18 18)" id="voltageValue">230V</text>
-              </svg>
-            </div>
-            <div class="gauge-label">Voltage</div>
-          </div>
+      <!-- Sidebar -->
+      <div class="sidebar">
+        <div class="tab active" onclick="switchTab(0)">Dashboard</div>
+        <div class="tab" onclick="switchTab(1)">User Settings</div>
+        <div class="tab" onclick="switchTab(2)">Manual Control</div>
+        <div class="tab" onclick="switchTab(3)">Admin Settings</div>
+        <div class="tab" onclick="switchTab(4)">Device Settings</div>
 
-          <!-- Current -->
-          <div class="gauge-card">
-            <div class="gauge">
-              <svg viewBox="0 0 36 36" class="gauge-svg">
-                <g transform="rotate(-90 18 18)">
-                  <path class="gauge-bg" d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831" />
-                  <path class="gauge-fg current" stroke-dasharray="60, 100" d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831" />
-                </g>
-                <text x="18" y="18" class="gauge-value" transform="rotate(90 18 18)" id="currentValue">1.2A</text>
-              </svg>
-            </div>
-            <div class="gauge-label">Current</div>
+        <div class="sidebar-controls-vertical">
+          <div
+            class="round-button stop"
+            onclick="shutdownSystem()"
+            title="Shutdown"
+          >
+            <img src="icons/power.png" alt="Shutdown" />
           </div>
-
-          <!-- Temp 1 -->
-          <div class="gauge-card">
-            <div class="gauge">
-              <svg viewBox="0 0 36 36" class="gauge-svg">
-                <g transform="rotate(-90 18 18)">
-                  <path class="gauge-bg"
-                        d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 
-                          a15.9155 15.9155 0 1 1 0 -31.831"/>
-                  <path class="gauge-fg temperature" stroke-dasharray="21, 100"
-                        d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 
-                          a15.9155 15.9155 0 1 1 0 -31.831"/>
-                </g>
-                <text x="18" y="18" class="gauge-value" transform="rotate(90 18 18)" id="temp1Value">31°C</text>
-              </svg>
-            </div>
-            <div class="gauge-label">Temp 1</div>
+          <div
+            class="round-button reset"
+            onclick="rebootSystem()"
+            title="Reboot"
+          >
+            <img src="icons/redo-5-16.png" alt="Reset" />
           </div>
-
-          <!-- Temp 2 -->
-          <div class="gauge-card">
-            <div class="gauge">
-              <svg viewBox="0 0 36 36" class="gauge-svg">
-                <g transform="rotate(-90 18 18)">
-                  <path class="gauge-bg" d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"/>
-                  <path class="gauge-fg temperature" stroke-dasharray="17, 100" d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"/>
-                </g>
-                <text x="18" y="18" class="gauge-value" transform="rotate(90 18 18)" id="temp2Value">25°C</text>
-              </svg>
-            </div>
-            <div class="gauge-label">Temp 2</div>
+          <div
+            class="round-button start"
+            onclick="startSystem()"
+            title="Ready Start System"
+          >
+            <img src="icons/ok_tank.png" alt="Start" />
           </div>
-
-          <!-- Temp 3 -->
-          <div class="gauge-card">
-            <div class="gauge">
-              <svg viewBox="0 0 36 36" class="gauge-svg">
-                <g transform="rotate(-90 18 18)">
-                  <path class="gauge-bg" d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"/>
-                  <path class="gauge-fg temperature" stroke-dasharray="26, 100" d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"/>
-                </g>
-                <text x="18" y="18" class="gauge-value" transform="rotate(90 18 18)" id="temp3Value">39°C</text>
-              </svg>
-            </div>
-            <div class="gauge-label">Temp 3</div>
-          </div>
-
-          <!-- Temp 4 -->
-          <div class="gauge-card">
-            <div class="gauge">
-              <svg viewBox="0 0 36 36" class="gauge-svg">
-                <g transform="rotate(-90 18 18)">
-                  <path class="gauge-bg" d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"/>
-                  <path class="gauge-fg temperature" stroke-dasharray="29, 100" d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"/>
-                </g>
-                <text x="18" y="18" class="gauge-value" transform="rotate(90 18 18)" id="temp4Value">44°C</text>
-              </svg>
-            </div>
-            <div class="gauge-label">Temp 4</div>
-          </div>
-
-          <!-- Temp 5 -->
-          <div class="gauge-card">
-            <div class="gauge">
-              <svg viewBox="0 0 36 36" class="gauge-svg">
-                <g transform="rotate(-90 18 18)">
-                  <path class="gauge-bg" d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"/>
-                  <path class="gauge-fg temperature" stroke-dasharray="19, 100" d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"/>
-                </g>
-                <text x="18" y="18" class="gauge-value" transform="rotate(90 18 18)" id="temp5Value">28°C</text>
-              </svg>
-            </div>
-            <div class="gauge-label">Temp 5</div>
-          </div>
-
-          <!-- Temp 6 -->
-          <div class="gauge-card">
-            <div class="gauge">
-              <svg viewBox="0 0 36 36" class="gauge-svg">
-                <g transform="rotate(-90 18 18)">
-                  <path class="gauge-bg" d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"/>
-                  <path class="gauge-fg temperature" stroke-dasharray="24, 100" d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"/>
-                </g>
-                <text x="18" y="18" class="gauge-value" transform="rotate(90 18 18)" id="temp6Value">36°C</text>
-              </svg>
-            </div>
-            <div class="gauge-label">Temp 6</div>
-          </div>
-
-          <!-- Temp 7 -->
-          <div class="gauge-card">
-            <div class="gauge">
-              <svg viewBox="0 0 36 36" class="gauge-svg">
-                <g transform="rotate(-90 18 18)">
-                  <path class="gauge-bg" d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"/>
-                  <path class="gauge-fg temperature" stroke-dasharray="14, 100" d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"/>
-                </g>
-                <text x="18" y="18" class="gauge-value" transform="rotate(90 18 18)" id="temp7Value">22°C</text>
-              </svg>
-            </div>
-            <div class="gauge-label">Temp 7</div>
-          </div>
-
-          <!-- Temp 8 -->
-          <div class="gauge-card">
-            <div class="gauge">
-              <svg viewBox="0 0 36 36" class="gauge-svg">
-                <g transform="rotate(-90 18 18)">
-                  <path class="gauge-bg" d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"/>
-                  <path class="gauge-fg temperature" stroke-dasharray="32, 100" d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"/>
-                </g>
-                <text x="18" y="18" class="gauge-value" transform="rotate(90 18 18)" id="temp8Value">48°C</text>
-              </svg>
-            </div>
-            <div class="gauge-label">Temp 8</div>
-          </div>
-
-          <!-- Temp 9 -->
-          <div class="gauge-card">
-            <div class="gauge">
-              <svg viewBox="0 0 36 36" class="gauge-svg">
-                <g transform="rotate(-90 18 18)">
-                  <path class="gauge-bg" d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"/>
-                  <path class="gauge-fg temperature" stroke-dasharray="18, 100" d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"/>
-                </g>
-                <text x="18" y="18" class="gauge-value" transform="rotate(90 18 18)" id="temp9Value">27°C</text>
-              </svg>
-            </div>
-            <div class="gauge-label">Temp 9</div>
-          </div>
-
-          <!-- Temp 10 -->
-          <div class="gauge-card">
-            <div class="gauge">
-              <svg viewBox="0 0 36 36" class="gauge-svg">
-                <g transform="rotate(-90 18 18)">
-                  <path class="gauge-bg" d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"/>
-                  <path class="gauge-fg temperature" stroke-dasharray="22, 100" d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"/>
-                </g>
-                <text x="18" y="18" class="gauge-value" transform="rotate(90 18 18)" id="temp10Value">33°C</text>
-              </svg>
-            </div>
-            <div class="gauge-label">Temp 10</div>
-          </div>
-
-          <!-- Temp 11 -->
-          <div class="gauge-card">
-            <div class="gauge">
-              <svg viewBox="0 0 36 36" class="gauge-svg">
-                <g transform="rotate(-90 18 18)">
-                  <path class="gauge-bg" d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"/>
-                  <path class="gauge-fg temperature" stroke-dasharray="27, 100" d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"/>
-                </g>
-                <text x="18" y="18" class="gauge-value" transform="rotate(90 18 18)" id="temp11Value">41°C</text>
-              </svg>
-            </div>
-            <div class="gauge-label">Temp 11</div>
-          </div>
-
-          <!-- Temp 12 -->
-          <div class="gauge-card">
-            <div class="gauge">
-              <svg viewBox="0 0 36 36" class="gauge-svg">
-                <g transform="rotate(-90 18 18)">
-                  <path class="gauge-bg" d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"/>
-                  <path class="gauge-fg temperature" stroke-dasharray="19, 100" d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"/>
-                </g>
-                <text x="18" y="18" class="gauge-value" transform="rotate(90 18 18)" id="temp12Value">29°C</text>
-              </svg>
-            </div>
-            <div class="gauge-label">Temp 12</div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- User Settings Tab -->
-    <div class="content" id="userSettingsTab">
-      <div class="content-header">
-        <h2>User Settings</h2>
-      </div>
-
-      <div class="user-modal-content zoom-box" style="width: 100%; max-width: 400px;">
-        <input type="password" id="userCurrentPassword" placeholder="Current Password" />
-        <input type="password" id="userNewPassword" placeholder="New Password" />
-        <input type="text" id="userDeviceId" placeholder="New Device ID" />
-        <div class="user-modal-actions round-actions">
-          <div class="round-button save" onclick="saveUserSettings()">
-            <img src="icons/ok_tank.png" alt="Save" />
-          </div>
-          <div class="round-button cancel" onclick="resetUserSettings()">
-            <img src="icons/close.png" alt="Cancel" />
+          <div class="round-button reset" onclick="resetSystem()" title="Reset">
+            <img src="icons/refresh.png" alt="Reset" />
           </div>
         </div>
       </div>
 
-      <div class="section-header">Output Access</div>
-      <div class="manual-outputs" id="userAccessGrid"></div>
-    </div>
+      <!-- Dashboard Tab -->
+      <div class="content active" id="dashboardTab">
+        <div class="content-header">
+          <h2>System Dashboard</h2>
+        </div>
 
-    <!-- Manual Control Tab -->
-    <div class="content" id="manualControlTab">
-      <div class="content-header">
-        <h2>Manual Control</h2>
-      </div>
+        <div
+          class="mode-box"
+          style="
+            background: rgba(255, 255, 255, 0.05);
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            box-shadow: 0 0 5px rgba(255, 255, 255, 0.05);
+          "
+        >
+          <div
+            class="mode-toggle"
+            style="
+              display: flex;
+              align-items: center;
+              gap: 15px;
+              flex-wrap: wrap;
+            "
+          >
+            <label>Auto</label>
+            <label class="switch">
+              <input type="checkbox" id="modeToggle" onchange="toggleMode()" />
+              <span class="slider"></span>
+            </label>
+            <label>Manual</label>
 
-      <div class="mode-box">
-        <div class="controls" style="display: flex; align-items: center; gap: 20px; flex-wrap: wrap;">
-          <label>Fan</label>
-          <input type="range" min="0" max="100" id="fanSlider" />
-          <label>Relay</label>
-          <label class="switch">
-            <input type="checkbox" id="relayToggle" />
-            <span class="slider"></span>
-          </label>
-          <label>Bypass</label>
-          <label class="switch">
-            <input type="checkbox" id="bypassToggle" />
-            <span class="slider"></span>
-          </label>
+            <label style="margin-left: 20px">LT</label>
+            <label class="switch">
+              <input type="checkbox" id="ltToggle" onchange="toggleLT()" />
+              <span class="slider"></span>
+            </label>
+
+            <span style="margin-left: 30px">Ready</span>
+            <div id="readyLed" class="led"></div>
+            <span style="margin-left: 20px">OFF</span>
+            <div id="offLed" class="led"></div>
+          </div>
+        </div>
+
+        <div class="gauge-scroll-area">
+          <div class="gauges">
+            <!-- Voltage -->
+            <div class="gauge-card">
+              <div class="gauge">
+                <svg viewBox="0 0 36 36" class="gauge-svg">
+                  <g transform="rotate(-90 18 18)">
+                    <path
+                      class="gauge-bg"
+                      d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                    />
+                    <path
+                      class="gauge-fg voltage"
+                      stroke-dasharray="92, 100"
+                      d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                    />
+                  </g>
+                  <text
+                    x="18"
+                    y="18"
+                    class="gauge-value"
+                    transform="rotate(90 18 18)"
+                    id="voltageValue"
+                  >
+                    230V
+                  </text>
+                </svg>
+              </div>
+              <div class="gauge-label">Voltage</div>
+            </div>
+
+            <!-- Current -->
+            <div class="gauge-card">
+              <div class="gauge">
+                <svg viewBox="0 0 36 36" class="gauge-svg">
+                  <g transform="rotate(-90 18 18)">
+                    <path
+                      class="gauge-bg"
+                      d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                    />
+                    <path
+                      class="gauge-fg current"
+                      stroke-dasharray="60, 100"
+                      d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                    />
+                  </g>
+                  <text
+                    x="18"
+                    y="18"
+                    class="gauge-value"
+                    transform="rotate(90 18 18)"
+                    id="currentValue"
+                  >
+                    1.2A
+                  </text>
+                </svg>
+              </div>
+              <div class="gauge-label">Current</div>
+            </div>
+
+            <!-- Temp 1 -->
+            <div class="gauge-card">
+              <div class="gauge">
+                <svg viewBox="0 0 36 36" class="gauge-svg">
+                  <g transform="rotate(-90 18 18)">
+                    <path
+                      class="gauge-bg"
+                      d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 
+                          a15.9155 15.9155 0 1 1 0 -31.831"
+                    />
+                    <path
+                      class="gauge-fg temperature"
+                      stroke-dasharray="21, 100"
+                      d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 
+                          a15.9155 15.9155 0 1 1 0 -31.831"
+                    />
+                  </g>
+                  <text
+                    x="18"
+                    y="18"
+                    class="gauge-value"
+                    transform="rotate(90 18 18)"
+                    id="temp1Value"
+                  >
+                    31°C
+                  </text>
+                </svg>
+              </div>
+              <div class="gauge-label">Temp 1</div>
+            </div>
+
+            <!-- Temp 2 -->
+            <div class="gauge-card">
+              <div class="gauge">
+                <svg viewBox="0 0 36 36" class="gauge-svg">
+                  <g transform="rotate(-90 18 18)">
+                    <path
+                      class="gauge-bg"
+                      d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                    />
+                    <path
+                      class="gauge-fg temperature"
+                      stroke-dasharray="17, 100"
+                      d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                    />
+                  </g>
+                  <text
+                    x="18"
+                    y="18"
+                    class="gauge-value"
+                    transform="rotate(90 18 18)"
+                    id="temp2Value"
+                  >
+                    25°C
+                  </text>
+                </svg>
+              </div>
+              <div class="gauge-label">Temp 2</div>
+            </div>
+
+            <!-- Temp 3 -->
+            <div class="gauge-card">
+              <div class="gauge">
+                <svg viewBox="0 0 36 36" class="gauge-svg">
+                  <g transform="rotate(-90 18 18)">
+                    <path
+                      class="gauge-bg"
+                      d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                    />
+                    <path
+                      class="gauge-fg temperature"
+                      stroke-dasharray="26, 100"
+                      d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                    />
+                  </g>
+                  <text
+                    x="18"
+                    y="18"
+                    class="gauge-value"
+                    transform="rotate(90 18 18)"
+                    id="temp3Value"
+                  >
+                    39°C
+                  </text>
+                </svg>
+              </div>
+              <div class="gauge-label">Temp 3</div>
+            </div>
+
+            <!-- Temp 4 -->
+            <div class="gauge-card">
+              <div class="gauge">
+                <svg viewBox="0 0 36 36" class="gauge-svg">
+                  <g transform="rotate(-90 18 18)">
+                    <path
+                      class="gauge-bg"
+                      d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                    />
+                    <path
+                      class="gauge-fg temperature"
+                      stroke-dasharray="29, 100"
+                      d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                    />
+                  </g>
+                  <text
+                    x="18"
+                    y="18"
+                    class="gauge-value"
+                    transform="rotate(90 18 18)"
+                    id="temp4Value"
+                  >
+                    44°C
+                  </text>
+                </svg>
+              </div>
+              <div class="gauge-label">Temp 4</div>
+            </div>
+
+            <!-- Temp 5 -->
+            <div class="gauge-card">
+              <div class="gauge">
+                <svg viewBox="0 0 36 36" class="gauge-svg">
+                  <g transform="rotate(-90 18 18)">
+                    <path
+                      class="gauge-bg"
+                      d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                    />
+                    <path
+                      class="gauge-fg temperature"
+                      stroke-dasharray="19, 100"
+                      d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                    />
+                  </g>
+                  <text
+                    x="18"
+                    y="18"
+                    class="gauge-value"
+                    transform="rotate(90 18 18)"
+                    id="temp5Value"
+                  >
+                    28°C
+                  </text>
+                </svg>
+              </div>
+              <div class="gauge-label">Temp 5</div>
+            </div>
+
+            <!-- Temp 6 -->
+            <div class="gauge-card">
+              <div class="gauge">
+                <svg viewBox="0 0 36 36" class="gauge-svg">
+                  <g transform="rotate(-90 18 18)">
+                    <path
+                      class="gauge-bg"
+                      d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                    />
+                    <path
+                      class="gauge-fg temperature"
+                      stroke-dasharray="24, 100"
+                      d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                    />
+                  </g>
+                  <text
+                    x="18"
+                    y="18"
+                    class="gauge-value"
+                    transform="rotate(90 18 18)"
+                    id="temp6Value"
+                  >
+                    36°C
+                  </text>
+                </svg>
+              </div>
+              <div class="gauge-label">Temp 6</div>
+            </div>
+
+            <!-- Temp 7 -->
+            <div class="gauge-card">
+              <div class="gauge">
+                <svg viewBox="0 0 36 36" class="gauge-svg">
+                  <g transform="rotate(-90 18 18)">
+                    <path
+                      class="gauge-bg"
+                      d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                    />
+                    <path
+                      class="gauge-fg temperature"
+                      stroke-dasharray="14, 100"
+                      d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                    />
+                  </g>
+                  <text
+                    x="18"
+                    y="18"
+                    class="gauge-value"
+                    transform="rotate(90 18 18)"
+                    id="temp7Value"
+                  >
+                    22°C
+                  </text>
+                </svg>
+              </div>
+              <div class="gauge-label">Temp 7</div>
+            </div>
+
+            <!-- Temp 8 -->
+            <div class="gauge-card">
+              <div class="gauge">
+                <svg viewBox="0 0 36 36" class="gauge-svg">
+                  <g transform="rotate(-90 18 18)">
+                    <path
+                      class="gauge-bg"
+                      d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                    />
+                    <path
+                      class="gauge-fg temperature"
+                      stroke-dasharray="32, 100"
+                      d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                    />
+                  </g>
+                  <text
+                    x="18"
+                    y="18"
+                    class="gauge-value"
+                    transform="rotate(90 18 18)"
+                    id="temp8Value"
+                  >
+                    48°C
+                  </text>
+                </svg>
+              </div>
+              <div class="gauge-label">Temp 8</div>
+            </div>
+
+            <!-- Temp 9 -->
+            <div class="gauge-card">
+              <div class="gauge">
+                <svg viewBox="0 0 36 36" class="gauge-svg">
+                  <g transform="rotate(-90 18 18)">
+                    <path
+                      class="gauge-bg"
+                      d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                    />
+                    <path
+                      class="gauge-fg temperature"
+                      stroke-dasharray="18, 100"
+                      d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                    />
+                  </g>
+                  <text
+                    x="18"
+                    y="18"
+                    class="gauge-value"
+                    transform="rotate(90 18 18)"
+                    id="temp9Value"
+                  >
+                    27°C
+                  </text>
+                </svg>
+              </div>
+              <div class="gauge-label">Temp 9</div>
+            </div>
+
+            <!-- Temp 10 -->
+            <div class="gauge-card">
+              <div class="gauge">
+                <svg viewBox="0 0 36 36" class="gauge-svg">
+                  <g transform="rotate(-90 18 18)">
+                    <path
+                      class="gauge-bg"
+                      d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                    />
+                    <path
+                      class="gauge-fg temperature"
+                      stroke-dasharray="22, 100"
+                      d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                    />
+                  </g>
+                  <text
+                    x="18"
+                    y="18"
+                    class="gauge-value"
+                    transform="rotate(90 18 18)"
+                    id="temp10Value"
+                  >
+                    33°C
+                  </text>
+                </svg>
+              </div>
+              <div class="gauge-label">Temp 10</div>
+            </div>
+
+            <!-- Temp 11 -->
+            <div class="gauge-card">
+              <div class="gauge">
+                <svg viewBox="0 0 36 36" class="gauge-svg">
+                  <g transform="rotate(-90 18 18)">
+                    <path
+                      class="gauge-bg"
+                      d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                    />
+                    <path
+                      class="gauge-fg temperature"
+                      stroke-dasharray="27, 100"
+                      d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                    />
+                  </g>
+                  <text
+                    x="18"
+                    y="18"
+                    class="gauge-value"
+                    transform="rotate(90 18 18)"
+                    id="temp11Value"
+                  >
+                    41°C
+                  </text>
+                </svg>
+              </div>
+              <div class="gauge-label">Temp 11</div>
+            </div>
+
+            <!-- Temp 12 -->
+            <div class="gauge-card">
+              <div class="gauge">
+                <svg viewBox="0 0 36 36" class="gauge-svg">
+                  <g transform="rotate(-90 18 18)">
+                    <path
+                      class="gauge-bg"
+                      d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                    />
+                    <path
+                      class="gauge-fg temperature"
+                      stroke-dasharray="19, 100"
+                      d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                    />
+                  </g>
+                  <text
+                    x="18"
+                    y="18"
+                    class="gauge-value"
+                    transform="rotate(90 18 18)"
+                    id="temp12Value"
+                  >
+                    29°C
+                  </text>
+                </svg>
+              </div>
+              <div class="gauge-label">Temp 12</div>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div class="manual-outputs" id="manualOutputs"></div>
-    </div>
+      <!-- User Settings Tab -->
+      <div class="content" id="userSettingsTab">
+        <div class="content-header">
+          <h2>User Settings</h2>
+        </div>
 
-    <!-- Admin Settings Tab -->
-    <div class="content" id="adminSettingsTab">
-      <div class="content-header">
-        <h2>Admin Settings</h2>
-      </div>
-
-      <div style="display: flex; justify-content: center; align-items: center; height: calc(100% - 80px);">
-        <div class="user-modal-content zoom-box" style="width: 100%; max-width: 400px;">
-          <input type="password" id="adminCurrentPassword" placeholder="Current Password" />
-          <input type="text" id="adminUsername" placeholder="New Admin Username" />
-          <input type="password" id="adminPassword" placeholder="New Admin Password" />
-
-          <hr style="margin: 20px 0; opacity: 0.2;" />
-
-          <input type="text" id="wifiSSID" placeholder="Wi-Fi SSID" />
-          <input type="password" id="wifiPassword" placeholder="Wi-Fi Password" />
-
+        <div
+          class="user-modal-content zoom-box"
+          style="width: 100%; max-width: 400px"
+        >
+          <input
+            type="password"
+            id="userCurrentPassword"
+            placeholder="Current Password"
+          />
+          <input
+            type="password"
+            id="userNewPassword"
+            placeholder="New Password"
+          />
+          <input type="text" id="userDeviceId" placeholder="New Device ID" />
           <div class="user-modal-actions round-actions">
-            <div class="round-button save" onclick="saveAdminSettings()">
+            <div class="round-button save" onclick="saveUserSettings()">
               <img src="icons/ok_tank.png" alt="Save" />
             </div>
-            <div class="round-button cancel" onclick="resetAdminSettings()">
+            <div class="round-button cancel" onclick="resetUserSettings()">
               <img src="icons/close.png" alt="Cancel" />
             </div>
           </div>
         </div>
+
+        <div class="section-header">Output Access</div>
+        <div class="manual-outputs" id="userAccessGrid"></div>
       </div>
-    </div>
-  <!-- Device Settings Tab -->
-  <div class="content" id="deviceSettingsTab">
-    <div class="content-header">
-      <h2>Device Settings</h2>
-    </div>
 
-    <div style="display: flex; justify-content: center; align-items: center; height: calc(100% - 80px);">
-      <div class="user-modal-content zoom-box" style="width: 100%; max-width: 400px;">
-
-        <div class="input-with-unit">
-          <input type="number" id="desiredVoltage" placeholder="Desired Output Voltage" />
-          <span class="unit-label">V</span>
+      <!-- Manual Control Tab -->
+      <div class="content" id="manualControlTab">
+        <div class="content-header">
+          <h2>Manual Control</h2>
         </div>
 
-        <div class="input-with-unit">
-          <input type="number" id="acFrequency" placeholder="AC Frequency" />
-          <span class="unit-label">Hz</span>
-        </div>
-
-        <div class="input-with-unit">
-          <input type="number" id="chargeResistor" placeholder="Charge Resistor" />
-          <span class="unit-label">Ω</span>
-        </div>
-
-        <div class="input-with-unit">
-          <input type="number" id="dcVoltage" placeholder="DC Output Voltage" />
-          <span class="unit-label">V</span>
-        </div>
-
-        <div class="input-with-unit">
-          <input type="number" id="onTime" placeholder="ON Time" />
-          <span class="unit-label">ms</span>
-        </div>
-
-        <div class="input-with-unit">
-          <input type="number" id="offTime" placeholder="OFF Time" />
-          <span class="unit-label">ms</span>
-        </div>
-
-        <div class="user-modal-actions round-actions">
-          <div class="round-button save" onclick="saveDeviceSettings()">
-            <img src="icons/ok_tank.png" alt="Save" />
-          </div>
-          <div class="round-button cancel" onclick="resetDeviceSettings()">
-            <img src="icons/close.png" alt="Cancel" />
+        <div class="mode-box">
+          <div
+            class="controls"
+            style="
+              display: flex;
+              align-items: center;
+              gap: 20px;
+              flex-wrap: wrap;
+            "
+          >
+            <label>Fan</label>
+            <input type="range" min="0" max="100" id="fanSlider" />
+            <label>Relay</label>
+            <label class="switch">
+              <input type="checkbox" id="relayToggle" />
+              <span class="slider"></span>
+            </label>
+            <label>Bypass</label>
+            <label class="switch">
+              <input type="checkbox" id="bypassToggle" />
+              <span class="slider"></span>
+            </label>
           </div>
         </div>
+
+        <div class="manual-outputs" id="manualOutputs"></div>
       </div>
+
+      <!-- Admin Settings Tab -->
+      <div class="content" id="adminSettingsTab">
+        <div class="content-header">
+          <h2>Admin Settings</h2>
+        </div>
+
+        <div
+          style="
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: calc(100% - 80px);
+          "
+        >
+          <div
+            class="user-modal-content zoom-box"
+            style="width: 100%; max-width: 400px"
+          >
+            <input
+              type="password"
+              id="adminCurrentPassword"
+              placeholder="Current Password"
+            />
+            <input
+              type="text"
+              id="adminUsername"
+              placeholder="New Admin Username"
+            />
+            <input
+              type="password"
+              id="adminPassword"
+              placeholder="New Admin Password"
+            />
+
+            <hr style="margin: 20px 0; opacity: 0.2" />
+
+            <input type="text" id="wifiSSID" placeholder="Wi-Fi SSID" />
+            <input
+              type="password"
+              id="wifiPassword"
+              placeholder="Wi-Fi Password"
+            />
+
+            <div class="user-modal-actions round-actions">
+              <div class="round-button save" onclick="saveAdminSettings()">
+                <img src="icons/ok_tank.png" alt="Save" />
+              </div>
+              <div class="round-button cancel" onclick="resetAdminSettings()">
+                <img src="icons/close.png" alt="Cancel" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- Device Settings Tab -->
+      <div class="content" id="deviceSettingsTab">
+        <div class="content-header">
+          <h2>Device Settings</h2>
+        </div>
+
+        <div
+          style="
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: calc(100% - 80px);
+          "
+        >
+          <div
+            class="user-modal-content zoom-box"
+            style="width: 100%; max-width: 400px"
+          >
+            <div class="input-with-unit">
+              <input
+                type="number"
+                id="desiredVoltage"
+                placeholder="Desired Output Voltage"
+              />
+              <span class="unit-label">V</span>
+            </div>
+
+            <div class="input-with-unit">
+              <input
+                type="number"
+                id="acFrequency"
+                placeholder="AC Frequency"
+              />
+              <span class="unit-label">Hz</span>
+            </div>
+
+            <div class="input-with-unit">
+              <input
+                type="number"
+                id="chargeResistor"
+                placeholder="Charge Resistor"
+              />
+              <span class="unit-label">Ω</span>
+            </div>
+
+            <div class="input-with-unit">
+              <input
+                type="number"
+                id="dcVoltage"
+                placeholder="DC Output Voltage"
+              />
+              <span class="unit-label">V</span>
+            </div>
+
+            <div class="input-with-unit">
+              <input type="number" id="onTime" placeholder="ON Time" />
+              <span class="unit-label">ms</span>
+            </div>
+
+            <div class="input-with-unit">
+              <input type="number" id="offTime" placeholder="OFF Time" />
+              <span class="unit-label">ms</span>
+            </div>
+
+            <div class="user-modal-actions round-actions">
+              <div class="round-button save" onclick="saveDeviceSettings()">
+                <img src="icons/ok_tank.png" alt="Save" />
+              </div>
+              <div class="round-button cancel" onclick="resetDeviceSettings()">
+                <img src="icons/close.png" alt="Cancel" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div class="footer">&copy; 2025 Power Distribution Admin Interface</div>
     </div>
-  </div>
 
-
-    <!-- Footer -->
-    <div class="footer">
-      &copy; 2025 Power Distribution Admin Interface
-    </div>
-  </div>
-
-  <script src="js/admin.js?v=2"></script>
-</body>
+    <script src="js/admin.js?v=2"></script>
+  </body>
 </html>

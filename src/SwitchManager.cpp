@@ -62,7 +62,7 @@ void SwitchManager::detectTapOrHold() {
         }
 
         // Timeout to reset tap sequence
-        if ((millis() - lastTapTime) > 1500 && tapCount > 0) {
+        if ((millis() - lastTapTime) > TAP_TIMEOUT_MS && tapCount > 0) {
             if (tapCount == 1) {
                 if (wifi->dev->currentState != DeviceState::Running)
                     wifi->dev->startLoopTask();
@@ -78,7 +78,7 @@ void SwitchManager::detectTapOrHold() {
             }
         }
 
-        vTaskDelay(pdMS_TO_TICKS(20));
+        vTaskDelay(pdMS_TO_TICKS(SWITCH_TASK_LOOP_DELAY_MS));
     }
 }
 
@@ -89,7 +89,7 @@ void SwitchManager::SwitchTask(void* pvParameters) {
         if (SwitchManager::instance != nullptr) {
             SwitchManager::instance->detectTapOrHold();
         }
-        vTaskDelay(pdMS_TO_TICKS(500));
+        vTaskDelay(pdMS_TO_TICKS(SWITCH_TASK_CALL_DELAY_MS));
     }
 }
 
@@ -98,10 +98,9 @@ void SwitchManager::TapDetect() {
     xTaskCreatePinnedToCore(
         SwitchTask,      // Pass the global function, not a member function
         "SwitchTask",
-        4096,
+        SWITCH_TASK_STACK_SIZE,
         nullptr,         // No parameter needed since we use the static instance
-        1,
-        nullptr,
-        0
+        SWITCH_TASK_PRIORITY,nullptr,
+        SWITCH_TASK_CORE
     );
 }

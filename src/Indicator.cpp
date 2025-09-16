@@ -1,5 +1,6 @@
 #include "Indicator.h"
 
+
 void Indicator::begin() {
   DEBUG_PRINTLN("###########################################################");
   DEBUG_PRINTLN("#                  Starting Indicator                     #");
@@ -11,6 +12,7 @@ void Indicator::begin() {
 
   pinMode(FL06_LED_PIN, OUTPUT);
   pinMode(FL08_LED_PIN, OUTPUT);
+  startupChaser();
 
   clearAll();
 
@@ -30,10 +32,10 @@ void Indicator::setLED(uint8_t flIndex, bool state) {
     case 9:  setShiftLED(7, state); break;  // Q7 → FL9
     case 10: setShiftLED(5, state); break;  // Q5 → FL10
     default: 
-      DEBUG_PRINTF("Indicator: Invalid FL index %d ❌\n", flIndex);
+     // DEBUG_PRINTF("Indicator: Invalid FL index %d ❌\n", flIndex);
       return;
   }
-  DEBUG_PRINTF("Indicator: FL%02d set to %s 💡\n", flIndex, state ? "ON" : "OFF");
+  //DEBUG_PRINTF("Indicator: FL%02d set to %s 💡\n", flIndex, state ? "ON" : "OFF");
 }
 
 void Indicator::setShiftLED(uint8_t qIndex, bool state) {
@@ -45,15 +47,16 @@ void Indicator::setShiftLED(uint8_t qIndex, bool state) {
     shiftState &= ~(1 << qIndex);
 
   updateShiftRegister();
-  DEBUG_PRINTF("Indicator: Q%d updated to %s ⚙️\n", qIndex, state ? "ON" : "OFF");
+  //DEBUG_PRINTF("Indicator: Q%d updated to %s ⚙️\n", qIndex, state ? "ON" : "OFF");
 }
 
 void Indicator::updateShiftRegister() {
   digitalWrite(SHIFT_RCK_PIN, LOW);
-  shiftOut(SHIFT_SER_PIN, SHIFT_SCK_PIN, MSBFIRST, shiftState);
+  shiftOutFast(shiftState);  // Faster, inline, stack-safe
+  //shiftOut(SHIFT_SER_PIN, SHIFT_SCK_PIN, MSBFIRST, shiftState);
   digitalWrite(SHIFT_RCK_PIN, HIGH);
-  DEBUG_PRINTLN("Indicator: Shift register latched ✅");
 }
+
 
 void Indicator::clearAll() {
   shiftState = 0;
@@ -61,4 +64,56 @@ void Indicator::clearAll() {
   digitalWrite(FL06_LED_PIN, LOW);
   digitalWrite(FL08_LED_PIN, LOW);
   DEBUG_PRINTLN("Indicator: All LEDs turned OFF 📴");
+}
+
+void Indicator::shiftOutFast(uint8_t data) {
+  for (int8_t i = 7; i >= 0; i--) {
+    digitalWrite(SHIFT_SCK_PIN, LOW);
+    digitalWrite(SHIFT_SER_PIN, (data >> i) & 0x01);
+    digitalWrite(SHIFT_SCK_PIN, HIGH);
+  }
+}
+
+void Indicator::startupChaser() {
+  // Tune these if you want it even faster/slower—kept < 2.5s total.
+  const uint16_t T_WIPE  = 40;  // ms per LED in the wipe
+  const uint16_t T_DOT   = 40;  // ms per LED in the ping-pong dot
+  const uint16_t T_PHASE = 80;  // ms for even/odd flash
+
+  // Safety: ensure all off to start
+  for (int i = 1; i <= 10; ++i) setLED(i, false);
+
+  // 1) Forward wipe ON (fills L→R quickly)
+  for (int i = 1; i <= 10; ++i) {
+    setLED(i, true);
+    delay(T_WIPE);
+  }
+
+  // 2) Forward wipe OFF (clears L→R, a bit snappier)
+  for (int i = 1; i <= 10; ++i) {
+    setLED(i, false);
+    delay(T_WIPE / 2);
+  }
+
+  // 3) Ping-pong single dot (L→R→L)
+  for (int i = 1; i <= 10; ++i) {
+    setLED(i, true);  delay(T_DOT);
+    setLED(i, false);
+  }
+  for (int i = 10; i >= 1; --i) {
+    setLED(i, true);  delay(T_DOT);
+    setLED(i, false);
+  }
+
+  // 4) Even/Odd flash (two quick phases), then leave OFF
+  for (int phase = 0; phase < 2; ++phase) {
+    for (int i = 1; i <= 10; ++i) {
+      bool odd = (i & 1);
+      setLED(i, phase ? !odd : odd);
+    }
+    delay(T_PHASE);
+  }
+
+  // End clean
+  for (int i = 1; i <= 10; ++i) setLED(i, false);
 }

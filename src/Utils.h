@@ -3,6 +3,8 @@
 
 #include <Arduino.h>
 #include "ConfigManager.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 // ───────────────────────────────────────────────
 // ADC Constants (adjust as per your circuit)
@@ -54,6 +56,7 @@ extern volatile bool StartFromremote;
 void blink(uint8_t pin, int durationMs = 100);
 void disableAllPins();
 void BlinkTask(void* parameter);
-
+void taskMonitorTask(void* param);
+void startTaskMonitor(uint32_t intervalMs);
 
 #endif // UTILS_H

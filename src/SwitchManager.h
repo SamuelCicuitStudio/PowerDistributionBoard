@@ -10,8 +10,8 @@
 // Constants for Tap/Hold Detection
 // ===============================
 
-#define TAP_WINDOW_MS         1200              // Max time window for 3 taps
-#define HOLD_THRESHOLD_MS     3000              // Max duration for short hold
+//#define TAP_WINDOW_MS         1200              // Max time window for 3 taps
+//#define HOLD_THRESHOLD_MS     3000              // Max duration for short hold
 
 
 class SwitchManager {

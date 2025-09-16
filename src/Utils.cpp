@@ -30,9 +30,9 @@ void blink(uint8_t pin, int durationMs) {
     xTaskCreate(
         BlinkTask,           // Task function
         "BlinkTask",         // Task name
-        2048,                // Stack size
+        BLINK_TASK_STACK_SIZE,// Stack size
         params,              // Parameters
-        1,                   // Priority
+        BLINK_TASK_PRIORITY, // Priority
         nullptr              // Task handle
     );
 }
@@ -79,3 +79,54 @@ void disableAllPins() {
     DEBUG_PRINTLN("[DEBUG] All control pins disabled.");
 }
 
+
+
+void taskMonitorTask(void* param) {
+    uint32_t intervalMs = *(uint32_t*)param;
+    TickType_t delayTicks = pdMS_TO_TICKS(intervalMs);
+    free(param);  // cleanup
+
+    while (true) {
+        Serial.println("\n[TaskMonitor] ======= Task Stack Usage Report =======");
+
+        // Get all tasks
+        const UBaseType_t numTasks = uxTaskGetNumberOfTasks();
+        TaskStatus_t* taskStatusArray = (TaskStatus_t*)pvPortMalloc(numTasks * sizeof(TaskStatus_t));
+        if (taskStatusArray == nullptr) {
+            Serial.println("[TaskMonitor] Failed to allocate memory for task list ❌");
+            vTaskDelay(delayTicks);
+            continue;
+        }
+
+        UBaseType_t count = uxTaskGetSystemState(taskStatusArray, numTasks, nullptr);
+
+        for (UBaseType_t i = 0; i < count; i++) {
+            const TaskStatus_t& t = taskStatusArray[i];
+            DEBUG_PRINTF("  • %-16s | Prio: %2d | Stack free: %5u bytes\n",
+              t.pcTaskName,
+              t.uxCurrentPriority,
+              t.usStackHighWaterMark * sizeof(StackType_t)); // usually 4 bytes per word
+
+        }
+
+        vPortFree(taskStatusArray);
+        Serial.println("[TaskMonitor] =======================================");
+
+        vTaskDelay(delayTicks);
+    }
+}
+
+void startTaskMonitor(uint32_t intervalMs) {    
+        uint32_t* intervalPtr = (uint32_t*)malloc(sizeof(uint32_t));
+        *intervalPtr = intervalMs;
+        xTaskCreatePinnedToCore(
+            taskMonitorTask,
+            "TaskMonitor",
+            TASK_MONITOR_TASK_STACK_SIZE,
+            intervalPtr,
+            TASK_MONITOR_TASK_PRIORITY,
+            nullptr,
+            TASK_MONITOR_TASK_CORE
+        );
+   
+}

@@ -52,8 +52,19 @@ void Device::begin() {
     digitalWrite(READY_LED_PIN, LOW);
     digitalWrite(POWER_OFF_LED_PIN, HIGH);
     buz->bipStartupSequence();
+
+    xTaskCreatePinnedToCore(
+    Device::LedUpdateTask,   // Task function
+    "LedUpdateTask",         // Name
+    LED_UPDATE_TASK_STACK_SIZE, // Stack size
+    this,                    // Parameter (pass this pointer)
+    LED_UPDATE_TASK_PRIORITY,                       // Priority
+    &ledTaskHandle,           // Task handle (optional)
+    LED_UPDATE_TASK_CORE      // Core to pin task to (PRO_CPU_NUM = 0)
+    );
+
     DEBUG_PRINTLN("[Device] Configuring system I/O pins 🧰");
- 
+
 
 }
 
@@ -64,11 +75,11 @@ void Device::startLoopTask() {
         BaseType_t result = xTaskCreatePinnedToCore(
             Device::loopTaskWrapper,    // Task entry function
             "DeviceLoopTask",           // Task name
-            8192,                       // Stack size in words
+            DEVICE_LOOP_TASK_STACK_SIZE,// Stack size in words
             this,                       // Task parameter
-            1,                          // Task priority
+            DEVICE_LOOP_TASK_PRIORITY,  // Task priority
             &loopTaskHandle,            // Store task handle
-            APP_CPU_NUM                 // Target CPU core
+            DEVICE_LOOP_TASK_CORE       // Target CPU core
         );
 
         if (result != pdPASS) {
@@ -236,11 +247,11 @@ void Device::startTemperatureMonitor() {
         xTaskCreatePinnedToCore(
             Device::monitorTemperatureTask,
             "TempMonitorTask",
-            2048,
+            TEMP_MONITOR_TASK_STACK_SIZE,
             this,
-            1,
+            TEMP_MONITOR_TASK_PRIORITY,
             &tempMonitorTaskHandle,
-            APP_CPU_NUM
+            TEMP_MONITOR_TASK_CORE
         );
         DEBUG_PRINTLN("[Device] Temperature monitor started 🧪");
     }
@@ -276,7 +287,7 @@ void Device::monitorTemperatureTask(void* param) {
             }
         }
 
-        vTaskDelay(pdMS_TO_TICKS(2000));
+        vTaskDelay(pdMS_TO_TICKS(TEMP_MONITOR_TASK_DELAY_MS));
     }
 }
 
@@ -290,3 +301,26 @@ void Device::stopLoopTask() {
     }
 }
 
+void Device::LedUpdateTask(void *param) {
+    Device *device = static_cast<Device*>(param);
+    const TickType_t delayTicks = pdMS_TO_TICKS(LED_UPDATE_TASK_DELAY_MS); // Update every 1000
+
+    while (true) {
+        if (device->config->GetBool(LED_FEEDBACK_KEY, DEFAULT_LED_FEEDBACK)) {
+            for (uint8_t i = 1; i <= 10; i++) {
+                bool state = device->heaterManager->getOutputState(i);
+                device->indicator->setLED(i, state); // FL index matches output
+            }
+        }
+        vTaskDelay(delayTicks);
+    }
+}
+
+void Device::updateLed() {
+    if (config->GetBool(LED_FEEDBACK_KEY, DEFAULT_LED_FEEDBACK)) {
+        for (uint8_t i = 1; i <= 10; i++) {
+            bool state = heaterManager->getOutputState(i);
+            indicator->setLED(i, state); // Match FL index
+        }
+    }
+}

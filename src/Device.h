@@ -41,7 +41,8 @@ public:
     void startTemperatureMonitor();                    // Starts temperature monitor
     static void monitorTemperatureTask(void* param);   // Temperature task handler
     void stopLoopTask();  // Add this to the public section of the Device class
-
+    void updateLed();                                  // Manual LED update call
+    static void LedUpdateTask(void* param);            // ✅ RTOS LED task
 
 
     // Subsystem pointers
@@ -63,6 +64,9 @@ public:
     // RTOS task handles
     TaskHandle_t loopTaskHandle = nullptr;         // ✅ Main loop RTOS task
     TaskHandle_t tempMonitorTaskHandle = nullptr;  // Temp monitor RTOS task
+    TaskHandle_t ledTaskHandle = nullptr;
+
+
 };
 
 #endif // DEVICE_H

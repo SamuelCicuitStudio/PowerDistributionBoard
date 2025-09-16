@@ -43,13 +43,13 @@ void CpDischg::startCapVoltageTask() {
         [](void* param) {
             CpDischg* self = static_cast<CpDischg*>(param);  // ⬅️ Access Device instance
             const uint16_t samples = 64;
-            const TickType_t delayTicks = pdMS_TO_TICKS(200);  // Fixed 200ms interval
+            const TickType_t delayTicks = pdMS_TO_TICKS(CAP_VOLTAGE_TASK_DELAY_MS);  // Fixed 200ms interval
 
             while (true) {
                 uint32_t total = 0;
                 for (uint16_t i = 0; i < samples; ++i) {
                     total += analogRead(CAPACITOR_ADC_PIN);
-                    delayMicroseconds(200);
+                    delayMicroseconds(CAP_VOLTAGE_TASK_DELAY_MS);
                 }
 
                 float avgADC = total / static_cast<float>(samples);
@@ -62,11 +62,11 @@ void CpDischg::startCapVoltageTask() {
             }
         },
         "CapVoltageTask",
-        4096,                    // Increased stack size to avoid canary crash
+        CAP_VOLTAGE_TASK_STACK_SIZE,// Increased stack size to avoid canary crash
         this,                    // Pass 'this' as parameter
-        1,
+        CAP_VOLTAGE_TASK_PRIORITY,
         &capVoltageTaskHandle,
-        APP_CPU_NUM
+        CAP_VOLTAGE_TASK_CORE
     );
 }
 

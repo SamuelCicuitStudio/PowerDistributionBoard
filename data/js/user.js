@@ -326,7 +326,7 @@ function disconnectDevice() {
 // ───────────────────────────────────────────────────────────────
 window.addEventListener("DOMContentLoaded", () => {
   loadControls();
-  startHeartbeat(); // Uncomment if needed
+ // startHeartbeat(); // Uncomment if needed
   startMonitorPolling();
 
   const disconnectBtn = document.getElementById("disconnectBtn");

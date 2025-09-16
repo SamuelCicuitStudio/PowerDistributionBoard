@@ -183,7 +183,7 @@
 #define FAN_PWM_PIN                    14                   // FAN output
 #define FAN_PWM_CHANNEL                2
 
-#define PWM_FREQ                       50000                // 50 kHz for all PWM signals
+#define PWM_FREQ                       53              // 50 kHz for all PWM signals
 #define PWM_RESOLUTION                 8                    // 8-bit resolution (0–255)
 #define PWM_DUTY_CYCLE                 173                  // Default duty (68%)
 
@@ -201,4 +201,55 @@
 // ==================================================
 
 #define BUZZER_PIN                     46    // Buzzer control output
+// ==================================================
+//  RTOS CONFIGURATION: Task Priorities
+// ==================================================
+#define DEVICE_LOOP_TASK_PRIORITY         1
+#define TASK_MONITOR_TASK_PRIORITY        1
+#define TEMP_MONITOR_TASK_PRIORITY        1
+#define LED_UPDATE_TASK_PRIORITY          4
+#define CAP_VOLTAGE_TASK_PRIORITY         1
+#define SWITCH_TASK_PRIORITY              1
+#define TEMP_SENSOR_TASK_PRIORITY         1
+#define BLINK_TASK_PRIORITY               1
+
+// ==================================================
+//  RTOS CONFIGURATION: Core Assignments
+// ==================================================
+#define DEVICE_LOOP_TASK_CORE             APP_CPU_NUM
+#define TASK_MONITOR_TASK_CORE             APP_CPU_NUM
+#define TEMP_MONITOR_TASK_CORE            APP_CPU_NUM
+#define LED_UPDATE_TASK_CORE              PRO_CPU_NUM
+#define CAP_VOLTAGE_TASK_CORE             APP_CPU_NUM
+#define SWITCH_TASK_CORE                  PRO_CPU_NUM
+#define TEMP_SENSOR_TASK_CORE             APP_CPU_NUM
+// (Blink task runs on any core — no fixed core needed)
+
+// ==================================================
+//  RTOS CONFIGURATION: Stack Sizes (in words = 4 bytes)
+// ==================================================
+#define DEVICE_LOOP_TASK_STACK_SIZE       4096
+#define TASK_MONITOR_TASK_STACK_SIZE       4096
+#define TEMP_MONITOR_TASK_STACK_SIZE      2048
+#define LED_UPDATE_TASK_STACK_SIZE        15360  
+#define CAP_VOLTAGE_TASK_STACK_SIZE       4096
+#define SWITCH_TASK_STACK_SIZE            2048
+#define TEMP_SENSOR_TASK_STACK_SIZE       2048
+#define BLINK_TASK_STACK_SIZE             2048
+
+// ==================================================
+//  RTOS CONFIGURATION: Task Delay Intervals & Timing (ms)
+// ==================================================
+#define TEMP_MONITOR_TASK_DELAY_MS        2000    // 2s temperature check
+#define LED_UPDATE_TASK_DELAY_MS          2000    // 2s LED feedback
+#define CAP_VOLTAGE_TASK_DELAY_MS         200     // 200ms ADC sampling
+
+#define SWITCH_TASK_LOOP_DELAY_MS         20      // Polling loop
+#define SWITCH_TASK_CALL_DELAY_MS         500     // Re-check cycle
+#define TAP_TIMEOUT_MS                    1500
+#define HOLD_THRESHOLD_MS                 3000
+#define TAP_WINDOW_MS                     1200
+
+
+
 #endif // CONFIG_H
