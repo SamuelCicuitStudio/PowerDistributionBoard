@@ -26,7 +26,7 @@ public:
            BypassMosfet* bypass,
            CpDischg* discharger,
            Indicator* ledIndicator,
-            BuzzerManager* buz);
+           BuzzerManager* buz);
 
     void begin();                          // System startup sequence
     void StartLoop();                      // Main output cycle loop
@@ -40,10 +40,11 @@ public:
 
     void startTemperatureMonitor();                    // Starts temperature monitor
     static void monitorTemperatureTask(void* param);   // Temperature task handler
-    void stopLoopTask();  // Add this to the public section of the Device class
-    void updateLed();                                  // Manual LED update call
-    static void LedUpdateTask(void* param);            // ✅ RTOS LED task
+    void stopTemperatureMonitor();                     // <-- NEW: stop temp monitor task cleanly
 
+    void stopLoopTask();                               // Stop main loop task
+    void updateLed();                                  // Manual LED update call
+    static void LedUpdateTask(void* param);            // RTOS LED task
 
     // Subsystem pointers
     ConfigManager* config;
@@ -62,11 +63,9 @@ public:
     bool allowedOutputs[10] = {false};
 
     // RTOS task handles
-    TaskHandle_t loopTaskHandle = nullptr;         // ✅ Main loop RTOS task
+    TaskHandle_t loopTaskHandle = nullptr;         // Main loop RTOS task
     TaskHandle_t tempMonitorTaskHandle = nullptr;  // Temp monitor RTOS task
     TaskHandle_t ledTaskHandle = nullptr;
-
-
 };
 
 #endif // DEVICE_H

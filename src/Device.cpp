@@ -15,7 +15,6 @@ const char* outputKeys[10] = {
     OUT10_ACCESS_KEY
 };
 
-
 Device::Device(ConfigManager* cfg,
                HeaterManager* heater,
                FanManager* fan,
@@ -40,7 +39,7 @@ Device::Device(ConfigManager* cfg,
 
 void Device::begin() {
     currentState = DeviceState::Idle;
-    wifiStatus= WiFiStatus::NotConnected; // global variable from utils 
+    wifiStatus= WiFiStatus::NotConnected; // global variable from utils
 
     DEBUG_PRINTLN("###########################################################");
     DEBUG_PRINTLN("#                 Starting Device Manager ⚙️              #");
@@ -52,20 +51,18 @@ void Device::begin() {
     digitalWrite(READY_LED_PIN, LOW);
     digitalWrite(POWER_OFF_LED_PIN, HIGH);
     buz->bipStartupSequence();
-
+    checkAllowedOutputs();
     xTaskCreatePinnedToCore(
-    Device::LedUpdateTask,   // Task function
-    "LedUpdateTask",         // Name
-    LED_UPDATE_TASK_STACK_SIZE, // Stack size
-    this,                    // Parameter (pass this pointer)
-    LED_UPDATE_TASK_PRIORITY,                       // Priority
-    &ledTaskHandle,           // Task handle (optional)
-    LED_UPDATE_TASK_CORE      // Core to pin task to (PRO_CPU_NUM = 0)
+        Device::LedUpdateTask,             // Task function
+        "LedUpdateTask",                   // Name
+        LED_UPDATE_TASK_STACK_SIZE,        // Stack size
+        this,                              // Parameter
+        LED_UPDATE_TASK_PRIORITY,          // Priority
+        &ledTaskHandle,                    // Task handle
+        LED_UPDATE_TASK_CORE               // Core
     );
 
     DEBUG_PRINTLN("[Device] Configuring system I/O pins 🧰");
-
-
 }
 
 void Device::startLoopTask() {
@@ -73,13 +70,13 @@ void Device::startLoopTask() {
         DEBUG_PRINTLN("[Device] Starting main loop task on RTOS 🧵");
 
         BaseType_t result = xTaskCreatePinnedToCore(
-            Device::loopTaskWrapper,    // Task entry function
-            "DeviceLoopTask",           // Task name
-            DEVICE_LOOP_TASK_STACK_SIZE,// Stack size in words
-            this,                       // Task parameter
-            DEVICE_LOOP_TASK_PRIORITY,  // Task priority
-            &loopTaskHandle,            // Store task handle
-            DEVICE_LOOP_TASK_CORE       // Target CPU core
+            Device::loopTaskWrapper,       // Task entry function
+            "DeviceLoopTask",              // Task name
+            DEVICE_LOOP_TASK_STACK_SIZE,   // Stack size in words
+            this,                          // Task parameter
+            DEVICE_LOOP_TASK_PRIORITY,     // Task priority
+            &loopTaskHandle,               // Store task handle
+            DEVICE_LOOP_TASK_CORE          // Target CPU core
         );
 
         if (result != pdPASS) {
@@ -93,7 +90,7 @@ void Device::startLoopTask() {
 
 void Device::loopTaskWrapper(void* param) {
     Device* self = static_cast<Device*>(param);
-    self->loopTask();  // Execute member function
+    self->loopTask();
 }
 
 void Device::loopTask() {
@@ -104,28 +101,32 @@ void Device::loopTask() {
     buz->bip();
     relayControl->turnOff();
     bypassFET->disable();
-    tempSensor->stopTemperatureTask();
-    discharger->startCapVoltageTask();
+    stopTemperatureMonitor();  // ensure not running
+
     currentState = DeviceState::Idle;
     buz->bip();
     buz->bip();
 
     DEBUG_PRINTLN("[Device] Waiting for 12V input... 🔋");
-    while (digitalRead(DETECT_12V_PIN)) {
-        delay(100);
+    while (!digitalRead(DETECT_12V_PIN)) {
+        vTaskDelay(pdMS_TO_TICKS(100));
     }
 
     DEBUG_PRINTLN("[Device] 12V Detected – Enabling input relay ✅");
     relayControl->turnOn();
- 
-   
-    DEBUG_PRINTF("[Device] Initial Capacitor Voltage: %.2fV 🧠\n", discharger->readCapVoltage());
 
+    discharger->setBypassRelayGate(false);
+    discharger->startCapVoltageTask();
+    vTaskDelay(pdMS_TO_TICKS(1500));
     while (discharger->readCapVoltage() < GO_THRESHOLD_RATIO ) {
-        DEBUG_PRINTF("[Device] Charging... Cap Voltage: %.2fV / Target: %.2fV ⏳\n", discharger->readCapVoltage(), GO_THRESHOLD_RATIO );
-        delay(500);
+        DEBUG_PRINTF("[Device] Charging... Cap Voltage: %.2fV / Target: %.2fV ⏳\n",
+                     discharger->readCapVoltage(), GO_THRESHOLD_RATIO );
+        vTaskDelay(pdMS_TO_TICKS(500));
         discharger->readCapVoltage();
     };
+    checkAllowedOutputs();
+    discharger->stopCapVoltageTask();
+    discharger->setBypassRelayGate(true);
     buz->bipSystemReady();
     DEBUG_PRINTLN("[Device] Voltage threshold met ✅ Bypassing inrush resistor 🔄");
     bypassFET->enable();
@@ -140,11 +141,11 @@ void Device::loopTask() {
     DEBUG_PRINTLN("[Device] Waiting for user to press POWER ON button 🔘");
     buz->bip();
     buz->bip();
-    while (digitalRead(POWER_ON_SWITCH_PIN)) {
+    /*while (digitalRead(POWER_ON_SWITCH_PIN)) {
         if (StartFromremote) break;
-        delay(100);
-    };
-    StartFromremote = false;// reset the start from remote flag
+        vTaskDelay(pdMS_TO_TICKS(100));
+    };*/
+    StartFromremote = false; // reset the start from remote flag
 
     DEBUG_PRINTLN("[Device] POWER ON button pressed ▶️ Launching main loop");
     buz->successSound();
@@ -154,12 +155,8 @@ void Device::loopTask() {
     buz->bipSystemShutdown();
     shutdown();
 
-    // Self-cleanup and safe termination
-    TaskHandle_t handle = loopTaskHandle;
-    loopTaskHandle = nullptr;
-
     DEBUG_PRINTLN("[Device] Loop task terminating and freeing handle ✅");
-    vTaskDelete(handle);  // Delete self
+    vTaskDelete(loopTaskHandle);  // Delete self
 }
 
 void Device::checkAllowedOutputs() {
@@ -167,12 +164,19 @@ void Device::checkAllowedOutputs() {
 
     for (uint8_t i = 0; i < 10; ++i) {
         allowedOutputs[i] = config->GetBool(outputKeys[i], false);
-        DEBUG_PRINTF("[Device] OUT%02u => %s ✅\n", i + 1, allowedOutputs[i] ? "ENABLED" : "DISABLED");
+        DEBUG_PRINTF("[Device] OUT%02u => %s ✅\n",
+                     i + 1, allowedOutputs[i] ? "ENABLED" : "DISABLED");
     }
 }
 
 void Device::StartLoop() {
+    DEBUG_PRINTLN("-----------------------------------------------------------");
+    DEBUG_PRINTLN("[Device] Initiating Loop Sequence 🔻");
+    DEBUG_PRINTLN("-----------------------------------------------------------");
     startTemperatureMonitor();  // Start temperature monitoring in background
+    relayControl->turnOn();
+    bypassFET->enable();
+    checkAllowedOutputs();
 
     DEBUG_PRINTLN("[Device] Starting Output Activation Cycle 🔁");
     currentState = DeviceState::Running;
@@ -182,14 +186,14 @@ void Device::StartLoop() {
     bool ledFeedback    = config->GetBool(LED_FEEDBACK_KEY, DEFAULT_LED_FEEDBACK);
 
     while (currentState == DeviceState::Running) {
-        for (uint8_t i = 0; i < 10; ++i) {
+        for (uint8_t i = 1; i <= 10; ++i) {
             if (currentState != DeviceState::Running) break;
-            if (!allowedOutputs[i]) continue;
+            if (!allowedOutputs[i-1]) continue;
 
             DEBUG_PRINTF("[Device] Activating Output %u 🔥\n", i + 1);
             if (ledFeedback) indicator->setLED(i + 1, true);
-            heaterManager->setOutput(i + 1, true);
-            delay(onTime);
+            heaterManager->setOutput(i, true);
+            vTaskDelay(pdMS_TO_TICKS(onTime));
 
             float current = currentSensor->readCurrent();
             DEBUG_PRINTF("[Device] Current Sensor Reading: %.2fA ⚡\n", current);
@@ -202,11 +206,14 @@ void Device::StartLoop() {
                 return;
             }
 
-            heaterManager->setOutput(i + 1, false);
-            if (ledFeedback) indicator->setLED(i + 1, false);
-            delay(offTime);
+            heaterManager->setOutput(i, false);
+            if (ledFeedback) indicator->setLED(i, false);
+            vTaskDelay(pdMS_TO_TICKS(offTime));
         }
-    }
+    };
+
+    // Ensure the temperature monitor task is stopped when leaving the loop
+    stopTemperatureMonitor();
 
     DEBUG_PRINTLN("[Device] Output loop exited gracefully 🛑");
     heaterManager->disableAll();
@@ -221,6 +228,9 @@ void Device::shutdown() {
 
     currentState = DeviceState::Shutdown;
 
+    // Stop background monitoring first
+    stopTemperatureMonitor();
+
     DEBUG_PRINTLN("[Device] Turning OFF Main Relay 🔌");
     relayControl->turnOff();
 
@@ -230,9 +240,6 @@ void Device::shutdown() {
 
     DEBUG_PRINTLN("[Device] Disabling Inrush Bypass MOSFET ⛔");
     bypassFET->disable();
-
-    DEBUG_PRINTLN("[Device] Stopping Temperature Monitoring Task 🧊");
-    tempSensor->stopTemperatureTask();
 
     DEBUG_PRINTLN("[Device] Updating Status LEDs 💡");
     digitalWrite(READY_LED_PIN, LOW);
@@ -269,7 +276,7 @@ void Device::monitorTemperatureTask(void* param) {
         return;
     }
 
-    self->tempSensor->startTemperatureTask(1000);
+    self->tempSensor->startTemperatureTask(2500);
     DEBUG_PRINTF("[Device] Monitoring %u temperature sensors every 2s ⚙️\n", sensorCount);
 
     while (true) {
@@ -291,6 +298,20 @@ void Device::monitorTemperatureTask(void* param) {
     }
 }
 
+void Device::stopTemperatureMonitor() {
+    // Stop the TempSensor’s own worker first
+    if (tempSensor) {
+        tempSensor->stopTemperatureTask();
+    }
+
+    // Then kill our monitor RTOS task if running
+    if (tempMonitorTaskHandle != nullptr) {
+        DEBUG_PRINTLN("[Device] Stopping Temperature Monitor Task 🧊❌");
+        vTaskDelete(tempMonitorTaskHandle);
+        tempMonitorTaskHandle = nullptr;
+    }
+}
+
 void Device::stopLoopTask() {
     if (loopTaskHandle != nullptr) {
         DEBUG_PRINTLN("[Device] Stopping Device Loop Task 🧵❌");
@@ -303,7 +324,7 @@ void Device::stopLoopTask() {
 
 void Device::LedUpdateTask(void *param) {
     Device *device = static_cast<Device*>(param);
-    const TickType_t delayTicks = pdMS_TO_TICKS(LED_UPDATE_TASK_DELAY_MS); // Update every 1000
+    const TickType_t delayTicks = pdMS_TO_TICKS(LED_UPDATE_TASK_DELAY_MS);
 
     while (true) {
         if (device->config->GetBool(LED_FEEDBACK_KEY, DEFAULT_LED_FEEDBACK)) {

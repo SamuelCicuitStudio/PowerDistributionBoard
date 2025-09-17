@@ -131,8 +131,8 @@
 // LED Configuration
 // ==================================================
 
-#define READY_LED_PIN                  16                   // System ready indicator
-#define POWER_OFF_LED_PIN              2                    // Power off indicator LED
+#define READY_LED_PIN                  2                   // System ready indicator
+#define POWER_OFF_LED_PIN              16                    // Power off indicator LED
 
 // ==================================================
 // Floor Heater LED Indicators
@@ -228,13 +228,13 @@
 // ==================================================
 //  RTOS CONFIGURATION: Stack Sizes (in words = 4 bytes)
 // ==================================================
-#define DEVICE_LOOP_TASK_STACK_SIZE       4096
-#define TASK_MONITOR_TASK_STACK_SIZE       4096
-#define TEMP_MONITOR_TASK_STACK_SIZE      2048
+#define DEVICE_LOOP_TASK_STACK_SIZE       8192
+#define TASK_MONITOR_TASK_STACK_SIZE      8192
+#define TEMP_MONITOR_TASK_STACK_SIZE      8192
 #define LED_UPDATE_TASK_STACK_SIZE        15360  
 #define CAP_VOLTAGE_TASK_STACK_SIZE       4096
 #define SWITCH_TASK_STACK_SIZE            2048
-#define TEMP_SENSOR_TASK_STACK_SIZE       2048
+#define TEMP_SENSOR_TASK_STACK_SIZE       8192
 #define BLINK_TASK_STACK_SIZE             2048
 
 // ==================================================

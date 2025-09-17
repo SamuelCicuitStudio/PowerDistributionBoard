@@ -6,23 +6,21 @@ void Relay::begin() {
     Serial.println("###########################################################");
 
     pinMode(RELAY_CONTROL_PIN, OUTPUT);
-    digitalWrite(RELAY_CONTROL_PIN, LOW);  // Start OFF
-    state = false;
-    DEBUG_PRINTLN("[Relay] Initialized and OFF 🚫");
+    turnOff();
 }
 
 void Relay::turnOn() {
-    digitalWrite(RELAY_CONTROL_PIN, HIGH);
+    digitalWrite(RELAY_CONTROL_PIN, LOW);
     state = true;
     DEBUG_PRINTLN("[Relay] Turned ON ⚡");
 }
 
 void Relay::turnOff() {
-    digitalWrite(RELAY_CONTROL_PIN, LOW);
+    digitalWrite(RELAY_CONTROL_PIN, HIGH);
     state = false;
-    DEBUG_PRINTLN("[Relay] Turned OFF ⛔");
+   DEBUG_PRINTLN("[Relay] Turned OFF ⛔");
 }
 
 bool Relay::isOn() const {
-    return state;
+    return !state;
 }

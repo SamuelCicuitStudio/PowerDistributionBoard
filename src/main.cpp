@@ -61,6 +61,12 @@ void WiFiEvent(WiFiEvent_t event) {
 //                          Setup()
 // ──────────────────────────────────────────────────────────────
 void setup() {
+
+    pinMode(RELAY_CONTROL_PIN, OUTPUT);
+    digitalWrite(RELAY_CONTROL_PIN, HIGH);  // Start OFF
+    pinMode(INA_RELAY_BYPASS_PIN, OUTPUT);
+    digitalWrite(INA_RELAY_BYPASS_PIN, LOW);  // LOW = MOSFET OFF (safe)
+
     Serial.begin(115200);
     DEBUG_PRINTLN("###########################################################");
     DEBUG_PRINTLN("#          Starting System Setup 921600 Baud⚙️            #");
@@ -70,6 +76,22 @@ void setup() {
     DEBUG_PRINTLN("[Setup] Initializing NVS (Preferences)...");
     prefs.begin(CONFIG_PARTITION, false);
     DEBUG_PRINTLN("[Setup] NVS Initialized. ✅");
+    // 🧠 Load system configuration
+    config = new ConfigManager(&prefs);
+    config->begin();
+    // 🔥 Initialize heater control logic
+    heater = new HeaterManager(config);
+    heater->begin();
+    heater-> disableAll();
+    // 🔌 Initialize power relay
+    mainRelay = new Relay();
+    mainRelay->begin();
+
+    // ⛔ Initialize bypass MOSFET
+    bypassFET = new BypassMosfet();
+    bypassFET->begin();
+
+
 
     // 📁 Mount SPIFFS filesystem
     DEBUG_PRINTLN("[Setup] Mounting SPIFFS...");
@@ -78,23 +100,18 @@ void setup() {
         return;
     }
     DEBUG_PRINTLN("✅ SPIFFS successfully mounted.");
-    delay(500);  // Let Serial settle
 
-    // 🧠 Load system configuration
-    config = new ConfigManager(&prefs);
-    config->begin();
+
+
 
     // 💡 Initialize LED indicators
     indicator = new Indicator();
     indicator->begin();
 
-    // 🔥 Initialize heater control logic
-    heater = new HeaterManager(config);
-    heater->begin();
-
     // ⚡ Initialize capacitor discharge manager
-    discharger = new CpDischg(heater);
+    discharger = new CpDischg(heater,mainRelay);
     discharger->begin();
+    discharger->setBypassRelayGate(true);
 
     // 🌀 Initialize fan control
     fan = new FanManager();
@@ -108,13 +125,6 @@ void setup() {
     tempSensor = new TempSensor(config,&oneWire);
     tempSensor->begin();
 
-    // 🔌 Initialize power relay
-    mainRelay = new Relay();
-    mainRelay->begin();
-
-    // ⛔ Initialize bypass MOSFET
-    bypassFET = new BypassMosfet();
-    bypassFET->begin();
 
     // 🔔 Initialize buzzer
     buzz = new BuzzerManager();
