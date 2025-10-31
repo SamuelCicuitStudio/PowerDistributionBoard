@@ -19,10 +19,11 @@ WiFiManager::WiFiManager()
 : server(80) {}
 
 void WiFiManager::begin() {
+    DEBUGGSTART();
     DEBUG_PRINTLN("###########################################################");
     DEBUG_PRINTLN("#                 Starting WIFI Manager 🌐               #");
     DEBUG_PRINTLN("###########################################################");
-
+    DEBUGGSTOP();
     // In case someone constructs manually, keep instance in sync.
     if (!instance) instance = this;
 
@@ -60,6 +61,8 @@ void WiFiManager::StartWifiAP() {
     if (lock()) { keepAlive = false; WifiState = true; prev_WifiState = false; unlock(); }
 
     DEBUG_PRINTLN("[WiFiManager] Starting Access Point ✅");
+    WiFi.mode(WIFI_OFF);
+    vTaskDelay(pdMS_TO_TICKS(2000));
 
     const String ap_ssid = CONF->GetString(DEVICE_WIFI_HOTSPOT_NAME_KEY, DEVICE_WIFI_HOTSPOT_NAME);
     const String ap_pass = CONF->GetString(DEVICE_AP_AUTH_PASS_KEY, DEVICE_AP_AUTH_PASS_DEFAULT);
@@ -78,7 +81,7 @@ void WiFiManager::StartWifiAP() {
     }
 
     DEBUG_PRINTF("✅ AP Started: %s\n", ap_ssid.c_str());
-    DEBUG_PRINT("[WiFiManager] AP IP Address: "); DEBUG_PRINTLN(WiFi.softAPIP());
+    DEBUG_PRINT("[WiFiManager] AP IP Address: "); DEBUG_PRINTLN(WiFi.softAPIP().toString());
 
     registerRoutes_();
     server.begin();
@@ -101,6 +104,8 @@ bool WiFiManager::StartWifiSTA() {
     String ssid = WIFI_STA_SSID;
     String pass =  WIFI_STA_PASS;
 
+    WiFi.mode(WIFI_OFF);
+    vTaskDelay(pdMS_TO_TICKS(5000));
     WiFi.mode(WIFI_STA);
     WiFi.begin(ssid.c_str(), pass.c_str());
 

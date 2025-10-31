@@ -368,7 +368,7 @@ void NVS::RestartSysDelayDown(unsigned long delayTime) {
     DEBUG_PRINTLN("###########################################################");
     DEBUG_PRINTLN("#           Restarting the Device in: " + String(delayTime / 1000)+ " Sec              #");
     DEBUG_PRINTLN("###########################################################");
-    
+    DEBUGGSTOP() ;
     for (int i = 0; i < 30; i++) {
         DEBUG_PRINT("🔵");
         sleepMs_(interval);
@@ -386,6 +386,7 @@ void NVS::RestartSysDelay(unsigned long delayTime) {
     DEBUG_PRINTLN("###########################################################");
     DEBUG_PRINTLN("#           Restarting the Device in: " + String(delayTime / 1000)+ " Sec              #");
     DEBUG_PRINTLN("###########################################################");
+    DEBUGGSTOP() ;
     for (int i = 0; i < 30; i++) {
         DEBUG_PRINT("🔵");
         sleepMs_(interval);
@@ -393,7 +394,7 @@ void NVS::RestartSysDelay(unsigned long delayTime) {
     }
     DEBUG_PRINTLN();
     DEBUG_PRINTLN("[NVS] Restarting now...");
-    DEBUGGSTOP() ;
+    
     ESP.restart();
 }
 
@@ -404,13 +405,14 @@ void NVS::CountdownDelay(unsigned long delayTime) {
     DEBUG_PRINT("[NVS] Waiting User Action: ");
     DEBUG_PRINT(delayTime / 1000);
     DEBUG_PRINTLN(" Sec");
+    DEBUGGSTOP() ;
     for (int i = 0; i < 32; i++) {
         DEBUG_PRINT("#");
         sleepMs_(interval);
         esp_task_wdt_reset();
     }
     DEBUG_PRINTLN();
-    DEBUGGSTOP() ;
+    
 }
 
 void NVS::simulatePowerDown() {

@@ -9,10 +9,6 @@ SwitchManager::SwitchManager(){
     DEBUG_PRINTLN("###########################################################");
     DEBUG_PRINTLN("#                  Starting Switch Manager                #");
     DEBUG_PRINTLN("###########################################################");
-    // Print pin mapping
-    DEBUG_PRINTLN("================ Switch Pin Map ==================");
-    DEBUG_PRINTF("POWER_ON_SWITCH_PIN = GPIO %d (Boot / Mode button)\n", POWER_ON_SWITCH_PIN);
-    DEBUG_PRINTLN("==================================================");
     DEBUGGSTOP();
     pinMode(POWER_ON_SWITCH_PIN, INPUT_PULLUP);
     instance = this;  // Set the static instance pointer
