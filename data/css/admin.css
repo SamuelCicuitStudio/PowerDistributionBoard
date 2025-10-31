@@ -849,3 +849,16 @@ button.danger {
 button.danger:hover {
   background: #ff6666;
 }
+/* Modal button variants (match your theme) */
+.user-modal-actions .danger {
+  background: #ff4d4d;
+  color: #fff;
+}
+.user-modal-actions .warning {
+  background: #ffae00;
+  color: #000;
+}
+.user-modal-actions .success {
+  background: #00ffae;
+  color: #000;
+} /* default */

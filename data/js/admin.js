@@ -9,6 +9,43 @@ const powerText = () => document.getElementById("powerLabel");
 let lastState = "Shutdown"; // default
 // --- Confirmation modal controller ---
 let pendingConfirm = null;
+function isManualMode() {
+  const t = document.getElementById("modeToggle");
+  return !!(t && t.checked);
+}
+
+function setModeDot(isManual) {
+  const dot = document.querySelector(".status-dot");
+  if (!dot) return;
+  dot.title = isManual ? "Manual Mode" : "Auto Mode";
+  dot.style.backgroundColor = isManual ? "#ffa500" : "#00ff80";
+  dot.style.boxShadow = `0 0 6px ${dot.style.backgroundColor}`;
+}
+
+/**
+ * Ensure manual mode is asserted and auto loop is not Running.
+ * Call this once before sending ANY manual-changing command.
+ */
+async function ensureManualTakeover(source = "manual-action") {
+  // 1) Flip UI + notify backend if not already manual
+  if (!isManualMode()) {
+    const t = document.getElementById("modeToggle");
+    if (t) t.checked = true;
+    setModeDot(true);
+    await sendControlCommand("set", "mode", true);
+  }
+
+  // 2) If auto is currently Running, abort it (soft stop preferred)
+  if (lastState === "Running") {
+    const resp = await sendControlCommand("set", "abortAuto", true);
+    if (!resp || resp.error) {
+      // Fallback to your existing shutdown if backend doesn't implement abortAuto
+      await shutdownSystem();
+    }
+    setPowerUI("Idle");
+  }
+  console.log(`Manual takeover by: ${source}`);
+}
 
 function openConfirm(kind) {
   pendingConfirm = kind;
@@ -286,15 +323,17 @@ document.addEventListener("click", function (e) {
   }
 });
 
-function toggleMode() {
+async function toggleMode() {
   const isManual = document.getElementById("modeToggle").checked;
-  const dot = document.querySelector(".status-dot");
+  setModeDot(isManual);
+  await sendControlCommand("set", "mode", isManual);
 
-  dot.title = isManual ? "Manual Mode" : "Auto Mode";
-  dot.style.backgroundColor = isManual ? "#ffa500" : "#00ff80";
-  dot.style.boxShadow = `0 0 6px ${dot.style.backgroundColor}`;
-
-  sendControlCommand("set", "mode", isManual);
+  // If user just switched to Manual while Running → stop the loop
+  if (isManual && lastState === "Running") {
+    const r = await sendControlCommand("set", "abortAuto", true);
+    if (!r || r.error) await shutdownSystem();
+    setPowerUI("Idle");
+  }
 }
 
 function toggleLT() {
@@ -302,15 +341,24 @@ function toggleLT() {
   sendControlCommand("set", "ledFeedback", isOn);
 }
 
-function handleOutputToggle(index, checkbox) {
+async function handleOutputToggle(index, checkbox) {
+  await ensureManualTakeover(`output${index}`);
   const led = checkbox.parentElement.nextElementSibling;
   const isOn = checkbox.checked;
-
-  led.classList.toggle("active", isOn); // Visual feedback
-  sendControlCommand("set", `output${index}`, isOn); // Send command
+  led.classList.toggle("active", isOn);
+  sendControlCommand("set", `output${index}`, isOn);
 }
 
-function startSystem() {
+async function startSystem() {
+  if (isManualMode()) {
+    openAlert(
+      "Manual mode is ON",
+      "Switch to Auto before starting the cycle.",
+      "warning"
+    );
+    return;
+  }
+
   sendControlCommand("set", "systemStart", true);
 }
 
@@ -343,17 +391,26 @@ function startHeartbeat(intervalMs = 3000) {
   }, intervalMs);
 }
 
-document.getElementById("relayToggle").addEventListener("change", function () {
-  sendControlCommand("set", "relay", this.checked);
-});
+document
+  .getElementById("relayToggle")
+  .addEventListener("change", async function () {
+    await ensureManualTakeover("relay");
+    sendControlCommand("set", "relay", this.checked);
+  });
 
-document.getElementById("bypassToggle").addEventListener("change", function () {
-  sendControlCommand("set", "bypass", this.checked);
-});
+document
+  .getElementById("bypassToggle")
+  .addEventListener("change", async function () {
+    await ensureManualTakeover("bypass");
+    sendControlCommand("set", "bypass", this.checked);
+  });
 
-document.getElementById("fanSlider").addEventListener("input", function () {
-  sendControlCommand("set", "fanSpeed", parseInt(this.value));
-});
+document
+  .getElementById("fanSlider")
+  .addEventListener("input", async function () {
+    await ensureManualTakeover("fan");
+    sendControlCommand("set", "fanSpeed", parseInt(this.value));
+  });
 
 function toggleOutput(index, state) {
   sendControlCommand("set", `output${index}`, state);
@@ -368,7 +425,7 @@ function sendControlCommand(action, target, value) {
   const payload = { action, target };
   if (value !== undefined) payload.value = value;
 
-  fetch("/control", {
+  return fetch("/control", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -382,9 +439,14 @@ function sendControlCommand(action, target, value) {
       } else if (data.error) {
         console.warn(`[✖] ${data.error}`);
       }
+      return data; // <-- important
     })
-    .catch((err) => console.error("Control error:", err));
+    .catch((err) => {
+      console.error("Control error:", err);
+      return { error: String(err) };
+    });
 }
+
 let isMuted = false;
 
 function setMuteUI(muted) {
@@ -489,15 +551,15 @@ function saveUserSettings() {
     .then((res) => res.json())
     .then((data) => {
       if (data.status) {
-        alert("✅ " + data.status);
+        openAlert("✅ " + data.status);
         closeUserModal();
       } else if (data.error) {
-        alert("⚠️ " + data.error);
+        openAlert("⚠️ " + data.error);
       }
     })
     .catch((err) => {
       console.error("Credential update failed:", err);
-      alert("Error communicating with device.");
+      openAlert("Error communicating with device.");
     });
 }
 function saveAdminSettings() {
@@ -520,12 +582,12 @@ function saveAdminSettings() {
   })
     .then((res) => res.json())
     .then((data) => {
-      if (data.status) alert("✅ " + data.status);
-      else if (data.error) alert("⚠️ " + data.error);
+      if (data.status) openAlert("✅ " + data.status);
+      else if (data.error) openAlert("⚠️ " + data.error);
     })
     .catch((err) => {
       console.error("Admin settings update failed:", err);
-      alert("Error communicating with device.");
+      openAlert("Error communicating with device.");
     });
 }
 
@@ -549,7 +611,7 @@ function disconnectDevice() {
         window.location.href = response.url;
       } else {
         return response.json().then((data) => {
-          alert(data.error || "Unexpected response");
+          openAlert(data.error || "Unexpected response");
         });
       }
     })
@@ -702,7 +764,7 @@ function saveDeviceSettings() {
     isNaN(onTime) ||
     isNaN(offTime)
   ) {
-    alert("⚠️ Please enter valid numeric values for all fields.");
+    openAlert("⚠️ Please enter valid numeric values for all fields.");
     return;
   }
 
@@ -716,7 +778,46 @@ function saveDeviceSettings() {
 
 function resetDeviceSettings() {
   loadControls(); // Reload from backend to restore defaults
+} // ─────────────────────────────────────────────────────────────
+// Generic alert modal (reuses #confirmModal) for info/warn/error
+// ─────────────────────────────────────────────────────────────
+function openAlert(title, message, variant = "warning") {
+  // We are not confirming any pending action here
+  pendingConfirm = null;
+
+  const modal = document.getElementById("confirmModal");
+  const titleEl = document.getElementById("confirmTitle");
+  const messageEl = document.getElementById("confirmMessage");
+  const okBtn = document.getElementById("confirmOkBtn");
+  const cancelBtn = document.getElementById("confirmCancelBtn");
+
+  // Restore Cancel visibility for future confirms
+  if (cancelBtn) cancelBtn.style.display = "none"; // hide for simple alerts
+
+  titleEl.textContent = title || "Notice";
+  messageEl.textContent = message || "";
+  okBtn.textContent = "OK";
+
+  // Style the OK button based on severity
+  okBtn.classList.remove("danger", "warning", "success");
+  if (variant === "danger") okBtn.classList.add("danger");
+  else if (variant === "success") okBtn.classList.add("success");
+  else okBtn.classList.add("warning");
+
+  // Clicking OK just closes the modal
+  okBtn.onclick = closeConfirm;
+
+  modal.style.display = "flex";
 }
+
+// Ensure Cancel is visible again for real confirmations
+const _openConfirm_original = openConfirm;
+openConfirm = function (kind) {
+  const cancelBtn = document.getElementById("confirmCancelBtn");
+  if (cancelBtn) cancelBtn.style.display = ""; // show Cancel for confirms
+  _openConfirm_original(kind);
+};
+
 window.addEventListener("DOMContentLoaded", () => {
   // Existing initializations...
   renderAllOutputs("manualOutputs", true);
