@@ -1,62 +1,89 @@
 #include "TempSensor.h"
 
 void TempSensor::begin() {
-    Serial.println("###########################################################");
-    Serial.println("#               Starting Temperature Manager 🌡️          #");
-    Serial.println("###########################################################");
+    DEBUGGSTART();
+    DEBUG_PRINTLN("###########################################################");
+    DEBUG_PRINTLN("#               Starting Temperature Manager 🌡️          #");
+    DEBUG_PRINTLN("###########################################################");
+    DEBUGGSTOP();
 
-    if (!cfg || !ow) {
-        Serial.println("[TempSensor] Missing dependencies ❌");
+    if (!CONF || !ow) {
+        DEBUG_PRINTLN("[TempSensor] Missing dependencies ❌");
         return;
     }
 
+    // Create mutex first so everything after is protected
+    _mutex = xSemaphoreCreateMutex();
+
     // Discover all devices on the bus
-    sensorCount = 0;
-    ow->reset_search();
-    while (ow->search(sensorAddresses[sensorCount]) && sensorCount < MAX_TEMP_SENSORS) {
-        Serial.printf("[TempSensor] Found sensor %u: ", sensorCount);
-        printAddress(sensorAddresses[sensorCount]);
-        sensorCount++;
+    if (lock()) {
+        sensorCount = 0;
+        ow->reset_search();
+        while (sensorCount < MAX_TEMP_SENSORS &&
+               ow->search(sensorAddresses[sensorCount])) {
+
+            DEBUG_PRINTF("[TempSensor] Found sensor %u: ", sensorCount);
+            printAddress(sensorAddresses[sensorCount]);
+            sensorCount++;
+        }
+        unlock();
     }
 
     if (sensorCount == 0) {
-        Serial.println("[TempSensor] No sensors found ❌");
+        DEBUG_PRINTLN("[TempSensor] No sensors found ❌");
         return;
     }
 
-    cfg->PutInt(TEMP_SENSOR_COUNT_KEY, sensorCount);
-    Serial.printf("[TempSensor] %u sensor(s) found ✅\n", sensorCount);
+    CONF->PutInt(TEMP_SENSOR_COUNT_KEY, sensorCount);
+    DEBUG_PRINTF("[TempSensor] %u sensor(s) found ✅\n", sensorCount);
 
     startTemperatureTask();
 }
 
 void TempSensor::requestTemperatures() {
-    // Issue conversion command to all devices
+    if (!ow) return;
+
+    // Protect OneWire bus while we broadcast "convert T" to each sensor
+    if (!lock()) return;
+
     for (uint8_t i = 0; i < sensorCount; i++) {
         ow->reset();
         ow->select(sensorAddresses[i]);
-        ow->write(0x44);  // Start conversion
+        ow->write(0x44);  // Start temperature conversion
     }
+
+    unlock();
 }
 
 float TempSensor::getTemperature(uint8_t index) {
     if (!ow || index >= sensorCount) {
-        Serial.printf("[TempSensor] Invalid index %u ❌\n", index);
+        DEBUG_PRINTF("[TempSensor] Invalid index %u ❌\n", index);
         return NAN;
     }
 
+    // Protect OneWire bus + shared scratchpad buffer
+    if (!lock()) {
+        DEBUG_PRINTLN("[TempSensor] Mutex lock failed ❌");
+        return NAN;
+    }
+
+    // Select specific sensor and read scratchpad
     ow->reset();
     ow->select(sensorAddresses[index]);
     ow->write(0xBE);  // Read scratchpad
     ow->read_bytes(scratchpad, 9);
 
     int16_t raw = (scratchpad[1] << 8) | scratchpad[0];
-    return (float)raw / 16.0;  // 12-bit resolution
+    float tempC = (float)raw / 16.0f;  // DS18B20: 12-bit -> 0.0625°C LSB
+
+    unlock();
+
+    return tempC;
 }
 
 uint8_t TempSensor::getSensorCount() {
-    if (!cfg) return 0;
-    return cfg->GetInt(TEMP_SENSOR_COUNT_KEY, 0);
+    if (!CONF) return 0;
+    return CONF->GetInt(TEMP_SENSOR_COUNT_KEY, 0);
 }
 
 void TempSensor::printAddress(uint8_t address[8]) {
@@ -76,8 +103,16 @@ void TempSensor::stopTemperatureTask() {
 }
 
 void TempSensor::startTemperatureTask(uint32_t intervalMs) {
+    // Stop old task first
     stopTemperatureTask();
-    updateIntervalMs = intervalMs;
+
+    // Store the new interval safely
+    if (lock()) {
+        updateIntervalMs = intervalMs;
+        unlock();
+    }
+
+    // Spawn periodic updater task pinned where you want it
     xTaskCreatePinnedToCore(
         TempSensor::temperatureTask,
         "TempUpdateTask",
@@ -91,8 +126,18 @@ void TempSensor::startTemperatureTask(uint32_t intervalMs) {
 
 void TempSensor::temperatureTask(void* param) {
     auto* instance = static_cast<TempSensor*>(param);
+
     for (;;) {
+        // Kick all sensors to start a new conversion round
         instance->requestTemperatures();
-        vTaskDelay(pdMS_TO_TICKS(instance->updateIntervalMs));
+
+        // Take a snapshot of delay without holding the mutex during vTaskDelay
+        uint32_t intervalSnapshot = 2000;
+        if (instance->lock()) {
+            intervalSnapshot = instance->updateIntervalMs;
+            instance->unlock();
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(intervalSnapshot));
     }
 }

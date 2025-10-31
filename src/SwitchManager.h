@@ -2,10 +2,10 @@
 #define SWITCH_MANAGER_H
 
 #include "Arduino.h"
-#include "ConfigManager.h"
+#include "NVSManager.h"
 #include "Utils.h"
 #include "WiFiManager.h"
-
+#include "RGBLed.h"
 // ===============================
 // Constants for Tap/Hold Detection
 // ===============================
@@ -17,7 +17,7 @@
 class SwitchManager {
 public:
     // Constructor
-    SwitchManager(ConfigManager* Conf,WiFiManager * wifi);
+    SwitchManager();
 
     /**
      * Detect user interaction:
@@ -29,8 +29,7 @@ public:
     // RTOS-compatible task that uses detectTapOrHold()
     static void SwitchTask(void* pvParameters); // <-- make it static
     static SwitchManager* instance;
-    ConfigManager* Conf;
-    WiFiManager * wifi;
+
 };
 
 

@@ -1,71 +1,134 @@
 #ifndef WIFI_MANAGER_H
 #define WIFI_MANAGER_H
 
-#include <WiFi.h>
-#include <FS.h>
-#include <SPIFFS.h>
-#include <ESPAsyncWebServer.h>
-#include <ArduinoJson.h>
 #include "Device.h"
-#include "esp_wifi.h"
+#include "Config.h"
+#include "RGBLed.h"
 
-class Device;  // Forward declaration to resolve circular dependency
+// ================= Build-time Wi-Fi mode selection =================
+// If 1 → start in Station (STA) mode using saved creds or the macros below.
+// If 0 → start in Access Point (AP) mode.
+#define WIFI_START_IN_STA 1
 
-// ─────────────────────────────────────────────────────────────
-//                       WiFiManager Class
-// ─────────────────────────────────────────────────────────────
-// Handles Access Point (SoftAP) setup, Async Web Server,
-// heartbeat tracking, session management, and inactivity timeout
-// ─────────────────────────────────────────────────────────────
+#ifndef WIFI_STA_SSID
+#define WIFI_STA_SSID "FASTWEB-ES28CD"
+#endif
+#ifndef WIFI_STA_PASS
+#define WIFI_STA_PASS "9PFSLSA349"
+#endif
+
+// Connection timeout before falling back to AP (ms)
+#ifndef WIFI_STA_CONNECT_TIMEOUT_MS
+#define WIFI_STA_CONNECT_TIMEOUT_MS 12000
+#endif
+
+// ==================================================================
 
 class WiFiManager {
 public:
-    // ─────────────────────── Constructor ───────────────────────
-    // Accepts a pointer to the main Device controller
-    explicit WiFiManager(Device* dev);
+    // ===== Singleton API (like NVS/CONF style) =====
+    // Create the singleton once (pass your Device*).
+    static void Init();
+    // Get the singleton pointer (nullptr until Init()).
+    static WiFiManager* Get();
 
-    // ───────────── Static Singleton Instance ─────────────
-    // Globally accessible instance pointer
+    // Kept for backward-compatibility with any existing code.
     static WiFiManager* instance;
 
-    // ───────────── Public API ─────────────
+    // ===== Public API (unchanged) =====
+    void begin();                // init Wi-Fi + routes + timers
+    void restartWiFiAP();        // turn off then begin() again
+    void StartWifiAP();          // start SoftAP and register routes
+    bool StartWifiSTA();         // start Station mode and register routes (true on success)
+    void disableWiFiAP();        // stop Wi-Fi
 
-    void begin();               // 🔧 Initialize Wi-Fi and start services
-    void restartWiFiAP();       // 🔄 Restart Access Point and web server
-    void StartWifiAP();         // 📡 Start SoftAP and register routes
-    void disableWiFiAP();       // 📴 Turn off Wi-Fi and cleanup
+    void resetTimer();           // reset inactivity timer
+    void startInactivityTimer(); // start watchdog task
+    void heartbeat();            // start/refresh heartbeat task
 
-    void resetTimer();          // 🔁 Reset inactivity timer
-    void startInactivityTimer();// ⏱ Launch RTOS task to monitor idle time
-    void heartbeat();           // ❤️ Called when client sends heartbeat ping
+    void onUserConnected();
+    void onAdminConnected();
+    void onDisconnected();
 
-    void onUserConnected();     // 👤 Mark user as connected
-    void onAdminConnected();    // 👤 Mark admin as connected
-    void onDisconnected();      // 🚪 Invalidate all sessions
+    bool isUserConnected() const;
+    bool isAdminConnected() const;
+    bool isAuthenticated(AsyncWebServerRequest* request);
 
-    bool isUserConnected() const;                     // 🔐 Check user session
-    bool isAdminConnected() const;                    // 🔐 Check admin session
-    bool isAuthenticated(AsyncWebServerRequest* request);  // 🔐 Check if request has valid session
+    void handleRoot(AsyncWebServerRequest* request);
 
-    // ───────────── HTTP Routing ─────────────
-    void handleRoot(AsyncWebServerRequest* request);  // 🌐 Handle "/" GET request
+    // Web server
+    AsyncWebServer server;
 
-    // ───────────── Web Server ─────────────
-    AsyncWebServer server;       // 🌍 Async HTTP server running on port 80
-
-    // ───────────── RTOS Timing Tasks ─────────────
-    static void inactivityTask(void* param);   // ⏳ Idle timeout RTOS task
+    // RTOS tasks/handles
+    static void inactivityTask(void* param);
     TaskHandle_t inactivityTaskHandle = nullptr;
-    TaskHandle_t heartbeatTaskHandle = nullptr;
-    unsigned long lastActivityMillis = 0;      // 🕒 Last known activity timestamp
+    TaskHandle_t heartbeatTaskHandle  = nullptr;
+    unsigned long lastActivityMillis  = 0;
 
-    // ───────────── State Flags ─────────────
-    bool keepAlive = false;         // 📶 Heartbeat active
-    bool WifiState = false;         // 📡 Current Wi-Fi state
-    bool prev_WifiState = false;    // 📡 Previous Wi-Fi state
+    // State
+    bool keepAlive      = false;
+    bool WifiState      = false;
+    bool prev_WifiState = false;
 
-    // ───────────── Link to Device ─────────────
-    Device* dev;                    // 🔗 Pointer to main system controller
+private:
+    // ----- Enforce singleton construction via Init() -----
+    explicit WiFiManager();
+
+    // ================= Concurrency plumbing =================
+    SemaphoreHandle_t _mutex = nullptr;
+
+    inline bool lock() const {
+        if (_mutex == nullptr) return true;
+        return xSemaphoreTake(_mutex, portMAX_DELAY) == pdTRUE;
+    }
+    inline void unlock() const {
+        if (_mutex) xSemaphoreGive(_mutex);
+    }
+
+    // ================= Control command queue =================
+    enum CtrlType : uint8_t {
+        CTRL_REBOOT,
+        CTRL_SYS_RESET,
+        CTRL_LED_FEEDBACK_BOOL,
+        CTRL_ON_TIME_MS,
+        CTRL_OFF_TIME_MS,
+        CTRL_RELAY_BOOL,
+        CTRL_OUTPUT_BOOL,        // i1=index(1..10), b1=state
+        CTRL_DESIRED_V,          // f1
+        CTRL_AC_FREQ,            // i1
+        CTRL_CHARGE_RES,         // f1
+        CTRL_DC_VOLT,            // f1
+        CTRL_ACCESS_BOOL,        // i1=index(1..10), b1=flag
+        CTRL_MODE_IDLE,
+        CTRL_SYSTEM_START,
+        CTRL_SYSTEM_SHUTDOWN,
+        CTRL_BYPASS_BOOL,
+        CTRL_FAN_SPEED ,          // i1=0..100
+        CTRL_BUZZER_MUTE,      // b1 = true/false
+    };
+
+    struct ControlCmd {
+        CtrlType type;
+        int32_t  i1 = 0;
+        int32_t  i2 = 0;
+        float    f1 = 0.0f;
+        bool     b1 = false;
+    };
+
+    QueueHandle_t  _ctrlQueue = nullptr;
+    TaskHandle_t   _ctrlTask  = nullptr;
+
+    static void controlTaskTrampoline(void* pv);
+    void controlTaskLoop();
+    void handleControl(const ControlCmd& c);
+
+    void sendCmd(const ControlCmd& c); // non-blocking enqueue
+
+    // Routes registration shared by AP/STA
+    void registerRoutes_();
 };
+
+// Convenience pointer macro (mirrors CONF)
+#define WIFI WiFiManager::Get()
 
 #endif // WIFI_MANAGER_H

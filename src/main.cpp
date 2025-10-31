@@ -4,161 +4,129 @@
 // ──────────────────────────────────────────────────────────────
 //                        Module Headers
 // ──────────────────────────────────────────────────────────────
-#include "ConfigManager.h"
+#include "NVSManager.h"
 #include "WiFiManager.h"
 #include "SwitchManager.h"
-#include "Device.h"  // ✅ Central system controller
+#include "Device.h"
 
-// Setup a oneWire instance to communicate with any OneWire devices
+// OneWire bus instance
 OneWire oneWire(ONE_WIRE_BUS);
 
 // ──────────────────────────────────────────────────────────────
-//                    Global Object Pointers
+// Global Object Pointers
 // ──────────────────────────────────────────────────────────────
 
 // Non-volatile storage
-Preferences prefs;  // 🔒 NVS storage for user/system settings
+Preferences prefs;
 
-// Core Modules
-ConfigManager*    config        = nullptr;  // 🧠 Configuration handler
-Indicator*        indicator     = nullptr;  // 💡 LED status indicator
-HeaterManager*    heater        = nullptr;  // 🔥 Controls heating elements
-CpDischg*         discharger    = nullptr;  // ⚡ Capacitor discharge logic
-FanManager*       fan           = nullptr;  // 🌀 Fan control via PWM
-CurrentSensor*    currentSensor = nullptr;  // ⚙️ Current sensing
-TempSensor*       tempSensor    = nullptr;  // 🌡️ DS18B20 temperature sensors
-Relay*            mainRelay     = nullptr;  // 🔌 Main relay control
-BypassMosfet*     bypassFET     = nullptr;  // ⛔ Inrush control MOSFET
-BuzzerManager*    buzz          = nullptr;  // 🔔 Sound feedback (active-low buzzer)
-Device*           device        = nullptr;  // 📦 Main device orchestrator
-WiFiManager*      wifi          = nullptr;  // 🌐 Wi-Fi + web interface
-SwitchManager*    sw            = nullptr;  // 🔘 Power button tap detection
+// Core modules
+Indicator*     indicator     = nullptr;
+HeaterManager* heater        = nullptr;
+CpDischg*      discharger    = nullptr;
+CurrentSensor* currentSensor = nullptr;
+TempSensor*    tempSensor    = nullptr;
+Relay*         mainRelay     = nullptr;
+BypassMosfet*  bypassFET     = nullptr;
+SwitchManager* sw            = nullptr;
 
 // ──────────────────────────────────────────────────────────────
 //              Wi-Fi Event Handler for AP Client Events
 // ──────────────────────────────────────────────────────────────
 void WiFiEvent(WiFiEvent_t event) {
-    if (!WiFiManager::instance || !WiFiManager::instance->dev || !WiFiManager::instance->dev->buz)
+    if (!WiFiManager::instance || !BUZZ)
         return;
 
     switch (event) {
         case ARDUINO_EVENT_WIFI_AP_STACONNECTED:
             // 🔔 Client connected to ESP32 AP
-            WiFiManager::instance->dev->buz->bipClientConnected();
+            BUZZ->bipClientConnected();
             break;
 
         case ARDUINO_EVENT_WIFI_AP_STADISCONNECTED:
             // 🔕 Client disconnected from ESP32 AP
-            WiFiManager::instance->dev->buz->bipClientDisconnected();
+            BUZZ->bipClientDisconnected();
             break;
 
         default:
             break;
     }
 }
-
 // ──────────────────────────────────────────────────────────────
 //                          Setup()
 // ──────────────────────────────────────────────────────────────
 void setup() {
+  Debug::begin(SERIAL_BAUD_RATE);
 
-    pinMode(RELAY_CONTROL_PIN, OUTPUT);
-    digitalWrite(RELAY_CONTROL_PIN, HIGH);  // Start OFF
-    pinMode(INA_RELAY_BYPASS_PIN, OUTPUT);
-    digitalWrite(INA_RELAY_BYPASS_PIN, LOW);  // LOW = MOSFET OFF (safe)
+  // SPIFFS
+  DEBUG_PRINTLN("[Setup] Mounting SPIFFS...");
+  if (!SPIFFS.begin(true)) {
+    DEBUG_PRINTLN("SPIFFS initialization failed!");
+    return;
+  }
+  DEBUG_PRINTLN("SPIFFS successfully mounted.");
+  NVS::Init();
+  CONF->begin();
 
-    Serial.begin(115200);
-    DEBUG_PRINTLN("###########################################################");
-    DEBUG_PRINTLN("#          Starting System Setup 921600 Baud⚙️            #");
-    DEBUG_PRINTLN("###########################################################");
+  RGB->RGBLed::Init(POWER_OFF_LED_PIN, READY_LED_PIN, false);
+  RGB->begin();
+  RGB->setDeviceState(DevState::BOOT);
 
-    // 🔧 Initialize non-volatile storage (NVS)
-    DEBUG_PRINTLN("[Setup] Initializing NVS (Preferences)...");
-    prefs.begin(CONFIG_PARTITION, false);
-    DEBUG_PRINTLN("[Setup] NVS Initialized. ✅");
-    // 🧠 Load system configuration
-    config = new ConfigManager(&prefs);
-    config->begin();
-    // 🔥 Initialize heater control logic
-    heater = new HeaterManager(config);
-    heater->begin();
-    heater-> disableAll();
-    // 🔌 Initialize power relay
-    mainRelay = new Relay();
-    mainRelay->begin();
+  Buzzer::Init();    
+  BUZZ->begin();    
 
-    // ⛔ Initialize bypass MOSFET
-    bypassFET = new BypassMosfet();
-    bypassFET->begin();
+  FanManager::Init();
+  FAN->begin();
 
+  // Heater
+  heater = new HeaterManager();
+  heater->begin();
+  heater->disableAll();
 
+  // Relay
+  mainRelay = new Relay();
+  mainRelay->begin();
 
-    // 📁 Mount SPIFFS filesystem
-    DEBUG_PRINTLN("[Setup] Mounting SPIFFS...");
-    if (!SPIFFS.begin(true)) {
-        DEBUG_PRINTLN("SPIFFS initialization failed! ❌");
-        return;
-    }
-    DEBUG_PRINTLN("✅ SPIFFS successfully mounted.");
+  // Bypass MOSFET
+  bypassFET = new BypassMosfet();
+  bypassFET->begin();
 
+  // Indicator
+  indicator = new Indicator();
+  indicator->begin();
 
+  // Capacitor discharge
+  discharger = new CpDischg(heater, mainRelay);
+  discharger->begin();
+  discharger->setBypassRelayGate(true);
 
+  // Current sensor
+  currentSensor = new CurrentSensor();
+  currentSensor->begin();
 
-    // 💡 Initialize LED indicators
-    indicator = new Indicator();
-    indicator->begin();
+  // Temperature sensors
+  tempSensor = new TempSensor(&oneWire);
+  tempSensor->begin();
 
-    // ⚡ Initialize capacitor discharge manager
-    discharger = new CpDischg(heater,mainRelay);
-    discharger->begin();
-    discharger->setBypassRelayGate(true);
+  indicator->clearAll();
 
-    // 🌀 Initialize fan control
-    fan = new FanManager();
-    fan->begin();
+  // Device singleton
+  Device::Init(heater, tempSensor, currentSensor, mainRelay, bypassFET, discharger, indicator);
+  DEVICE->begin();
 
-    // ⚙️ Initialize current sensor
-    currentSensor = new CurrentSensor();
-    currentSensor->begin();
+  // Wi-Fi singleton
+  WiFiManager::Init();
+  WiFi.onEvent(WiFiEvent);
+  WIFI->begin();
 
-    // 🌡️ Initialize temperature sensors
-    tempSensor = new TempSensor(config,&oneWire);
-    tempSensor->begin();
-
-
-    // 🔔 Initialize buzzer
-    buzz = new BuzzerManager();
-    buzz->begin();
-
-    // 📦 Create and start main system controller
-    device = new Device(
-        config,
-        heater,
-        fan,
-        tempSensor,
-        currentSensor,
-        mainRelay,
-        bypassFET,
-        discharger,
-        indicator,
-        buzz
-    );
-    device->begin();
-
-    // 🌐 Initialize Wi-Fi AP + web interface
-    wifi = new WiFiManager(device);
-    // 🔔 Register Wi-Fi event handler (for client connect/disconnect)
-    WiFi.onEvent(WiFiEvent);
-    wifi->begin();
-
-    // 🔘 Setup tap detection for the power switch
-    sw = new SwitchManager(config, wifi);
-    sw->TapDetect();
+  // Power switch tap detection
+  sw = new SwitchManager();
+  sw->TapDetect();
+  mainRelay->turnOn();
 }
 
 // ──────────────────────────────────────────────────────────────
 //                           Loop()
 // ──────────────────────────────────────────────────────────────
 void loop() {
-    vTaskDelay(5000);  // 💤 System operates on FreeRTOS tasks
+  DEVICE->StartLoop();
 }

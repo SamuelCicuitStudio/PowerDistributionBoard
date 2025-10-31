@@ -1,8 +1,11 @@
 #include "SwitchManager.h"
+#include "RGBLed.h"   // <-- added for overlays/patterns
 
 SwitchManager* SwitchManager::instance = nullptr;
+
 // Constructor
-SwitchManager::SwitchManager(ConfigManager* Conf,WiFiManager * wifi) : Conf(Conf), wifi(wifi){
+SwitchManager::SwitchManager(){
+    DEBUGGSTART();
     DEBUG_PRINTLN("###########################################################");
     DEBUG_PRINTLN("#                  Starting Switch Manager                #");
     DEBUG_PRINTLN("###########################################################");
@@ -10,10 +13,10 @@ SwitchManager::SwitchManager(ConfigManager* Conf,WiFiManager * wifi) : Conf(Conf
     DEBUG_PRINTLN("================ Switch Pin Map ==================");
     DEBUG_PRINTF("POWER_ON_SWITCH_PIN = GPIO %d (Boot / Mode button)\n", POWER_ON_SWITCH_PIN);
     DEBUG_PRINTLN("==================================================");
-    pinMode(POWER_ON_SWITCH_PIN,INPUT_PULLUP);
+    DEBUGGSTOP();
+    pinMode(POWER_ON_SWITCH_PIN, INPUT_PULLUP);
     instance = this;  // Set the static instance pointer
 }
-
 
 void SwitchManager::detectTapOrHold() {
     uint8_t tapCount = 0;
@@ -33,27 +36,35 @@ void SwitchManager::detectTapOrHold() {
 
             // If press lasted longer than threshold → HOLD
             if (pressDuration >= HOLD_THRESHOLD_MS) {
-                blink(POWER_OFF_LED_PIN, 100);
+                // Replaced blink(...) with RGB overlay
+                RGB->postOverlay(OverlayEvent::RESET_TRIGGER);
+                DEBUGGSTART();
                 DEBUG_PRINTLN("Long press detected 🕒");
                 DEBUG_PRINTLN("###########################################################");
                 DEBUG_PRINTLN("#                   Resetting device 🔄                   #");
                 DEBUG_PRINTLN("###########################################################");
-                Conf->PutBool(RESET_FLAG, true);   // Set the reset flag
-                Conf->RestartSysDelayDown(3000);   // Delayed restart
+                DEBUGGSTOP();
+                CONF->PutBool(RESET_FLAG, true);   // Set the reset flag
+                CONF->RestartSysDelayDown(3000);   // Delayed restart
                 tapCount = 0;                      // Cancel any tap sequence
             }
             // Otherwise → count as tap
             else {
                 tapCount++;
                 lastTapTime = millis();
+
+                // Visual ping for a short tap
+                RGB->postOverlay(OverlayEvent::WAKE_FLASH);
             }
 
             // Triple-tap detection
             if (tapCount == 3) {
                 if ((millis() - lastTapTime) <= TAP_WINDOW_MS) {
-                    blink(POWER_OFF_LED_PIN, 100);
+                    // Replaced blink(...) with a Wi-Fi overlay hint
+                    RGB->postOverlay(OverlayEvent::WIFI_AP_);
+
                     DEBUG_PRINTLN("Triple tap detected 🖱️🖱️🖱️");
-                    wifi->begin();
+                    WIFI->begin();   // begin() itself will show STA/AP overlays too
                     tapCount = 0;
                 } else {
                     tapCount = 0;
@@ -64,11 +75,23 @@ void SwitchManager::detectTapOrHold() {
         // Timeout to reset tap sequence
         if ((millis() - lastTapTime) > TAP_TIMEOUT_MS && tapCount > 0) {
             if (tapCount == 1) {
-                if (wifi->dev->currentState != DeviceState::Running)
-                    wifi->dev->startLoopTask();
+                DEVICE->startLoopTask(); // idempotent: ensures the Device task is running
 
-                if (wifi->dev->currentState == DeviceState::Running)
-                    wifi->dev->currentState = DeviceState::Idle;
+                // OFF (= Shutdown) → Tap#1 requests WAKE
+                if (DEVICE->currentState == DeviceState::Shutdown) {
+                xEventGroupSetBits(gEvt, EVT_WAKE_REQ);
+                RGB->postOverlay(OverlayEvent::WAKE_FLASH);
+                }
+                // IDLE → Tap#1 requests RUN
+                else if (DEVICE->currentState == DeviceState::Idle) {
+                xEventGroupSetBits(gEvt, EVT_RUN_REQ);
+                RGB->postOverlay(OverlayEvent::PWR_START);
+                }
+                // RUN → Tap#1 requests STOP
+                else if (DEVICE->currentState == DeviceState::Running) {
+                xEventGroupSetBits(gEvt, EVT_STOP_REQ);
+                RGB->postOverlay(OverlayEvent::RELAY_OFF);
+                }
 
                 tapCount = 0;
                 DEBUG_PRINTLN("One tap detected 🖱️");
@@ -77,11 +100,9 @@ void SwitchManager::detectTapOrHold() {
                 DEBUG_PRINTLN("Tap timeout ⏱️");
             }
         }
-
         vTaskDelay(pdMS_TO_TICKS(SWITCH_TASK_LOOP_DELAY_MS));
     }
 }
-
 
 // Global C-style FreeRTOS task function
 void SwitchManager::SwitchTask(void* pvParameters) {
@@ -100,7 +121,7 @@ void SwitchManager::TapDetect() {
         "SwitchTask",
         SWITCH_TASK_STACK_SIZE,
         nullptr,         // No parameter needed since we use the static instance
-        SWITCH_TASK_PRIORITY,nullptr,
+        SWITCH_TASK_PRIORITY, nullptr,
         SWITCH_TASK_CORE
     );
 }

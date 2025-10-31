@@ -55,30 +55,40 @@
         <div class="tab" onclick="switchTab(3)">Admin Settings</div>
         <div class="tab" onclick="switchTab(4)">Device Settings</div>
 
+        <!-- SINGLE vertical stack of 4 buttons -->
         <div class="sidebar-controls-vertical">
+          <!-- 1) Mute -->
           <div
-            class="round-button stop"
-            onclick="shutdownSystem()"
-            title="Shutdown"
+            class="round-button mute"
+            id="muteBtn"
+            onclick="toggleMute()"
+            title="Mute / Unmute"
           >
-            <img src="icons/power.png" alt="Shutdown" />
+            <img id="muteIcon" src="icons/volume-up-4-256.png" alt="Sound" />
           </div>
+
+          <!-- 2) Power -->
+          <button id="powerButton" class="power-button state-off" title="Power">
+            <span class="ring"></span>
+            <span class="label" id="powerLabel">OFF</span>
+          </button>
+
+          <!-- 3) Reboot -->
           <div
             class="round-button reset"
             onclick="rebootSystem()"
             title="Reboot"
           >
-            <img src="icons/redo-5-16.png" alt="Reset" />
-          </div>
-          <div
-            class="round-button start"
-            onclick="startSystem()"
-            title="Ready Start System"
-          >
-            <img src="icons/ok_tank.png" alt="Start" />
-          </div>
-          <div class="round-button reset" onclick="resetSystem()" title="Reset">
             <img src="icons/refresh.png" alt="Reset" />
+          </div>
+
+          <!-- 4) Reset -->
+          <div
+            class="round-button reset"
+            onclick="openConfirm('reset')"
+            title="Reset"
+          >
+            <img src="icons/redo-5-16.png" alt="Reset" />
           </div>
         </div>
       </div>
@@ -86,7 +96,7 @@
       <!-- Dashboard Tab -->
       <div class="content active" id="dashboardTab">
         <div class="content-header">
-          <h2>System Dashboard</h2>
+          <h2></h2>
         </div>
 
         <div
@@ -544,7 +554,7 @@
       <!-- User Settings Tab -->
       <div class="content" id="userSettingsTab">
         <div class="content-header">
-          <h2>User Settings</h2>
+          <h2></h2>
         </div>
 
         <div
@@ -579,7 +589,7 @@
       <!-- Manual Control Tab -->
       <div class="content" id="manualControlTab">
         <div class="content-header">
-          <h2>Manual Control</h2>
+          <h2></h2>
         </div>
 
         <div class="mode-box">
@@ -613,7 +623,7 @@
       <!-- Admin Settings Tab -->
       <div class="content" id="adminSettingsTab">
         <div class="content-header">
-          <h2>Admin Settings</h2>
+          <h2></h2>
         </div>
 
         <div
@@ -667,7 +677,7 @@
       <!-- Device Settings Tab -->
       <div class="content" id="deviceSettingsTab">
         <div class="content-header">
-          <h2>Device Settings</h2>
+          <h2></h2>
         </div>
 
         <div
@@ -745,5 +755,20 @@
     </div>
 
     <script src="js/admin.js?v=2"></script>
+    <!-- Confirm dialog -->
+    <div id="confirmModal" class="user-modal" style="display: none">
+      <div
+        class="user-modal-content zoom-box"
+        style="max-width: 380px; text-align: center"
+      >
+        <h3 id="confirmTitle">Confirm Action</h3>
+        <p id="confirmMessage">Are you sure?</p>
+
+        <div class="user-modal-actions">
+          <button id="confirmCancelBtn">Cancel</button>
+          <button id="confirmOkBtn" class="danger">Yes, do it</button>
+        </div>
+      </div>
+    </div>
   </body>
 </html>

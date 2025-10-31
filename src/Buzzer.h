@@ -1,149 +1,91 @@
-#ifndef BUZZER_MANAGER_H
-#define BUZZER_MANAGER_H
+#ifndef BUZZER_H
+#define BUZZER_H
 
 #include <Arduino.h>
 #include "Config.h"
-#include "ConfigManager.h"
 
-class BuzzerManager {
+// ===== Task / Queue sizing =====
+#ifndef BUZZER_TASK_STACK
+#define BUZZER_TASK_STACK    2048
+#endif
+#ifndef BUZZER_TASK_PRIORITY
+#define BUZZER_TASK_PRIORITY 1
+#endif
+#ifndef BUZZER_QUEUE_LEN
+#define BUZZER_QUEUE_LEN     12
+#endif
+
+class Buzzer {
 public:
-  enum BuzzerMode {
-    BUZZER_SUCCESS,
-    BUZZER_FAILED,
-    BUZZER_WIFI_CONNECTED,
-    BUZZER_WIFI_OFF,
-    BUZZER_OVER_TEMPERATURE,
-    BUZZER_FAULT,
-    BUZZER_STARTUP,
-    BUZZER_READY,
-    BUZZER_SHUTDOWN,
-    BUZZER_CLIENT_CONNECTED,      // NEW
-    BUZZER_CLIENT_DISCONNECTED    // NEW
+  enum class Mode : uint8_t {
+    BIP = 0, SUCCESS, FAILED, WIFI_CONNECTED, WIFI_OFF,
+    OVER_TEMPERATURE, FAULT, STARTUP, READY, SHUTDOWN,
+    CLIENT_CONNECTED, CLIENT_DISCONNECTED
   };
 
-  explicit BuzzerManager() {}
+  // Singleton access.
+  // NOTE: pin is resolved from BUZZER_PIN; param kept for API parity but ignored unless BUZZER_PIN is undefined.
+  static void    Init(int pin = -1, bool activeLow = true);
+  static Buzzer* Get();
+  static Buzzer* TryGet();
 
-  void begin() {
-    if (DEBUGMODE) {
-      Serial.println("###########################################################");
-      Serial.println("#                 Starting BuzzerManager                  #");
-      Serial.println("###########################################################");
-    }
+  // Lifecycle
+  bool begin();   // loads polarity/mute from CONF, resolves pin from BUZZER_PIN, starts task
+  void end();
 
-    pinMode(BUZZER_PIN, OUTPUT);
-    digitalWrite(BUZZER_PIN, HIGH); // Ensure silent (active-low)
-  }
+  // Runtime changes (pin change is NOT persisted; polarity/mute ARE).
+  void attachPin(int pin, bool activeLow = true);
 
-  // Public API
-  void bip()                      { tone(BUZZER_PIN, 1000, 50); digitalWrite(BUZZER_PIN, HIGH); }
-  void successSound()            { playSequence(BUZZER_SUCCESS); }
-  void failedSound()             { playSequence(BUZZER_FAILED); }
-  void bipWiFiConnected()        { playSequence(BUZZER_WIFI_CONNECTED); }
-  void bipWiFiOff()              { playSequence(BUZZER_WIFI_OFF); }
-  void bipOverTemperature()      { playSequence(BUZZER_OVER_TEMPERATURE); }
-  void bipFault()                { playSequence(BUZZER_FAULT); }
-  void bipStartupSequence()      { playSequence(BUZZER_STARTUP); }
-  void bipSystemReady()          { playSequence(BUZZER_READY); }
-  void bipSystemShutdown()       { playSequence(BUZZER_SHUTDOWN); }
-  void bipClientConnected()      { playSequence(BUZZER_CLIENT_CONNECTED); }     // NEW
-  void bipClientDisconnected()   { playSequence(BUZZER_CLIENT_DISCONNECTED); }  // NEW
+  void setMuted(bool on);
+  bool isMuted() const { return _muted; }
+
+  // Enqueue helpers (no-ops while muted)
+  void bip();
+  void successSound();
+  void failedSound();
+  void bipWiFiConnected();
+  void bipWiFiOff();
+  void bipOverTemperature();
+  void bipFault();
+  void bipStartupSequence();
+  void bipSystemReady();
+  void bipSystemShutdown();
+  void bipClientConnected();
+  void bipClientDisconnected();
+
+  void enqueue(Mode m);  // drops immediately if muted
 
 private:
-  static void BuzzerTask(void* pvParameters) {
-    BuzzerMode mode = *static_cast<BuzzerMode*>(pvParameters);
-    free(pvParameters); // Clean up heap memory
+  Buzzer() = default;
+  Buzzer(const Buzzer&) = delete;
+  Buzzer& operator=(const Buzzer&) = delete;
 
-    auto playTone = [](int freq, int duration) {
-      tone(BUZZER_PIN, freq, duration);
-      vTaskDelay(pdMS_TO_TICKS(duration + 10));
-      digitalWrite(BUZZER_PIN, HIGH); // Pull high to silence buzzer (active-low)
-    };
+  static void taskThunk(void* arg);
+  void        taskLoop();
 
-    switch (mode) {
-      case BUZZER_SUCCESS:
-        playTone(1000, 40);
-        vTaskDelay(pdMS_TO_TICKS(30));
-        playTone(1300, 40);
-        vTaskDelay(pdMS_TO_TICKS(30));
-        playTone(1600, 60);
-        break;
+  void playMode(Mode m);
+  void playTone(int freqHz, int durationMs);
+  inline void idleOff() { digitalWrite(_pin, _activeLow ? HIGH : LOW); }
 
-      case BUZZER_FAILED:
-        for (int i = 0; i < 2; ++i) {
-          playTone(500, 50);
-          vTaskDelay(pdMS_TO_TICKS(50));
-        }
-        break;
+  // Persist/load helpers (NO pin in NVS)
+  void loadFromPrefs_();
+  void storeToPrefs_() const;
 
-      case BUZZER_WIFI_CONNECTED:
-        playTone(1200, 100);
-        vTaskDelay(pdMS_TO_TICKS(50));
-        playTone(1500, 100);
-        break;
+private:
+  static Buzzer* s_inst;
 
-      case BUZZER_WIFI_OFF:
-        playTone(800, 150);
-        break;
+  // HW
+  int   _pin       = -1;     // always comes from BUZZER_PIN (or last attachPin call), not NVS
+  bool  _activeLow = true;   // persisted
+  volatile bool  _muted     = false;  // persisted, checked from ISR/task/queue paths
 
-      case BUZZER_OVER_TEMPERATURE:
-        for (int i = 0; i < 4; ++i) {
-          playTone(2000, 40);
-          vTaskDelay(pdMS_TO_TICKS(60));
-        }
-        break;
-
-      case BUZZER_FAULT:
-        for (int i = 0; i < 5; ++i) {
-          playTone(300, 80);
-          vTaskDelay(pdMS_TO_TICKS(40));
-        }
-        break;
-
-      case BUZZER_STARTUP:
-        playTone(600, 80);
-        vTaskDelay(pdMS_TO_TICKS(50));
-        playTone(1000, 80);
-        vTaskDelay(pdMS_TO_TICKS(50));
-        playTone(1400, 80);
-        break;
-
-      case BUZZER_READY:
-        playTone(2000, 50);
-        vTaskDelay(pdMS_TO_TICKS(50));
-        playTone(2500, 50);
-        break;
-
-      case BUZZER_SHUTDOWN:
-        playTone(1500, 80);
-        vTaskDelay(pdMS_TO_TICKS(50));
-        playTone(1000, 80);
-        vTaskDelay(pdMS_TO_TICKS(50));
-        playTone(600, 80);
-        break;
-
-      case BUZZER_CLIENT_CONNECTED:
-        playTone(1100, 50);
-        vTaskDelay(pdMS_TO_TICKS(30));
-        playTone(1300, 60);
-        break;
-
-      case BUZZER_CLIENT_DISCONNECTED:
-        playTone(1200, 80);
-        vTaskDelay(pdMS_TO_TICKS(40));
-        playTone(900, 60);
-        break;
-    }
-
-    digitalWrite(BUZZER_PIN, HIGH); // Extra safety
-    vTaskDelete(nullptr);
-  }
-
-  void playSequence(BuzzerMode mode) {
-    BuzzerMode* arg = static_cast<BuzzerMode*>(malloc(sizeof(BuzzerMode)));
-    if (!arg) return;
-    *arg = mode;
-    xTaskCreate(BuzzerTask, "BuzzerSequence", 1024, arg, 1, nullptr);
-  }
+  // RTOS
+  TaskHandle_t      _task  = nullptr;
+  QueueHandle_t     _queue = nullptr;
+  SemaphoreHandle_t _mtx   = nullptr;
 };
 
-#endif // BUZZER_MANAGER_H
+// Convenience macro
+#define BUZZ  (Buzzer::Get())
+
+#endif // BUZZER_H

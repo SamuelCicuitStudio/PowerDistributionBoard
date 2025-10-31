@@ -1,397 +1,275 @@
 #include "WiFiManager.h"
 #include "Utils.h"
+
+// ===== Singleton storage & accessors =====
 WiFiManager* WiFiManager::instance = nullptr;
-// Constructor
-WiFiManager:: WiFiManager( Device* dev)
-        : dev(dev), server(80) {}
-// ─────────────────────────────────────────────────────────────
-// Begin WiFi Manager
-// ─────────────────────────────────────────────────────────────
+
+void WiFiManager::Init() {
+    if (!instance) {
+        instance = new WiFiManager();
+    }
+}
+
+WiFiManager* WiFiManager::Get() {
+    return instance; // nullptr until Init() has been called
+}
+
+// ===== Ctor kept lightweight; full setup happens in begin() =====
+WiFiManager::WiFiManager()
+: server(80) {}
+
 void WiFiManager::begin() {
     DEBUG_PRINTLN("###########################################################");
     DEBUG_PRINTLN("#                 Starting WIFI Manager 🌐               #");
     DEBUG_PRINTLN("###########################################################");
-    instance = this;
-    wifiStatus= WiFiStatus::NotConnected; // global variable from utils 
+
+    // In case someone constructs manually, keep instance in sync.
+    if (!instance) instance = this;
+
+    // Create mutex first so all shared state is protected immediately
+    _mutex = xSemaphoreCreateMutex();
+
+    // Create control queue + worker task (serialize /control effects)
+    _ctrlQueue = xQueueCreate(24, sizeof(ControlCmd));
+    xTaskCreatePinnedToCore(controlTaskTrampoline, "WiFiCtrlTask", 4096, this, 1, &_ctrlTask, APP_CPU_NUM);
+
+    // Set initial session state safely
+    if (lock()) {
+        wifiStatus = WiFiStatus::NotConnected; // (global) keep it consistent
+        keepAlive = false;
+        WifiState = false;
+        prev_WifiState = false;
+        unlock();
+    }
+
+#if WIFI_START_IN_STA
+    if (!StartWifiSTA()) {
+        DEBUG_PRINTLN("[WiFiManager] STA connect failed → falling back to AP 📡");
+        StartWifiAP();
+    }
+#else
     StartWifiAP();
-    dev->buz->bipWiFiConnected();
+#endif
+
+    BUZZ->bipWiFiConnected();
 }
 
-// ─────────────────────────────────────────────────────────────
-// Start Access Point
-// ─────────────────────────────────────────────────────────────
+// ========================== AP / STA ==========================
+
 void WiFiManager::StartWifiAP() {
-    keepAlive = false;
-    WifiState = true;
-    prev_WifiState = false;
+    if (lock()) { keepAlive = false; WifiState = true; prev_WifiState = false; unlock(); }
 
     DEBUG_PRINTLN("[WiFiManager] Starting Access Point ✅");
 
-    if (!WiFi.softAP(dev->config->GetString(DEVICE_WIFI_HOTSPOT_NAME_KEY, DEVICE_WIFI_HOTSPOT_NAME).c_str(),dev->config->GetString(DEVICE_AP_AUTH_PASS_KEY, DEVICE_AP_AUTH_PASS_DEFAULT).c_str())) {
+    const String ap_ssid = CONF->GetString(DEVICE_WIFI_HOTSPOT_NAME_KEY, DEVICE_WIFI_HOTSPOT_NAME);
+    const String ap_pass = CONF->GetString(DEVICE_AP_AUTH_PASS_KEY, DEVICE_AP_AUTH_PASS_DEFAULT);
+
+    if (!WiFi.softAP(ap_ssid.c_str(), ap_pass.c_str())) {
         DEBUG_PRINTLN("[WiFiManager] Failed to start AP ❌");
-        dev->buz->bipFault();
+        BUZZ->bipFault();
+        RGB->postOverlay(OverlayEvent::WIFI_LOST);
         return;
     }
-
-    DEBUG_PRINTF("✅ AP Started: %s\n", dev->config->GetString(DEVICE_WIFI_HOTSPOT_NAME_KEY, DEVICE_WIFI_HOTSPOT_NAME).c_str());
-
     if (!WiFi.softAPConfig(LOCAL_IP, GATEWAY, SUBNET)) {
         DEBUG_PRINTLN("[WiFiManager] Failed to set AP config ❌");
-        dev->buz->bipFault();
+        BUZZ->bipFault();
+        RGB->postOverlay(OverlayEvent::WIFI_LOST);
         return;
     }
 
+    DEBUG_PRINTF("✅ AP Started: %s\n", ap_ssid.c_str());
+    DEBUG_PRINT("[WiFiManager] AP IP Address: "); DEBUG_PRINTLN(WiFi.softAPIP());
 
-    DEBUG_PRINT("[WiFiManager] AP IP Address: ");
-    DEBUG_PRINTLN(WiFi.softAPIP());
+    registerRoutes_();
+    server.begin();
+    startInactivityTimer();
 
+    // Visual cue for AP mode
+    RGB->postOverlay(OverlayEvent::WIFI_AP_);
+}
 
-    // ── Web routes ───────────────────────────────────────────
+// Returns true on successful STA connection
+bool WiFiManager::StartWifiSTA() {
+    if (lock()) { keepAlive = false; WifiState = true; prev_WifiState = false; unlock(); }
+
+    DEBUG_PRINTLN("[WiFiManager] Starting Station (STA) mode 🚏");
+
+    // Prefer stored creds if available; otherwise use compile-time defaults
+    //String ssid = dev->config->GetString(STA_SSID_KEY, WIFI_STA_SSID);
+    //String pass = dev->config->GetString(STA_PASS_KEY, WIFI_STA_PASS);
     
+    String ssid = WIFI_STA_SSID;
+    String pass =  WIFI_STA_PASS;
+
+    WiFi.mode(WIFI_STA);
+    WiFi.begin(ssid.c_str(), pass.c_str());
+
+    unsigned long t0 = millis();
+    while (WiFi.status() != WL_CONNECTED && (millis() - t0) < WIFI_STA_CONNECT_TIMEOUT_MS) {
+        vTaskDelay(pdMS_TO_TICKS(200));
+    }
+
+    if (WiFi.status() != WL_CONNECTED) {
+        DEBUG_PRINTLN("[WiFiManager] STA connect timeout ❌");
+        RGB->postOverlay(OverlayEvent::WIFI_LOST);
+        return false;
+    }
+
+    DEBUG_PRINTF("✅ STA Connected. SSID=%s, IP=%s\n", ssid.c_str(), WiFi.localIP().toString().c_str());
+
+    registerRoutes_();
+    server.begin();
+    startInactivityTimer();
+
+    // Visual cue for STA join
+    RGB->postOverlay(OverlayEvent::WIFI_STATION);
+    return true;
+}
+
+// Shared route registration (used by AP and STA)
+void WiFiManager::registerRoutes_() {
+    // ---------- Simple pages ----------
     server.on("/login", HTTP_GET, [this](AsyncWebServerRequest* request) {
-        resetTimer();// reset activity timer
+        if (lock()) { lastActivityMillis = millis(); unlock(); }
         handleRoot(request);
     });
 
-    // ─────────────────────────────────────────────────────────────
-    // REST API Callbacks – WiFiManager
-    // ─────────────────────────────────────────────────────────────
-
-    // 1. Heartbeat – Update keep-alive and verify auth
+    // ---------- Heartbeat ----------
     server.on("/heartbeat", HTTP_GET, [this](AsyncWebServerRequest* request) {
-        if (!isAuthenticated(request)) {
-            DEBUG_PRINTLN("[Heartbeat] Not authenticated ❌ → Redirecting to root");
-            dev->buz->bipFault();
-            request->redirect("/login");
-            return;
-        }
-        //DEBUG_PRINTLN("[Heartbeat❤️ ]");
-        resetTimer();
-        heartbeat();// start heartbeat
-        keepAlive = true;
+        if (!isAuthenticated(request)) { BUZZ->bipFault(); request->redirect("/login"); return; }
+        if (lock()) { lastActivityMillis = millis(); keepAlive = true; unlock(); }
         request->send(200, "text/plain", "alive");
     });
 
-    // 2. Connect – Authenticate user or admin via JSON body
-    server.on("/connect", HTTP_POST,[this](AsyncWebServerRequest* request) {
-            // Not used for POST body in AsyncWebServer
-        },
+    // ---------- Connect ----------
+    server.on("/connect", HTTP_POST, [this](AsyncWebServerRequest* request) {},
         nullptr,
         [this](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
-            static String body = "";
+            static String body = ""; body += String((char*)data);
+            if (index + len != total) return;
 
-            body += String((char*)data);
+            DynamicJsonDocument doc(512);
+            if (deserializeJson(doc, body)) { request->send(400, "application/json", "{\"error\":\"Invalid JSON\"}"); body = ""; return; }
+            body = "";
 
-            // Wait until full body is received
-            if (index + len == total) {
-                DynamicJsonDocument doc(512);
-                DeserializationError error = deserializeJson(doc, body);
-                resetTimer();// reset activity timer
+            const String username = doc["username"] | "";
+            const String password = doc["password"] | "";
+            if (username == "" || password == "") { request->send(400, "application/json", "{\"error\":\"Missing fields\"}"); return; }
 
-                if (error) {
-                    request->send(400, "application/json", "{\"error\":\"Invalid JSON\"}");
-                    body = "";
-                    return;
-                }
+            // already connected?
+            if (wifiStatus != WiFiStatus::NotConnected) { request->send(403, "application/json", "{\"error\":\"Already connected\"}"); return; }
 
-                // Extract credentials
-                String username = doc["username"] | "";
-                String password = doc["password"] | "";
+            // Check stored credentials
+            String adminUser = CONF->GetString(ADMIN_ID_KEY, "");
+            String adminPass = CONF->GetString(ADMIN_PASS_KEY, "");
+            String userUser  = CONF->GetString(USER_ID_KEY, "");
+            String userPass  = CONF->GetString(USER_PASS_KEY, "");
 
-                // Validate presence
-                if (username == "" || password == "") {
-                    request->send(400, "application/json", "{\"error\":\"Missing username or password\"}");
-                    body = "";
-                    return;
-                }
-
-                // Check stored credentials
-                String adminUser = dev->config->GetString(ADMIN_ID_KEY, "");
-                String adminPass = dev->config->GetString(ADMIN_PASS_KEY, "");
-                String userUser  = dev->config->GetString(USER_ID_KEY, "");
-                String userPass  = dev->config->GetString(USER_PASS_KEY, "");
-
-                if (wifiStatus != WiFiStatus::NotConnected) {
-                    request->send(403, "application/json", "{\"error\":\"Already connected\"}");
-                    body = "";
-                    return;
-                }
-
-                if (username == adminUser && password == adminPass) {
-                    dev->buz->successSound();
-                    onAdminConnected();
-                    request->redirect("/admin.html");
-                    body = "";
-                    return;
-                }
-
-                if (username == userUser && password == userPass) {
-                    onUserConnected();
-                    dev->buz->successSound();
-                    request->redirect("/user.html");
-                    body = "";
-                    return;
-                }
-
-                dev->buz->bipFault();
-                request->redirect("/login_failed.html");  // ❌ Invalid credentials
-                body = "";
+            if (username == adminUser && password == adminPass) {
+                BUZZ->successSound(); onAdminConnected(); RGB->postOverlay(OverlayEvent::WEB_ADMIN_ACTIVE);
+                request->redirect("/admin.html"); return;
             }
+            if (username == userUser && password == userPass) {
+                BUZZ->successSound(); onUserConnected();  RGB->postOverlay(OverlayEvent::WEB_USER_ACTIVE);
+                request->redirect("/user.html");  return;
+            }
+
+            BUZZ->bipFault();
+            request->redirect("/login_failed.html");
         }
     );
 
-    // 3. Disconnect
-    server.on("/disconnect", HTTP_POST,
-        [](AsyncWebServerRequest* request) {
-            // Unused for POST body
-        },
+    // ---------- Disconnect ----------
+    server.on("/disconnect", HTTP_POST, [](AsyncWebServerRequest* request) {},
         nullptr,
         [this](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
-            static String body = "";
-            body += String((char*)data);
+            static String body = ""; body += String((char*)data);
+            if (index + len != total) return;
 
-            if (index + len == total) {
-                body.trim();  // Clean up formatting
-                DynamicJsonDocument doc(256);
-                DeserializationError error = deserializeJson(doc, body);
-                body = ""; // clear after use
+            DynamicJsonDocument doc(256);
+            if (deserializeJson(doc, body)) { request->send(400, "application/json", "{\"error\":\"Invalid JSON\"}"); body = ""; return; }
+            body = "";
+            if ((String)(doc["action"] | "") != "disconnect") { request->send(400, "application/json", "{\"error\":\"Invalid action\"}"); return; }
 
-                if (error) {
-                    request->send(400, "application/json", "{\"error\":\"Invalid JSON format\"}");
-                    return;
-                }
-
-                String action = doc["action"] | "";
-                if (action != "disconnect") {
-                    request->send(400, "application/json", "{\"error\":\"Invalid action\"}");
-                    return;
-                }
-
-                DEBUG_PRINTLN("[Device]  Valid disconnect request received 🔌");
-
-                onDisconnected();  // Clear any session state
-                resetTimer();      // Reset watchdog
-                keepAlive = false;
-                request->redirect("/login.html");  // Trigger redirect
-            }
+            onDisconnected();
+            if (lock()) { lastActivityMillis = millis(); keepAlive = false; unlock(); }
+            RGB->postOverlay(OverlayEvent::WIFI_LOST);
+            request->redirect("/login.html");
         }
     );
 
-    // 4. Monitor – Return live readings
+    // ---------- Monitor ----------
     server.on("/monitor", HTTP_GET, [this](AsyncWebServerRequest* request) {
         if (!isAuthenticated(request)) return;
-
-        resetTimer();  // Reset activity timer
+        if (lock()) { lastActivityMillis = millis(); unlock(); }
 
         StaticJsonDocument<768> doc;
 
-        // Measurements
-        dev->discharger->startCapVoltageTask();
-        doc["capVoltage"] = dev->discharger->readCapVoltage();
-        doc["current"] = dev->currentSensor->readCurrent();
+        doc["capVoltage"] = DEVICE->discharger->readCapVoltage();
+        doc["current"]    = DEVICE->currentSensor->readCurrent();
 
-        // Temperatures
         JsonArray temps = doc.createNestedArray("temperatures");
         for (uint8_t i = 0; i < MAX_TEMP_SENSORS; ++i) {
-            float temp = (i < dev->tempSensor->getSensorCount()) ? dev->tempSensor->getTemperature(i) : -127;
-            temps.add((temp == -127) ? -127 : temp);
+            float t = (i < DEVICE->tempSensor->getSensorCount()) ? DEVICE->tempSensor->getTemperature(i) : -127;
+            temps.add((t == -127) ? -127 : t);
         }
 
-        // LED status
         doc["ready"] = digitalRead(READY_LED_PIN);
         doc["off"]   = digitalRead(POWER_OFF_LED_PIN);
 
-        // Output states 1–10
         JsonObject outputs = doc.createNestedObject("outputs");
-        for (int i = 1; i <= 10; ++i) {
-            outputs["output" + String(i)] = dev->heaterManager->getOutputState(i);
-        }
+        for (int i = 1; i <= 10; ++i) outputs["output" + String(i)] = DEVICE->heaterManager->getOutputState(i);
 
-        // Fan speed
-        doc["fanSpeed"] = dev->fanManager->getSpeedPercent();
+        doc["fanSpeed"] = FAN->getSpeedPercent();
 
-        String json;
-        serializeJson(doc, json);
-        //DEBUG_PRINTLN("[Update] Monitor data sent 🚀");
+        String json; serializeJson(doc, json);
         request->send(200, "application/json", json);
     });
 
-    // 5. Control – Unified command handler with JSON body
-    server.on("/control", HTTP_POST, [this](AsyncWebServerRequest* request) {
-        // Empty handler
-    }, nullptr, [this](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
-        static String body = "";
-        body += String((char*)data);
-
-        if (index + len == total) {
-            if (!isAuthenticated(request)) return;
+    // ---------- CONTROL (now queued) ----------
+    server.on("/control", HTTP_POST, [this](AsyncWebServerRequest* request) {},
+        nullptr,
+        [this](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
+            static String body = ""; body += String((char*)data);
+            if (index + len != total) return;
+            if (!isAuthenticated(request)) { body = ""; return; }
 
             StaticJsonDocument<1024> doc;
-            DeserializationError error = deserializeJson(doc, body);
+            if (deserializeJson(doc, body)) { body = ""; request->send(400, "application/json", "{\"error\":\"Invalid JSON\"}"); return; }
             body = "";
 
-            if (error) {
-                request->send(400, "application/json", "{\"error\":\"Invalid JSON\"}");
-                return;
-            }
-
-            String action = doc["action"] | "";
-            String target = doc["target"] | "";
-            JsonVariant value = doc["value"];
+            ControlCmd c{};
+            const String action = doc["action"] | "";
+            const String target = doc["target"] | "";
+            JsonVariant value   = doc["value"];
 
             if (action == "set") {
+                if (target == "reboot")                          c.type = CTRL_REBOOT;
+                else if (target == "systemReset")               c.type = CTRL_SYS_RESET;
+                else if (target == "ledFeedback")               { c.type = CTRL_LED_FEEDBACK_BOOL; c.b1 = value.as<bool>(); }
+                else if (target == "onTime")                    { c.type = CTRL_ON_TIME_MS;         c.i1 = value.as<int>(); }
+                else if (target == "offTime")                   { c.type = CTRL_OFF_TIME_MS;        c.i1 = value.as<int>(); }
+                else if (target == "relay")                     { c.type = CTRL_RELAY_BOOL;         c.b1 = value.as<bool>(); }
+                else if (target.startsWith("output"))           { c.type = CTRL_OUTPUT_BOOL;        c.i1 = target.substring(6).toInt(); c.b1 = value.as<bool>(); }
+                else if (target == "desiredVoltage")            { c.type = CTRL_DESIRED_V;          c.f1 = value.as<float>(); }
+                else if (target == "acFrequency")               { c.type = CTRL_AC_FREQ;            c.i1 = value.as<int>(); }
+                else if (target == "chargeResistor")            { c.type = CTRL_CHARGE_RES;         c.f1 = value.as<float>(); }
+                else if (target == "dcVoltage")                 { c.type = CTRL_DC_VOLT;            c.f1 = value.as<float>(); }
+                else if (target.startsWith("Access"))           { c.type = CTRL_ACCESS_BOOL;        c.i1 = target.substring(6).toInt(); c.b1 = value.as<bool>(); }
+                else if (target == "mode")                      c.type = CTRL_MODE_IDLE;
+                else if (target == "systemStart")               c.type = CTRL_SYSTEM_START;
+                else if (target == "systemShutdown")            c.type = CTRL_SYSTEM_SHUTDOWN;
+                else if (target == "bypass")                    { c.type = CTRL_BYPASS_BOOL;        c.b1 = value.as<bool>(); }
+                else if (target == "fanSpeed")                  { c.type = CTRL_FAN_SPEED;          c.i1 = constrain(value.as<int>(), 0, 100); }
+                else if (target == "buzzerMute")                { c.type = CTRL_BUZZER_MUTE; c.b1 = value.as<bool>(); }
+                else { request->send(400, "application/json", "{\"error\":\"Unknown target\"}"); return; }
 
-                if (target == "reboot") {
-                    DEBUG_PRINTLN("Reboot requested ⚙️");
-                    blink(POWER_OFF_LED_PIN, 100);
-                    dev->buz->bip();
-                    dev->config->RestartSysDelayDown(3000);
-
-                } else if (target == "systemReset") {
-                    blink(POWER_OFF_LED_PIN, 100);
-                    dev->buz->bip();
-                    DEBUG_PRINTLN("Resetting device... 🔁");
-                    dev->config->PutBool(RESET_FLAG, true);
-                    dev->config->RestartSysDelayDown(3000);
-
-                } else if (target == "ledFeedback") {
-                    bool state = value.as<bool>();
-                    dev->buz->bip();
-                    DEBUG_PRINTF("LED Feedback: %s 🔘\n", state ? "true" : "false");
-                    dev->config->PutBool(LED_FEEDBACK_KEY, state);
-
-                } else if (target == "onTime") {
-                    int t = value.as<int>();
-                    dev->buz->bip();
-                    DEBUG_PRINTF("ON time set to %d ms ⏱️\n", t);
-                    dev->config->PutInt(ON_TIME_KEY, t);
-
-                } else if (target == "offTime") {
-                    int t = value.as<int>();
-                    dev->buz->bip();
-                    DEBUG_PRINTF("OFF time set to %d ms ⏱️\n", t);
-                    dev->config->PutInt(OFF_TIME_KEY, t);
-
-                } else if (target == "relay") {
-                    bool state = value.as<bool>();
-                    dev->buz->bip();
-                    DEBUG_PRINTF("Relay: %s 🔌\n", state ? "ON" : "OFF");
-                    state ? dev->relayControl->turnOn() : dev->relayControl->turnOff();
-
-                } else if (target.startsWith("output")) {
-                    int index = target.substring(6).toInt();
-                    dev->buz->bip();
-                    if (index >= 1 && index <= 10) {
-                        bool state = value.as<bool>();
-                        DEBUG_PRINTF("Output %d → %s 🔥\n", index, state ? "ON" : "OFF");
-                        if (isAdminConnected()) {
-                            dev->heaterManager->setOutput(index, state);
-                            dev->indicator->setLED(index, state);
-                        } else if (isUserConnected()) {
-                            if (index >= 1 && index <= 10) {
-                                const char* accessKeys[10] = {
-                                    OUT01_ACCESS_KEY, OUT02_ACCESS_KEY, OUT03_ACCESS_KEY, OUT04_ACCESS_KEY, OUT05_ACCESS_KEY,
-                                    OUT06_ACCESS_KEY, OUT07_ACCESS_KEY, OUT08_ACCESS_KEY, OUT09_ACCESS_KEY, OUT10_ACCESS_KEY
-                                };
-                                // Check if user is allowed to control this output
-                                bool allowed = dev->config->GetBool(accessKeys[index - 1], false);
-                                if (allowed) {
-                                    dev->heaterManager->setOutput(index, state);
-                                    dev->indicator->setLED(index, state);
-                                } else {
-                                    DEBUG_PRINTF("Access denied for OUT%02d 🔒\n", index);
-                                }
-                            } else {
-                                DEBUG_PRINTF("Invalid output index: %d ❌\n", index);
-                            }
-                        }
-
-                    }
-
-                } else if (target == "desiredVoltage") {
-                    float v = value.as<float>();
-                    dev->buz->bip();
-                    DEBUG_PRINTF("Desired Output Voltage set to %.2f V ⚡\n", v);
-                    dev->config->PutFloat(DESIRED_OUTPUT_VOLTAGE_KEY, v);
-
-                } else if (target == "acFrequency") {
-                    int f = value.as<int>();
-                    dev->buz->bip();
-                    DEBUG_PRINTF("AC Frequency set to %d Hz 🔄\n", f);
-                    dev->config->PutInt(AC_FREQUENCY_KEY, f);
-
-                } else if (target == "chargeResistor") {
-                    float r = value.as<float>();
-                    dev->buz->bip();
-                    DEBUG_PRINTF("Charge Resistor set to %.2f Ω 🧯\n", r);
-                    dev->config->PutFloat(CHARGE_RESISTOR_KEY, r);
-
-                } else if (target == "dcVoltage") {
-                    float v = value.as<float>();
-                    dev->buz->bip();
-                    DEBUG_PRINTF("DC Output Voltage set to %.2f V ⚡\n", v);
-                    dev->config->PutFloat(DC_VOLTAGE_KEY, v);
-
-                } else if (target.startsWith("Access")) {
-                    int index = target.substring(6).toInt();
-                    dev->buz->bip();
-                    if (index >= 1 && index <= 10) {
-                        const char* accessKeys[10] = {
-                            OUT01_ACCESS_KEY, OUT02_ACCESS_KEY, OUT03_ACCESS_KEY, OUT04_ACCESS_KEY, OUT05_ACCESS_KEY,
-                            OUT06_ACCESS_KEY, OUT07_ACCESS_KEY, OUT08_ACCESS_KEY, OUT09_ACCESS_KEY, OUT10_ACCESS_KEY
-                        };
-                        bool flag = value.as<bool>();
-                        DEBUG_PRINTF("Access %d → %s 🔐\n", index, flag ? "true" : "false");
-                        dev->config->PutBool(accessKeys[index - 1], flag);
-                    }
-
-                } else if (target == "mode") {
-                    DEBUG_PRINTLN("Mode switched to IDLE 🧭");
-                    dev->currentState = DeviceState::Idle;
-                    dev->buz->bip();
-                    dev->indicator->clearAll();
-                    dev->heaterManager->disableAll();
-
-                } else if (target == "systemStart") {
-                    DEBUG_PRINTLN("System Start requested ▶️");
-                    dev->buz->bip();
-                    if (dev->loopTaskHandle != nullptr && dev->currentState == DeviceState::Idle) {
-                        dev->startLoopTask();
-                    }
-                    if (dev->discharger->readCapVoltage() < 0.78f * dev->config->GetFloat(DC_VOLTAGE_KEY, DEFAULT_DC_VOLTAGE)) {
-                        StartFromremote = true;
-                    }
-
-                } else if (target == "systemShutdown") {
-                    DEBUG_PRINTLN("System Shutdown requested ⏹️");
-                    dev->buz->bip();
-                    if (dev->currentState == DeviceState::Running) {
-                        dev->currentState = DeviceState::Idle;
-                    }
-
-                } else if (target == "bypass") {
-                    bool state = value.as<bool>();
-                    dev->buz->bip();
-                    DEBUG_PRINTF("Bypass: %s 🛠️\n", state ? "ENABLED" : "DISABLED");
-                    state ? dev->bypassFET->enable() : dev->bypassFET->disable();
-
-                } else if (target == "fanSpeed") {
-                    int speed = constrain(value.as<int>(), 0, 100);
-
-                    DEBUG_PRINTF("Fan speed set to %d%% 🌀\n", speed);
-                    dev->fanManager->setSpeedPercent(speed);
-
-                } else {
-                    dev->buz->bipFault();
-                    request->send(400, "application/json", "{\"error\":\"Unknown target\"}");
-                    return;
-                }
-
-                request->send(200, "application/json", "{\"status\":\"ok\"}");
-
+                sendCmd(c);
+                // Respond quickly — worker will execute in order
+                request->send(202, "application/json", "{\"status\":\"queued\"}");
             } else if (action == "get" && target == "status") {
                 String statusStr;
-                switch (dev->currentState) {
+                switch (DEVICE->currentState) {
                     case DeviceState::Idle:     statusStr = "Idle"; break;
                     case DeviceState::Running:  statusStr = "Running"; break;
                     case DeviceState::Error:    statusStr = "Error"; break;
@@ -399,266 +277,108 @@ void WiFiManager::StartWifiAP() {
                     default:                    statusStr = "Unknown"; break;
                 }
                 request->send(200, "application/json", "{\"state\":\"" + statusStr + "\"}");
-
             } else {
                 request->send(400, "application/json", "{\"error\":\"Invalid action or target\"}");
             }
         }
-    });
+    );
 
-    // 6. Load all controllable states for UI initialization
+    // ---------- load_controls ----------
     server.on("/load_controls", HTTP_GET, [this](AsyncWebServerRequest* request) {
         if (!isAuthenticated(request)) return;
-        resetTimer();
-        dev->buz->bip();
+        if (lock()) { lastActivityMillis = millis(); unlock(); }
+        BUZZ->bip();
+
+        // show a soft overlay based on who’s active
+        if (isAdminConnected())      RGB->postOverlay(OverlayEvent::WEB_ADMIN_ACTIVE);
+        else if (isUserConnected())  RGB->postOverlay(OverlayEvent::WEB_USER_ACTIVE);
 
         StaticJsonDocument<1024> doc;
+        doc["ledFeedback"]     = CONF->GetBool(LED_FEEDBACK_KEY, false);
+        doc["onTime"]          = CONF->GetInt(ON_TIME_KEY, 500);
+        doc["offTime"]         = CONF->GetInt(OFF_TIME_KEY, 500);
+        doc["desiredVoltage"]  = CONF->GetFloat(DESIRED_OUTPUT_VOLTAGE_KEY, 0);
+        doc["acFrequency"]     = CONF->GetInt(AC_FREQUENCY_KEY, 50);
+        doc["chargeResistor"]  = CONF->GetFloat(CHARGE_RESISTOR_KEY, 0.0f);
+        doc["dcVoltage"]       = CONF->GetFloat(DC_VOLTAGE_KEY, 0.0f);
+        bool relayOn           = DEVICE->relayControl->isOn();
+        doc["relay"]           = relayOn;
+        doc["ready"]           = digitalRead(READY_LED_PIN);
+        doc["off"]             = digitalRead(POWER_OFF_LED_PIN);
 
-        // Basic control states
-        doc["ledFeedback"]     = dev->config->GetBool(LED_FEEDBACK_KEY, false);
-        doc["onTime"]          = dev->config->GetInt(ON_TIME_KEY, 500);
-        doc["offTime"]         = dev->config->GetInt(OFF_TIME_KEY, 500);
-        doc["desiredVoltage"]  = dev->config->GetFloat(DESIRED_OUTPUT_VOLTAGE_KEY, 0);
-        doc["acFrequency"]     = dev->config->GetInt(AC_FREQUENCY_KEY, 50);
-        doc["chargeResistor"]  = dev->config->GetFloat(CHARGE_RESISTOR_KEY, 0.0f);
-        doc["dcVoltage"]       = dev->config->GetFloat(DC_VOLTAGE_KEY, 0.0f);
-
-        // Relay state
-        bool relayOn = dev->relayControl->isOn();
-        doc["relay"] = relayOn;
-
-        // Ready and OFF LED indicators
-        doc["ready"] = digitalRead(READY_LED_PIN);     // true if system is in ready state
-        doc["off"]   =  digitalRead(POWER_OFF_LED_PIN); ;          // true if system is off
-
-        // Output states 1–10
         JsonObject outputs = doc.createNestedObject("outputs");
-        for (int i = 1; i <= 10; ++i) {
-            outputs["output" + String(i)] = dev->heaterManager->getOutputState(i);
-        }
+        for (int i = 1; i <= 10; ++i) outputs["output" + String(i)] = DEVICE->heaterManager->getOutputState(i);
 
-        // Output access flags (non-padded keys like "OUT1F", "OUT2F", ...)
         const char* accessKeys[10] = {
             OUT01_ACCESS_KEY, OUT02_ACCESS_KEY, OUT03_ACCESS_KEY, OUT04_ACCESS_KEY, OUT05_ACCESS_KEY,
             OUT06_ACCESS_KEY, OUT07_ACCESS_KEY, OUT08_ACCESS_KEY, OUT09_ACCESS_KEY, OUT10_ACCESS_KEY
         };
-
         JsonObject access = doc.createNestedObject("outputAccess");
-        for (int i = 0; i < 10; ++i) {
-            access["output" + String(i + 1)] = dev->config->GetBool(accessKeys[i], false);
-        }
+        for (int i = 0; i < 10; ++i) access["output" + String(i + 1)] = CONF->GetBool(accessKeys[i], false);
 
-        String json;
-        serializeJson(doc, json);
+        String json; serializeJson(doc, json);
         request->send(200, "application/json", json);
     });
-    // 7. Set Admin Credentials
-    server.on("/SetAdminCred", HTTP_POST, [this](AsyncWebServerRequest* request) { },
-        nullptr,
-        [this](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
-            static String body = "";
-            body += String((char*)data);
 
-            if (index + len == total) {
-                resetTimer();
-
-                DEBUG_PRINTLN("[AdminCred] Received request ✅");
-
-                if (!isAdminConnected()) {
-                    DEBUG_PRINTLN("[AdminCred] Admin not connected ❌");
-                    request->send(403, "application/json", "{\"error\":\"Not allowed\"}");
-                    body = "";
-                    return;
-                }
-
-                DynamicJsonDocument doc(512);
-                DeserializationError error = deserializeJson(doc, body);
-                body = "";
-
-                if (error) {
-                    DEBUG_PRINTLN("[AdminCred] Invalid JSON ❌");
-                    request->send(400, "application/json", "{\"error\":\"Invalid JSON\"}");
-                    return;
-                }
-
-                String username     = doc["username"]     | "";
-                String password     = doc["password"]     | "";
-                String current      = doc["current"]      | "";
-                String ssid         = doc["ssid"]         | "";
-                String wifiPassword = doc["wifiPassword"] | "";
-
-                if (username == "" || password == "") {
-                    DEBUG_PRINTLN("[AdminCred] Missing username or password ❌");
-                    dev->buz->bipFault();
-                    request->send(400, "application/json", "{\"error\":\"Missing username or password\"}");
-                    return;
-                }
-
-                // Optionally verify current password
-                String stored = dev->config->GetString(ADMIN_PASS_KEY, "");
-                if (current != "" && stored != current) {
-                    DEBUG_PRINTLN("[AdminCred] Incorrect current password ❌");
-                    dev->buz->bipFault();
-                    request->send(403, "application/json", "{\"error\":\"Incorrect current password\"}");
-                    return;
-                }
-
-                DEBUG_PRINTLN("[AdminCred] Saving admin credentials ✅");
-                DEBUG_PRINT("[AdminCred] Username: "); DEBUG_PRINTLN(username);
-                dev->config->PutString(ADMIN_ID_KEY, username);
-                dev->config->PutString(ADMIN_PASS_KEY, password);
-
-                // Optional Wi-Fi update
-                if (ssid != "" && wifiPassword != "") {
-                    DEBUG_PRINTLN("[AdminCred] Saving Wi-Fi settings ✅");
-                    
-                    dev->config->PutString(STA_SSID_KEY, ssid);
-                    dev->config->PutString(STA_PASS_KEY, wifiPassword);
-                }
-
-                DEBUG_PRINTLN("[AdminCred] Admin credentials updated ✅");
-                dev->buz->successSound();
-                request->send(200, "application/json", "{\"status\":\"admin credentials updated\"}");
-            }
-        }
-    );
-
-    // 8. Set User Credentials
-    server.on("/SetUserCred", HTTP_POST, [this](AsyncWebServerRequest* request) { },
-        nullptr,
-        [this](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
-            static String body = "";
-            body += String((char*)data);
-
-            if (index + len == total) {
-                resetTimer();
-
-                DEBUG_PRINTLN("[UserCred] Received request ✅");
-
-                if (!isUserConnected() && !isAdminConnected()) {
-                    DEBUG_PRINTLN("[UserCred] User not connected ❌");
-                    request->send(403, "application/json", "{\"error\":\"Not allowed\"}");
-                    body = "";
-                    return;
-                }
-
-                DynamicJsonDocument doc(512);
-                DeserializationError error = deserializeJson(doc, body);
-                body = "";
-
-                if (error) {
-                    DEBUG_PRINTLN("[UserCred] Invalid JSON ❌");
-                    request->send(400, "application/json", "{\"error\":\"Invalid JSON\"}");
-                    return;
-                }
-
-                String current = doc["current"] | "";
-                String newUser = doc["username"] | "";
-                String newPass = doc["password"] | "";
-
-                if (current == "" || newUser == "" || newPass == "") {
-                    DEBUG_PRINTLN("[UserCred] Missing required fields ❌");
-                    dev->buz->bipFault();
-                    request->send(400, "application/json", "{\"error\":\"Missing required fields\"}");
-                    return;
-                }
-
-                String stored = dev->config->GetString(USER_PASS_KEY, "");
-                if (stored != current) {
-                    DEBUG_PRINTLN("[UserCred] Incorrect current password ❌");
-                    dev->buz->bipFault();
-                    request->send(403, "application/json", "{\"error\":\"Incorrect current password\"}");
-                    return;
-                }
-
-                DEBUG_PRINTLN("[UserCred] Updating user credentials ✅");
-                DEBUG_PRINT("[UserCred] New User ID: "); DEBUG_PRINTLN(newUser);
-
-                dev->config->PutString(USER_ID_KEY, newUser);
-                dev->config->PutString(USER_PASS_KEY, newPass);
-
-                DEBUG_PRINTLN("[UserCred] User credentials updated ✅");
-                dev->buz->successSound();
-                request->send(200, "application/json", "{\"status\":\"Credentials updated\"}");
-            }
-        }
-    );
     server.on("/favicon.ico", HTTP_GET, [this](AsyncWebServerRequest* request) {
-        keepAlive = true;
-        request->send(204);  // No Content
+        if (lock()) { keepAlive = true; unlock(); }
+        request->send(204);
     });
-    server.serveStatic("/", SPIFFS, "/");
-    server.serveStatic("/icons/", SPIFFS, "/icons/").setCacheControl("no-store, must-revalidate");
-    server.serveStatic("/css/", SPIFFS, "/css/").setCacheControl("no-store, must-revalidate");
-    server.serveStatic("/js/", SPIFFS, "/js/").setCacheControl("no-store, must-revalidate");
-    server.serveStatic("/fonts/", SPIFFS, "/fonts/").setCacheControl("no-store, must-revalidate");
-    server.begin();
-    //Start auto-disable timer
-    startInactivityTimer();
+
+    server.serveStatic("/",      SPIFFS, "/");
+    server.serveStatic("/icons/",SPIFFS, "/icons/").setCacheControl("no-store, must-revalidate");
+    server.serveStatic("/css/",  SPIFFS, "/css/").setCacheControl("no-store, must-revalidate");
+    server.serveStatic("/js/",   SPIFFS, "/js/").setCacheControl("no-store, must-revalidate");
+    server.serveStatic("/fonts/",SPIFFS, "/fonts/").setCacheControl("no-store, must-revalidate");
 }
 
+// ====================== Common helpers / tasks ======================
 
-// ─────────────────────────────────────────────────────────────
-// Handle Root Request
-// ─────────────────────────────────────────────────────────────
 void WiFiManager::handleRoot(AsyncWebServerRequest* request) {
     DEBUG_PRINTLN("[WiFiManager] Handling root request 🌐");
-    keepAlive = true;
+    if (lock()) { keepAlive = true; unlock(); }
     request->send(SPIFFS, "/login.html", "text/html");
 }
 
-
-// ─────────────────────────────────────────────────────────────
-// Disable Access Point
-// ─────────────────────────────────────────────────────────────
 void WiFiManager::disableWiFiAP() {
-    DEBUG_PRINTLN("[WiFiManager] Disabling WiFi Access Point...");
-
-    WifiState = false;
-    prev_WifiState = true;
-
-    WiFi.softAPdisconnect(true);     // Disconnect AP
-    WiFi.disconnect(true);           // Disconnect STA (if connected)
-    delay(1000);                      // Let stack settle
-    //WiFi.mode(WIFI_OFF);            // Turn off WiFi
-    //esp_wifi_deinit();              // 💥 Fully deinitialize WiFi
-
-    if (inactivityTaskHandle != nullptr) {
+    DEBUG_PRINTLN("[WiFiManager] Disabling WiFi ...");
+    WiFi.softAPdisconnect(true);
+    WiFi.disconnect(true);
+    vTaskDelay(pdMS_TO_TICKS(1000));
+    if (lock()) {
+        WifiState = false;
+        prev_WifiState = true;
         inactivityTaskHandle = nullptr;
-        DEBUG_PRINTLN("[WiFiManager] Inactivity timer stopped 🛑");
+        unlock();
     }
-    DEBUG_PRINTLN("[WiFiManager] WiFi Access Point disabled ❌");
+    RGB->postOverlay(OverlayEvent::WIFI_LOST);
+    DEBUG_PRINTLN("[WiFiManager] WiFi disabled ❌");
 }
 
-// ─────────────────────────────────────────────────────────────
-// Reset Inactivity Timer
-// ─────────────────────────────────────────────────────────────
 void WiFiManager::resetTimer() {
-    lastActivityMillis = millis();
+    if (lock()) { lastActivityMillis = millis(); unlock(); }
 }
 
-
-// ─────────────────────────────────────────────────────────────
-// RTOS Task: WiFi Inactivity Monitor
-// ─────────────────────────────────────────────────────────────
 void WiFiManager::inactivityTask(void* param) {
-    WiFiManager* self = static_cast<WiFiManager*>(param);
-    while (true) {
-        if (self->WifiState) {
-            unsigned long now = millis();
-            if ((now - self->lastActivityMillis) > INACTIVITY_TIMEOUT_MS) {
-                DEBUG_PRINTLN("[WiFiManager] Inactivity timeout reached ⏳");
-                self->disableWiFiAP();     // Disables Wi-Fi and clears task handle
-                vTaskDelete(nullptr);      // ✅ Kill this task
+    auto* self = static_cast<WiFiManager*>(param);
+    for (;;) {
+        bool wifiOn;
+        unsigned long last;
+        if (self->lock()) { wifiOn = self->WifiState; last = self->lastActivityMillis; self->unlock(); }
+        else { wifiOn = self->WifiState; last = self->lastActivityMillis; }
+
+        if (wifiOn) {
+            if (millis() - last > INACTIVITY_TIMEOUT_MS) {
+                DEBUG_PRINTLN("[WiFiManager] Inactivity timeout ⏳");
+                self->disableWiFiAP();
+                // disableWiFiAP() already posts WIFI_LOST overlay
+                vTaskDelete(nullptr);
             }
         }
         vTaskDelay(pdMS_TO_TICKS(5000));
     }
 }
 
-// ─────────────────────────────────────────────────────────────
-// Start Inactivity Timer Task
-// ─────────────────────────────────────────────────────────────
 void WiFiManager::startInactivityTimer() {
     resetTimer();
     if (inactivityTaskHandle == nullptr) {
@@ -675,32 +395,30 @@ void WiFiManager::startInactivityTimer() {
     }
 }
 
-
 void WiFiManager::onUserConnected() {
-    wifiStatus = WiFiStatus::UserConnected;
+    if (lock()) { wifiStatus = WiFiStatus::UserConnected; unlock(); }
     DEBUG_PRINTLN("[WiFiManager] User connected 🌐");
+    RGB->postOverlay(OverlayEvent::WEB_USER_ACTIVE);
 }
 
 void WiFiManager::onAdminConnected() {
-    wifiStatus = WiFiStatus::AdminConnected;
+    if (lock()) { wifiStatus = WiFiStatus::AdminConnected; unlock(); }
     DEBUG_PRINTLN("[WiFiManager] Admin connected 🔐");
-
+    RGB->postOverlay(OverlayEvent::WEB_ADMIN_ACTIVE);
 }
 
 void WiFiManager::onDisconnected() {
-    wifiStatus = WiFiStatus::NotConnected;
+    if (lock()) { wifiStatus = WiFiStatus::NotConnected; unlock(); }
     DEBUG_PRINTLN("[WiFiManager] All clients disconnected ❌");
-
+    RGB->postOverlay(OverlayEvent::WIFI_LOST);
 }
 
 bool WiFiManager::isUserConnected() const {
     return wifiStatus == WiFiStatus::UserConnected;
 }
-
 bool WiFiManager::isAdminConnected() const {
     return wifiStatus == WiFiStatus::AdminConnected;
 }
-
 bool WiFiManager::isAuthenticated(AsyncWebServerRequest* request) {
     if (wifiStatus == WiFiStatus::NotConnected) {
         request->send(403, "application/json", "{\"error\":\"Not authenticated\"}");
@@ -710,55 +428,189 @@ bool WiFiManager::isAuthenticated(AsyncWebServerRequest* request) {
 }
 
 void WiFiManager::heartbeat() {
-    // Only start if not already running
     if (heartbeatTaskHandle != nullptr) return;
 
     DEBUG_PRINTLN("[WiFiManager] Heartbeat Create 🟢");
-    dev->buz->bip();
+    BUZZ->bip();
 
     xTaskCreatePinnedToCore(
         [](void* param) {
             WiFiManager* self = static_cast<WiFiManager*>(param);
-            const TickType_t interval = pdMS_TO_TICKS(6000); // 6s interval
-
-            while (true) {
+            const TickType_t interval = pdMS_TO_TICKS(6000);
+            for (;;) {
                 vTaskDelay(interval);
 
-                // Delete if only admin remains
-                if (!self->isUserConnected() && !self->isAdminConnected()) {
+                bool user = self->isUserConnected();
+                bool admin = self->isAdminConnected();
+                bool ka = false;
+                if (self->lock()) { ka = self->keepAlive; self->unlock(); } else { ka = self->keepAlive; }
+
+                if (!user && !admin) {
                     DEBUG_PRINTLN("[WiFiManager] Heartbeat deleted 🔴");
-                    self->dev->buz->bipWiFiOff();
+                    BUZZ->bipWiFiOff();
+                    RGB->postOverlay(OverlayEvent::WIFI_LOST);
                     self->heartbeatTaskHandle = nullptr;
                     vTaskDelete(nullptr);
-                    return;
                 }
-                // Delete on timeout
-                if (!self->keepAlive) {
+                if (!ka) {
                     DEBUG_PRINTLN("[WiFiManager] ⚠️  Heartbeat timeout – disconnecting");
                     self->onDisconnected();
-                    self->dev->buz->bipWiFiOff();
+                    BUZZ->bipWiFiOff();
+                    RGB->postOverlay(OverlayEvent::WIFI_LOST);
                     DEBUG_PRINTLN("[WiFiManager] Heartbeat deleted 🔴");
                     self->heartbeatTaskHandle = nullptr;
                     vTaskDelete(nullptr);
-                    return;
                 }
-
-                // Reset for next round
-                self->keepAlive = false;
+                // prepare for next round
+                if (self->lock()) { self->keepAlive = false; self->unlock(); } else { self->keepAlive = false; }
             }
         },
-        "HeartbeatTask",        // Task name
-        2048,                   // Stack size
-        this,                   // Parameter
-        1,                      // Priority
-        &heartbeatTaskHandle,   // Save handle for later reference
-        APP_CPU_NUM             // Pin to core
+        "HeartbeatTask",
+        2048,
+        this,
+        1,
+        &heartbeatTaskHandle,
+        APP_CPU_NUM
     );
 }
 
 void WiFiManager::restartWiFiAP() {
-    disableWiFiAP();  // Turn off WiFi & cleanup
-    delay(100);       // Small delay to let WiFi stack clean up
-    begin();          // Restart AP and all callbacks
+    disableWiFiAP();
+    vTaskDelay(pdMS_TO_TICKS(100));
+    begin();
 }
 
+// ===================== Control queue worker =====================
+
+void WiFiManager::controlTaskTrampoline(void* pv) {
+    static_cast<WiFiManager*>(pv)->controlTaskLoop();
+    vTaskDelete(nullptr);
+}
+
+void WiFiManager::controlTaskLoop() {
+    ControlCmd c{};
+    for (;;) {
+        if (xQueueReceive(_ctrlQueue, &c, portMAX_DELAY) == pdTRUE) {
+            handleControl(c);
+        }
+    }
+}
+
+void WiFiManager::sendCmd(const ControlCmd& c) {
+    if (_ctrlQueue) xQueueSendToBack(_ctrlQueue, &c, 0); // drop if full
+}
+
+void WiFiManager::handleControl(const ControlCmd& c) {
+    switch (c.type) {
+        case CTRL_REBOOT:
+            RGB->postOverlay(OverlayEvent::RESET_TRIGGER);
+            BUZZ->bip();
+            CONF->RestartSysDelayDown(3000);
+            break;
+
+        case CTRL_SYS_RESET:
+            RGB->postOverlay(OverlayEvent::RESET_TRIGGER);
+            BUZZ->bip();
+            CONF->PutBool(RESET_FLAG, true);
+            CONF->RestartSysDelayDown(3000);
+            break;
+
+        case CTRL_LED_FEEDBACK_BOOL:
+            BUZZ->bip(); CONF->PutBool(LED_FEEDBACK_KEY, c.b1); break;
+        
+        case CTRL_BUZZER_MUTE:
+            BUZZ->bip();                          // optional UI nudge
+            BUZZ->setMuted(c.b1);                 // or your existing API to mute
+            break;
+        case CTRL_ON_TIME_MS:
+            BUZZ->bip(); CONF->PutInt(ON_TIME_KEY, c.i1); break;
+
+        case CTRL_OFF_TIME_MS:
+            BUZZ->bip(); CONF->PutInt(OFF_TIME_KEY, c.i1); break;
+
+        case CTRL_RELAY_BOOL:
+            BUZZ->bip();
+            if (c.b1) { DEVICE->relayControl->turnOn();  RGB->postOverlay(OverlayEvent::RELAY_ON);  }
+            else      { DEVICE->relayControl->turnOff(); RGB->postOverlay(OverlayEvent::RELAY_OFF); }
+            break;
+
+        case CTRL_OUTPUT_BOOL:
+            if (c.i1 >= 1 && c.i1 <= 10) {
+                BUZZ->bip();
+                if (isAdminConnected()) {
+                    DEVICE->heaterManager->setOutput(c.i1, c.b1);
+                    DEVICE->indicator->setLED(c.i1, c.b1);
+                    RGB->postOutputEvent(c.i1, c.b1);
+                } else if (isUserConnected()) {
+                    const char* accessKeys[10] = {
+                        OUT01_ACCESS_KEY, OUT02_ACCESS_KEY, OUT03_ACCESS_KEY, OUT04_ACCESS_KEY, OUT05_ACCESS_KEY,
+                        OUT06_ACCESS_KEY, OUT07_ACCESS_KEY, OUT08_ACCESS_KEY, OUT09_ACCESS_KEY, OUT10_ACCESS_KEY
+                    };
+                    bool allowed = CONF->GetBool(accessKeys[c.i1 - 1], false);
+                    if (allowed) {
+                        DEVICE->heaterManager->setOutput(c.i1, c.b1);
+                        DEVICE->indicator->setLED(c.i1, c.b1);
+                        RGB->postOutputEvent(c.i1, c.b1);
+                    }
+                }
+            }
+            break;
+
+        case CTRL_DESIRED_V:
+            BUZZ->bip(); CONF->PutFloat(DESIRED_OUTPUT_VOLTAGE_KEY, c.f1); break;
+
+        case CTRL_AC_FREQ:
+            BUZZ->bip(); CONF->PutInt(AC_FREQUENCY_KEY, c.i1); break;
+
+        case CTRL_CHARGE_RES:
+            BUZZ->bip(); CONF->PutFloat(CHARGE_RESISTOR_KEY, c.f1); break;
+
+        case CTRL_DC_VOLT:
+            BUZZ->bip(); CONF->PutFloat(DC_VOLTAGE_KEY, c.f1); break;
+
+        case CTRL_ACCESS_BOOL:
+            if (c.i1 >= 1 && c.i1 <= 10) {
+                const char* accessKeys[10] = {
+                    OUT01_ACCESS_KEY, OUT02_ACCESS_KEY, OUT03_ACCESS_KEY, OUT04_ACCESS_KEY, OUT05_ACCESS_KEY,
+                    OUT06_ACCESS_KEY, OUT07_ACCESS_KEY, OUT08_ACCESS_KEY, OUT09_ACCESS_KEY, OUT10_ACCESS_KEY
+                };
+                BUZZ->bip(); CONF->PutBool(accessKeys[c.i1 - 1], c.b1);
+            }
+            break;
+
+        case CTRL_MODE_IDLE:
+            DEVICE->currentState = DeviceState::Idle;
+            BUZZ->bip();
+            DEVICE->indicator->clearAll();
+            DEVICE->heaterManager->disableAll();
+            RGB->setIdle();  // background hint
+            break;
+
+        case CTRL_SYSTEM_START:
+            BUZZ->bip();
+            DEVICE->startLoopTask();                               // make sure gate task exists
+            xEventGroupSetBits(gEvt, EVT_WAKE_REQ | EVT_RUN_REQ);  // OFF → Power-Up → RUN
+            RGB->postOverlay(OverlayEvent::PWR_START);
+            break;
+
+        case CTRL_SYSTEM_SHUTDOWN:
+            BUZZ->bip();
+            xEventGroupSetBits(gEvt, EVT_STOP_REQ);                // RUN/IDLE → OFF
+            RGB->postOverlay(OverlayEvent::RELAY_OFF);
+            break;
+        case CTRL_BYPASS_BOOL:
+            BUZZ->bip();
+            (c.b1 ? DEVICE->bypassFET->enable() : DEVICE->bypassFET->disable());
+            // (no dedicated overlay in RGB enum; leave as-is)
+            break;
+
+        case CTRL_FAN_SPEED: {
+            int pct = constrain(c.i1, 0, 100);
+            FAN->setSpeedPercent(pct);
+            // Visual nudge only when crossing 0% boundary
+            if (pct <= 0) RGB->postOverlay(OverlayEvent::FAN_OFF);
+            else          RGB->postOverlay(OverlayEvent::FAN_ON);
+            break;
+        }
+    }
+}

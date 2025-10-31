@@ -2,23 +2,44 @@
 #define CONFIG_H
 
 #include <Arduino.h>
+// ===== Core Arduino / C++ =====
+#include <Arduino.h>
+#include <cstring>
+#include <algorithm>
+#include <time.h>
+#include <pgmspace.h>
 
-// ==================================================
-// Debugging and Logging Configuration
-// ==================================================
-
-#define DEBUGMODE                      true
-#define ENABLE_SERIAL_DEBUG
-
-#ifdef ENABLE_SERIAL_DEBUG
-  #define DEBUG_PRINT(x)              if (DEBUGMODE) Serial.print(x)
-  #define DEBUG_PRINTF                Serial.printf
-  #define DEBUG_PRINTLN(x)            if (DEBUGMODE) Serial.println(x)
-#else
-  #define DEBUG_PRINT(x)
-  #define DEBUG_PRINTF(...)
-  #define DEBUG_PRINTLN(x)
-#endif
+// ===== ESP32 & RTOS =====
+#include "esp_err.h"
+#include "esp_now.h"
+#include "esp_wifi.h"
+#include "esp_timer.h"
+#include "esp_heap_caps.h"
+#include "esp_task_wdt.h"
+#include "esp_sleep.h"
+#include "driver/rtc_io.h"
+#include "esp_log.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/semphr.h"
+#include "freertos/queue.h"
+#include "freertos/portmacro.h"
+#include "esp_log.h"
+#include <stdarg.h>
+// ===== WiFi & Network =====
+#include <WiFi.h>
+#include <WiFiUdp.h>
+#include <NTPClient.h>
+#include <ESPAsyncWebServer.h>
+// ===== File System & JSON =====
+#include <FS.h>
+#include <SPIFFS.h>
+#include <Preferences.h>
+#include <ArduinoJson.h>
+#include <OneWire.h>
+#include "Utils.h"
+#include <math.h> // for lroundf
+#include "esp_wifi.h"
 
 #define CONFIG_PARTITION               "config"    // NVS partition name
 
@@ -118,8 +139,6 @@
 // Time Configuration
 // ==================================================
 
-#define SERIAL_BAUD_RATE               115200
-
 // ==================================================
 // Switch Configuration
 // ==================================================
@@ -194,13 +213,22 @@
 #define RELAY_CONTROL_PIN              21                   // Relay controlling capacitor input power
 #define INA_RELAY_BYPASS_PIN           42                   // INA controls bypass MOSFET for inrush resistor
 
-#define GO_THRESHOLD_RATIO (0.78f * config->GetFloat(DC_VOLTAGE_KEY, DEFAULT_DC_VOLTAGE))
+
 
 // ==================================================
 // Additional I/O
 // ==================================================
 
-#define BUZZER_PIN                     46    // Buzzer control output
+#define BUZZER_PIN       46      // Buzzer control output
+
+#define BUZLOW_KEY       "BUZLOW"   // bool (activeLow)
+#define BUZMUT_KEY       "BUZMUT"   // bool (muted)
+
+// --- Default configuration values ---
+#define BUZLOW_DEFAULT   false   // Default: buzzer active HIGH
+#define BUZMUT_DEFAULT   false   // Default: buzzer not muted
+
+
 // ==================================================
 //  RTOS CONFIGURATION: Task Priorities
 // ==================================================
@@ -233,9 +261,9 @@
 #define TEMP_MONITOR_TASK_STACK_SIZE      8192
 #define LED_UPDATE_TASK_STACK_SIZE        15360  
 #define CAP_VOLTAGE_TASK_STACK_SIZE       4096
-#define SWITCH_TASK_STACK_SIZE            2048
+#define SWITCH_TASK_STACK_SIZE            8192
 #define TEMP_SENSOR_TASK_STACK_SIZE       8192
-#define BLINK_TASK_STACK_SIZE             2048
+#define BLINK_TASK_STACK_SIZE             4096
 
 // ==================================================
 //  RTOS CONFIGURATION: Task Delay Intervals & Timing (ms)
@@ -250,6 +278,31 @@
 #define HOLD_THRESHOLD_MS                 3000
 #define TAP_WINDOW_MS                     1200
 
+// ───────────────────────────────────────────────
+// Device operational states
+// ───────────────────────────────────────────────
+enum class DeviceState {
+    Idle,
+    Running,
+    Error,
+    Shutdown
+};
 
+// ───────────────────────────────────────────────
+// Wi-Fi connection levels
+// ───────────────────────────────────────────────
+enum class WiFiStatus {
+    NotConnected,
+    UserConnected,
+    AdminConnected
+};
+
+// ───────────────────────────────────────────────
+// Globals shared with other modules
+// NOTE: WiFiManager now updates wifiStatus under its own mutex,
+// and Device updates StartFromremote under its own mutex. We
+// keep them volatile here because multiple tasks read them. :contentReference[oaicite:3]{index=3}
+extern volatile WiFiStatus wifiStatus;
+extern volatile bool StartFromremote;
 
 #endif // CONFIG_H

@@ -1,52 +1,45 @@
 #include "CpDischg.h"
 
-// -------- Safe defaults if not provided elsewhere --------
+// ----- ADC / Divider configuration -----
+#define ADC_OFFSET              14    // Raw ADC offset in counts
 #ifndef ADC_REF_VOLTAGE
-#define ADC_REF_VOLTAGE         3.3f
+#define ADC_REF_VOLTAGE         3.3f  // ESP32 ADC full-scale
 #endif
 #ifndef ADC_MAX
-#define ADC_MAX                 4095.0f
+#define ADC_MAX                 4095.0f   // 12-bit ADC (0–4095)
 #endif
-#ifndef VOLTAGE_DIVIDER_RATIO
-#define VOLTAGE_DIVIDER_RATIO   100.0f
-#endif
+
 #ifndef SAFE_VOLTAGE_THRESHOLD
 #define SAFE_VOLTAGE_THRESHOLD  5.0f
 #endif
-#ifndef CAP_VOLTAGE_TASK_STACK_SIZE
-#define CAP_VOLTAGE_TASK_STACK_SIZE   3072
+
+// Divider: top to HV, bottom to GND
+#ifndef DIVIDER_TOP_OHMS
+#define DIVIDER_TOP_OHMS        470000.0f   // 470 kΩ
 #endif
-#ifndef CAP_VOLTAGE_TASK_PRIORITY
-#define CAP_VOLTAGE_TASK_PRIORITY     1
+#ifndef DIVIDER_BOTTOM_OHMS
+#define DIVIDER_BOTTOM_OHMS     4700.0f     // 4.7 kΩ
 #endif
-#ifndef CAP_VOLTAGE_TASK_CORE
-#define CAP_VOLTAGE_TASK_CORE         1
+
+// Gain (bus volts = v_adc * ratio)
+#ifndef VOLTAGE_DIVIDER_RATIO
+#define VOLTAGE_DIVIDER_RATIO   ((DIVIDER_TOP_OHMS + DIVIDER_BOTTOM_OHMS) / DIVIDER_BOTTOM_OHMS)
 #endif
-#ifndef CAP_VOLTAGE_TASK_DELAY_MS
-#define CAP_VOLTAGE_TASK_DELAY_MS     200
-#endif
-// ---------------------------------------------------------
+// ---------------------------------------
 
 void CpDischg::begin() {
-    DEBUG_PRINTLN("###########################################################");
-    DEBUG_PRINTLN("#                 Starting CPDis Manager ⚙️               #");
-    DEBUG_PRINTLN("###########################################################");
-
     pinMode(CAPACITOR_ADC_PIN, INPUT);
-    // startCapVoltageTask(); // keep disabled here if you start it elsewhere
-    DEBUG_PRINTLN("[CpDischg] Ready to discharge using heater banks 🔥");
+#if defined(ARDUINO_ARCH_ESP32)
+    analogSetPinAttenuation(CAPACITOR_ADC_PIN, ADC_11db);  // ~3.3V range
+#endif
 }
 
 void CpDischg::discharge() {
-    DEBUG_PRINTLN("[CpDischg] Starting discharge cycle 🚨");
-    startCapVoltageTask();
-
     while (true) {
-        float v = g_capVoltage;
-        DEBUG_PRINTF("[CpDischg] Capacitor voltage: %.2fV ⚡\n", v);
+        float v = readCapVoltage();
+        DEBUG_PRINTF("[CpDischg] Capacitor voltage: %.1f V ⚡\n", v);
 
         if (v <= SAFE_VOLTAGE_THRESHOLD) {
-            DEBUG_PRINTLN("[CpDischg] Capacitor discharged safely ✅");
             break;
         }
 
@@ -57,65 +50,23 @@ void CpDischg::discharge() {
                 heaterManager->setOutput(i, false);
             }
         }
-
-        vTaskDelay(pdMS_TO_TICKS(100));
+        delay(100);
     }
-
-    if (heaterManager) {
-        heaterManager->disableAll();
-    }
-    stopCapVoltageTask();
-    DEBUG_PRINTLN("[CpDischg] All heater outputs disabled 📴");
+    if (heaterManager) heaterManager->disableAll();
 }
 
-void CpDischg::startCapVoltageTask() {
-    if (capVoltageTaskHandle != nullptr) return;
-
-    xTaskCreatePinnedToCore(
-        [](void* param) {
-            auto* self = static_cast<CpDischg*>(param);
-            const TickType_t delayTicks = pdMS_TO_TICKS(CAP_VOLTAGE_TASK_DELAY_MS);
-
-            for (;;) {
-                float v = self->measureOnceWithRelayGate();
-                self->g_capVoltage = v;
-                // DEBUG_PRINTF("[CapTask] One-shot ADC voltage: %.2fV 🧪\n", v);
-                vTaskDelay(delayTicks);
-            }
-        },
-        "CapVoltageTask",
-        CAP_VOLTAGE_TASK_STACK_SIZE,
-        this,
-        CAP_VOLTAGE_TASK_PRIORITY,
-        &capVoltageTaskHandle,
-        CAP_VOLTAGE_TASK_CORE
-    );
-}
-
-void CpDischg::stopCapVoltageTask() {
-    if (capVoltageTaskHandle != nullptr) {
-        vTaskDelete(capVoltageTaskHandle);
-        capVoltageTaskHandle = nullptr;
-    }
-}
-
-float CpDischg::measureOnceWithRelayGate() {
-    // If user asked to bypass relay gating, or no relay provided → just read once.
-    if (bypassRelayGate || !relay) {
-        uint16_t rawNR = analogRead(CAPACITOR_ADC_PIN);
-        return (rawNR / ADC_MAX) * ADC_REF_VOLTAGE * VOLTAGE_DIVIDER_RATIO;
-    }
-
-    // Relay gating path:
-    bool wasOn = relay->isOn();
-    relay->turnOff();
-    vTaskDelay(pdMS_TO_TICKS(10)); // settle
-
+// ---- Simple one-shot ADC read ----
+float CpDischg::readCapVoltage() {
     uint16_t raw = analogRead(CAPACITOR_ADC_PIN);
-    float v = (raw / ADC_MAX) * ADC_REF_VOLTAGE * VOLTAGE_DIVIDER_RATIO;
+    return adcCodeToBusVolts(raw);
+}
 
-    if (wasOn) relay->turnOn();
-    else       relay->turnOff();
+// ---- ADC code -> bus volts ----
+float CpDischg::adcCodeToBusVolts(uint16_t raw) const {
+    // Apply offset in raw ADC counts
+    int32_t correctedRaw = static_cast<int32_t>(raw) - ADC_OFFSET;
+    if (correctedRaw < 0) correctedRaw = 0;   // clamp to 0
 
-    return v;
+    float v_adc = (static_cast<float>(correctedRaw) / ADC_MAX) * ADC_REF_VOLTAGE;
+    return v_adc * VOLTAGE_DIVIDER_RATIO;
 }
