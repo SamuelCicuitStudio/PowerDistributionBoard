@@ -2,34 +2,40 @@
 #define FAN_MANAGER_H
 
 #include "Utils.h"
+#include <Arduino.h>
+
+// --------- Defaults (only used if not provided by your Config.h) ----------
+#define FAN_PWM_FREQ       10000 // 10 kHz is quiet for most fans
+#define FAN_PWM_RESOLUTION 8     // 8-bit (0..255)
+// Backward-compatible aliases in case older code used these names:
+#define PWM_FREQ FAN_PWM_FREQ
+#define PWM_RESOLUTION FAN_PWM_RESOLUTION
 
 // FanManager
 // ----------
 // Thread-safe, ordered fan control with a global singleton accessor.
 // Usage:
-//   FanManager::Init();        // (once at boot, optional but clearer)
+//   FanManager::Init();        // (once)
 //   FAN->begin();              // start PWM + worker task
 //   FAN->setSpeedPercent(60);  // anywhere in code
-//
-// NOTE: The queue/RTOS design from your current class is preserved.
 
 class FanManager {
 public:
-    // ===== Singleton API (mirrors NVS::Init / NVS::Get) =====
+    // ===== Singleton API =====
     static void Init();                 // ensure the singleton exists
     static FanManager* Get();           // always returns a valid pointer
 
     // ===== Lifecycle =====
-    void begin();                       // idempotent; safe to call more than once
+    void begin();                       // idempotent
 
     // ===== Public API (non-blocking; enqueues commands) =====
     void setSpeedPercent(uint8_t pct);  // 0..100%
     void stop();
-    uint8_t getSpeedPercent() const;    // returns last applied speed (0..100)
+    uint8_t getSpeedPercent() const;    // last applied (0..100)
 
 private:
     // ----- Singleton internals -----
-    FanManager();                       // ctor is private (singleton)
+    FanManager();
     ~FanManager() = default;
     FanManager(const FanManager&) = delete;
     FanManager& operator=(const FanManager&) = delete;
@@ -41,12 +47,12 @@ private:
 
     // ===================== Internal state ====================
     // Last duty actually applied to hardware (0..255)
-    uint8_t currentDuty = 0;
+    volatile uint8_t currentDuty = 0;
 
     // One-time init guard for begin()
     bool started_ = false;
 
-    // Mutex protects currentDuty and actual ledcWrite() section.
+    // Mutex protects currentDuty and ledcWrite() critical section.
     SemaphoreHandle_t _mutex = nullptr;
 
     // Queue + worker task to serialize actual fan updates.
@@ -73,7 +79,7 @@ private:
     void hwApplyStop();
 };
 
-// Convenience macro (pointer style), like CONF for NVS.
+// Convenience macro (pointer style)
 #define FAN FanManager::Get()
 
 #endif // FAN_MANAGER_H

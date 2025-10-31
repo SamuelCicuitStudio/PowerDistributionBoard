@@ -105,7 +105,7 @@ bool WiFiManager::StartWifiSTA() {
     String pass =  WIFI_STA_PASS;
 
     WiFi.mode(WIFI_OFF);
-    vTaskDelay(pdMS_TO_TICKS(5000));
+    vTaskDelay(pdMS_TO_TICKS(2000));
     WiFi.mode(WIFI_STA);
     WiFi.begin(ssid.c_str(), pass.c_str());
 
@@ -310,6 +310,7 @@ void WiFiManager::registerRoutes_() {
         doc["relay"]           = relayOn;
         doc["ready"]           = digitalRead(READY_LED_PIN);
         doc["off"]             = digitalRead(POWER_OFF_LED_PIN);
+        doc["buzzerMute"]      = CONF->GetBool(BUZMUT_KEY, BUZMUT_DEFAULT);
 
         JsonObject outputs = doc.createNestedObject("outputs");
         for (int i = 1; i <= 10; ++i) outputs["output" + String(i)] = DEVICE->heaterManager->getOutputState(i);
@@ -506,14 +507,19 @@ void WiFiManager::sendCmd(const ControlCmd& c) {
 }
 
 void WiFiManager::handleControl(const ControlCmd& c) {
+    DEBUG_PRINTF("[WiFiManager] Handling control type: %d\n", static_cast<int>(c.type));
+
     switch (c.type) {
+
         case CTRL_REBOOT:
+            DEBUG_PRINTLN("[WiFiManager] CTRL_REBOOT → Restarting system...");
             RGB->postOverlay(OverlayEvent::RESET_TRIGGER);
             BUZZ->bip();
             CONF->RestartSysDelayDown(3000);
             break;
 
         case CTRL_SYS_RESET:
+            DEBUG_PRINTLN("[WiFiManager] CTRL_SYS_RESET → Full system reset...");
             RGB->postOverlay(OverlayEvent::RESET_TRIGGER);
             BUZZ->bip();
             CONF->PutBool(RESET_FLAG, true);
@@ -521,25 +527,44 @@ void WiFiManager::handleControl(const ControlCmd& c) {
             break;
 
         case CTRL_LED_FEEDBACK_BOOL:
-            BUZZ->bip(); CONF->PutBool(LED_FEEDBACK_KEY, c.b1); break;
-        
-        case CTRL_BUZZER_MUTE:
-            BUZZ->bip();                          // optional UI nudge
-            BUZZ->setMuted(c.b1);                 // or your existing API to mute
+            DEBUG_PRINTF("[WiFiManager] CTRL_LED_FEEDBACK_BOOL → %s\n", c.b1 ? "ON" : "OFF");
+            BUZZ->bip();
+            CONF->PutBool(LED_FEEDBACK_KEY, c.b1);
             break;
+
+        case CTRL_BUZZER_MUTE:
+            DEBUG_PRINTF("[WiFiManager] CTRL_BUZZER_MUTE → %s\n", c.b1 ? "MUTED" : "ACTIVE");
+            BUZZ->bip();
+            BUZZ->setMuted(c.b1);
+            CONF->PutBool(BUZMUT_KEY, c.b1);     // <-- add this line
+            break;
+
         case CTRL_ON_TIME_MS:
-            BUZZ->bip(); CONF->PutInt(ON_TIME_KEY, c.i1); break;
+            DEBUG_PRINTF("[WiFiManager] CTRL_ON_TIME_MS → %d ms\n", c.i1);
+            BUZZ->bip();
+            CONF->PutInt(ON_TIME_KEY, c.i1);
+            break;
 
         case CTRL_OFF_TIME_MS:
-            BUZZ->bip(); CONF->PutInt(OFF_TIME_KEY, c.i1); break;
+            DEBUG_PRINTF("[WiFiManager] CTRL_OFF_TIME_MS → %d ms\n", c.i1);
+            BUZZ->bip();
+            CONF->PutInt(OFF_TIME_KEY, c.i1);
+            break;
 
         case CTRL_RELAY_BOOL:
+            DEBUG_PRINTF("[WiFiManager] CTRL_RELAY_BOOL → %s\n", c.b1 ? "ON" : "OFF");
             BUZZ->bip();
-            if (c.b1) { DEVICE->relayControl->turnOn();  RGB->postOverlay(OverlayEvent::RELAY_ON);  }
-            else      { DEVICE->relayControl->turnOff(); RGB->postOverlay(OverlayEvent::RELAY_OFF); }
+            if (c.b1) {
+                DEVICE->relayControl->turnOn();
+                RGB->postOverlay(OverlayEvent::RELAY_ON);
+            } else {
+                DEVICE->relayControl->turnOff();
+                RGB->postOverlay(OverlayEvent::RELAY_OFF);
+            }
             break;
 
         case CTRL_OUTPUT_BOOL:
+            DEBUG_PRINTF("[WiFiManager] CTRL_OUTPUT_BOOL → Output #%d = %s\n", c.i1, c.b1 ? "ON" : "OFF");
             if (c.i1 >= 1 && c.i1 <= 10) {
                 BUZZ->bip();
                 if (isAdminConnected()) {
@@ -552,6 +577,7 @@ void WiFiManager::handleControl(const ControlCmd& c) {
                         OUT06_ACCESS_KEY, OUT07_ACCESS_KEY, OUT08_ACCESS_KEY, OUT09_ACCESS_KEY, OUT10_ACCESS_KEY
                     };
                     bool allowed = CONF->GetBool(accessKeys[c.i1 - 1], false);
+                    DEBUG_PRINTF("[WiFiManager]   User access check: %s\n", allowed ? "ALLOWED" : "DENIED");
                     if (allowed) {
                         DEVICE->heaterManager->setOutput(c.i1, c.b1);
                         DEVICE->indicator->setLED(c.i1, c.b1);
@@ -562,60 +588,84 @@ void WiFiManager::handleControl(const ControlCmd& c) {
             break;
 
         case CTRL_DESIRED_V:
-            BUZZ->bip(); CONF->PutFloat(DESIRED_OUTPUT_VOLTAGE_KEY, c.f1); break;
+            DEBUG_PRINTF("[WiFiManager] CTRL_DESIRED_V → %.2f V\n", c.f1);
+            BUZZ->bip();
+            CONF->PutFloat(DESIRED_OUTPUT_VOLTAGE_KEY, c.f1);
+            break;
 
         case CTRL_AC_FREQ:
-            BUZZ->bip(); CONF->PutInt(AC_FREQUENCY_KEY, c.i1); break;
+            DEBUG_PRINTF("[WiFiManager] CTRL_AC_FREQ → %d Hz\n", c.i1);
+            BUZZ->bip();
+            CONF->PutInt(AC_FREQUENCY_KEY, c.i1);
+            break;
 
         case CTRL_CHARGE_RES:
-            BUZZ->bip(); CONF->PutFloat(CHARGE_RESISTOR_KEY, c.f1); break;
+            DEBUG_PRINTF("[WiFiManager] CTRL_CHARGE_RES → %.2f Ω\n", c.f1);
+            BUZZ->bip();
+            CONF->PutFloat(CHARGE_RESISTOR_KEY, c.f1);
+            break;
 
         case CTRL_DC_VOLT:
-            BUZZ->bip(); CONF->PutFloat(DC_VOLTAGE_KEY, c.f1); break;
+            DEBUG_PRINTF("[WiFiManager] CTRL_DC_VOLT → %.2f V\n", c.f1);
+            BUZZ->bip();
+            CONF->PutFloat(DC_VOLTAGE_KEY, c.f1);
+            break;
 
         case CTRL_ACCESS_BOOL:
+            DEBUG_PRINTF("[WiFiManager] CTRL_ACCESS_BOOL → Output #%d access = %s\n", c.i1, c.b1 ? "ENABLED" : "DISABLED");
             if (c.i1 >= 1 && c.i1 <= 10) {
                 const char* accessKeys[10] = {
                     OUT01_ACCESS_KEY, OUT02_ACCESS_KEY, OUT03_ACCESS_KEY, OUT04_ACCESS_KEY, OUT05_ACCESS_KEY,
                     OUT06_ACCESS_KEY, OUT07_ACCESS_KEY, OUT08_ACCESS_KEY, OUT09_ACCESS_KEY, OUT10_ACCESS_KEY
                 };
-                BUZZ->bip(); CONF->PutBool(accessKeys[c.i1 - 1], c.b1);
+                BUZZ->bip();
+                CONF->PutBool(accessKeys[c.i1 - 1], c.b1);
+                DEBUG_PRINTLN("[WiFiManager] Access updated in config ✅");
             }
             break;
 
         case CTRL_MODE_IDLE:
-            DEVICE->currentState = DeviceState::Idle;
+            DEBUG_PRINTLN("[WiFiManager] CTRL_MODE_IDLE → Switching to IDLE mode");
             BUZZ->bip();
+            DEVICE->currentState = DeviceState::Idle;
             DEVICE->indicator->clearAll();
             DEVICE->heaterManager->disableAll();
-            RGB->setIdle();  // background hint
+            RGB->setIdle();
             break;
 
         case CTRL_SYSTEM_START:
+            DEBUG_PRINTLN("[WiFiManager] CTRL_SYSTEM_START → Starting system");
             BUZZ->bip();
-            DEVICE->startLoopTask();                               // make sure gate task exists
-            xEventGroupSetBits(gEvt, EVT_WAKE_REQ | EVT_RUN_REQ);  // OFF → Power-Up → RUN
+            DEVICE->startLoopTask();
+            xEventGroupSetBits(gEvt, EVT_WAKE_REQ | EVT_RUN_REQ);
             RGB->postOverlay(OverlayEvent::PWR_START);
             break;
 
         case CTRL_SYSTEM_SHUTDOWN:
+            DEBUG_PRINTLN("[WiFiManager] CTRL_SYSTEM_SHUTDOWN → Initiating shutdown");
             BUZZ->bip();
-            xEventGroupSetBits(gEvt, EVT_STOP_REQ);                // RUN/IDLE → OFF
+            xEventGroupSetBits(gEvt, EVT_STOP_REQ);
             RGB->postOverlay(OverlayEvent::RELAY_OFF);
             break;
+
         case CTRL_BYPASS_BOOL:
+            DEBUG_PRINTF("[WiFiManager] CTRL_BYPASS_BOOL → %s\n", c.b1 ? "ENABLED" : "DISABLED");
             BUZZ->bip();
-            (c.b1 ? DEVICE->bypassFET->enable() : DEVICE->bypassFET->disable());
-            // (no dedicated overlay in RGB enum; leave as-is)
+            if (c.b1) DEVICE->bypassFET->enable();
+            else      DEVICE->bypassFET->disable();
             break;
 
         case CTRL_FAN_SPEED: {
             int pct = constrain(c.i1, 0, 100);
+            DEBUG_PRINTF("[WiFiManager] CTRL_FAN_SPEED → %d%%\n", pct);
             FAN->setSpeedPercent(pct);
-            // Visual nudge only when crossing 0% boundary
             if (pct <= 0) RGB->postOverlay(OverlayEvent::FAN_OFF);
             else          RGB->postOverlay(OverlayEvent::FAN_ON);
             break;
         }
+
+        default:
+            DEBUG_PRINTF("[WiFiManager] Unknown control type: %d\n", static_cast<int>(c.type));
+            break;
     }
 }

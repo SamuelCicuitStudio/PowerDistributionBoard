@@ -1,7 +1,9 @@
 #include "FanManager.h"
 
 // How many pending fan commands we buffer
+#ifndef FAN_CMD_QUEUE_LEN
 #define FAN_CMD_QUEUE_LEN 16
+#endif
 
 // ===== Singleton storage =====
 FanManager* FanManager::s_instance = nullptr;
@@ -21,10 +23,7 @@ FanManager::FanManager() {
 }
 
 void FanManager::begin() {
-    if (started_) {
-        // already initialized; nothing to do
-        return;
-    }
+    if (started_) return;
     started_ = true;
 
     DEBUGGSTART();
@@ -33,27 +32,27 @@ void FanManager::begin() {
     DEBUG_PRINTLN("###########################################################");
     DEBUGGSTOP();
 
-    // 1. Create mutex first so all future hardware writes are protected
+    // 1) Create mutex first so all future hardware writes are protected
     _mutex = xSemaphoreCreateMutex();
 
-    // 2. Configure LEDC PWM hardware channel
+    // 2) Configure LEDC PWM hardware channel
     ledcSetup(FAN_PWM_CHANNEL, PWM_FREQ, PWM_RESOLUTION);
     ledcAttachPin(FAN_PWM_PIN, FAN_PWM_CHANNEL);
 
-    // 3. Create command queue
+    // 3) Create command queue
     _queue = xQueueCreate(FAN_CMD_QUEUE_LEN, sizeof(Cmd));
 
-    // 4. Start worker task which will consume the queue
+    // 4) Start worker task which will consume the queue
     xTaskCreate(
         taskTrampoline,
         "FanTask",
-        2048,
+        4096,           // bigger stack: formatted logging + safety
         this,
         1,
         &_taskHandle
     );
 
-    // 5. Ensure we start in a known safe state (fan OFF).
+    // 5) Start in a known safe state (fan OFF).
     Cmd initCmd; initCmd.type = CMD_STOP; initCmd.pct = 0;
     sendCmd(initCmd);
 
@@ -75,9 +74,15 @@ void FanManager::stop() {
 }
 
 uint8_t FanManager::getSpeedPercent() const {
-    uint8_t dutySnapshot = 0;
-    if (!lock()) dutySnapshot = currentDuty;
-    else { dutySnapshot = currentDuty; unlock(); }
+    // Snapshot duty safely
+    uint8_t dutySnapshot;
+    if (lock()) {
+        dutySnapshot = currentDuty;
+        unlock();
+    } else {
+        dutySnapshot = currentDuty;
+    }
+    // Convert back to %
     float pct = (dutySnapshot / 255.0f) * 100.0f + 0.5f;
     return static_cast<uint8_t>(pct);
 }
@@ -88,9 +93,13 @@ uint8_t FanManager::getSpeedPercent() const {
 
 void FanManager::sendCmd(const Cmd &cmd) {
     if (!_queue) return;
-    // FreeRTOS queues are multi-producer safe; no mutex here.
-    // Non-blocking; if full, drop the new request (newest-wins policy).
-    xQueueSendToBack(_queue, &cmd, 0);
+    // Non-blocking; if full, drop oldest then enqueue newest (newest-wins)
+    if (xQueueSendToBack(_queue, &cmd, 0) != pdTRUE) {
+        Cmd drop;
+        if (xQueueReceive(_queue, &drop, 0) == pdTRUE) {
+            (void)xQueueSendToBack(_queue, &cmd, 0);
+        }
+    }
 }
 
 // ======================================================================
@@ -100,7 +109,7 @@ void FanManager::sendCmd(const Cmd &cmd) {
 void FanManager::taskTrampoline(void* pv) {
     FanManager* self = static_cast<FanManager*>(pv);
     self->taskLoop();
-    vTaskDelete(nullptr); // should never actually return
+    vTaskDelete(nullptr); // never returns
 }
 
 void FanManager::taskLoop() {
@@ -115,7 +124,7 @@ void FanManager::taskLoop() {
 void FanManager::handleCmd(const Cmd &cmd) {
     switch (cmd.type) {
         case CMD_SET_SPEED: {
-            // clamp 0..100 (uses your existing constrain())
+            // clamp 0..100
             uint8_t pct = constrain(cmd.pct, 0, 100);
             hwApplySpeedPercent(pct);
             break;
@@ -131,12 +140,15 @@ void FanManager::handleCmd(const Cmd &cmd) {
 // ======================================================================
 
 void FanManager::hwApplySpeedPercent(uint8_t pct) {
-    if (!lock()) return;
-    // Convert % -> duty (0..255 like original code)
+    // Convert % -> duty (0..255)
     uint8_t duty = static_cast<uint8_t>((pct / 100.0f) * 255.0f);
+
+    if (!lock()) return;
     currentDuty = duty;
     ledcWrite(FAN_PWM_CHANNEL, duty);
     unlock();
+
+    // Print after unlock to keep critical section minimal
     DEBUG_PRINTF("[FanManager] Fan speed set to %u%% (duty %u) 🌀\n", pct, duty);
 }
 

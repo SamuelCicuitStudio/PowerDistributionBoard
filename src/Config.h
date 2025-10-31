@@ -202,8 +202,6 @@
 #define FAN_PWM_PIN                    14                   // FAN output
 #define FAN_PWM_CHANNEL                2
 
-#define PWM_FREQ                       53              // 50 kHz for all PWM signals
-#define PWM_RESOLUTION                 8                    // 8-bit resolution (0–255)
 #define PWM_DUTY_CYCLE                 173                  // Default duty (68%)
 
 // ==================================================
