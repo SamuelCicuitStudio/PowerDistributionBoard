@@ -141,8 +141,8 @@
 // ---------- Authentication Defaults ----------
 #define DEFAULT_ADMIN_ID               "admin"          // Default admin username
 #define DEFAULT_ADMIN_PASS             "admin123"       // Default admin password
-#define DEFAULT_USER_ID                "user0"          // Default customer username
-#define DEFAULT_USER_PASS              "admin123"               // Blank password (set via UI)
+#define DEFAULT_USER_ID                "user"          // Default customer username
+#define DEFAULT_USER_PASS              "user123"               // Blank password (set via UI)
 
 // ==================================================
 // APMODE Definitions
