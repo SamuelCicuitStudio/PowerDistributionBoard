@@ -9,6 +9,7 @@ This board controls **10 nichrome-wire outputs**, an **inrush (bypass) MOSFET**,
 > - Web UI has **Dashboard**, **Manual**, **User Settings**, and **Admin Settings** tabs.
 > - Wi-Fi client mode (**STA**) with **auto-fallback AP** if credentials fail.
 > - **AP auto-sleeps** after inactivity. **Triple-tap the yellow button** to wake Wi-Fi again.
+> - Wi-Fi may be sleeping. **Triple-press the yellow button**, reconnect to the board (use password **`1234567890`** in AP), and try again.
 
 ---
 
