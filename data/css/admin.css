@@ -1064,3 +1064,9 @@ button.danger:hover {
     width: 100%;
   }
 }
+.gauge-card.muted .gauge-fg.voltage {
+  opacity: 0.35;
+}
+.gauge-card.muted .gauge-value {
+  opacity: 0.6;
+}

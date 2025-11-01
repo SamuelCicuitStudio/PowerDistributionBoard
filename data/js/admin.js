@@ -665,10 +665,8 @@ async function loadControls() {
       readyLed.style.backgroundColor = data.ready ? "limegreen" : "gray";
     if (offLed) offLed.style.backgroundColor = data.off ? "red" : "gray";
 
-    // Keep a copy for Cancel
-    if (typeof lastLoadedControls !== "undefined") {
-      lastLoadedControls = data;
-    }
+    // Keep a copy for Cancel / fallbacks
+    lastLoadedControls = data;
 
     // --- Device numeric fields ---
     setField("desiredVoltage", data.desiredVoltage);
@@ -679,11 +677,8 @@ async function loadControls() {
     setField("offTime", data.offTime);
 
     // --- Nichrome values (canonical IDs: r01ohm..r10ohm, rTarget) ---
-    // Preferred: data.wireRes = { "1": 44.0, ..., "10": 44.0 }
-    // Fallbacks: data.wireOhms = [R1..R10], or data.nichrome = { r01..r10, target }
     const wireRes = (() => {
-      if (data && data.wireRes && typeof data.wireRes === "object")
-        return data.wireRes;
+      if (data && typeof data.wireRes === "object") return data.wireRes;
       const obj = {};
       if (Array.isArray(data?.wireOhms)) {
         for (let i = 1; i <= 10; i++) obj[String(i)] = data.wireOhms[i - 1];
@@ -730,6 +725,12 @@ async function loadControls() {
       );
       if (checkbox) checkbox.checked = !!access[`output${i}`];
     }
+
+    // --- RELAY: mirror current live state to both tabs ---
+    const relayFromServer = !!data.relay;
+    const relayToggle = document.getElementById("relayToggle");
+    if (relayToggle) relayToggle.checked = relayFromServer; // Manual tab
+    if (typeof setDot === "function") setDot("relay", relayFromServer); // Live tab
   } catch (err) {
     console.error("Failed to load controls:", err);
   }
@@ -882,110 +883,133 @@ function updateGauge(id, value, unit, maxValue) {
 }
 
 function startMonitorPolling(intervalMs = 400) {
-  setInterval(() => {
-    fetch("/monitor")
-      .then((res) => res.json())
-      .then((data) => {
-        const voltage = parseFloat(data.capVoltage).toFixed(2);
-        updateGauge("voltageValue", voltage, "V", 400);
+  // avoid stacking multiple intervals if this is called twice
+  if (window.__monInt) clearInterval(window.__monInt);
 
-        let rawCurrent = parseFloat(data.current);
-        if (isNaN(rawCurrent)) rawCurrent = 0;
-        const clampedCurrent = Math.max(0, Math.min(100, rawCurrent)).toFixed(
-          2
-        );
-        updateGauge("currentValue", clampedCurrent, "A", 100);
+  window.__monInt = setInterval(async () => {
+    try {
+      const res = await fetch("/monitor", { cache: "no-store" });
+      const data = await res.json();
 
-        const temps = data.temperatures || [];
-        updateGauge(
-          "temp1Value",
-          temps[0] === -127 ? "Off" : parseFloat(temps[0]).toFixed(2),
-          "°C",
-          150
-        );
-        updateGauge(
-          "temp2Value",
-          temps[1] === -127 ? "Off" : parseFloat(temps[1]).toFixed(2),
-          "°C",
-          150
-        );
-        updateGauge(
-          "temp3Value",
-          temps[2] === -127 ? "Off" : parseFloat(temps[2]).toFixed(2),
-          "°C",
-          150
-        );
-        updateGauge(
-          "temp4Value",
-          temps[3] === -127 ? "Off" : parseFloat(temps[3]).toFixed(2),
-          "°C",
-          150
-        );
-        updateGauge(
-          "temp5Value",
-          temps[4] === -127 ? "Off" : parseFloat(temps[4]).toFixed(2),
-          "°C",
-          150
-        );
-        updateGauge(
-          "temp6Value",
-          temps[5] === -127 ? "Off" : parseFloat(temps[5]).toFixed(2),
-          "°C",
-          150
-        );
-        updateGauge(
-          "temp7Value",
-          temps[6] === -127 ? "Off" : parseFloat(temps[6]).toFixed(2),
-          "°C",
-          150
-        );
-        updateGauge(
-          "temp8Value",
-          temps[7] === -127 ? "Off" : parseFloat(temps[7]).toFixed(2),
-          "°C",
-          150
-        );
-        updateGauge(
-          "temp9Value",
-          temps[8] === -127 ? "Off" : parseFloat(temps[8]).toFixed(2),
-          "°C",
-          150
-        );
-        updateGauge(
-          "temp10Value",
-          temps[9] === -127 ? "Off" : parseFloat(temps[9]).toFixed(2),
-          "°C",
-          150
-        );
-        updateGauge(
-          "temp11Value",
-          temps[10] === -127 ? "Off" : parseFloat(temps[10]).toFixed(2),
-          "°C",
-          150
-        );
-        updateGauge(
-          "temp12Value",
-          temps[11] === -127 ? "Off" : parseFloat(temps[11]).toFixed(2),
-          "°C",
-          150
-        );
+      // RELAY: keep Live + Manual in sync on every poll
+      const serverRelay = data.relay === true;
+      setDot("relay", serverRelay); // Live tab
+      const relayToggle = document.getElementById("relayToggle");
+      if (relayToggle) relayToggle.checked = serverRelay; // Manual tab
 
-        const readyLed = document.getElementById("readyLed");
-        const offLed = document.getElementById("offLed");
+      // Show measured DC only when AC is present; otherwise hold at dcVoltage (or 220)
+      const ac = data.ac === true;
+      const fallback =
+        typeof lastLoadedControls?.dcVoltage === "number"
+          ? lastLoadedControls.dcVoltage
+          : 220;
 
-        if (readyLed)
-          readyLed.style.backgroundColor = data.ready ? "limegreen" : "gray";
-        if (offLed) offLed.style.backgroundColor = data.off ? "red" : "gray";
+      let shownV = fallback;
+      if (ac) {
+        const v = parseFloat(data.capVoltage);
+        shownV = Number.isFinite(v) ? v : fallback;
+      }
+      updateGauge("voltageValue", shownV.toFixed(2), "V", 400);
 
-        // 🌀 Fan Speed Slider Update
-        const fanSlider = document.getElementById("fanSlider");
-        if (fanSlider && typeof data.fanSpeed === "number") {
-          fanSlider.value = data.fanSpeed;
-        }
-      })
-      .catch((err) => {
-        console.error("Monitor error:", err);
-      });
+      // (Optional) visually dim when AC is off
+      const vgCard = document
+        .getElementById("voltageValue")
+        ?.closest(".gauge-card");
+      if (vgCard) vgCard.classList.toggle("muted", !ac);
+
+      // Current: clamp to 0 when AC is false or ADC is noisy
+      let rawCurrent = parseFloat(data.current);
+      if (!ac || !Number.isFinite(rawCurrent)) rawCurrent = 0;
+      const clampedCurrent = Math.max(0, Math.min(100, rawCurrent)).toFixed(2);
+      updateGauge("currentValue", clampedCurrent, "A", 100);
+
+      const temps = data.temperatures || [];
+      updateGauge(
+        "temp1Value",
+        temps[0] === -127 ? "Off" : Number(temps[0]).toFixed(2),
+        "°C",
+        150
+      );
+      updateGauge(
+        "temp2Value",
+        temps[1] === -127 ? "Off" : Number(temps[1]).toFixed(2),
+        "°C",
+        150
+      );
+      updateGauge(
+        "temp3Value",
+        temps[2] === -127 ? "Off" : Number(temps[2]).toFixed(2),
+        "°C",
+        150
+      );
+      updateGauge(
+        "temp4Value",
+        temps[3] === -127 ? "Off" : Number(temps[3]).toFixed(2),
+        "°C",
+        150
+      );
+      updateGauge(
+        "temp5Value",
+        temps[4] === -127 ? "Off" : Number(temps[4]).toFixed(2),
+        "°C",
+        150
+      );
+      updateGauge(
+        "temp6Value",
+        temps[5] === -127 ? "Off" : Number(temps[5]).toFixed(2),
+        "°C",
+        150
+      );
+      updateGauge(
+        "temp7Value",
+        temps[6] === -127 ? "Off" : Number(temps[6]).toFixed(2),
+        "°C",
+        150
+      );
+      updateGauge(
+        "temp8Value",
+        temps[7] === -127 ? "Off" : Number(temps[7]).toFixed(2),
+        "°C",
+        150
+      );
+      updateGauge(
+        "temp9Value",
+        temps[8] === -127 ? "Off" : Number(temps[8]).toFixed(2),
+        "°C",
+        150
+      );
+      updateGauge(
+        "temp10Value",
+        temps[9] === -127 ? "Off" : Number(temps[9]).toFixed(2),
+        "°C",
+        150
+      );
+      updateGauge(
+        "temp11Value",
+        temps[10] === -127 ? "Off" : Number(temps[10]).toFixed(2),
+        "°C",
+        150
+      );
+      updateGauge(
+        "temp12Value",
+        temps[11] === -127 ? "Off" : Number(temps[11]).toFixed(2),
+        "°C",
+        150
+      );
+
+      // Ready / Off LEDs + Fan slider (unchanged)
+      const readyLed = document.getElementById("readyLed");
+      const offLed = document.getElementById("offLed");
+      if (readyLed)
+        readyLed.style.backgroundColor = data.ready ? "limegreen" : "gray";
+      if (offLed) offLed.style.backgroundColor = data.off ? "red" : "gray";
+
+      const fanSlider = document.getElementById("fanSlider");
+      if (fanSlider && typeof data.fanSpeed === "number")
+        fanSlider.value = data.fanSpeed;
+    } catch (err) {
+      console.error("Monitor error:", err);
+    }
   }, intervalMs);
 }
 
@@ -1137,7 +1161,7 @@ const LIVE = {
     },
     // Left side outputs 1..5 (turquoise)
     {
-      id: "o1",
+      id: "o6",
       color: "cyan",
       x: 8 + h,
       y: 11 + offset,
@@ -1145,7 +1169,7 @@ const LIVE = {
       ay: 11 + offset,
     },
     {
-      id: "o2",
+      id: "o7",
       color: "cyan",
       x: 8 + h,
       y: 23 + offset,
@@ -1153,7 +1177,7 @@ const LIVE = {
       ay: 23 + offset,
     },
     {
-      id: "o3",
+      id: "o8",
       color: "cyan",
       x: 8 + h,
       y: 35 + offset,
@@ -1161,7 +1185,7 @@ const LIVE = {
       ay: 35 + offset,
     },
     {
-      id: "o4",
+      id: "o9",
       color: "cyan",
       x: 8 + h,
       y: 47 + offset,
@@ -1169,7 +1193,7 @@ const LIVE = {
       ay: 47 + offset,
     },
     {
-      id: "o5",
+      id: "o10",
       color: "cyan",
       x: 8 + h,
       y: 59 + offset,
@@ -1179,7 +1203,7 @@ const LIVE = {
 
     // Right side outputs 6..10 (turquoise)
     {
-      id: "o6",
+      id: "o5",
       color: "cyan",
       x: 92 - h,
       y: 11 + offset,
@@ -1187,7 +1211,7 @@ const LIVE = {
       ay: 11 + offset,
     },
     {
-      id: "o7",
+      id: "o4",
       color: "cyan",
       x: 92 - h,
       y: 23 + offset,
@@ -1195,7 +1219,7 @@ const LIVE = {
       ay: 23 + offset,
     },
     {
-      id: "o8",
+      id: "o3",
       color: "cyan",
       x: 92 - h,
       y: 35 + offset,
@@ -1203,7 +1227,7 @@ const LIVE = {
       ay: 35 + offset,
     },
     {
-      id: "o9",
+      id: "o2",
       color: "cyan",
       x: 92 - h,
       y: 47 + offset,
@@ -1211,7 +1235,7 @@ const LIVE = {
       ay: 47 + offset,
     },
     {
-      id: "o10",
+      id: "o1",
       color: "cyan",
       x: 92 - h,
       y: 59 + offset,
@@ -1271,20 +1295,19 @@ async function pollLiveOnce() {
       r.json()
     );
 
-    // 10 outputs
+    // 10 outputs (Live dots)
     const outs = mon?.outputs || {};
     for (let i = 1; i <= 10; i++) setDot(`o${i}`, !!outs[`output${i}`]);
 
-    // Relay
-    setDot("relay", !!mon.relay);
+    // Relay — trust server, mirror to both tabs
+    const serverRelay = mon.relay === true;
+    setDot("relay", serverRelay); // Live tab dot
+    const relayToggle = document.getElementById("relayToggle");
+    if (relayToggle) relayToggle.checked = serverRelay; // Manual tab toggle
 
-    // AC (derive from cap voltage if you don't expose a flag)
-    const acOn =
-      mon.ac === true ||
-      (typeof mon.capVoltage === "number" && mon.capVoltage > 10);
-    setDot("ac", acOn);
+    // AC: trust server flag only (ignore noisy ADC)
+    setDot("ac", mon.ac === true);
   } catch (e) {
-    // optional: gray out dots on error
     console.warn("live poll failed", e);
   }
 }

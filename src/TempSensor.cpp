@@ -57,7 +57,7 @@ void TempSensor::requestTemperatures() {
 
 float TempSensor::getTemperature(uint8_t index) {
     if (!ow || index >= sensorCount) {
-        DEBUG_PRINTF("[TempSensor] Invalid index %u ❌\n", index);
+        //DEBUG_PRINTF("[TempSensor] Invalid index %u ❌\n", index);
         return NAN;
     }
 
