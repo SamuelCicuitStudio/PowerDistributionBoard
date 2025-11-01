@@ -82,31 +82,47 @@ This section previews the web interface. All screenshots are stored in the repos
 
 ---
 
-## 4) LED cheat-sheet
+## 4) LED cheat-sheet (with hex codes & swatches)
 
-- **OFF (dark)** → Stopped
-- **Soft-green, slow pulse** → **Ready**
-- **Bright green, double pulse** → **Running**
-- **Amber breathing / yellow heartbeat** → Preparing or **AP is active**
-- **Fast red strobe** → **Error** → Tap to stop; check wiring/load before retry
-- **Quick green flash** → Good event (start/joined Wi-Fi)
+> Hardware note: the LED is **RG-only** (no blue). All colors are **Red + Green** mixes.
 
-## RGB Status LED Guide
+- **OFF (dark)** — `#000000`
+  <svg width="14" height="14" style="vertical-align:middle"><rect width="14" height="14" fill="#000000" stroke="#bbb"/></svg>
+  → Stopped
 
-> Hardware note: the LED is **RG-only** (no blue). All colors use **Red** + **Green** mixes.
+- **Soft-green, slow pulse (Ready)** — `#00B400`
+  <svg width="14" height="14" style="vertical-align:middle"><rect width="14" height="14" fill="#00B400" stroke="#bbb"/></svg>
+
+- **Bright green, double pulse (Running)** — `#00DC00`
+  <svg width="14" height="14" style="vertical-align:middle"><rect width="14" height="14" fill="#00DC00" stroke="#bbb"/></svg>
+
+- **Amber breathing / Yellow heartbeat (Preparing / AP active)** — `#FF7800` (amber)
+  <svg width="14" height="14" style="vertical-align:middle"><rect width="14" height="14" fill="#FF7800" stroke="#bbb"/></svg>
+  or `#FFC800` (yellow)
+  <svg width="14" height="14" style="vertical-align:middle"><rect width="14" height="14" fill="#FFC800" stroke="#bbb"/></svg>
+
+- **Fast red strobe (Error)** — `#FF0000`
+  <svg width="14" height="14" style="vertical-align:middle"><rect width="14" height="14" fill="#FF0000" stroke="#bbb"/></svg>
+
+- **Quick green flash (Good event: start / Wi-Fi joined)** — `#00FF00`
+  <svg width="14" height="14" style="vertical-align:middle"><rect width="14" height="14" fill="#00FF00" stroke="#bbb"/></svg>
+
+---
+
+## RGB Status LED Guide (details with hex & swatches)
 
 ### Background States
 
 These run continuously when no overlay is active:
 
-| State     | Color (RG)   | Pattern & Tempo                                | Meaning                       |
-| --------- | ------------ | ---------------------------------------------- | ----------------------------- |
-| **OFF**   | LED off      | —                                              | Device is off / sleeping      |
-| **WAIT**  | Amber        | **Breathe**, ~1200 ms period                   | Getting ready / early startup |
-| **IDLE**  | Soft green   | **Double heartbeat**, ~2000 ms period          | Standing by, ready            |
-| **RUN**   | Bright green | **Double heartbeat**, ~1400 ms period          | Actively running              |
-| **FAULT** | Red          | **Fast strobe**, ~50 ms on / 75 ms off (~8 Hz) | Fault condition (investigate) |
-| **MAINT** | Amber        | **Blink**, ~900 ms period                      | Maintenance / special mode    |
+| State     | Hex       | Swatch                                                                                        | Pattern & Tempo                                | Meaning                       |
+| --------- | --------- | --------------------------------------------------------------------------------------------- | ---------------------------------------------- | ----------------------------- |
+| **OFF**   | `#000000` | <svg width="16" height="16"><rect width="16" height="16" fill="#000000" stroke="#bbb"/></svg> | —                                              | Device is off / sleeping      |
+| **WAIT**  | `#FF7800` | <svg width="16" height="16"><rect width="16" height="16" fill="#FF7800" stroke="#bbb"/></svg> | **Breathe**, ~1200 ms period                   | Getting ready / early startup |
+| **IDLE**  | `#00B400` | <svg width="16" height="16"><rect width="16" height="16" fill="#00B400" stroke="#bbb"/></svg> | **Double heartbeat**, ~2000 ms period          | Standing by, ready            |
+| **RUN**   | `#00DC00` | <svg width="16" height="16"><rect width="16" height="16" fill="#00DC00" stroke="#bbb"/></svg> | **Double heartbeat**, ~1400 ms period          | Actively running              |
+| **FAULT** | `#FF0000` | <svg width="16" height="16"><rect width="16" height="16" fill="#FF0000" stroke="#bbb"/></svg> | **Fast strobe**, ~50 ms on / 75 ms off (~8 Hz) | Fault condition (investigate) |
+| **MAINT** | `#FF7800` | <svg width="16" height="16"><rect width="16" height="16" fill="#FF7800" stroke="#bbb"/></svg> | **Blink**, ~900 ms period                      | Maintenance / special mode    |
 
 > Short yellow/amber/green flashes when the **relay** or **fan** toggles are normal.
 
