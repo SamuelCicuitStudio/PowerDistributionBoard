@@ -195,11 +195,11 @@ This section previews the web interface. All screenshots are stored in the repos
 </tr>
 </table>
 
-**Open the folder directly:** [`ui/`](ui/)
+**Open the folder directly:** [`Ui/`](Ui/)
 
 > **Add more screenshots:**
 >
-> 1. Drop `.png`/`.jpg` files into `ui/`.
+> 1. Drop `.png`/`.jpg` files into `Ui/`.
 > 2. Copy one of the `<td>…</td>` blocks above and change the filename.
 > 3. Commit the README change. GitHub will render the new image automatically.
 
