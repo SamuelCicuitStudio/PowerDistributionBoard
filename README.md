@@ -1,14 +1,14 @@
 # Power Distribution Board (Nichrome) — User Guide
 
-Welcome! This board controls **10 nichrome-wire outputs**, an **inrush (bypass) MOSFET**, and an **input relay**, with a web interface for live control and configuration. It also features a **buzzer** and an **RGB status LED** that communicates system state.
+This board controls **10 nichrome-wire outputs**, an **inrush (bypass) MOSFET**, and an **input relay**, with a built-in web interface for live control and configuration. It also features a **buzzer** and an **RGB status LED** that communicates system state.
 
 > **Quick highlights**
 >
-> - One physical **yellow button** on the board for power/start/stop and Wi‑Fi actions.
-> - Two web roles: **Admin** and **User** (with per‑output access control).
+> - One physical **yellow button** on the board for **power/start/stop** and **Wi-Fi wake** actions.
+> - Two web roles: **Admin** and **User** (with **per-output access control**).
 > - Web UI has **Dashboard**, **Manual**, **User Settings**, and **Admin Settings** tabs.
-> - Wi‑Fi client mode (STA) with **auto‑fallback AP** if credentials fail.
-> - **AP auto‑sleeps** after a short idle period. Triple‑tap the yellow button to bring Wi‑Fi back.
+> - Wi-Fi client mode (**STA**) with **auto-fallback AP** if credentials fail.
+> - **AP auto-sleeps** after inactivity. **Triple-tap the yellow button** to wake Wi-Fi again.
 
 ---
 
@@ -16,8 +16,9 @@ Welcome! This board controls **10 nichrome-wire outputs**, an **inrush (bypass) 
 
 - [Hardware Overview](#hardware-overview)
 - [Safety Notes](#safety-notes)
-- [Power‑On & Wi‑Fi Behavior](#power-on--wi-fi-behavior)
-- [First‑Time Setup](#first-time-setup)
+- [Physical Controls (Yellow Button)](#physical-controls-yellow-button)
+- [Wi-Fi Behavior (AP / STA / Auto-Sleep)](#wi-fi-behavior-ap--sta--auto-sleep)
+- [First-Time Setup](#first-time-setup)
 - [Finding the Board’s IP](#finding-the-boards-ip)
 - [Web Interface](#web-interface)
 
@@ -29,213 +30,338 @@ Welcome! This board controls **10 nichrome-wire outputs**, an **inrush (bypass) 
 - [Access Control (User vs Admin)](#access-control-user-vs-admin)
 - [Buzzer & Mute](#buzzer--mute)
 - [RGB Status LED Guide](#rgb-status-led-guide)
+
+  - [Background States](#background-states)
+  - [Overlay Events](#overlay-events)
+  - [Pattern Primitives](#pattern-primitives)
+
 - [Typical Workflows](#typical-workflows)
 - [FAQ / Troubleshooting](#faq--troubleshooting)
+- [Appendix: Defaults & Endpoints](#appendix-defaults--endpoints)
+- [Changelog](#changelog)
+- [License](#license)
 
 ---
 
 ## Hardware Overview
 
-- **Yellow Button**: single onboard push button for wake/run/stop and Wi‑Fi actions (see [Power‑On & Wi‑Fi Behavior](#power-on--wi-fi-behavior)).
-- **10 Nichrome Outputs**: individually switchable channels for heating loads.
-- **Inrush (Bypass) MOSFET**: engages after the capacitor reaches threshold.
-- **Input Relay**: connects input power during the start sequence and disconnects on stop.
-- **RGB Status LED**: communicates background state (OFF/IDLE/RUN/etc.) and overlays (Wi‑Fi events, web activity, relay toggles, warnings).
-- **Buzzer**: short audible feedback for actions and state changes.
+- **Yellow Button**
+  Single onboard push button used to **wake/start/stop** the system and to **wake Wi-Fi** (triple-press). See the detailed flows below.
 
-> **Electrical note:** Nichrome outputs are resistive heaters. Ensure proper gauge, thermal management, and **never run unattended** without safeguards.
+- **10 Nichrome Outputs**
+  Individually switchable channels for heating loads (nichrome wires). You can enable/disable each output in **Manual** mode and enforce end-user access in **User Settings**.
+
+- **Inrush (Bypass) MOSFET**
+  Engages after the capacitor bank reaches threshold to reduce series losses during operation.
+
+- **Input Relay**
+  Brings input power to the charging stage during startup; opens on stop/shutdown.
+
+- **RGB Status LED**
+  Shows **background states** (OFF / IDLE / RUN / FAULT / etc.) plus **short overlay hints** (Wi-Fi events, web activity, relay/fan toggles, warnings).
+
+- **Buzzer**
+  Provides short audible feedback for important actions; can be **muted** from the web UI (persists).
+
+> **Electrical note:** Nichrome elements are **resistive heaters**. Use appropriate wire gauge and thermal management. **Never leave the system unattended** without safeguards.
 
 ---
 
 ## Safety Notes
 
-- Nichrome elements get **hot**: mount on non‑flammable surfaces; provide ventilation.
-- Verify wiring and fusing. Keep clearances between high‑current traces and low‑voltage logic.
-- Do not exceed rated current per channel or total system limits.
-- Use **proper PPE** and a **bench supply** during first tests.
+- Nichrome elements get **hot**. Mount on **non-flammable** surfaces with ventilation.
+- Verify **wiring and fusing**. Respect current limits per channel and overall supply.
+- Keep separation between **high-current** paths and **logic** wiring.
+- Use **PPE** and a **bench supply** during first power-up and tests.
 
 ---
 
-## Power‑On & Wi‑Fi Behavior
+## Physical Controls (Yellow Button)
 
-1. **Boot → OFF** (LED off). System awaits a **Wake** action.
-2. **Wake (Tap #1 on the yellow button or Web Start):**
+The device boots **OFF** (LED dark; no outputs). The yellow button advances through the power sequence:
 
-   - Relay turns on, capacitor charges, then bypass MOSFET engages.
-   - System goes to **IDLE** (ready) or directly to **RUN** if Start was already requested.
+- **Tap #1 (from OFF)** → **Wake & Prepare**
+  The **input relay** closes; the board **charges the capacitor bank** up to the configured threshold. When threshold is reached, the **bypass MOSFET** engages and the system transitions to **IDLE** (ready).
+  LED shows charging and transition overlays (see LED section).
 
-3. **Run (Tap #2)**: Starts the activation loop (per configured On/Off times).
-4. **Stop (Tap #3)**: Clean shutdown → **OFF**.
+- **Tap #2 (from IDLE)** → **RUN**
+  Enters the main loop. Outputs follow configured **on/off timings** and any **access rules** in place.
 
-### Wi‑Fi
+- **Tap (from RUN)** → **OFF**
+  Requests a **clean stop**: outputs are disabled, the relay opens, bypass disengages, and LED returns to OFF.
 
-- On power‑up the board tries saved **Wi‑Fi STA** credentials. If it can’t connect, it opens a soft **AP**.
-- **AP SSID** appears; browse to **[http://192.168.4.1/login](http://192.168.4.1/login)**.
-- **AP idle sleep:** If the web interface is not used for a while, Wi‑Fi powers down to save energy.
-- **Bring Wi‑Fi back:** **Triple‑tap** the yellow button quickly to restart the Wi‑Fi connection/soft‑AP and access the web UI again.
+- **Long-press (any state)** → **Restart**
+  Press-and-hold a few seconds to reboot the device (use only when necessary).
+
+- **Triple-press (quick)** → **Wake Wi-Fi**
+  If the AP/STA has auto-slept due to inactivity, **press the yellow button three times quickly** to wake Wi-Fi back up so you can connect again.
+
+> **Mental model:** A **quick tap** always means “**advance one step**”:
+> OFF → _(tap)_ → IDLE → _(tap)_ → RUN → _(tap)_ → OFF.
 
 ---
 
-## First‑Time Setup
+## Wi-Fi Behavior (AP / STA / Auto-Sleep)
 
-1. **Power the board** and wait ~10–15 seconds.
-2. If it can’t join your router, connect to the board’s **AP** from your phone/PC, open **[http://192.168.4.1/login](http://192.168.4.1/login)**.
-3. **Default credentials** (change them after login):
+The board includes a web server and supports two Wi-Fi modes:
+
+1. **STA (Station / Client)** — connects to your router
+2. **AP (Access Point)** — the board creates its own Wi-Fi network
+
+### Boot Sequence
+
+- On boot, the board **tries saved STA credentials**.
+
+  - If it connects to your router, it serves the same pages at the **router-assigned IP**.
+  - If it **fails** to connect within its internal timeout, it **falls back to AP mode** so you can still reach the device.
+
+- In **AP mode**, connect to the board’s Wi-Fi and open:
+  **[http://192.168.4.1/login](http://192.168.4.1/login)**
+
+### AP Auto-Sleep (Power Saving)
+
+- To save power, the device monitors web activity and **sleeps Wi-Fi** when idle. When this happens, the AP disappears and any open page will stop responding.
+- To wake Wi-Fi again, **triple-press the yellow button** and reconnect.
+
+### Switching AP → STA
+
+- After you save valid STA credentials and the device joins your network, the **IP address changes** to the one assigned by your router.
+- **Important:** Your phone/computer must be on the **same network** as the board. Reopen the web UI at `http://<router-assigned-ip>/login`.
+
+---
+
+## First-Time Setup
+
+1. **Power the board** and wait ~10–15 seconds for initialization.
+2. If STA join fails, connect to the board’s **AP** from your phone/PC and open:
+   **[http://192.168.4.1/login](http://192.168.4.1/login)**
+3. **Default credentials** (change these immediately):
 
    - **Admin**: `admin` / `admin123`
    - **User**: `user` / `user123`
 
-4. Enter your **Wi‑Fi (STA)** credentials in the **Dashboard → Wi‑Fi** section or a dedicated Connect form (if present). After connecting, the board’s **IP will change** to the one assigned by your router.
-
-> If Wi‑Fi is idle/sleeping, triple‑tap the yellow button to bring it back and reconnect.
+4. From the web UI, enter your **Wi-Fi (STA)** credentials. Once connected, the board’s **IP will be the router-assigned IP** (see next section to find it).
+5. If the AP disappears while you’re working, it’s likely idle auto-sleep. **Triple-press** the yellow button and retry.
 
 ---
 
 ## Finding the Board’s IP
 
-- After the board joins your home/office Wi‑Fi, check your router’s **connected devices** page for the assigned IP.
-- If unsure, you can:
+After the board joins your router:
 
-  - Momentarily **disable your phone’s mobile data** and try **[http://pdis.local](http://pdis.local)** (if mDNS is enabled in your network), or
-  - Use a network scanner app to find the device.
+- Check your router’s **Connected Devices** page for the board’s **IP address**.
+- Optionally try **mDNS** (if supported on your network): `http://pdis.local`
+- A local **network scanner** app can also discover the device.
+
+> If you can’t reach the board and it was previously in AP mode, your browser may still be on `192.168.4.1`. Move to your normal Wi-Fi network and use the **router-assigned IP** instead.
 
 ---
 
 ## Web Interface
 
-The web tool has tabs and quick‑action buttons. Depending on whether you log in as **Admin** or **User**, you will see different capabilities.
+You’ll see different capabilities depending on your role (**Admin** or **User**). The UI is divided into tabs.
 
 ### Dashboard
 
-Primary status and quick controls:
+**Purpose:** Quick status and high-level actions.
 
-- **Mode**: **Auto ↔ Manual** toggle for the main activation loop.
-- **LT**: LED feedback switch (per‑channel LED indicators while running).
-- **Ready / OFF indicators**: visual status.
-- **Power button**:
+- **Mode: Auto ↔ Manual**
+  Switch the main loop mode.
+- **LT (LED Feedback)**
+  Toggle per-channel LED feedback while running.
+- **Ready / OFF indicators**
+  Visual status mirrored from the device.
+- **Power Button**
 
-  - **Start** (wake → run),
-  - **Stop** (clean shutdown),
-  - shows state (OFF/IDLE/RUN) and disables itself when not applicable.
+  - **Start** (OFF/IDLE → RUN)
+  - **Stop** (RUN → OFF)
+  - The button text/state mirrors the device; it disables itself when an action is not valid.
 
-- **Mute**: Mutes/unmutes the buzzer (saved to preferences).
-- **System**: **Reboot** and **Factory Reset** (use with care).
-- Live gauges (if present): input voltage/current, temperatures.
+- **Mute (Buzzer)**
+  Toggles a **persistent** mute flag for the buzzer.
+- **System**
+  **Reboot** and **Factory Reset** controls (use carefully).
+- **Live Gauges (if present)**
+  Input voltage/current, temperatures, etc.
 
 ### Manual
 
-Direct control when **Manual** mode is active:
+**Purpose:** Direct, per-device control (when Manual mode is active).
 
-- **Outputs 1–10**: On/Off per channel.
-- **Input Relay**: On/Off.
-- **Bypass MOSFET**: On/Off.
-- **Fan**: duty slider.
-- **Timing**: On‑Time / Off‑Time (ms or s), **Save** to preferences.
-- **Electrical Params**: AC frequency, charge resistor, DC voltage, desired output voltage.
+- **Outputs 1–10** — On/Off per channel
+- **Input Relay** — On/Off
+- **Bypass MOSFET** — On/Off
+- **Fan** — Duty slider
+- **Timing** — On-Time / Off-Time; **Save** to preferences
+- **Electrical Parameters** — AC frequency, charge resistor, DC voltage, desired output voltage
 
-> Manual control is subject to role permissions and the **User Access** settings below.
+> **Note:** Manual actions for **User** are limited by the **Access** flags set by **Admin** (see below).
 
 ### User Settings
 
 - Change **User username/password**.
-- **Per‑output access**: allow/deny the **User role** to control each output (1–10).
-- Save applies immediately.
+- **Per-output access**: grant or deny the **User role** control over each output (1–10).
+- **Save** applies immediately.
 
 ### Admin Settings
 
 - Change **Admin username/password**.
-- Use strong passwords and keep them safe.
+- Use strong passwords and store them safely.
 
 ---
 
 ## Access Control (User vs Admin)
 
-- **Admin** can control all outputs and all system settings.
-- **User** control is limited by **per‑output access flags** set in _User Settings_. If a channel is not granted, User clicks on it will be ignored.
+- **Admin** can **control everything**: all outputs, relay, bypass, fan, timings, electrical parameters, credentials.
+- **User** control is limited by **per-output access flags** set in **User Settings**. If an output is **not granted**, clicking it in the UI will have **no effect**.
 
 ---
 
 ## Buzzer & Mute
 
-- The **Mute** button in the web UI toggles a persisted flag. When muted, beeps are suppressed except for critical events.
+- The **Mute** button flips a **persisted** flag. When muted, buzzer beeps are suppressed except for critical cases.
 - You can unmute at any time from the web UI.
 
 ---
 
 ## RGB Status LED Guide
 
-> The board is wired **RG‑only** (no blue). Colors below are described in RG terms.
+> Hardware note: the LED is **RG-only** (no blue). All colors use **Red** + **Green** mixes.
 
-### Background states (always-on ambience)
+### Background States
 
-| State     | Effect                        | Meaning                    |
-| --------- | ----------------------------- | -------------------------- |
-| **OFF**   | LED off                       | System off / sleeping      |
-| **WAIT**  | Amber breathe                 | Power‑up / getting ready   |
-| **IDLE**  | Soft‑green slow heartbeat     | Standing by, ready         |
-| **RUN**   | Bright‑green double heartbeat | Actively running           |
-| **FAULT** | Fast red strobe               | Fault condition            |
-| **MAINT** | Amber blink                   | Maintenance / special mode |
+These run continuously when no overlay is active:
 
-### Overlay events (short pulses layered on background)
+| State     | Color (RG)   | Pattern & Tempo                                | Meaning                       |
+| --------- | ------------ | ---------------------------------------------- | ----------------------------- |
+| **OFF**   | LED off      | —                                              | Device is off / sleeping      |
+| **WAIT**  | Amber        | **Breathe**, ~1200 ms period                   | Getting ready / early startup |
+| **IDLE**  | Soft green   | **Double heartbeat**, ~2000 ms period          | Standing by, ready            |
+| **RUN**   | Bright green | **Double heartbeat**, ~1400 ms period          | Actively running              |
+| **FAULT** | Red          | **Fast strobe**, ~50 ms on / 75 ms off (~8 Hz) | Fault condition (investigate) |
+| **MAINT** | Amber        | **Blink**, ~900 ms period                      | Maintenance / special mode    |
 
-- **Wi‑Fi AP**: yellow heartbeat pulse
-- **Wi‑Fi STA**: quick green flash
-- **Wi‑Fi lost**: amber blink
-- **Web Admin active**: orange‑red breathe
-- **Web User active**: green breathe
-- **Relay on/off**: short yellow/amber flashes
-- **Fan on/off**: short green/amber flashes
-- **Output toggled (per‑channel)**: short green/amber flashes, repeated N times to indicate channel index
-- **Power‑up sequence**: distinct flashes for _wait 12V_, _charging_, _threshold OK_, _bypass on_, _wait button_, and _start_
-- **Low/Critical battery**: yellow/red attention blinks
+**Heartbeat shape:** two short beats per period (beat, gap, beat, rest).
 
-> Overlays are prioritized; critical alerts can briefly preempt background effects.
+### Overlay Events
+
+Short, higher-priority hints that temporarily preempt the background:
+
+- **Power / Path**
+
+  - **Wake flash** (button registered) — soft white, flash once
+  - **Relay ON / OFF** — short yellow/amber flash
+  - **Charging** — amber “breathe” ≤ 1/s while capacitor charges
+  - **Threshold OK** — short green flash
+  - **Bypass ON** — short greenish flash
+  - **Start** — alert flash as we enter RUN
+
+- **Wi-Fi / Web**
+
+  - **Wi-Fi AP up** — yellow double heartbeat (~1.5 s) for a few seconds
+  - **Wi-Fi STA joined** — quick green flash
+  - **Wi-Fi lost** — amber blink
+  - **Web Admin active** — orange-red breathe (short window)
+  - **Web User active** — green breathe (short window)
+
+- **Fan / Relay / Outputs**
+
+  - **Fan on/off** — quick green/amber flash
+  - **Relay on/off** — quick yellow/amber flash
+  - **Output toggled N** — pulse train (N flashes) to indicate channel index
+
+- **Limits / Battery**
+
+  - **Temp warn / crit** — yellow/red blinks (tempo indicates severity)
+  - **Current warn / trip** — yellow/red blinks (tempo indicates severity)
+  - **Low / Critical battery** — yellow/red attention blinks
+
+**Priority:** Background < Action < Alert < Critical. Critical overlays preempt; background resumes automatically when they end.
+
+### Pattern Primitives
+
+- **FLASH_ONCE** — Solid ON for _onMs_, then off.
+- **BLINK** — Equal ON/OFF slices within a period.
+- **BREATHE** — Smooth ramp up/down (soft glow).
+- **HEARTBEAT2** — Two short beats per period (beat, gap, beat, rest).
+- **STROBE** — Rapid on/off according to explicit timings.
 
 ---
 
 ## Typical Workflows
 
-**Start a job**
+### Start a job (hardware-only, no web)
 
-1. Tap the yellow button once (or press **Start** in the web UI).
-2. Wait for the LED sequence: relay on → charging → bypass on → IDLE.
-3. Tap the yellow button again (or **Start** in the web UI) to enter **RUN**.
+1. Ensure wiring and loads are safe; power the board (LED off).
+2. **Tap the yellow button once** to **Wake & Prepare**.
+   Watch the LED: relay ON → charging pulses → threshold OK → bypass ON → **IDLE**.
+3. **Tap the yellow button again** to enter **RUN** (main loop).
+4. To stop, **tap once** while running. The board cleanly disables outputs, opens the relay, and returns to **OFF**.
 
-**Stop safely**
+### Start a job (from the web UI)
 
-1. Tap the yellow button (Stop) or press **Stop** in the web UI.
-2. The board cleanly disables outputs, turns relay off, disables bypass, and returns to **OFF**.
+1. Connect to **AP** (`http://192.168.4.1/login`) or the **router IP** (STA).
+2. Log in (**Admin** or **User**).
+3. On the **Dashboard**, click **Start** (or **Stop** when running).
+4. If the AP disappears while idle, **triple-press** the yellow button and reconnect.
 
-**Bring Wi‑Fi back if the page won’t load**
-
-- Triple‑tap the yellow button quickly to re‑enable Wi‑Fi/AP and reconnect.
-
-**Give a user access to only channels 1–3**
+### Give a user access to only channels 1–3
 
 1. Log in as **Admin**.
-2. Go to **User Settings** and enable access for outputs **1**, **2**, **3**.
-3. Save. Now a **User** login can only toggle those channels.
+2. Open **User Settings** and enable outputs **1**, **2**, **3**.
+3. Save. User accounts can now toggle only those channels.
 
 ---
 
 ## FAQ / Troubleshooting
 
-**The webpage shows “Idle.” Does that mean the device is disconnected?**
-
-- _Idle_ is a **real device state** (board is ready but not running). If the board disconnects, the web page will fail heartbeat checks and automatically redirect you to the AP login when it can’t reach the device.
-
-**The power button in the web UI doesn’t match the hardware state.**
-
-- The UI continuously syncs from the device and updates the power button and LED indicators accordingly. If it’s out of sync, refresh the page, or toggle **Start/Stop** once to resync.
+**The web page says “Idle”. Is the device disconnected?**
+No. **Idle** is a **real device state** (board is ready, not running). Disconnection looks different: your page won’t update, buttons seem unresponsive, or the AP has vanished (auto-sleep).
 
 **The AP vanished after a few minutes.**
+Expected: **auto-sleep** saves power when the web UI is idle. **Triple-press** the yellow button to wake Wi-Fi (AP/STA), reconnect, and reload the page.
 
-- That’s expected: to save power, Wi‑Fi/AP auto‑sleeps when idle. Triple‑tap the yellow button to bring it back.
+**I switched to STA but can’t reach the page.**
+You’re likely still on `192.168.4.1` (AP). After joining your router, the board serves pages at the **router-assigned IP**. Find it in your router’s device list and browse to `http://<that-ip>/login`.
 
-**I can’t control some outputs when logged in as User.**
+**The power button in the UI doesn’t match the hardware state.**
+The UI mirrors the device. If it looks out of sync, refresh the page or **toggle Start/Stop** once—status will re-sync.
 
-- Those outputs are probably **not granted** to the User role. Ask an Admin to enable them under **User Settings**.
+**I’m logged in as User but some outputs won’t toggle.**
+They’re likely **not granted** to the User role. Ask an **Admin** to enable those outputs in **User Settings**.
+
+**The buzzer is noisy.**
+Use **Mute** on the Dashboard. The **mute flag persists** until you unmute.
+
+**Wi-Fi keeps sleeping while I’m on the page.**
+Keep at least one tab **active**, or interact periodically. If it sleeps, **triple-press** the yellow button and reconnect.
+
+**I forgot the credentials.**
+Use **Admin Settings** (if you still have access) to reset passwords. If fully locked out, perform a **factory reset** (from the System section) or follow your project’s hardware recovery procedure.
+
+---
+
+## Appendix: Defaults & Endpoints
+
+**Default logins** (change after first use):
+
+- **Admin**: `admin` / `admin123`
+- **User**: `user` / `user123`
+
+**AP login URL:** `http://192.168.4.1/login`
+**STA login URL:** `http://<router-assigned-ip>/login`
+
+**Common endpoints (for reference):**
+
+- `GET /login` — Login page
+- `POST /connect` — Authenticate (role-based redirect)
+- `POST /disconnect` — Logout
+- `GET /monitor` — Live status snapshot (UI uses this)
+- `GET /load_controls` — Control panel snapshot (also refreshes inactivity timer)
+- `GET /control?action=...` — Command/status API (start/stop, relay, bypass, fan, outputs, timings, LED feedback, mute, etc.)
+- `GET /heartbeat` — Keeps session alive; prevents Wi-Fi auto-sleep while browsing
+
+> **Port:** HTTP **80** (default). Use a modern browser (Chrome/Edge/Firefox/Safari).
 
 ---
 
@@ -247,4 +373,4 @@ Direct control when **Manual** mode is active:
 
 ## License
 
-This documentation is provided as‑is under your project’s license.
+This documentation is provided as-is under your project’s license.
