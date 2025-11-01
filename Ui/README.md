@@ -82,47 +82,43 @@ This section previews the web interface. All screenshots are stored in the repos
 
 ---
 
-## 4) LED cheat-sheet (with hex codes & swatches)
+## 4) LED cheat-sheet (hex + visible color chips)
 
-> Hardware note: the LED is **RG-only** (no blue). All colors are **Red + Green** mixes.
+> Hardware note: the LED is **RG-only** (no blue). Colors are **Red + Green** mixes.
 
-- **OFF (dark)** — `#000000`
-  <svg width="14" height="14" style="vertical-align:middle"><rect width="14" height="14" fill="#000000" stroke="#bbb"/></svg>
-  → Stopped
+- **OFF (dark)** — `#000000`  
+  <img alt="#000000" src="https://placehold.co/14x14/000000/000000.png" />
 
-- **Soft-green, slow pulse (Ready)** — `#00B400`
-  <svg width="14" height="14" style="vertical-align:middle"><rect width="14" height="14" fill="#00B400" stroke="#bbb"/></svg>
+- **Soft-green, slow pulse (Ready)** — `#00B400`  
+  <img alt="#00B400" src="https://placehold.co/14x14/00B400/00B400.png" />
 
-- **Bright green, double pulse (Running)** — `#00DC00`
-  <svg width="14" height="14" style="vertical-align:middle"><rect width="14" height="14" fill="#00DC00" stroke="#bbb"/></svg>
+- **Bright green, double pulse (Running)** — `#00DC00`  
+  <img alt="#00DC00" src="https://placehold.co/14x14/00DC00/00DC00.png" />
 
-- **Amber breathing / Yellow heartbeat (Preparing / AP active)** — `#FF7800` (amber)
-  <svg width="14" height="14" style="vertical-align:middle"><rect width="14" height="14" fill="#FF7800" stroke="#bbb"/></svg>
-  or `#FFC800` (yellow)
-  <svg width="14" height="14" style="vertical-align:middle"><rect width="14" height="14" fill="#FFC800" stroke="#bbb"/></svg>
+- **Amber breathing / Yellow heartbeat (Preparing / AP active)** — `#FF7800` (amber) or `#FFC800` (yellow)  
+  <img alt="#FF7800" src="https://placehold.co/14x14/FF7800/FF7800.png" />
+  <img alt="#FFC800" src="https://placehold.co/14x14/FFC800/FFC800.png" />
 
-- **Fast red strobe (Error)** — `#FF0000`
-  <svg width="14" height="14" style="vertical-align:middle"><rect width="14" height="14" fill="#FF0000" stroke="#bbb"/></svg>
+- **Fast red strobe (Error)** — `#FF0000`  
+  <img alt="#FF0000" src="https://placehold.co/14x14/FF0000/FF0000.png" />
 
-- **Quick green flash (Good event: start / Wi-Fi joined)** — `#00FF00`
-  <svg width="14" height="14" style="vertical-align:middle"><rect width="14" height="14" fill="#00FF00" stroke="#bbb"/></svg>
+- **Quick green flash (Good event: start / Wi-Fi joined)** — `#00FF00`  
+  <img alt="#00FF00" src="https://placehold.co/14x14/00FF00/00FF00.png" />
 
 ---
 
-## RGB Status LED Guide (details with hex & swatches)
+## RGB Status LED Guide (details with hex + chips)
 
-### Background States
+These background states run continuously when no overlay is active:
 
-These run continuously when no overlay is active:
-
-| State     | Hex       | Swatch                                                                                        | Pattern & Tempo                                | Meaning                       |
-| --------- | --------- | --------------------------------------------------------------------------------------------- | ---------------------------------------------- | ----------------------------- |
-| **OFF**   | `#000000` | <svg width="16" height="16"><rect width="16" height="16" fill="#000000" stroke="#bbb"/></svg> | —                                              | Device is off / sleeping      |
-| **WAIT**  | `#FF7800` | <svg width="16" height="16"><rect width="16" height="16" fill="#FF7800" stroke="#bbb"/></svg> | **Breathe**, ~1200 ms period                   | Getting ready / early startup |
-| **IDLE**  | `#00B400` | <svg width="16" height="16"><rect width="16" height="16" fill="#00B400" stroke="#bbb"/></svg> | **Double heartbeat**, ~2000 ms period          | Standing by, ready            |
-| **RUN**   | `#00DC00` | <svg width="16" height="16"><rect width="16" height="16" fill="#00DC00" stroke="#bbb"/></svg> | **Double heartbeat**, ~1400 ms period          | Actively running              |
-| **FAULT** | `#FF0000` | <svg width="16" height="16"><rect width="16" height="16" fill="#FF0000" stroke="#bbb"/></svg> | **Fast strobe**, ~50 ms on / 75 ms off (~8 Hz) | Fault condition (investigate) |
-| **MAINT** | `#FF7800` | <svg width="16" height="16"><rect width="16" height="16" fill="#FF7800" stroke="#bbb"/></svg> | **Blink**, ~900 ms period                      | Maintenance / special mode    |
+| State     | Hex       | Chip                                                                     | Pattern & Tempo                                | Meaning                       |
+| --------- | --------- | ------------------------------------------------------------------------ | ---------------------------------------------- | ----------------------------- |
+| **OFF**   | `#000000` | <img alt="#000000" src="https://placehold.co/16x16/000000/000000.png" /> | —                                              | Device is off / sleeping      |
+| **WAIT**  | `#FF7800` | <img alt="#FF7800" src="https://placehold.co/16x16/FF7800/FF7800.png" /> | **Breathe**, ~1200 ms period                   | Getting ready / early startup |
+| **IDLE**  | `#00B400` | <img alt="#00B400" src="https://placehold.co/16x16/00B400/00B400.png" /> | **Double heartbeat**, ~2000 ms period          | Standing by, ready            |
+| **RUN**   | `#00DC00` | <img alt="#00DC00" src="https://placehold.co/16x16/00DC00/00DC00.png" /> | **Double heartbeat**, ~1400 ms period          | Actively running              |
+| **FAULT** | `#FF0000` | <img alt="#FF0000" src="https://placehold.co/16x16/FF0000/FF0000.png" /> | **Fast strobe**, ~50 ms on / 75 ms off (~8 Hz) | Fault condition (investigate) |
+| **MAINT** | `#FF7800` | <img alt="#FF7800" src="https://placehold.co/16x16/FF7800/FF7800.png" /> | **Blink**, ~900 ms period                      | Maintenance / special mode    |
 
 > Short yellow/amber/green flashes when the **relay** or **fan** toggles are normal.
 
