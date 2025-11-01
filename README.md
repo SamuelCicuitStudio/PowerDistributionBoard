@@ -142,52 +142,52 @@ This section previews the web interface. All screenshots are stored in the repos
 <img src="Ui/Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042258.png" alt="Capture d’écran 2025-11-01 042258" width="300"></a><br/><sub>Capture d’écran 2025-11-01 042258</sub>
 </td>
 <td align="center" valign="top">
-<a href="ui/Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042326.png">
+<a href="Ui/Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042326.png">
 <img src="Ui/Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042326.png" alt="Capture d’écran 2025-11-01 042326" width="300"></a><br/><sub>Capture d’écran 2025-11-01 042326</sub>
 </td>
 <td align="center" valign="top">
-<a href="ui/Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042345.png">
+<a href="Ui/Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042345.png">
 <img src="Ui/Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042345.png" alt="Capture d’écran 2025-11-01 042345" width="300"></a><br/><sub>Capture d’écran 2025-11-01 042345</sub>
 </td>
 </tr>
 
 <tr>
 <td align="center" valign="top">
-<a href="ui/Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042357.png">
+<a href="Ui/Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042357.png">
 <img src="Ui/Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042357.png" alt="Capture d’écran 2025-11-01 042357" width="300"></a><br/><sub>Capture d’écran 2025-11-01 042357</sub>
 </td>
 <td align="center" valign="top">
-<a href="ui/Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042411.png">
+<a href="Ui/Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042411.png">
 <img src="Ui/Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042411.png" alt="Capture d’écran 2025-11-01 042411" width="300"></a><br/><sub>Capture d’écran 2025-11-01 042411</sub>
 </td>
 <td align="center" valign="top">
-<a href="ui/Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042423.png">
+<a href="Ui/Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042423.png">
 <img src="Ui/Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042423.png" alt="Capture d’écran 2025-11-01 042423" width="300"></a><br/><sub>Capture d’écran 2025-11-01 042423</sub>
 </td>
 </tr>
 
 <tr>
 <td align="center" valign="top">
-<a href="ui/Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042436.png">
+<a href="Ui/Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042436.png">
 <img src="Ui/Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042436.png" alt="Capture d’écran 2025-11-01 042436" width="300"></a><br/><sub>Capture d’écran 2025-11-01 042436</sub>
 </td>
 <td align="center" valign="top">
-<a href="ui/Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042450.png">
+<a href="Ui/Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042450.png">
 <img src="Ui/Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042450.png" alt="Capture d’écran 2025-11-01 042450" width="300"></a><br/><sub>Capture d’écran 2025-11-01 042450</sub>
 </td>
 <td align="center" valign="top">
-<a href="ui/Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042508.png">
+<a href="Ui/Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042508.png">
 <img src="Ui/Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042508.png" alt="Capture d’écran 2025-11-01 042508" width="300"></a><br/><sub>Capture d’écran 2025-11-01 042508</sub>
 </td>
 </tr>
 
 <tr>
 <td align="center" valign="top">
-<a href="ui/Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042523.png">
+<a href="Ui/Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042523.png">
 <img src="Ui/Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042523.png" alt="Capture d’écran 2025-11-01 042523" width="300"></a><br/><sub>Capture d’écran 2025-11-01 042523</sub>
 </td>
 <td align="center" valign="top">
-<a href="ui/Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042536.png">
+<a href="Ui/Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042536.png">
 <img src="Ui/Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042536.png" alt="Capture d’écran 2025-11-01 042536" width="300"></a><br/><sub>Capture d’écran 2025-11-01 042536</sub>
 </td>
 <td>
