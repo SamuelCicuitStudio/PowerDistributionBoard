@@ -8,7 +8,7 @@ This board turns electric heating wires (nichrome) **ON/OFF**. You can use the *
 
 This section previews the web interface. All screenshots are stored in the repository at **`ui/`**. Click any thumbnail to open the full-size image.
 
-> Tip: Filenames with spaces or accented characters are fully supported below (they’re URL-encoded). If you rename files, update the paths here.
+> Tip: Filenames with spaces or accented characters are fully supported below (they’re URL-encoded). If you rename files, update the paths here .
 
 <table>
 <tr><td align="center" valign="top"><a href="ui/Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042258.png"><img src="Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042258.png" alt="Capture d’écran 2025-11-01 042258" width="300"></a><br/><sub>Capture d’écran 2025-11-01 042258</sub></td><td align="center" valign="top"><a href="ui/Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042326.png"><img src="Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042326.png" alt="Capture d’écran 2025-11-01 042326" width="300"></a><br/><sub>Capture d’écran 2025-11-01 042326</sub></td><td align="center" valign="top"><a href="ui/Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042345.png"><img src="Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042345.png" alt="Capture d’écran 2025-11-01 042345" width="300"></a><br/><sub>Capture d’écran 2025-11-01 042345</sub></td></tr>
