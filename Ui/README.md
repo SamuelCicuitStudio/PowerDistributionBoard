@@ -6,9 +6,21 @@ This board turns electric heating wires (nichrome) **ON/OFF**. You can use the *
 
 ## UI
 
-This section previews the web interface. All screenshots are stored in the repository at **`ui/`**. Click any thumbnail to open the full-size image.
+This section previews the web interface. All screenshots are stored in the repository at **`ui/`** and are already referenced below. **Click any thumbnail** to open the full-size image in GitHub.
 
-> Tip: Filenames with spaces or accented characters are fully supported below (they’re URL-encoded). If you rename files, update the paths here .
+**How to view on GitHub**
+
+- **Desktop:** Left-click a thumbnail to open it; use your browser’s back button to return. Right-click → “Open link in new tab” if you want to keep the gallery open.
+- **Mobile:** Tap a thumbnail to open the full view; pinch to zoom. Use your back gesture to return.
+- **If an image doesn’t load:** Check your internet connection and refresh the page. GitHub is case-sensitive—make sure filenames match exactly. Cached pages sometimes need a hard refresh (Ctrl/Cmd + Shift + R).
+
+**How to add more screenshots later**
+
+1. Put new `.png` / `.jpg` files in the **`ui/`** folder.
+2. Duplicate one `<td>…</td>` block below and change only the filename/label (keep the URL-encoded characters intact).
+3. Commit your changes—GitHub will render them automatically.
+
+> Tip: Filenames with spaces or accented characters are fully supported below (they’re URL-encoded). If you rename files, update the paths here.
 
 <table>
 <tr><td align="center" valign="top"><a href="Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042258.png"><img src="Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042258.png" alt="Capture d’écran 2025-11-01 042258" width="300"></a><br/><sub>Capture d’écran 2025-11-01 042258</sub></td><td align="center" valign="top"><a href="Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042326.png"><img src="Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042326.png" alt="Capture d’écran 2025-11-01 042326" width="300"></a><br/><sub>Capture d’écran 2025-11-01 042326</sub></td><td align="center" valign="top"><a href="Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042345.png"><img src="Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042345.png" alt="Capture d’écran 2025-11-01 042345" width="300"></a><br/><sub>Capture d’écran 2025-11-01 042345</sub></td></tr>
@@ -51,22 +63,17 @@ This section previews the web interface. All screenshots are stored in the repos
 **First time or when not on your home Wi-Fi (AP mode):**
 
 1. On your phone, open Wi-Fi and connect to the board’s network.
-
    - If you don’t see it, **triple-press the yellow button** to wake Wi-Fi.
    - **AP Wi-Fi password (default): `1234567890`**
-
 2. Open a browser and go to **[http://192.168.4.1/login](http://192.168.4.1/login)**
 3. Log in (change later if you want):
-
    - **Admin:** `admin` / `admin123`
    - **User:** `user` / `user123`
-
 4. Press **Start** to run, **Stop** to stop.
 
 **After saving your home Wi-Fi (STA mode):**
 
-- The board joins your router. Next time, open:
-  **http://(router-assigned-IP)/login**
+- The board joins your router. Next time, open: **http://(router-assigned-IP)/login**
 - Find that IP in your router’s “connected devices” list.
 
 **If the page won’t load:**
