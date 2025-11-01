@@ -139,11 +139,11 @@ This section previews the web interface. All screenshots are stored in the repos
 <tr>
 <td align="center" valign="top">
 <a href="Ui/Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042258.png">
-<img src="Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042258.png" alt="Capture d’écran 2025-11-01 042258" width="300"></a><br/><sub>Capture d’écran 2025-11-01 042258</sub>
+<img src="Ui/Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042258.png" alt="Capture d’écran 2025-11-01 042258" width="300"></a><br/><sub>Capture d’écran 2025-11-01 042258</sub>
 </td>
 <td align="center" valign="top">
 <a href="ui/Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042326.png">
-<img src="Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042326.png" alt="Capture d’écran 2025-11-01 042326" width="300"></a><br/><sub>Capture d’écran 2025-11-01 042326</sub>
+<img src="Ui/Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042326.png" alt="Capture d’écran 2025-11-01 042326" width="300"></a><br/><sub>Capture d’écran 2025-11-01 042326</sub>
 </td>
 <td align="center" valign="top">
 <a href="ui/Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042345.png">
