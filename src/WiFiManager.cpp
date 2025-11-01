@@ -218,10 +218,10 @@ void WiFiManager::registerRoutes_() {
             float t = (i < DEVICE->tempSensor->getSensorCount()) ? DEVICE->tempSensor->getTemperature(i) : -127;
             temps.add((t == -127) ? -127 : t);
         }
-
         doc["ready"] = digitalRead(READY_LED_PIN);
         doc["off"]   = digitalRead(POWER_OFF_LED_PIN);
-
+        doc["ac"]    = digitalRead(DETECT_12V_PIN) == HIGH;
+        doc["relay"] = DEVICE->relayControl->isOn();
         JsonObject outputs = doc.createNestedObject("outputs");
         for (int i = 1; i <= 10; ++i) outputs["output" + String(i)] = DEVICE->heaterManager->getOutputState(i);
 
@@ -267,6 +267,8 @@ void WiFiManager::registerRoutes_() {
                 else if (target == "bypass")                    { c.type = CTRL_BYPASS_BOOL;        c.b1 = value.as<bool>(); }
                 else if (target == "fanSpeed")                  { c.type = CTRL_FAN_SPEED;          c.i1 = constrain(value.as<int>(), 0, 100); }
                 else if (target == "buzzerMute")                { c.type = CTRL_BUZZER_MUTE; c.b1 = value.as<bool>(); }
+                else if (target.startsWith("wireRes"))        { c.type = CTRL_WIRE_RES; c.i1 = target.substring(7).toInt(); c.f1 = value.as<float>(); }
+                else if (target == "targetRes")               { c.type = CTRL_TARGET_RES; c.f1 = value.as<float>(); }
                 else { request->send(400, "application/json", "{\"error\":\"Unknown target\"}"); return; }
 
                 sendCmd(c);
@@ -321,6 +323,16 @@ void WiFiManager::registerRoutes_() {
         };
         JsonObject access = doc.createNestedObject("outputAccess");
         for (int i = 0; i < 10; ++i) access["output" + String(i + 1)] = CONF->GetBool(accessKeys[i], false);
+        // --- Nichrome wire resistances + target ---
+        JsonObject wr = doc.createNestedObject("wireRes");
+        const char* rkeys[10] = {
+        R01OHM_KEY, R02OHM_KEY, R03OHM_KEY, R04OHM_KEY, R05OHM_KEY,
+        R06OHM_KEY, R07OHM_KEY, R08OHM_KEY, R09OHM_KEY, R10OHM_KEY
+        };
+        for (int i = 0; i < 10; ++i) {
+        wr[String(i + 1)] = CONF->GetFloat(rkeys[i], DEFAULT_WIRE_RES_OHMS);
+        }
+        doc["targetRes"] = CONF->GetFloat(R0XTGT_KEY, DEFAULT_TARG_RES_OHMS);
 
         String json; serializeJson(doc, json);
         request->send(200, "application/json", json);

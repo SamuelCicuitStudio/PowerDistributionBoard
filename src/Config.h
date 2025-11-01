@@ -84,7 +84,24 @@
 #define OUT08_ACCESS_KEY               "OUT8F"
 #define OUT09_ACCESS_KEY               "OUT9F"
 #define OUT10_ACCESS_KEY              "OUT10F"
+// ---------- Nichrome Wire Resistance (Ohms) ----------
+#define DEFAULT_WIRE_RES_OHMS  44.0f   // default for all 10 wires
 
+// 6-char NVS keys per wire
+#define R01OHM_KEY  "R01OHM"
+#define R02OHM_KEY  "R02OHM"
+#define R03OHM_KEY  "R03OHM"
+#define R04OHM_KEY  "R04OHM"
+#define R05OHM_KEY  "R05OHM"
+#define R06OHM_KEY  "R06OHM"
+#define R07OHM_KEY  "R07OHM"
+#define R08OHM_KEY  "R08OHM"
+#define R09OHM_KEY  "R09OHM"
+#define R10OHM_KEY  "R10OHM"
+// ---------- Target Resistance for all  Output (Ohms) ----------
+#define DEFAULT_TARG_RES_OHMS  14.0f  // default target for all outputs
+// 6-char NVS keys (one per output)
+#define R0XTGT_KEY  "R0XTGT"  // OUTXX target resistance
 // ==================================================
 // Default Values for Preferences
 // ==================================================

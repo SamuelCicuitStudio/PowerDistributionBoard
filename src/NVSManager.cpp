@@ -224,6 +224,20 @@ void NVS::initializeVariables() {
   // --- Buzzer configuration ---
   PutBool(BUZLOW_KEY, BUZLOW_DEFAULT);   // Active-low logic (default false)
   PutBool(BUZMUT_KEY, BUZMUT_DEFAULT);   // Muted state (default false)
+
+  // --- Nichrome wire resistances (Ohms, default 44.0) ---
+  PutFloat(R01OHM_KEY, DEFAULT_WIRE_RES_OHMS);
+  PutFloat(R02OHM_KEY, DEFAULT_WIRE_RES_OHMS);
+PutFloat(R03OHM_KEY, DEFAULT_WIRE_RES_OHMS);
+    PutFloat(R04OHM_KEY, DEFAULT_WIRE_RES_OHMS);
+    PutFloat(R05OHM_KEY, DEFAULT_WIRE_RES_OHMS);
+    PutFloat(R06OHM_KEY, DEFAULT_WIRE_RES_OHMS);
+    PutFloat(R07OHM_KEY, DEFAULT_WIRE_RES_OHMS);
+    PutFloat(R08OHM_KEY, DEFAULT_WIRE_RES_OHMS);
+    PutFloat(R09OHM_KEY, DEFAULT_WIRE_RES_OHMS);
+    PutFloat(R10OHM_KEY, DEFAULT_WIRE_RES_OHMS);
+ // --- Target resistance per output (Ohms, default 14.0) ---
+    PutFloat(R0XTGT_KEY, DEFAULT_TARG_RES_OHMS);
 }
 
 

@@ -5,7 +5,7 @@ const tabs = document.querySelectorAll(".tab");
 const contents = document.querySelectorAll(".content");
 
 // Hide Manual tab by default (index 1)
-document.querySelector('.sidebar .tab:nth-child(2)').style.display = "none";
+document.querySelector(".sidebar .tab:nth-child(2)").style.display = "none";
 
 // Switch between tabs based on index
 function switchTab(index) {
@@ -17,11 +17,13 @@ function switchTab(index) {
 
 // Toggle between Auto and Manual mode
 function toggleMode() {
-  const isManual = document.getElementById('modeToggle').checked;
-  const dot = document.querySelector('.status-dot');
+  const isManual = document.getElementById("modeToggle").checked;
+  const dot = document.querySelector(".status-dot");
 
   // UI update: show/hide manual tab
-  document.querySelector('.sidebar .tab:nth-child(2)').style.display = isManual ? "block" : "none";
+  document.querySelector(".sidebar .tab:nth-child(2)").style.display = isManual
+    ? "block"
+    : "none";
   switchTab(isManual ? 1 : 0);
 
   // Update status dot
@@ -37,7 +39,7 @@ function toggleMode() {
 // 💡 LT TOGGLE — Sends LED feedback toggle state to the server
 // ───────────────────────────────────────────────────────────────
 function toggleLT() {
-  const isOn = document.getElementById('ltToggle').checked;
+  const isOn = document.getElementById("ltToggle").checked;
   sendControlCommand("set", "ledFeedback", isOn);
   console.log(`LT Toggle switched to ${isOn ? "ON" : "OFF"}`);
 }
@@ -58,7 +60,7 @@ function shutdownSystem() {
 // ───────────────────────────────────────────────────────────────
 function toggleUserMenu() {
   const menu = document.getElementById("userMenu");
-  menu.style.display = (menu.style.display === "block") ? "none" : "block";
+  menu.style.display = menu.style.display === "block" ? "none" : "block";
 }
 
 document.addEventListener("click", function (e) {
@@ -73,11 +75,11 @@ document.addEventListener("click", function (e) {
 // ───────────────────────────────────────────────────────────────
 // 🎛️ MANUAL OUTPUT SCROLLING — Enables horizontal scroll with mouse
 // ───────────────────────────────────────────────────────────────
-const manualScrollArea = document.querySelector('.manual-outputs');
-manualScrollArea?.addEventListener('wheel', function (e) {
+const manualScrollArea = document.querySelector(".manual-outputs");
+manualScrollArea?.addEventListener("wheel", function (e) {
   if (!e.shiftKey) {
     e.preventDefault();
-    manualScrollArea.scrollBy({ left: e.deltaY, behavior: 'smooth' });
+    manualScrollArea.scrollBy({ left: e.deltaY, behavior: "smooth" });
   }
 });
 
@@ -88,7 +90,7 @@ async function loadControls() {
   try {
     const res = await fetch("/load_controls");
     const data = await res.json();
-    console.log("Fetched config:", data);  // Debug info
+    console.log("Fetched config:", data); // Debug info
 
     // ── Update LT toggle switch ──
     const ltToggle = document.getElementById("ltToggle");
@@ -103,7 +105,8 @@ async function loadControls() {
     const readyLed = document.getElementById("readyLed");
     const offLed = document.getElementById("offLed");
 
-    if (readyLed) readyLed.style.backgroundColor = data.ready ? "limegreen" : "gray";
+    if (readyLed)
+      readyLed.style.backgroundColor = data.ready ? "limegreen" : "gray";
     else console.warn("Ready LED not found in DOM!");
 
     if (offLed) offLed.style.backgroundColor = data.off ? "red" : "gray";
@@ -128,7 +131,9 @@ async function loadControls() {
         item.innerHTML = `
           <span>Output ${outputIndex}</span>
           <label class="switch">
-            <input type="checkbox" ${isChecked ? "checked" : ""} onchange="handleOutputToggle(${outputIndex}, this)">
+            <input type="checkbox" ${
+              isChecked ? "checked" : ""
+            } onchange="handleOutputToggle(${outputIndex}, this)">
             <span class="slider"></span>
           </label>
           <div class="led ${isChecked ? "active" : ""}"></div>
@@ -136,7 +141,6 @@ async function loadControls() {
         manualOutputs.appendChild(item);
       }
     });
-
   } catch (err) {
     console.error("Failed to load controls:", err);
   }
@@ -149,8 +153,8 @@ function handleOutputToggle(index, checkbox) {
   const led = checkbox.parentElement.nextElementSibling;
   const isOn = checkbox.checked;
 
-  led.classList.toggle("active", isOn);  // Visual feedback
-  sendControlCommand("set", `output${index}`, isOn);  // Send command
+  led.classList.toggle("active", isOn); // Visual feedback
+  sendControlCommand("set", `output${index}`, isOn); // Send command
 }
 
 // ───────────────────────────────────────────────────────────────
@@ -176,16 +180,16 @@ function saveUserSettings() {
   fetch("/SetUserCred", {
     method: "POST",
     headers: {
-      "Content-Type": "application/json"
+      "Content-Type": "application/json",
     },
     body: JSON.stringify({
       current: currentPassword,
       username: newId,
-      password: newPassword
-    })
+      password: newPassword,
+    }),
   })
-    .then(res => res.json())
-    .then(data => {
+    .then((res) => res.json())
+    .then((data) => {
       if (data.status) {
         alert("✅ " + data.status);
         closeUserModal();
@@ -193,7 +197,7 @@ function saveUserSettings() {
         alert("⚠️ " + data.error);
       }
     })
-    .catch(err => {
+    .catch((err) => {
       console.error("Credential update failed:", err);
       alert("Error communicating with device.");
     });
@@ -204,7 +208,7 @@ function saveUserSettings() {
 // ───────────────────────────────────────────────────────────────
 function updateGauge(id, value, unit, maxValue) {
   const display = document.getElementById(id);
-  const stroke = display.closest('svg').querySelector('path.gauge-fg');
+  const stroke = display.closest("svg").querySelector("path.gauge-fg");
 
   if (value === "Off") {
     stroke.setAttribute("stroke-dasharray", `0, 100`);
@@ -223,29 +227,52 @@ function updateGauge(id, value, unit, maxValue) {
 function startMonitorPolling(intervalMs = 1000) {
   setInterval(() => {
     fetch("/monitor")
-      .then(res => res.json())
-      .then(data => {
+      .then((res) => res.json())
+      .then((data) => {
         const voltage = parseFloat(data.capVoltage).toFixed(2);
         updateGauge("voltageValue", voltage, "V", 400);
 
         let rawCurrent = parseFloat(data.current);
         if (isNaN(rawCurrent)) rawCurrent = 0;
-        const clampedCurrent = Math.max(0, Math.min(100, rawCurrent)).toFixed(2);
+        const clampedCurrent = Math.max(0, Math.min(100, rawCurrent)).toFixed(
+          2
+        );
         updateGauge("currentValue", clampedCurrent, "A", 100);
 
         const temps = data.temperatures || [];
-        updateGauge("temp1Value", temps[0] === -127 ? "Off" : parseFloat(temps[0]).toFixed(2), "°C", 150);
-        updateGauge("temp2Value", temps[1] === -127 ? "Off" : parseFloat(temps[1]).toFixed(2), "°C", 150);
-        updateGauge("temp3Value", temps[2] === -127 ? "Off" : parseFloat(temps[2]).toFixed(2), "°C", 150);
-        updateGauge("temp4Value", temps[3] === -127 ? "Off" : parseFloat(temps[3]).toFixed(2), "°C", 150);
+        updateGauge(
+          "temp1Value",
+          temps[0] === -127 ? "Off" : parseFloat(temps[0]).toFixed(2),
+          "°C",
+          150
+        );
+        updateGauge(
+          "temp2Value",
+          temps[1] === -127 ? "Off" : parseFloat(temps[1]).toFixed(2),
+          "°C",
+          150
+        );
+        updateGauge(
+          "temp3Value",
+          temps[2] === -127 ? "Off" : parseFloat(temps[2]).toFixed(2),
+          "°C",
+          150
+        );
+        updateGauge(
+          "temp4Value",
+          temps[3] === -127 ? "Off" : parseFloat(temps[3]).toFixed(2),
+          "°C",
+          150
+        );
 
         const readyLed = document.getElementById("readyLed");
         const offLed = document.getElementById("offLed");
 
-        if (readyLed) readyLed.style.backgroundColor = data.ready ? "limegreen" : "gray";
+        if (readyLed)
+          readyLed.style.backgroundColor = data.ready ? "limegreen" : "gray";
         if (offLed) offLed.style.backgroundColor = data.off ? "red" : "gray";
       })
-      .catch(err => {
+      .catch((err) => {
         console.error("Monitor error:", err);
       });
   }, intervalMs);
@@ -257,14 +284,14 @@ function startMonitorPolling(intervalMs = 1000) {
 function startHeartbeat(intervalMs = 3000) {
   setInterval(() => {
     fetch("/heartbeat")
-      .then(res => res.text())
-      .then(text => {
+      .then((res) => res.text())
+      .then((text) => {
         if (text !== "alive") {
           console.warn("Unexpected heartbeat:", text);
           window.location.href = "http://192.168.4.1/login";
         }
       })
-      .catch(err => {
+      .catch((err) => {
         console.error("Heartbeat error:", err);
         window.location.href = "http://192.168.4.1/login";
       });
@@ -281,10 +308,10 @@ function sendControlCommand(action, target, value) {
   fetch("/control", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
+    body: JSON.stringify(payload),
   })
-    .then(res => res.json())
-    .then(data => {
+    .then((res) => res.json())
+    .then((data) => {
       if (data.status === "ok") {
         console.log(`[✔] '${action}' on '${target}' succeeded`);
       } else if (data.state) {
@@ -293,7 +320,7 @@ function sendControlCommand(action, target, value) {
         console.warn(`[✖] ${data.error}`);
       }
     })
-    .catch(err => console.error("Control error:", err));
+    .catch((err) => console.error("Control error:", err));
 }
 
 // ───────────────────────────────────────────────────────────────
@@ -304,18 +331,18 @@ function disconnectDevice() {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ action: "disconnect" }),
-    redirect: "follow"
+    redirect: "follow",
   })
-    .then(response => {
+    .then((response) => {
       if (response.redirected) {
         window.location.href = response.url;
       } else {
-        return response.json().then(data => {
+        return response.json().then((data) => {
           alert(data.error || "Unexpected response");
         });
       }
     })
-    .catch(err => {
+    .catch((err) => {
       console.error("Disconnect failed:", err);
       window.location.href = "/login.html";
     });
@@ -326,7 +353,7 @@ function disconnectDevice() {
 // ───────────────────────────────────────────────────────────────
 window.addEventListener("DOMContentLoaded", () => {
   loadControls();
- // startHeartbeat(); // Uncomment if needed
+  // startHeartbeat(); // Uncomment if needed
   startMonitorPolling();
 
   const disconnectBtn = document.getElementById("disconnectBtn");
@@ -336,7 +363,9 @@ window.addEventListener("DOMContentLoaded", () => {
     console.warn("⚠️ disconnectBtn not found in DOM");
   }
 
-  const editBtn = document.getElementById("userMenu")?.querySelector("button:nth-child(1)");
+  const editBtn = document
+    .getElementById("userMenu")
+    ?.querySelector("button:nth-child(1)");
   editBtn?.addEventListener("click", () => {
     document.getElementById("userModal").style.display = "flex";
     document.getElementById("userMenu").style.display = "none";
@@ -352,6 +381,8 @@ window.addEventListener("load", () => {
   const localVersion = localStorage.getItem("ui_version");
   if (localVersion !== REQUIRED_VERSION) {
     localStorage.setItem("ui_version", REQUIRED_VERSION);
-    alert("Please refresh the page using Ctrl+F5 or clear your browser cache to load the latest interface.");
+    alert(
+      "Please refresh the page using Ctrl+F5 or clear your browser cache to load the latest interface."
+    );
   }
 });

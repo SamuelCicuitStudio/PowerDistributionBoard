@@ -105,6 +105,8 @@ private:
         CTRL_BYPASS_BOOL,
         CTRL_FAN_SPEED ,          // i1=0..100
         CTRL_BUZZER_MUTE,      // b1 = true/false
+        CTRL_TARGET_RES,
+        CTRL_WIRE_RES,
     };
 
     struct ControlCmd {

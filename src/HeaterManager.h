@@ -60,6 +60,14 @@ public:
 
   /** Return current digital state of ENA pin (true if HIGH). Thread-safe. */
   bool getOutputState(uint8_t index) const;
+  /** Cache a single wire resistance (Ω) for channel 1..10. Thread-safe. */
+  void setWireResistance(uint8_t index, float ohms);
+
+  /** Set global target resistance (Ω) used by control logic. Thread-safe. */
+  void setTargetResistanceAll(float ohms);
+
+  /** Optional helper: get cached wire resistance (Ω), 0 if invalid index. */
+  float getWireResistance(uint8_t index) const;
 
 private:
   // Active-HIGH ENA control lines (ENA01–ENA10) for reference
@@ -67,7 +75,9 @@ private:
     ENA01_E_PIN, ENA02_E_PIN, ENA03_E_PIN, ENA04_E_PIN, ENA05_E_PIN,
     ENA06_E_PIN, ENA07_E_PIN, ENA08_E_PIN, ENA09_E_PIN, ENA10_E_PIN
   };
-
+  // Cached per-channel wire resistances and global target (Ω)
+  float wireResOhms[10] = {0};
+  float targetResOhms   = 0;
   // Mutex protects: onTimeMs/offTimeMs + all ENA GPIO writes/reads
   SemaphoreHandle_t _mutex;
 

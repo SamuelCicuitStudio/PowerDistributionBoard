@@ -21,6 +21,23 @@ function setModeDot(isManual) {
   dot.style.backgroundColor = isManual ? "#ffa500" : "#00ff80";
   dot.style.boxShadow = `0 0 6px ${dot.style.backgroundColor}`;
 }
+// Keep the last loaded config so Cancel can restore UI
+let lastLoadedControls = null;
+
+function setField(id, val) {
+  const el = document.getElementById(id);
+  if (el) el.value = (val ?? "") === null ? "" : val;
+}
+
+function getFloat(id) {
+  const v = parseFloat(document.getElementById(id)?.value);
+  return Number.isFinite(v) ? v : undefined;
+}
+
+function getInt(id) {
+  const v = parseInt(document.getElementById(id)?.value);
+  return Number.isFinite(v) ? v : undefined;
+}
 
 /**
  * Ensure manual mode is asserted and auto loop is not Running.
@@ -45,6 +62,48 @@ async function ensureManualTakeover(source = "manual-action") {
     setPowerUI("Idle");
   }
   console.log(`Manual takeover by: ${source}`);
+}
+function readFloat(id) {
+  const v = parseFloat(document.getElementById(id).value);
+  return Number.isFinite(v) ? v : null;
+}
+
+function resetNichromeInputs() {
+  for (let i = 1; i <= 10; i++) {
+    const id = `r${String(i).padStart(2, "0")}Ohm`;
+    const el = document.getElementById(id);
+    if (el) el.value = "";
+  }
+  const tEl = document.getElementById("targetOhm");
+  if (tEl) tEl.value = "";
+}
+
+/** Gather the 11 fields, validate, and send one aggregated control */
+async function saveNichrome() {
+  // optional: ensure manual takeover if saving affects control loops
+  // await ensureManualTakeover("nichrome");
+
+  const payload = {};
+  for (let i = 1; i <= 10; i++) {
+    const id = `r${String(i).padStart(2, "0")}Ohm`;
+    const v = readFloat(id);
+    if (v === null || v < 0) {
+      alert(`Invalid value for ${id}`);
+      return;
+    }
+    payload[`r${String(i).padStart(2, "0")}`] = v;
+  }
+  const tgt = readFloat("targetOhm");
+  if (tgt === null || tgt < 0) {
+    alert("Invalid Target Resistance");
+    return;
+  }
+  payload.target = tgt;
+
+  const res = await sendControlCommand("set", "nichromeConfig", payload);
+  if (res && !res.error) {
+    console.log("[Nichrome] Saved.");
+  }
 }
 
 function openConfirm(kind) {
@@ -465,64 +524,157 @@ function toggleMute() {
   // Persist + apply on device (ESP32 will NVS-store and update buzzer behavior)
   sendControlCommand("set", "buzzerMute", isMuted);
 }
+async function saveDeviceAndNichrome() {
+  const cmds = [];
+
+  // Device settings
+  const dv = getFloat("desiredVoltage");
+  if (dv !== undefined) cmds.push(["set", "desiredVoltage", dv]);
+  const hz = getInt("acFrequency");
+  if (hz !== undefined) cmds.push(["set", "acFrequency", hz]);
+  const cr = getFloat("chargeResistor");
+  if (cr !== undefined) cmds.push(["set", "chargeResistor", cr]);
+  const dc = getFloat("dcVoltage");
+  if (dc !== undefined) cmds.push(["set", "dcVoltage", dc]);
+  const on = getInt("onTime");
+  if (on !== undefined) cmds.push(["set", "onTime", on]);
+  const off = getInt("offTime");
+  if (off !== undefined) cmds.push(["set", "offTime", off]);
+
+  // Nichrome resistances R01..R10
+  for (let i = 1; i <= 10; i++) {
+    const val = getFloat(`r${String(i).padStart(2, "0")}ohm`);
+    if (val !== undefined) cmds.push(["set", `wireRes${i}`, val]);
+  }
+
+  // Target resistance for all
+  const tgt = getFloat("rTarget");
+  if (tgt !== undefined) cmds.push(["set", "targetRes", tgt]);
+
+  // Fire sequentially (preserves order)
+  for (const [a, t, v] of cmds) {
+    await sendControlCommand(a, t, v);
+  }
+
+  // Reload to reflect any server-side clamping/formatting
+  loadControls();
+}
+
+function resetDeviceAndNichrome() {
+  // If we have a cached config, restore it; otherwise re-fetch
+  if (!lastLoadedControls) {
+    loadControls();
+    return;
+  }
+
+  const data = lastLoadedControls;
+  setField("desiredVoltage", data.desiredVoltage);
+  setField("acFrequency", data.acFrequency);
+  setField("chargeResistor", data.chargeResistor);
+  setField("dcVoltage", data.dcVoltage);
+  setField("onTime", data.onTime);
+  setField("offTime", data.offTime);
+
+  const wr = data.wireRes || {};
+  for (let i = 1; i <= 10; i++) {
+    setField(`r${String(i).padStart(2, "0")}ohm`, wr[String(i)]);
+  }
+  setField("rTarget", data.targetRes);
+}
 
 async function loadControls() {
   try {
-    const res = await fetch("/load_controls");
+    const res = await fetch("/load_controls", { cache: "no-store" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     console.log("Fetched config:", data);
 
     const access = data.outputAccess || {};
     const states = data.outputs || {};
 
-    // ── Update LT toggle switch ──
+    // --- LT toggle ---
     const ltToggle = document.getElementById("ltToggle");
-    if (ltToggle) {
-      ltToggle.checked = !!data.ledFeedback;
-    }
-    // ── Update buzzer mute from backend (persisted in NVS) ──
+    if (ltToggle) ltToggle.checked = !!data.ledFeedback;
+
+    // --- Buzzer mute ---
     if (typeof data.buzzerMute === "boolean") {
+      // assumes globals isMuted + setMuteUI exist
       isMuted = data.buzzerMute;
       setMuteUI(isMuted);
     }
-    // ── Update Ready / OFF LED indicators ──
+
+    // --- Ready / Off LEDs ---
     const readyLed = document.getElementById("readyLed");
     const offLed = document.getElementById("offLed");
     if (readyLed)
       readyLed.style.backgroundColor = data.ready ? "limegreen" : "gray";
     if (offLed) offLed.style.backgroundColor = data.off ? "red" : "gray";
 
-    // ── Update Manual Control toggles ──
+    // Keep a copy for Cancel
+    if (typeof lastLoadedControls !== "undefined") {
+      lastLoadedControls = data;
+    }
+
+    // --- Device numeric fields ---
+    setField("desiredVoltage", data.desiredVoltage);
+    setField("acFrequency", data.acFrequency);
+    setField("chargeResistor", data.chargeResistor);
+    setField("dcVoltage", data.dcVoltage);
+    setField("onTime", data.onTime);
+    setField("offTime", data.offTime);
+
+    // --- Nichrome values (canonical IDs: r01ohm..r10ohm, rTarget) ---
+    // Preferred: data.wireRes = { "1": 44.0, ..., "10": 44.0 }
+    // Fallbacks: data.wireOhms = [R1..R10], or data.nichrome = { r01..r10, target }
+    const wireRes = (() => {
+      if (data && data.wireRes && typeof data.wireRes === "object")
+        return data.wireRes;
+      const obj = {};
+      if (Array.isArray(data?.wireOhms)) {
+        for (let i = 1; i <= 10; i++) obj[String(i)] = data.wireOhms[i - 1];
+        return obj;
+      }
+      if (data?.nichrome && typeof data.nichrome === "object") {
+        for (let i = 1; i <= 10; i++) {
+          const k = `r${String(i).padStart(2, "0")}`;
+          obj[String(i)] = data.nichrome[k];
+        }
+        return obj;
+      }
+      return obj;
+    })();
+
+    for (let i = 1; i <= 10; i++) {
+      setField(`r${String(i).padStart(2, "0")}ohm`, wireRes[String(i)]);
+    }
+
+    const targetRes =
+      typeof data.targetRes === "number"
+        ? data.targetRes
+        : typeof data?.nichrome?.target === "number"
+        ? data.nichrome.target
+        : undefined;
+    setField("rTarget", targetRes);
+
+    // --- Manual Control toggles (Outputs tab) ---
     for (let i = 1; i <= 10; i++) {
       const checked = !!states[`output${i}`];
+      const itemSel = `#manualOutputs .manual-item:nth-child(${i})`;
       const checkbox = document.querySelector(
-        `#manualOutputs .manual-item:nth-child(${i}) input[type="checkbox"]`
+        `${itemSel} input[type="checkbox"]`
       );
-      const led = document.querySelector(
-        `#manualOutputs .manual-item:nth-child(${i}) .led`
-      );
-
+      const led = document.querySelector(`${itemSel} .led`);
       if (checkbox) checkbox.checked = checked;
       if (led) led.classList.toggle("active", checked);
     }
 
-    // ── Update Output Access (User Settings tab) ──
+    // --- Output Access (User Settings tab) ---
     for (let i = 1; i <= 10; i++) {
       const checkbox = document.querySelector(
         `#userAccessGrid .manual-item:nth-child(${i}) input[type="checkbox"]`
       );
-      if (checkbox) {
-        checkbox.checked = !!access[`output${i}`];
-      }
+      if (checkbox) checkbox.checked = !!access[`output${i}`];
     }
-
-    // ── Update Device Settings Tab ──
-    document.getElementById("desiredVoltage").value = data.desiredVoltage ?? "";
-    document.getElementById("acFrequency").value = data.acFrequency ?? "";
-    document.getElementById("chargeResistor").value = data.chargeResistor ?? "";
-    document.getElementById("dcVoltage").value = data.dcVoltage ?? "";
-    document.getElementById("onTime").value = data.onTime ?? "";
-    document.getElementById("offTime").value = data.offTime ?? "";
   } catch (err) {
     console.error("Failed to load controls:", err);
   }
@@ -562,6 +714,44 @@ function saveUserSettings() {
       openAlert("Error communicating with device.");
     });
 }
+function parseNum(v) {
+  const f = parseFloat(String(v).replace(",", "."));
+  return Number.isFinite(f) ? f : null;
+}
+
+async function saveNichrome() {
+  // send 10 wire values + 1 target via the same /control "set" action
+  const ops = [];
+  for (let i = 1; i <= 10; i++) {
+    const id = `r${String(i).padStart(2, "0")}ohm`;
+    const v = parseNum(document.getElementById(id)?.value);
+    if (v !== null) {
+      // use the NVS key as target to keep naming 1:1 with backend
+      const key = `R${String(i).padStart(2, "0")}OHM`;
+      ops.push(sendControlCommand("set", key, v));
+    }
+  }
+
+  const tgtVal = parseNum(document.getElementById("r0xtgt")?.value);
+  if (tgtVal !== null) {
+    ops.push(sendControlCommand("set", "R0XTGT", tgtVal));
+  }
+
+  // fire & await all
+  await Promise.all(ops);
+}
+
+function resetNichrome() {
+  // You can choose to restore defaults or simply clear fields.
+  // Here we just clear; a reload will fill from current NVS.
+  for (let i = 1; i <= 10; i++) {
+    const el = document.getElementById(`r${String(i).padStart(2, "0")}ohm`);
+    if (el) el.value = "";
+  }
+  const tgt = document.getElementById("r0xtgt");
+  if (tgt) tgt.value = "";
+}
+
 function saveAdminSettings() {
   const currentPassword = document.getElementById("adminCurrentPassword").value;
   const username = document.getElementById("adminUsername").value;
@@ -860,3 +1050,209 @@ window.addEventListener("DOMContentLoaded", () => {
     });
   }
 });
+
+// ===== Live Tab: board overlay =====
+
+// Markers are placed in percent units (0..100) to scale with the image.
+// Each marker has a dot at (x,y) and a line to an anchor (ax,ay).
+const LIVE = {
+  svg: null,
+  markers: [
+    (offset = 2.6),
+    (l = 3),
+    (h = 2.5),
+    // AC (red) bottom-left
+    {
+      id: "ac",
+      color: "red",
+      x: 8 + h,
+      y: 81 + offset,
+      ax: 16 + l,
+      ay: 81 + offset,
+    },
+
+    // Relay (yellow) bottom-right
+    {
+      id: "relay",
+      color: "yellow",
+      x: 92 - h,
+      y: 81 + offset,
+      ax: 84 - l,
+      ay: 81 + offset,
+    },
+    // Left side outputs 1..5 (turquoise)
+    {
+      id: "o1",
+      color: "cyan",
+      x: 8 + h,
+      y: 11 + offset,
+      ax: 13 + l,
+      ay: 11 + offset,
+    },
+    {
+      id: "o2",
+      color: "cyan",
+      x: 8 + h,
+      y: 23 + offset,
+      ax: 13 + l,
+      ay: 23 + offset,
+    },
+    {
+      id: "o3",
+      color: "cyan",
+      x: 8 + h,
+      y: 35 + offset,
+      ax: 13 + l,
+      ay: 35 + offset,
+    },
+    {
+      id: "o4",
+      color: "cyan",
+      x: 8 + h,
+      y: 47 + offset,
+      ax: 13 + l,
+      ay: 47 + offset,
+    },
+    {
+      id: "o5",
+      color: "cyan",
+      x: 8 + h,
+      y: 59 + offset,
+      ax: 13 + l,
+      ay: 59 + offset,
+    },
+
+    // Right side outputs 6..10 (turquoise)
+    {
+      id: "o6",
+      color: "cyan",
+      x: 92 - h,
+      y: 11 + offset,
+      ax: 87 - l,
+      ay: 11 + offset,
+    },
+    {
+      id: "o7",
+      color: "cyan",
+      x: 92 - h,
+      y: 23 + offset,
+      ax: 87 - l,
+      ay: 23 + offset,
+    },
+    {
+      id: "o8",
+      color: "cyan",
+      x: 92 - h,
+      y: 35 + offset,
+      ax: 87 - l,
+      ay: 35 + offset,
+    },
+    {
+      id: "o9",
+      color: "cyan",
+      x: 92 - h,
+      y: 47 + offset,
+      ax: 87 - l,
+      ay: 47 + offset,
+    },
+    {
+      id: "o10",
+      color: "cyan",
+      x: 92 - h,
+      y: 59 + offset,
+      ax: 87 - l,
+      ay: 59 + offset,
+    },
+  ],
+  interval: null,
+};
+
+function liveRender() {
+  const svg = document.querySelector("#liveTab .live-overlay");
+  if (!svg) return;
+  LIVE.svg = svg;
+  svg.innerHTML = ""; // reset
+
+  // Draw traces + dots
+  for (const m of LIVE.markers) {
+    const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+    line.setAttribute("class", "trace");
+    line.setAttribute("x1", m.x);
+    line.setAttribute("y1", m.y);
+    line.setAttribute("x2", m.ax);
+    line.setAttribute("y2", m.ay);
+    svg.appendChild(line);
+
+    const dot = document.createElementNS(
+      "http://www.w3.org/2000/svg",
+      "circle"
+    );
+    dot.setAttribute("class", `dot ${m.color} off`);
+    dot.setAttribute("r", 3.2);
+    dot.setAttribute("cx", m.x);
+    dot.setAttribute("cy", m.y);
+    dot.dataset.id = m.id;
+    svg.appendChild(dot);
+  }
+}
+
+function setDot(id, on) {
+  const c = LIVE.svg?.querySelector(`circle[data-id="${id}"]`);
+  if (!c) return;
+  c.classList.toggle("on", !!on);
+  c.classList.toggle("off", !on);
+}
+
+// --- Live polling (no backend change) ---
+function scheduleLiveInterval() {
+  if (LIVE.interval) clearInterval(LIVE.interval);
+  const ms = lastState === "Running" ? 250 : 1000; // fast when Running
+  LIVE.interval = setInterval(pollLiveOnce, ms);
+}
+
+async function pollLiveOnce() {
+  try {
+    const mon = await fetch("/monitor", { cache: "no-store" }).then((r) =>
+      r.json()
+    );
+
+    // 10 outputs
+    const outs = mon?.outputs || {};
+    for (let i = 1; i <= 10; i++) setDot(`o${i}`, !!outs[`output${i}`]);
+
+    // Relay
+    setDot("relay", !!mon.relay);
+
+    // AC (derive from cap voltage if you don't expose a flag)
+    const acOn =
+      mon.ac === true ||
+      (typeof mon.capVoltage === "number" && mon.capVoltage > 10);
+    setDot("ac", acOn);
+  } catch (e) {
+    // optional: gray out dots on error
+    console.warn("live poll failed", e);
+  }
+}
+
+// Call this wherever your state changes are handled:
+const _prevSetPowerUI = setPowerUI;
+setPowerUI = function (state, extras = {}) {
+  _prevSetPowerUI(state, extras);
+  scheduleLiveInterval();
+};
+
+// Bootstrapping
+document.addEventListener("DOMContentLoaded", () => {
+  liveRender(); // your existing SVG builder
+  scheduleLiveInterval();
+});
+
+function initLiveTab() {
+  liveRender();
+  // You can also hook this into loadControls() if you prefer fewer fetches.
+  if (LIVE.interval) clearInterval(LIVE.interval);
+  LIVE.interval = setInterval(pollLiveOnce, 500);
+  pollLiveOnce();
+}
+
+document.addEventListener("DOMContentLoaded", initLiveTab);

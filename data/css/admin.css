@@ -75,7 +75,7 @@ body {
   align-items: center;
   gap: 10px;
   padding: 10px 14px;
-  margin: 6px 0;
+  margin: 4px 0;
   font-size: 14px;
   cursor: pointer;
 
@@ -862,3 +862,205 @@ button.danger:hover {
   background: #00ffae;
   color: #000;
 } /* default */
+/* ---- Device Settings: compact, no-scroll, all-visible ---- */
+#deviceSettingsTab .user-modal-content.device-settings-box {
+  /* shrink padding & internal spacing to fit the 600px frame */
+  padding: 12px 14px; /* was 24px globally */
+  gap: 12px; /* was 14px in the inline style */
+  width: 100%;
+  max-width: 620px; /* aligns with your current design */
+  max-height: 460px; /* fits inside 600px frame with header/footer */
+}
+
+#deviceSettingsTab .device-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr; /* left fields | right nichrome */
+  gap: 12px 16px; /* tighter than default */
+  align-items: start;
+  min-width: 0;
+}
+
+#deviceSettingsTab .device-col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px; /* reduce vertical stacking gap */
+  min-width: 0;
+}
+
+#deviceSettingsTab .device-settings-box h3 {
+  margin: 0 0 6px; /* tighter heading */
+  font-size: 14px; /* a bit smaller */
+  line-height: 1.2;
+}
+
+/* Inputs with right-side unit tag (left column) */
+#deviceSettingsTab .input-with-unit {
+  position: relative;
+}
+#deviceSettingsTab .input-with-unit input {
+  width: 100%;
+  height: 32px; /* compact control height */
+  padding: 6px 36px 6px 10px; /* leave space for the unit */
+  font-size: 13px;
+}
+#deviceSettingsTab .unit-label {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 11px; /* smaller unit text */
+  opacity: 0.75;
+  pointer-events: none;
+}
+
+/* Nichrome grid (right column): keep height low and labels on one line */
+#deviceSettingsTab .nichrome-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr)); /* 5×2 for R01..R10 */
+  gap: 8px 10px; /* tighter gaps */
+}
+#deviceSettingsTab .nichrome-grid .field {
+  gap: 6px;
+}
+#deviceSettingsTab .nichrome-grid .field label {
+  font-size: 10.5px;
+  line-height: 1;
+  white-space: nowrap; /* prevents label wrap -> saves height */
+}
+#deviceSettingsTab .nichrome-grid .field input {
+  height: 32px; /* match left column */
+  padding: 6px 10px;
+  font-size: 13px;
+}
+#deviceSettingsTab .nichrome-grid .field.target {
+  grid-column: 1 / -1; /* full width row */
+}
+
+/* Actions row: make buttons smaller and keep them visible */
+#deviceSettingsTab .user-modal-actions.round-actions {
+  margin-top: 6px; /* was 15px globally */
+  gap: 14px; /* was 25px globally */
+  justify-content: center;
+}
+#deviceSettingsTab .user-modal-actions.round-actions .round-button {
+  width: 44px; /* smaller round buttons */
+  height: 44px;
+}
+#deviceSettingsTab .user-modal-actions.round-actions .round-button img {
+  width: 22px; /* smaller glyphs, keeps the vibe */
+  height: 22px;
+}
+
+/* Safety: extremely short viewports */
+@media (max-height: 640px) {
+  #deviceSettingsTab .user-modal-content.device-settings-box {
+    max-height: 440px;
+  }
+}
+/* ===== Live Tab ===== */
+.live-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.live-stage {
+  position: relative;
+  width: 440px;
+  max-width: 100%;
+  aspect-ratio: 1 / 1;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 34px;
+  box-shadow: inset 0 0 8px rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+}
+.live-stage img {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: var(--live-img-width, 340px);
+  height: var(--live-img-height, 340px);
+  object-fit: contain;
+}
+.live-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* Traces */
+.live-overlay .trace {
+  stroke: rgba(255, 255, 255, 0.85);
+  stroke-width: 5;
+  stroke-linecap: round;
+  opacity: 0.5;
+  filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.45));
+}
+
+/* Dots (off = dim, on = glow) */
+.live-overlay .dot {
+  stroke: rgba(255, 255, 255, 0.25);
+  stroke-width: 0.9;
+}
+.dot.cyan.off {
+  fill: #214e58;
+  opacity: 0.85;
+}
+.dot.cyan.on {
+  fill: #19d2ff;
+  filter: drop-shadow(0 0 6px rgba(25, 210, 255, 0.75));
+}
+
+.dot.yellow.off {
+  fill: #4a4520;
+  opacity: 0.85;
+}
+.dot.yellow.on {
+  fill: #ffd000;
+  filter: drop-shadow(0 0 6px rgba(255, 208, 0, 0.75));
+}
+
+.dot.red.off {
+  fill: #4a2020;
+  opacity: 0.85;
+}
+.dot.red.on {
+  fill: #ff4d4d;
+  filter: drop-shadow(0 0 6px rgba(255, 77, 77, 0.8));
+}
+
+/* Legend */
+.live-legend {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 13px;
+  opacity: 0.9;
+}
+.live-legend .chip {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  margin-right: 6px;
+  box-shadow: 0 0 6px rgba(255, 255, 255, 0.15);
+}
+.live-legend .chip.cyan {
+  background: #19d2ff;
+}
+.live-legend .chip.yellow {
+  background: #ffd000;
+}
+.live-legend .chip.red {
+  background: #ff4d4d;
+}
+
+/* Small screens */
+@media (max-width: 420px) {
+  .live-stage {
+    width: 100%;
+  }
+}

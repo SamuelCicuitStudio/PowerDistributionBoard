@@ -2,9 +2,123 @@
 #include "Utils.h"
 #include "RGBLed.h"    // keep
 #include "Buzzer.h"    // BUZZ macro
+
+// === Multi-output heating helpers (file-local; no header changes needed) ===
+#include <vector>
+#include <math.h>
+
 // Single, shared instances (linked once)
 SemaphoreHandle_t gStateMtx = nullptr;
 EventGroupHandle_t gEvt = nullptr;
+
+// tiny popcount for 10-bit masks
+static inline uint8_t _pop10(uint16_t m) {
+#if defined(__GNUC__)
+  return (uint8_t)__builtin_popcount(m);
+#else
+  uint8_t c=0; while (m) { c += (m & 1); m >>= 1; } return c;
+#endif
+}
+
+// parallel equivalent resistance for a set of wires
+static inline float _req(uint16_t mask, const float R[10]) {
+  float g = 0.0f;
+  for (uint8_t i=0;i<10;++i) if (mask & (1u<<i)) {
+    const float Ri = R[i];
+    if (Ri > 0.01f && isfinite(Ri)) g += 1.0f / Ri;
+  }
+  if (g <= 0.0f) return INFINITY;
+  return 1.0f / g;
+}
+
+// choose best subset (≤ maxActive) inside allowedMask w.r.t. target
+static uint16_t _chooseBest(uint16_t allowedMask,
+                            const float R[10],
+                            float target,
+                            uint8_t maxActive,
+                            bool preferAboveOrEqual,
+                            uint16_t recentMask)
+{
+  float bestScore = INFINITY; uint16_t best = 0; bool foundAbove = false;
+  const uint16_t FULL = (1u<<10);
+
+  for (uint16_t m=1; m<FULL; ++m) {
+    if ((m & ~allowedMask) != 0) continue;
+    const uint8_t k = _pop10(m);
+    if (k==0 || k>maxActive) continue;
+
+    const float Req = _req(m, R);
+    if (!isfinite(Req)) continue;
+    const bool  above = (Req >= target);
+    const float err   = fabsf(Req - target);
+
+    if (preferAboveOrEqual) {
+      if (above && !foundAbove) { foundAbove = true; bestScore = INFINITY; best = 0; }
+      if (!above && foundAbove)  continue;
+    }
+
+    float score = err;
+    if (m == recentMask) score += 0.0001f;          // mild fairness
+
+    // tie-breakers: fewer channels, then higher Req (safer current)
+    if (score < bestScore ||
+       (score == bestScore && k < _pop10(best)) ||
+       (score == bestScore && k == _pop10(best) && Req > _req(best, R)))
+    {
+      bestScore = score; best = m;
+    }
+  }
+
+  // if we insisted on ≥ target but nothing qualifies, allow undershoot once
+  if (preferAboveOrEqual && best == 0) {
+    return _chooseBest(allowedMask, R, target, maxActive, /*preferAboveOrEqual=*/false, recentMask);
+  }
+  return best;
+}
+
+// build one supercycle "plan": covers every allowed wire at least once
+static void _buildPlan(std::vector<uint16_t>& plan,
+                       uint16_t allowedMask,
+                       const float R[10],
+                       float target,
+                       uint8_t maxActive,
+                       bool preferAboveOrEqual)
+{
+  plan.clear();
+  uint16_t remaining = allowedMask;
+  uint16_t last = 0;
+
+  while (remaining) {
+    uint16_t pick = _chooseBest(remaining, R, target, maxActive, preferAboveOrEqual, last);
+    if (pick == 0) {
+      // no multi-group possible → pick best single wire
+      float bestErr = INFINITY; uint16_t solo = 0;
+      for (uint8_t i=0;i<10;++i) if (remaining & (1u<<i)) {
+        const float Req = _req((1u<<i), R);
+        const float err = fabsf(Req - target);
+        if (err < bestErr) { bestErr = err; solo = (1u<<i); }
+      }
+      pick = solo;
+      if (pick == 0) break;
+    }
+    plan.push_back(pick);
+    remaining &= ~pick;
+    last = pick;
+  }
+}
+
+// turn a group ON/OFF with LED mirroring
+static void _applyMask(Device* self, uint16_t mask, bool on, bool ledFeedback) {
+  for (uint8_t i=0;i<10;++i) if (mask & (1u<<i)) {
+    self->heaterManager->setOutput(i+1, on);
+    if (ledFeedback) self->indicator->setLED(i+1, on);
+  }
+}
+
+// utility: boolean array -> 10-bit allowed mask
+static inline uint16_t _allowedMaskFrom(const bool allowed[10]) {
+  uint16_t m=0; for (uint8_t i=0;i<10;++i) if (allowed[i]) m |= (1u<<i); return m;
+}
 
 // ===== Singleton storage & accessors =====
 Device* Device::instance = nullptr;
@@ -279,36 +393,51 @@ void Device::StartLoop() {
                 break;
             }
         }
+
         if (rechargeMode == RechargeMode::BatchRecharge) {
             // ------------------ BATCH RECHARGE MODE ------------------
             relayControl->turnOn();
             RGB->postOverlay(OverlayEvent::RELAY_ON);
             delay(200);
 
-            for (uint8_t i = 1; i <= 10; ++i) {
-                if (currentState != DeviceState::Running) break;
-                if (!allowedOutputs[i - 1]) continue;
+            // ---- Multi-output plan: cover all allowed wires, near target Ω ----
+            checkAllowedOutputs(); // pick up any access changes
+            const float targetRes = CONF->GetFloat(R0XTGT_KEY, DEFAULT_TARG_RES_OHMS);
 
-                DEBUG_PRINTF("[Device] [Batch] Activating Output %u 🔥\n", i);
+            // actual per-wire resistances (use your calibrated/entered values)
+            float R[10] = {
+              CONF->GetFloat(R01OHM_KEY, DEFAULT_WIRE_RES_OHMS),
+              CONF->GetFloat(R02OHM_KEY, DEFAULT_WIRE_RES_OHMS),
+              CONF->GetFloat(R03OHM_KEY, DEFAULT_WIRE_RES_OHMS),
+              CONF->GetFloat(R04OHM_KEY, DEFAULT_WIRE_RES_OHMS),
+              CONF->GetFloat(R05OHM_KEY, DEFAULT_WIRE_RES_OHMS),
+              CONF->GetFloat(R06OHM_KEY, DEFAULT_WIRE_RES_OHMS),
+              CONF->GetFloat(R07OHM_KEY, DEFAULT_WIRE_RES_OHMS),
+              CONF->GetFloat(R08OHM_KEY, DEFAULT_WIRE_RES_OHMS),
+              CONF->GetFloat(R09OHM_KEY, DEFAULT_WIRE_RES_OHMS),
+              CONF->GetFloat(R10OHM_KEY, DEFAULT_WIRE_RES_OHMS),
+            };
 
-                // Visual: announce which channel is active (once per channel)
-                RGB->postOutputEvent(i, true);
+            // knobs (safe defaults; you can surface these in UI later)
+            const uint8_t maxActive        = (uint8_t)CONF->GetInt("MAX_SIMUL_OUT", 3); // try 2–3
+            const bool    preferAboveEqual = CONF->GetBool("PREF_ABOVE", true);         // avoid undershoot when possible
 
-                // Pulse this output 10 times
-                for (uint8_t pulse = 0; pulse < 10; ++pulse) {
+            std::vector<uint16_t> plan;
+            const uint16_t allowedMask = _allowedMaskFrom(allowedOutputs);
+            _buildPlan(plan, allowedMask, R, targetRes, maxActive, preferAboveEqual);
+
+            if (plan.empty()) {
+                DEBUG_PRINTLN("[Device] [Batch] No allowed outputs in plan; skipping.");
+            } else {
+                for (uint16_t mask : plan) {
                     if (currentState != DeviceState::Running) break;
 
-                    if (ledFeedback) indicator->setLED(i, true);
-                    heaterManager->setOutput(i, true);
-                    delay(onTime);   // ON time
-
-                    heaterManager->setOutput(i, false);
-                    if (ledFeedback) indicator->setLED(i, false);
-                    delay(offTime);  // OFF time between pulses
+                    // group pulse: turn this subset ON together to approximate target Ω
+                    _applyMask(this, mask, true,  ledFeedback);
+                    delay(onTime);
+                    _applyMask(this, mask, false, ledFeedback);
+                    delay(offTime);
                 }
-
-                // Channel done
-                RGB->postOutputEvent(i, false);
             }
 
             // Recharge wait loop (RUN background + throttled charging overlay)

@@ -10,6 +10,17 @@ void HeaterManager::begin() {
  
   // Create mutex so future ops are serialized
   _mutex = xSemaphoreCreateMutex();
+    // --- Load R01..R10 and global target from NVS into runtime cache ---
+  const char* rkeys[10] = {
+    R01OHM_KEY, R02OHM_KEY, R03OHM_KEY, R04OHM_KEY, R05OHM_KEY,
+    R06OHM_KEY, R07OHM_KEY, R08OHM_KEY, R09OHM_KEY, R10OHM_KEY
+  };
+  for (int i = 0; i < 10; ++i) {
+    wireResOhms[i] = CONF->GetFloat(rkeys[i], DEFAULT_WIRE_RES_OHMS);
+    DEBUG_PRINTF("[Heater] R%02d cache = %.3f Ω\n", i + 1, wireResOhms[i]);
+  }
+  targetResOhms = CONF->GetFloat(R0XTGT_KEY, DEFAULT_TARG_RES_OHMS);
+  DEBUG_PRINTF("[Heater] TargetRes cache = %.3f Ω (global)\n", targetResOhms);
   DEBUG_PRINTLN("All ENA outputs initialized and disabled 🔌");
   // Initialize timing from desired voltage (same behavior you had)
 
@@ -101,3 +112,49 @@ bool HeaterManager::getOutputState(uint8_t index) const {
   return result;
 }
 
+void HeaterManager::setWireResistance(uint8_t index, float ohms) {
+  if (!(ohms > 0.0f) || ohms > 2000.0f) {
+    DEBUG_PRINTF("[Heater] setWireResistance invalid: idx=%u, %.3f Ω\n", index, ohms);
+    return;
+  }
+  if (index < 1 || index > 10) {
+    DEBUG_PRINTF("[Heater] setWireResistance out of range: idx=%u\n", index);
+    return;
+  }
+
+  // 1) Update runtime cache (thread-safe)
+  if (!lock()) return;
+  wireResOhms[index - 1] = ohms;
+  unlock();
+  DEBUG_PRINTF("[Heater] R%02u set to %.3f Ω ✅ (cached)\n", index, ohms);
+
+  // 2) Persist to NVS immediately
+  static const char* rkeys[10] = {
+    R01OHM_KEY, R02OHM_KEY, R03OHM_KEY, R04OHM_KEY, R05OHM_KEY,
+    R06OHM_KEY, R07OHM_KEY, R08OHM_KEY, R09OHM_KEY, R10OHM_KEY
+  };
+  const char* key = rkeys[index - 1];
+  CONF->PutFloat(key, ohms);
+  DEBUG_PRINTF("[Heater] R%02u persisted to NVS key '%s' = %.3f Ω\n", index, key, ohms);
+
+  // Optional: if control math depends on R immediately
+  // recomputeTargets();
+}
+
+void HeaterManager::setTargetResistanceAll(float ohms) {
+  if (!(ohms > 0.0f) || ohms > 2000.0f) {
+    DEBUG_PRINTF("[Heater] setTargetResistanceAll invalid: %.3f Ω\n", ohms);
+    return;
+  }
+
+  // 1) Update runtime cache (thread-safe)
+  if (!lock()) return;
+  targetResOhms = ohms;
+  unlock();
+  DEBUG_PRINTF("[Heater] TargetRes (global) set to %.3f Ω ✅ (cached)\n", ohms);
+
+  // 2) Persist to NVS immediately
+  CONF->PutFloat(R0XTGT_KEY, ohms);
+  DEBUG_PRINTF("[Heater] TargetRes persisted to NVS key '%s' = %.3f Ω\n", R0XTGT_KEY, ohms);
+
+}
