@@ -1,0 +1,5 @@
+arduino-libraries/NTPClient@^3.2.1
+milesburton/DallasTemperature@^4.0.4
+paulstoffregen/Time@^1.6.1
+https://github.com/me-no-dev/ESPAsyncWebServer.git
+bblanchon/ArduinoJson@^7.2.0
