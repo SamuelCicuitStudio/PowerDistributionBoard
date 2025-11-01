@@ -228,7 +228,7 @@ void NVS::initializeVariables() {
   // --- Nichrome wire resistances (Ohms, default 44.0) ---
   PutFloat(R01OHM_KEY, DEFAULT_WIRE_RES_OHMS);
   PutFloat(R02OHM_KEY, DEFAULT_WIRE_RES_OHMS);
-PutFloat(R03OHM_KEY, DEFAULT_WIRE_RES_OHMS);
+    PutFloat(R03OHM_KEY, DEFAULT_WIRE_RES_OHMS);
     PutFloat(R04OHM_KEY, DEFAULT_WIRE_RES_OHMS);
     PutFloat(R05OHM_KEY, DEFAULT_WIRE_RES_OHMS);
     PutFloat(R06OHM_KEY, DEFAULT_WIRE_RES_OHMS);

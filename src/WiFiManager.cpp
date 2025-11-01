@@ -574,6 +574,28 @@ void WiFiManager::handleControl(const ControlCmd& c) {
                 RGB->postOverlay(OverlayEvent::RELAY_OFF);
             }
             break;
+        // inside switch(c.type) in WiFiManager::handleControl(...)
+        case CTRL_WIRE_RES: {
+            // c.i1 = 1..10 index (set during parsing), c.f1 = ohms value
+            int idx = constrain(c.i1, 1, 10);
+            const char* rkeys[10] = {
+                R01OHM_KEY, R02OHM_KEY, R03OHM_KEY, R04OHM_KEY, R05OHM_KEY,
+                R06OHM_KEY, R07OHM_KEY, R08OHM_KEY, R09OHM_KEY, R10OHM_KEY
+            };
+            float ohms = c.f1;
+            BUZZ->bip();
+            CONF->PutFloat(rkeys[idx - 1], ohms);
+            DEBUG_PRINTF("[WiFiManager] CTRL_WIRE_RES → R%02d = %.3f Ω saved\n", idx, ohms);
+            break;
+        }
+
+        case CTRL_TARGET_RES: {
+            float tgt = c.f1;
+            BUZZ->bip();
+            CONF->PutFloat(R0XTGT_KEY, tgt);
+            DEBUG_PRINTF("[WiFiManager] CTRL_TARGET_RES → Target = %.3f Ω saved\n", tgt);
+            break;
+        }
 
         case CTRL_OUTPUT_BOOL:
             DEBUG_PRINTF("[WiFiManager] CTRL_OUTPUT_BOOL → Output #%d = %s\n", c.i1, c.b1 ? "ON" : "OFF");

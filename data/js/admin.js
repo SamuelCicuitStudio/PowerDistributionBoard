@@ -13,6 +13,52 @@ function isManualMode() {
   const t = document.getElementById("modeToggle");
   return !!(t && t.checked);
 }
+function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+function approxEqual(a, b, eps = 0.05) {
+  const na = Number(a),
+    nb = Number(b);
+  if (!Number.isFinite(na) || !Number.isFinite(nb)) return false;
+  return Math.abs(na - nb) <= eps;
+}
+
+// Poll /load_controls until what we saved is visible there (or we time out)
+async function waitUntilApplied(expected, timeoutMs = 2000, stepMs = 120) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const res = await fetch("/load_controls", { cache: "no-store" });
+    if (res.ok) {
+      const data = await res.json();
+
+      // Check targetRes
+      let ok = true;
+      if (expected.targetRes != null) {
+        ok &&= approxEqual(data.targetRes, expected.targetRes, 0.1);
+      }
+
+      // Check each wireRes we just set
+      if (expected.wireRes) {
+        const wr = data.wireRes || {};
+        for (const [idx, val] of Object.entries(expected.wireRes)) {
+          if (!approxEqual(wr[String(idx)], val, 0.05)) {
+            ok = false;
+            break;
+          }
+        }
+      }
+
+      if (ok) {
+        await loadControls(); // render canonical values from server
+        return true;
+      }
+    }
+    await sleep(stepMs);
+  }
+  // Fallback: refresh once even if we didn’t see the match in time
+  await loadControls();
+  return false;
+}
 
 function setModeDot(isManual) {
   const dot = document.querySelector(".status-dot");
@@ -480,30 +526,31 @@ function updateOutputAccess(index, newState) {
   sendControlCommand("set", `Access${index}`, newState);
 }
 
-function sendControlCommand(action, target, value) {
+/**
+ * @param {string} action
+ * @param {string} target
+ * @param {any} [value]
+ * @returns {Promise<any>}
+ */
+async function sendControlCommand(action, target, value) {
   const payload = { action, target };
   if (value !== undefined) payload.value = value;
 
-  return fetch("/control", {
+  const res = await fetch("/control", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
-  })
-    .then((res) => res.json())
-    .then((data) => {
-      if (data.status === "ok") {
-        console.log(`[✔] '${action}' on '${target}' succeeded`);
-      } else if (data.state) {
-        console.log(`[ℹ] State: ${data.state}`);
-      } else if (data.error) {
-        console.warn(`[✖] ${data.error}`);
-      }
-      return data; // <-- important
-    })
-    .catch((err) => {
-      console.error("Control error:", err);
-      return { error: String(err) };
-    });
+  });
+  const data = await res.json();
+
+  if (data.status === "ok") {
+    console.log(`[✔] '${action}' on '${target}' succeeded`);
+  } else if (data.state) {
+    console.log(`[ℹ] State: ${data.state}`);
+  } else if (data.error) {
+    console.warn(`[✖] ${data.error}`);
+  }
+  return data;
 }
 
 let isMuted = false;
@@ -527,11 +574,11 @@ function toggleMute() {
 async function saveDeviceAndNichrome() {
   const cmds = [];
 
-  // Device settings
-  const dv = getFloat("desiredVoltage");
-  if (dv !== undefined) cmds.push(["set", "desiredVoltage", dv]);
-  const hz = getInt("acFrequency");
-  if (hz !== undefined) cmds.push(["set", "acFrequency", hz]);
+  // (keep your existing reads)
+  const v = getFloat("desiredVoltage");
+  if (v !== undefined) cmds.push(["set", "desiredVoltage", v]);
+  const f = getInt("acFrequency");
+  if (f !== undefined) cmds.push(["set", "acFrequency", f]);
   const cr = getFloat("chargeResistor");
   if (cr !== undefined) cmds.push(["set", "chargeResistor", cr]);
   const dc = getFloat("dcVoltage");
@@ -541,23 +588,31 @@ async function saveDeviceAndNichrome() {
   const off = getInt("offTime");
   if (off !== undefined) cmds.push(["set", "offTime", off]);
 
-  // Nichrome resistances R01..R10
+  // Wire resistances R01..R10
+  const expected = { wireRes: {}, targetRes: null };
   for (let i = 1; i <= 10; i++) {
-    const val = getFloat(`r${String(i).padStart(2, "0")}ohm`);
-    if (val !== undefined) cmds.push(["set", `wireRes${i}`, val]);
+    const id = `r${String(i).padStart(2, "0")}ohm`;
+    const val = getFloat(id);
+    if (val !== undefined) {
+      cmds.push(["set", `wireRes${i}`, val]); // backend expects wireResX
+      expected.wireRes[String(i)] = val;
+    }
   }
 
-  // Target resistance for all
+  // Target resistance
   const tgt = getFloat("rTarget");
-  if (tgt !== undefined) cmds.push(["set", "targetRes", tgt]);
+  if (tgt !== undefined) {
+    cmds.push(["set", "targetRes", tgt]); // backend expects targetRes
+    expected.targetRes = tgt;
+  }
 
-  // Fire sequentially (preserves order)
+  // Send sequentially (server answers 202 "queued", worker applies later)
   for (const [a, t, v] of cmds) {
     await sendControlCommand(a, t, v);
   }
 
-  // Reload to reflect any server-side clamping/formatting
-  loadControls();
+  // <-- The important bit: wait until /load_controls shows the changes
+  await waitUntilApplied(expected, 2000, 120);
 }
 
 function resetDeviceAndNichrome() {
