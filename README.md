@@ -297,56 +297,119 @@ You’ll see different capabilities depending on your role (**Admin** or **User*
 
 ## RGB Status LED Guide
 
-> Hardware note: the LED is **RG-only** (no blue). All colors use **Red** + **Green** mixes.
+> Hardware note: the LED is **RG-only** (no blue die is wired). All colors below are **Red + Green** mixes. Chips show the **exact hex** the firmware uses.
+
+### Palette (quick reference)
+
+- **OFF** — `#000000`  
+  <img alt="#000000" src="https://placehold.co/16x16/000000/000000.png" />
+- **Green (OK)** — `#00FF00`  
+  <img alt="#00FF00" src="https://placehold.co/16x16/00FF00/00FF00.png" />
+- **Soft Green (Idle)** — `#00B400`  
+  <img alt="#00B400" src="https://placehold.co/16x16/00B400/00B400.png" />
+- **Bright Green (Run)** — `#00DC00`  
+  <img alt="#00DC00" src="https://placehold.co/16x16/00DC00/00DC00.png" />
+- **Amber** — `#FF7800`  
+  <img alt="#FF7800" src="https://placehold.co/16x16/FF7800/FF7800.png" />
+- **Yellow** — `#FFC800`  
+  <img alt="#FFC800" src="https://placehold.co/16x16/FFC800/FFC800.png" />
+- **Red (Fault/Crit)** — `#FF0000`  
+  <img alt="#FF0000" src="https://placehold.co/16x16/FF0000/FF0000.png" />
+- **Soft White (RG)** — `#787800`  
+  <img alt="#787800" src="https://placehold.co/16x16/787800/787800.png" />
+- **Greenish (Bypass)** — `#00B43C`  
+  <img alt="#00B43C" src="https://placehold.co/16x16/00B43C/00B43C.png" />
+- **Admin Pulse (Orange-Red)** — `#C83C00`  
+  <img alt="#C83C00" src="https://placehold.co/16x16/C83C00/C83C00.png" />
+- **User Pulse (Green Pulse)** — `#3CC800`  
+  <img alt="#3CC800" src="https://placehold.co/16x16/3CC800/3CC800.png" />
+- **Net Recover (Green OK)** — `#00DC00`  
+  <img alt="#00DC00" src="https://placehold.co/16x16/00DC00/00DC00.png" />
 
 ### Background States
 
 These run continuously when no overlay is active:
 
-| State     | Color (RG)   | Pattern & Tempo                                | Meaning                       |
-| --------- | ------------ | ---------------------------------------------- | ----------------------------- |
-| **OFF**   | LED off      | —                                              | Device is off / sleeping      |
-| **WAIT**  | Amber        | **Breathe**, ~1200 ms period                   | Getting ready / early startup |
-| **IDLE**  | Soft green   | **Double heartbeat**, ~2000 ms period          | Standing by, ready            |
-| **RUN**   | Bright green | **Double heartbeat**, ~1400 ms period          | Actively running              |
-| **FAULT** | Red          | **Fast strobe**, ~50 ms on / 75 ms off (~8 Hz) | Fault condition (investigate) |
-| **MAINT** | Amber        | **Blink**, ~900 ms period                      | Maintenance / special mode    |
+| State     | Hex       | Chip                                                                     | Pattern & Tempo                                | Meaning                       |
+| --------- | --------- | ------------------------------------------------------------------------ | ---------------------------------------------- | ----------------------------- |
+| **OFF**   | `#000000` | <img alt="#000000" src="https://placehold.co/16x16/000000/000000.png" /> | —                                              | Device is off / sleeping      |
+| **WAIT**  | `#FF7800` | <img alt="#FF7800" src="https://placehold.co/16x16/FF7800/FF7800.png" /> | **Breathe**, ~1200 ms period                   | Getting ready / early startup |
+| **IDLE**  | `#00B400` | <img alt="#00B400" src="https://placehold.co/16x16/00B400/00B400.png" /> | **Double heartbeat**, ~2000 ms period          | Standing by, ready            |
+| **RUN**   | `#00DC00` | <img alt="#00DC00" src="https://placehold.co/16x16/00DC00/00DC00.png" /> | **Double heartbeat**, ~1400 ms period          | Actively running              |
+| **FAULT** | `#FF0000` | <img alt="#FF0000" src="https://placehold.co/16x16/FF0000/FF0000.png" /> | **Fast strobe**, ~50 ms on / 75 ms off (~8 Hz) | Fault condition (investigate) |
+| **MAINT** | `#FF7800` | <img alt="#FF7800" src="https://placehold.co/16x16/FF7800/FF7800.png" /> | **Blink**, ~900 ms period                      | Maintenance / special mode    |
 
-**Heartbeat shape:** two short beats per period (beat, gap, beat, rest).
+**Heartbeat shape.** Two short beats per period (beat, gap, beat, rest).
 
 ### Overlay Events
 
-Short, higher-priority hints that temporarily preempt the background:
+Short, higher-priority hints that temporarily preempt the background. (Durations/tempos are fixed for consistency.)
 
-- **Power / Path**
+#### Power / Power Path
 
-  - **Wake flash** (button registered) — soft white, flash once
-  - **Relay ON / OFF** — short yellow/amber flash
-  - **Charging** — amber “breathe” ≤ 1/s while capacitor charges
-  - **Threshold OK** — short green flash
-  - **Bypass ON** — short greenish flash
-  - **Start** — alert flash as we enter RUN
+- **Wake flash** — `#787800`  
+  <img alt="#787800" src="https://placehold.co/16x16/787800/787800.png" /> — Soft white, **flash once** when a tap is registered
+- **Relay ON** — `#FFC800`  
+  <img alt="#FFC800" src="https://placehold.co/16x16/FFC800/FFC800.png" /> — Short **yellow flash**
+- **Relay OFF** — `#FF7800`  
+  <img alt="#FF7800" src="https://placehold.co/16x16/FF7800/FF7800.png" /> — Short **amber flash**
+- **Charging** — `#FFA000`  
+  <img alt="#FFA000" src="https://placehold.co/16x16/FFA000/FFA000.png" /> — Amber **breathe** (≤ 1/s) while capacitor charges
+- **Threshold OK** — `#00DC00`  
+  <img alt="#00DC00" src="https://placehold.co/16x16/00DC00/00DC00.png" /> — Short **green flash**
+- **Bypass ON** — `#00B43C`  
+  <img alt="#00B43C" src="https://placehold.co/16x16/00B43C/00B43C.png" /> — Short **greenish flash**
+- **Wait Button** — `#787800`  
+  <img alt="#787800" src="https://placehold.co/16x16/787800/787800.png" /> — **Yellow heartbeat** while awaiting start
+- **Start (enter RUN)** — `#00C800`  
+  <img alt="#00C800" src="https://placehold.co/16x16/00C800/00C800.png" /> — **Flash once** on transition to RUN
 
-- **Wi-Fi / Web**
+#### Wi-Fi / Web
 
-  - **Wi-Fi AP up** — yellow double heartbeat (~1.5 s) for a few seconds
-  - **Wi-Fi STA joined** — quick green flash
-  - **Wi-Fi lost** — amber blink
-  - **Web Admin active** — orange-red breathe (short window)
-  - **Web User active** — green breathe (short window)
+- **Wi-Fi AP up** — `#FFC800`  
+  <img alt="#FFC800" src="https://placehold.co/16x16/FFC800/FFC800.png" /> — **Double heartbeat** (~1.5 s) for a few seconds
+- **Wi-Fi STA joined** — `#00FF00`  
+  <img alt="#00FF00" src="https://placehold.co/16x16/00FF00/00FF00.png" /> — **Quick green flash**
+- **Wi-Fi lost** — `#FF7800`  
+  <img alt="#FF7800" src="https://placehold.co/16x16/FF7800/FF7800.png" /> — **Amber blink**
+- **Web Admin active** — `#C83C00`  
+  <img alt="#C83C00" src="https://placehold.co/16x16/C83C00/C83C00.png" /> — **Orange-red breathe** (short window)
+- **Web User active** — `#3CC800`  
+  <img alt="#3CC800" src="https://placehold.co/16x16/3CC800/3CC800.png" /> — **Green breathe** (short window)
+- **Network recovered** — `#00DC00`  
+  <img alt="#00DC00" src="https://placehold.co/16x16/00DC00/00DC00.png" /> — **Green flash** on reconnect
 
-- **Fan / Relay / Outputs**
+#### Fan / Relay / Outputs
 
-  - **Fan on/off** — quick green/amber flash
-  - **Relay on/off** — quick yellow/amber flash
-  - **Output toggled N** — pulse train (N flashes) to indicate channel index
+- **Fan ON** — `#00FF00`  
+  <img alt="#00FF00" src="https://placehold.co/16x16/00FF00/00FF00.png" /> — Quick **green flash**
+- **Fan OFF** — `#FF7800`  
+  <img alt="#FF7800" src="https://placehold.co/16x16/FF7800/FF7800.png" /> — Quick **amber flash**
+- **Relay ON** — `#FFC800`  
+  <img alt="#FFC800" src="https://placehold.co/16x16/FFC800/FFC800.png" /> — Quick **yellow flash**
+- **Relay OFF** — `#FF7800`  
+  <img alt="#FF7800" src="https://placehold.co/16x16/FF7800/FF7800.png" /> — Quick **amber flash**
+- **Output toggled (ON)** — `#00FF00`  
+  <img alt="#00FF00" src="https://placehold.co/16x16/00FF00/00FF00.png" /> — Short **green flash** (may repeat **N** times = channel index)
+- **Output toggled (OFF)** — `#FF7800`  
+  <img alt="#FF7800" src="https://placehold.co/16x16/FF7800/FF7800.png" /> — Short **amber flash** (may repeat **N** times)
 
-- **Limits / Battery**
-  - **Temp warn / crit** — yellow/red blinks (tempo indicates severity)
-  - **Current warn / trip** — yellow/red blinks (tempo indicates severity)
-  - **Low / Critical battery** — yellow/red attention blinks
+#### Limits / Battery
 
-**Priority:** Background < Action < Alert < Critical. Critical overlays preempt; background resumes automatically when they end.
+- **Temperature Warn** — `#FFC800`  
+  <img alt="#FFC800" src="https://placehold.co/16x16/FFC800/FFC800.png" /> — **Yellow blink** (warning tempo)
+- **Temperature Critical** — `#FF0000`  
+  <img alt="#FF0000" src="https://placehold.co/16x16/FF0000/FF0000.png" /> — **Red rapid blink**
+- **Current Warn** — `#FFC800`  
+  <img alt="#FFC800" src="https://placehold.co/16x16/FFC800/FFC800.png" /> — **Yellow blink** (warning tempo)
+- **Current Trip** — `#FF0000`  
+  <img alt="#FF0000" src="https://placehold.co/16x16/FF0000/FF0000.png" /> — **Red rapid blink**
+- **Low Battery** — `#FFC800`  
+  <img alt="#FFC800" src="https://placehold.co/16x16/FFC800/FFC800.png" /> — **Yellow attention blinks**
+- **Critical Battery** — `#FF0000`  
+  <img alt="#FF0000" src="https://placehold.co/16x16/FF0000/FF0000.png" /> — **Red rapid blinks**
+
+**Priority model:** _Background_ < _Action_ < _Alert_ < _Critical_. Equal/higher priority overlays preempt; background resumes automatically when they end.
 
 ### Pattern Primitives
 
@@ -354,7 +417,7 @@ Short, higher-priority hints that temporarily preempt the background:
 - **BLINK** — Equal ON/OFF slices within a period.
 - **BREATHE** — Smooth ramp up/down (soft glow).
 - **HEARTBEAT2** — Two short beats per period (beat, gap, beat, rest).
-- **STROBE** — Rapid on/off according to explicit timings.
+- **STROBE** — Rapid on/off via explicit on/off timings (used by **FAULT**).
 
 ---
 
