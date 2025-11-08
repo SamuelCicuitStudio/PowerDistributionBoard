@@ -43,16 +43,16 @@ void CpDischg::discharge() {
             break;
         }
 
-        if (heaterManager) {
+        if (WIRE) {
             for (int i = 1; i <= 10; ++i) {
-                heaterManager->setOutput(i, true);
+                WIRE->setOutput(i, true);
                 delay(20);
-                heaterManager->setOutput(i, false);
+                WIRE->setOutput(i, false);
             }
         }
         delay(100);
     }
-    if (heaterManager) heaterManager->disableAll();
+    if (WIRE) WIRE->disableAll();
 }
 
 // ---- Simple one-shot ADC read ----

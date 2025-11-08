@@ -867,8 +867,8 @@ button.danger:hover {
   /* shrink padding & internal spacing to fit the 600px frame */
   padding: 12px 14px; /* was 24px globally */
   gap: 12px; /* was 14px in the inline style */
-  width: 100%;
-  max-width: 620px; /* aligns with your current design */
+  width: 130%;
+  max-width: 650px; /* aligns with your current design */
   max-height: 460px; /* fits inside 600px frame with header/footer */
 }
 
@@ -916,7 +916,7 @@ button.danger:hover {
 /* Nichrome grid (right column): keep height low and labels on one line */
 #deviceSettingsTab .nichrome-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr)); /* 5×2 for R01..R10 */
+  grid-template-columns: repeat(4, minmax(1px, 1fr)); /* 5×2 for R01..R10 */
   gap: 8px 10px; /* tighter gaps */
 }
 #deviceSettingsTab .nichrome-grid .field {
@@ -1069,4 +1069,28 @@ button.danger:hover {
 }
 .gauge-card.muted .gauge-value {
   opacity: 0.6;
+}
+/* Live tab – temperature badges */
+#liveTab .temp-badge .temp-circle {
+  fill: rgba(0, 0, 0, 0.8);
+  stroke: #00eaff;
+  stroke-width: 0.7;
+}
+
+#liveTab .temp-badge .temp-label {
+  font-size: 3px;
+  font-weight: 600;
+  fill: #ffffff;
+  text-anchor: middle;
+  dominant-baseline: middle;
+  pointer-events: none;
+}
+
+/* Optional: color hints for hotter wires */
+#liveTab .temp-badge.warn .temp-circle {
+  stroke: #ff9800;
+}
+
+#liveTab .temp-badge.hot .temp-circle {
+  stroke: #ff4d4f;
 }

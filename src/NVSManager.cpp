@@ -220,7 +220,7 @@ void NVS::initializeVariables() {
 
   // Temperature sensor count
   PutInt(TEMP_SENSOR_COUNT_KEY, DEFAULT_TEMP_SENSOR_COUNT);
-
+  PutFloat(IDLE_CURR_KEY,DEFAULT_IDLE_CURR); 
   // --- Buzzer configuration ---
   PutBool(BUZLOW_KEY, BUZLOW_DEFAULT);   // Active-low logic (default false)
   PutBool(BUZMUT_KEY, BUZMUT_DEFAULT);   // Muted state (default false)
@@ -238,6 +238,7 @@ void NVS::initializeVariables() {
     PutFloat(R10OHM_KEY, DEFAULT_WIRE_RES_OHMS);
  // --- Target resistance per output (Ohms, default 14.0) ---
     PutFloat(R0XTGT_KEY, DEFAULT_TARG_RES_OHMS);
+    PutFloat(WIRE_OHM_PER_M_KEY, DEFAULT_WIRE_OHM_PER_M);
 }
 
 

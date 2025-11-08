@@ -849,6 +849,16 @@
               <section class="device-col">
                 <h3>Nichrome Calibration</h3>
                 <div class="nichrome-grid">
+                  <!-- New: global Ω/m -->
+                  <div class="field target">
+                    <label for="wireOhmPerM">Wire Resistivity (Ω/m)</label>
+                    <input
+                      id="wireOhmPerM"
+                      type="number"
+                      step="0.01"
+                      inputmode="decimal"
+                    />
+                  </div>
                   <!-- R01..R10 -->
                   <div class="field">
                     <label for="r01ohm">R01 (Ω)</label>
@@ -1023,4 +1033,44 @@
       </div>
     </div>
   </body>
+  <style>
+    /* === Fixed App Stage (change these if you want another size) === */
+    :root {
+      --APP_W: 980px;
+      --APP_H: 640px;
+    }
+    /* Don't let the layout collapse below the fixed stage */
+    html,
+    body {
+      min-width: var(--APP_W);
+      min-height: var(--APP_H);
+      overflow: auto; /* scrollbars if window is smaller */
+    }
+    /* Pin the whole admin UI to a fixed box */
+    .ui-container {
+      width: var(--APP_W);
+      height: var(--APP_H);
+      min-width: var(--APP_W);
+      min-height: var(--APP_H);
+      max-width: var(--APP_W);
+      max-height: var(--APP_H);
+      margin: 0 auto; /* centered if window gets wider */
+      overflow: hidden; /* avoid inner jiggle/resizes */
+      box-sizing: border-box;
+    }
+    /* Neutralize narrow/short responsive fallbacks */
+    @media (max-width: 99999px) {
+      /* keep two columns in device settings even on small windows */
+      .device-settings-box .device-grid {
+        grid-template-columns: 1fr 1fr !important;
+      }
+    }
+    @media (max-width: 980px), (max-height: 640px) {
+      /* keep the same fixed size even if viewport goes below */
+      .ui-container {
+        width: var(--APP_W);
+        height: var(--APP_H);
+      }
+    }
+  </style>
 </html>

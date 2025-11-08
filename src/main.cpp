@@ -21,7 +21,6 @@ Preferences prefs;
 
 // Core modules
 Indicator*     indicator     = nullptr;
-HeaterManager* heater        = nullptr;
 CpDischg*      discharger    = nullptr;
 CurrentSensor* currentSensor = nullptr;
 TempSensor*    tempSensor    = nullptr;
@@ -66,6 +65,10 @@ void setup() {
   DEBUG_PRINTLN("SPIFFS successfully mounted.");
   NVS::Init();
   CONF->begin();
+  // Heater
+  HeaterManager::Init();
+  WIRE->begin();          // now hardware + wire model are ready
+  WIRE->disableAll();
 
   RGB->RGBLed::Init(POWER_OFF_LED_PIN, READY_LED_PIN, false);
   RGB->begin();
@@ -76,11 +79,6 @@ void setup() {
 
   FanManager::Init();
   FAN->begin();
-
-  // Heater
-  heater = new HeaterManager();
-  heater->begin();
-  heater->disableAll();
 
   // Relay
   mainRelay = new Relay();
@@ -95,7 +93,7 @@ void setup() {
   indicator->begin();
 
   // Capacitor discharge
-  discharger = new CpDischg(heater, mainRelay);
+  discharger = new CpDischg( mainRelay);
   discharger->begin();
   discharger->setBypassRelayGate(true);
 
@@ -110,7 +108,7 @@ void setup() {
   indicator->clearAll();
 
   // Device singleton
-  Device::Init(heater, tempSensor, currentSensor, mainRelay, bypassFET, discharger, indicator);
+  Device::Init(tempSensor, currentSensor, mainRelay, bypassFET, discharger, indicator);
   DEVICE->begin();
 
   // Wi-Fi singleton

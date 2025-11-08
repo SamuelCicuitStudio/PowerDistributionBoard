@@ -1,140 +1,334 @@
-# Quick Start — Nichrome Power Board (for everyday users)
+Nice, this is getting sharp now 🔥
+Let’s rewrite the model to match your **real constraints**:
 
-This board turns electric heating wires (nichrome) **ON/OFF**. You can use the **yellow button** on the board or a **phone/computer**.
+- Capacitor is effectively “always being refilled” → **we cannot use ΔVcap / capacitor energy** reliably.
+- We **can** trust:
 
-> ⚠️ **Safety:** The heating wires get **hot**. Keep them away from anything that can burn. Don’t touch while running.
+  - ACS781 current
+  - Which wires are ON/OFF and when
+  - Each wire’s nominal resistance and geometry
 
-## UI
+- We have **two modes**:
 
-This section previews the web interface. All screenshots are stored in the repository at **`ui/`** and are already referenced below. **Click any thumbnail** to open the full-size image in GitHub.
+  - Sequential (1 wire at a time)
+  - Advanced (parallel groups tuned to target equivalent R)
 
-**How to view on GitHub**
+We want a **purely current-driven, per-wire power model** with:
 
-- **Desktop:** Left-click a thumbnail to open it; use your browser’s back button to return. Right-click → “Open link in new tab” if you want to keep the gallery open.
-- **Mobile:** Tap a thumbnail to open the full view; pinch to zoom. Use your back gesture to return.
-- **If an image doesn’t load:** Check your internet connection and refresh the page. GitHub is case-sensitive—make sure filenames match exactly. Cached pages sometimes need a hard refresh (Ctrl/Cmd + Shift + R).
+- R(T) (temperature-dependent resistance),
+- Thermal inertia,
+- Auto 150°C protection,
+- Same logic working for both modes.
 
-**How to add more screenshots later**
-
-1. Put new `.png` / `.jpg` files in the **`ui/`** folder.
-2. Duplicate one `<td>…</td>` block below and change only the filename/label (keep the URL-encoded characters intact).
-3. Commit your changes—GitHub will render them automatically.
-
-> Tip: Filenames with spaces or accented characters are fully supported below (they’re URL-encoded). If you rename files, update the paths here.
-
-<table>
-<tr><td align="center" valign="top"><a href="Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042258.png"><img src="Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042258.png" alt="Capture d’écran 2025-11-01 042258" width="300"></a><br/><sub>Capture d’écran 2025-11-01 042258</sub></td><td align="center" valign="top"><a href="Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042326.png"><img src="Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042326.png" alt="Capture d’écran 2025-11-01 042326" width="300"></a><br/><sub>Capture d’écran 2025-11-01 042326</sub></td><td align="center" valign="top"><a href="Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042345.png"><img src="Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042345.png" alt="Capture d’écran 2025-11-01 042345" width="300"></a><br/><sub>Capture d’écran 2025-11-01 042345</sub></td></tr>
-<tr><td align="center" valign="top"><a href="Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042357.png"><img src="Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042357.png" alt="Capture d’écran 2025-11-01 042357" width="300"></a><br/><sub>Capture d’écran 2025-11-01 042357</sub></td><td align="center" valign="top"><a href="Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042411.png"><img src="Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042411.png" alt="Capture d’écran 2025-11-01 042411" width="300"></a><br/><sub>Capture d’écran 2025-11-01 042411</sub></td><td align="center" valign="top"><a href="Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042423.png"><img src="Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042423.png" alt="Capture d’écran 2025-11-01 042423" width="300"></a><br/><sub>Capture d’écran 2025-11-01 042423</sub></td></tr>
-<tr><td align="center" valign="top"><a href="Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042436.png"><img src="Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042436.png" alt="Capture d’écran 2025-11-01 042436" width="300"></a><br/><sub>Capture d’écran 2025-11-01 042436</sub></td><td align="center" valign="top"><a href="Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042450.png"><img src="Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042450.png" alt="Capture d’écran 2025-11-01 042450" width="300"></a><br/><sub>Capture d’écran 2025-11-01 042450</sub></td><td align="center" valign="top"><a href="Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042508.png"><img src="Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042508.png" alt="Capture d’écran 2025-11-01 042508" width="300"></a><br/><sub>Capture d’écran 2025-11-01 042508</sub></td></tr>
-<tr><td align="center" valign="top"><a href="Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042523.png"><img src="Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042523.png" alt="Capture d’écran 2025-11-01 042523" width="300"></a><br/><sub>Capture d’écran 2025-11-01 042523</sub></td><td align="center" valign="top"><a href="Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042536.png"><img src="Capture%20d%E2%80%99%C3%A9cran%202025-11-01%20042536.png" alt="Capture d’écran 2025-11-01 042536" width="300"></a><br/><sub>Capture d’écran 2025-11-01 042536</sub></td><td></td></tr>
-</table>
-
-**Open the folder directly:** [`ui/`](ui/)
-
-> **Add more screenshots:**
->
-> 1. Drop `.png`/`.jpg` files into `ui/`.
-> 2. Copy one of the `<td>…</td>` blocks above and change the filename.
-> 3. Commit the README change. GitHub will render the new image automatically.
+Here’s the updated spec, clean and exact, based only on what you truly have.
 
 ---
 
-## 1) What you’ll use
+## 1. Inputs the model actually uses
 
-- **Yellow button** — start/stop & wake Wi-Fi
-- **RGB light** — shows what the board is doing
-- **Web app** — start/stop and basic settings
+### Measured / runtime
 
----
+1. **Total current `I_meas(t)`** from ACS781
 
-## 2) Use it without the phone (just the yellow button)
+   - Reliable.
+   - Logged with timestamps.
 
-1. **Power on** → LED is **OFF** (stopped)
-2. **Tap once** → board **prepares** (amber pulses), then **soft-green** = **Ready**
-3. **Tap again** → **bright green double-pulse** = **Running**
-4. **Tap once while Running** → **stops** and returns to **OFF**
+2. **Active wires mask `active_i(t)`**
 
-> Think “**tap to go forward**”: OFF → (tap) → READY → (tap) → RUN → (tap) → OFF
+   - From your control logic.
+   - For each time slice you know exactly which wires are ON.
 
----
+3. **Time**
 
-## 3) Use it with your phone (web app)
+   - `millis()` or equivalent → compute `dt` between samples.
 
-**First time or when not on your home Wi-Fi (AP mode):**
+4. **(Optional but recommended) Baseline current**
 
-1. On your phone, open Wi-Fi and connect to the board’s network.
-   - If you don’t see it, **triple-press the yellow button** to wake Wi-Fi.
-   - **AP Wi-Fi password (default): `1234567890`**
-2. Open a browser and go to **[http://192.168.4.1/login](http://192.168.4.1/login)**
-3. Log in (change later if you want):
-   - **Admin:** `admin` / `admin123`
-   - **User:** `user` / `user123`
-4. Press **Start** to run, **Stop** to stop.
+   - Measure `I_idle` when no heater wires are ON.
+   - Use `I_net = max(I_meas - I_idle, 0)` for heating calculations.
 
-**After saving your home Wi-Fi (STA mode):**
+### Config / calibration (per wire)
 
-- The board joins your router. Next time, open: **http://(router-assigned-IP)/login**
-- Find that IP in your router’s “connected devices” list.
+From your design + Nichrome data:
 
-**If the page won’t load:**
+1. `R0_i` — cold resistance at reference `T0` (e.g. 20°C).
+2. Wire geometry:
 
-- Wi-Fi may be sleeping. **Triple-press the yellow button**, reconnect to the board (use password **`1234567890`** in AP), and try again.
+   - Length `L_i`
+   - Diameter / gauge → cross-section, surface area.
 
----
+3. Material:
 
-## 4) LED cheat-sheet (hex + visible color chips)
+   - Nichrome density ρ
+   - Specific heat `c_p`
 
-> Hardware note: the LED is **RG-only** (no blue). Colors are **Red + Green** mixes.
+4. Derived:
 
-- **OFF (dark)** — `#000000`  
-  <img alt="#000000" src="https://placehold.co/14x14/000000/000000.png" />
+   - Mass `m_i`
+   - Thermal capacity `C_th_i = m_i · c_p`
 
-- **Soft-green, slow pulse (Ready)** — `#00B400`  
-  <img alt="#00B400" src="https://placehold.co/14x14/00B400/00B400.png" />
+5. Thermal behavior:
 
-- **Bright green, double pulse (Running)** — `#00DC00`  
-  <img alt="#00DC00" src="https://placehold.co/14x14/00DC00/00DC00.png" />
+   - Effective thermal resistance `R_th_i` to ambient
+     → time constant `τ_i = R_th_i · C_th_i`.
 
-- **Amber breathing / Yellow heartbeat (Preparing / AP active)** — `#FF7800` (amber) or `#FFC800` (yellow)  
-  <img alt="#FF7800" src="https://placehold.co/14x14/FF7800/FF7800.png" />
-  <img alt="#FFC800" src="https://placehold.co/14x14/FFC800/FFC800.png" />
+6. R(T) behavior:
 
-- **Fast red strobe (Error)** — `#FF0000`  
-  <img alt="#FF0000" src="https://placehold.co/14x14/FF0000/FF0000.png" />
+   - Use Nichrome’s temp coefficient or better: a linear / piecewise fit:
 
-- **Quick green flash (Good event: start / Wi-Fi joined)** — `#00FF00`  
-  <img alt="#00FF00" src="https://placehold.co/14x14/00FF00/00FF00.png" />
+     - `R_i(T) = R0_i · [1 + α · (T − T0)]`
 
----
+   - (α tuned using tech sheet / your measurements.)
 
-## RGB Status LED Guide (details with hex + chips)
+### Global
 
-These background states run continuously when no overlay is active:
+1. Initial ambient temperature `T_amb`
 
-| State     | Hex       | Chip                                                                     | Pattern & Tempo                                | Meaning                       |
-| --------- | --------- | ------------------------------------------------------------------------ | ---------------------------------------------- | ----------------------------- |
-| **OFF**   | `#000000` | <img alt="#000000" src="https://placehold.co/16x16/000000/000000.png" /> | —                                              | Device is off / sleeping      |
-| **WAIT**  | `#FF7800` | <img alt="#FF7800" src="https://placehold.co/16x16/FF7800/FF7800.png" /> | **Breathe**, ~1200 ms period                   | Getting ready / early startup |
-| **IDLE**  | `#00B400` | <img alt="#00B400" src="https://placehold.co/16x16/00B400/00B400.png" /> | **Double heartbeat**, ~2000 ms period          | Standing by, ready            |
-| **RUN**   | `#00DC00` | <img alt="#00DC00" src="https://placehold.co/16x16/00DC00/00DC00.png" /> | **Double heartbeat**, ~1400 ms period          | Actively running              |
-| **FAULT** | `#FF0000` | <img alt="#FF0000" src="https://placehold.co/16x16/FF0000/FF0000.png" /> | **Fast strobe**, ~50 ms on / 75 ms off (~8 Hz) | Fault condition (investigate) |
-| **MAINT** | `#FF7800` | <img alt="#FF7800" src="https://placehold.co/16x16/FF7800/FF7800.png" /> | **Blink**, ~900 ms period                      | Maintenance / special mode    |
+   - Read once at startup from DS18B20s.
+   - All wires start with `T_i = T_amb`.
 
-> Short yellow/amber/green flashes when the **relay** or **fan** toggles are normal.
+2. Temperature constraints:
+
+   - `T_max = 150°C` (hard ceiling)
+   - `T_reenable ≈ 140°C` (hysteresis)
+   - Optional fixed cooldown time per wire after overheat.
 
 ---
 
-## 5) Handy tips
+## 2. Per-wire state (kept by the estimator)
 
-- **Mute buzzer** in the web app (remembers your choice).
-- **User can’t toggle some outputs?** An **Admin** must grant access.
-- **Page looks stuck or idle?** Reconnect to the right network, or **triple-press** the yellow button and reload.
+For each wire `i`:
+
+- `T_i`
+  Current estimated temperature (this **is** `WireInfo.temperatureC`).
+
+- `lastUpdateMs_i`
+  For integrating over time.
+
+- `isLocked_i`
+  True when this wire hit 150°C and is temporarily disabled.
+
+- `cooldownReleaseMs_i` (optional)
+  Earliest time this wire can be re-enabled.
+
+You can also keep a tiny history if you want smoothing, but not required.
 
 ---
 
-## 6) Quick recipes
+## 3. Core idea: use only current + R(T) to get power per wire
 
-- **Fast hardware start (no phone):** tap once (prepare) → wait soft-green → tap again (run).
-- **Stop:** tap once while running.
-- **Wake Wi-Fi:** **triple-press** the yellow button.
-- **First login (AP):** connect to board Wi-Fi → **password `1234567890`** → go to **192.168.4.1/login** → log in → Start.
+Since Vcap is not trustworthy, we treat supply voltage as **implicit**, solved from:
+
+- All active heater wires are in **parallel**.
+- At a given instant:
+
+  - Each active wire `i` has resistance `R_i(T_i)`.
+  - Total conductance:
+
+    - `G_tot = Σ (1 / R_i(T_i))` over active wires.
+
+  - We know **total heater current** `I_net` from ACS (after baseline subtraction).
+
+So:
+
+1. **Estimate supply voltage across the wires**:
+
+   - `V_est = I_net / G_tot` (if `G_tot > 0`)
+
+2. **Per-wire current**:
+
+   - For each active wire:
+
+     - `I_i = V_est / R_i(T_i)`
+       (equivalently `I_i = I_net · ( (1/R_i) / G_tot )` )
+
+3. **Per-wire power**:
+
+   - `P_i = I_i² · R_i(T_i)`
+     or
+   - `P_i = V_est² / R_i(T_i)`
+     (both are equivalent)
+
+4. **Check conservation**:
+
+   - Σ P_i = `V_est · I_net` = total power into wires (minus whatever you filtered).
+
+This uses only:
+
+- Measured current,
+- Known R(T),
+- Active set.
+
+Exactly what you have.
+
+---
+
+## 4. Update rule per time step (this is the model)
+
+At each estimator tick (or for each logged current sample):
+
+1. Compute `dt` from `lastUpdateMs_i` for each wire.
+2. Determine `active` set from output states.
+
+### For each wire `i`:
+
+#### 4.1 Heating term (only if active and not locked)
+
+If wire `i` is ON and `!isLocked_i`:
+
+- Use `P_i` computed above.
+- Convert power → energy over `dt`:
+
+  - `E_i = P_i · dt`
+
+- Temperature rise from that energy:
+
+  - `ΔT_heat_i = E_i / C_th_i`
+
+- (This inherently uses its mass and Nichrome properties → thermal inertia.)
+
+#### 4.2 Cooling term (always)
+
+Regardless of ON/OFF state:
+
+- Cool toward `T_amb` using thermal RC:
+
+  - `ΔT_cool_i = − (T_i − T_amb) · (dt / τ_i)`
+
+This gives:
+
+> `T_i_new = T_i_old + ΔT_heat_i + ΔT_cool_i`
+
+with **inertia**:
+
+- Big τ → slow changes,
+- Small τ → fast response,
+- Hotter above ambient → faster cooling.
+
+#### 4.3 Safety & lockout
+
+After updating:
+
+1. If `T_i_new >= T_max (150°C)`:
+
+   - Set `T_i_new = 150°C`
+   - `isLocked_i = true`
+   - Set `cooldownReleaseMs_i = now + cooldown_ms` (if you use one)
+
+2. While `isLocked_i`:
+
+   - Treat wire as **not eligible** for activation (both modes must respect this).
+   - Only apply the **cooling term** each step.
+   - When:
+
+     - `T_i < T_reenable` (e.g. 140°C)
+     - AND `now >= cooldownReleaseMs_i`
+
+   - Then:
+
+     - `isLocked_i = false` → wire can be used again.
+
+3. Write `T_i_new` into `WireInfo.temperatureC`.
+
+---
+
+## 5. How this works in each mode
+
+### 5.1 Sequential mode (1→10)
+
+- At any time, only one wire is ON:
+
+  - Active set S = {k}
+  - `G_tot = 1 / R_k(T_k)`
+  - `V_est = I_net · R_k(T_k)`
+  - `P_k = I_net² · R_k(T_k)`
+
+- Only that wire gets heating. Others cool.
+- Temperature estimate is very accurate because there’s no ambiguity:
+
+  - All current is that wire (minus baseline).
+
+- Control logic:
+
+  - Always pick the **coolest non-locked** wire next.
+  - That naturally equalizes them near the 150°C band.
+
+### 5.2 Advanced mode (parallel groups)
+
+- Multiple wires ON in parallel; your planner chooses them to hit target R_eq.
+
+- Estimator:
+
+  1. Active set S = all `i` with ON and not locked.
+  2. Compute `G_tot = Σ 1/R_i(T_i)` using current temps.
+  3. Use `I_net` to derive `V_est`.
+  4. For each active wire:
+
+     - `I_i` and `P_i` computed as above.
+     - `ΔT_heat_i` based on its own `C_th_i`.
+
+- Effects:
+
+  - Colder wires (lower R(T)) naturally draw more current → heat faster.
+  - Hotter wires (higher R(T)) draw less → self-balancing.
+  - Scheduler can:
+
+    - Prefer cooler wires in the next group.
+    - Skip any locked ones.
+
+  - Result: group driving plus the physics model pushes all wires toward the same temperature band without exceeding 150°C.
+
+---
+
+## 6. How to use the current log / CurrentManager
+
+To make it robust:
+
+- Have `CurrentManager` maintain a small ring buffer of:
+
+  - `timestamp`
+  - `I_meas`
+  - `activeMask` (which wires were ON)
+
+- The estimator task:
+
+  - Consumes these entries in order,
+  - For each step:
+
+    - Computes `dt` between entries,
+    - Runs the per-wire update as described.
+
+This decouples:
+
+- Fast switching / PWM / mode logic
+  from
+- Smooth thermal estimation.
+
+And it works the same in both modes.
+
+---
+
+## 7. End result
+
+With this updated model:
+
+- You **do not rely** on capacitor discharge shape.
+- You **only rely** on:
+
+  - Measured current (trusted),
+  - Which wires are ON,
+  - Nichrome physics (R(T), mass, surface),
+  - Thermal RC inertia,
+  - 150°C clamp + lockout.
+
+You get:
+
+- A physically grounded **virtual temperature** for each of the 10 wires,
+- Valid in sequential and advanced group mode,
+- Good enough to:
+
+  - Protect hardware,
+  - Steer scheduling to keep every wire hovering _just under_ 150°C.
+
+If you’d like, I can now turn _this_ exact spec into a clear set of functions / RTOS task flow that slots right into `HeaterManager` + `Device` without hand-waving.
+help me imp^lement the fix here, the idle current can you recalculate it before starting the loop instead knowing that all the output are off and input relay activated ac topping off the capacitors ? for the sequential make sure to top of the coolest from all?

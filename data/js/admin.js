@@ -479,7 +479,7 @@ function rebootSystem() {
   sendControlCommand("set", "reboot", true);
 }
 
-function startHeartbeat(intervalMs = 3000) {
+function startHeartbeat(intervalMs = 1500) {
   setInterval(() => {
     fetch("/heartbeat")
       .then((res) => res.text())
@@ -587,7 +587,6 @@ async function saveDeviceAndNichrome() {
   if (on !== undefined) cmds.push(["set", "onTime", on]);
   const off = getInt("offTime");
   if (off !== undefined) cmds.push(["set", "offTime", off]);
-
   // Wire resistances R01..R10
   const expected = { wireRes: {}, targetRes: null };
   for (let i = 1; i <= 10; i++) {
@@ -604,6 +603,10 @@ async function saveDeviceAndNichrome() {
   if (tgt !== undefined) {
     cmds.push(["set", "targetRes", tgt]); // backend expects targetRes
     expected.targetRes = tgt;
+  }
+  const wireOhmPerM = getFloat("wireOhmPerM");
+  if (wireOhmPerM !== undefined && !Number.isNaN(wireOhmPerM)) {
+    cmds.push(["set", "wireOhmPerM", wireOhmPerM]);
   }
 
   // Send sequentially (server answers 202 "queued", worker applies later)
@@ -629,6 +632,7 @@ function resetDeviceAndNichrome() {
   setField("dcVoltage", data.dcVoltage);
   setField("onTime", data.onTime);
   setField("offTime", data.offTime);
+  setField("wireOhmPerM", data.wireOhmPerM ?? "");
 
   const wr = data.wireRes || {};
   for (let i = 1; i <= 10; i++) {
@@ -675,6 +679,9 @@ async function loadControls() {
     setField("dcVoltage", data.dcVoltage);
     setField("onTime", data.onTime);
     setField("offTime", data.offTime);
+    if (data.wireOhmPerM !== undefined) {
+      setField("wireOhmPerM", data.wireOhmPerM);
+    }
 
     // --- Nichrome values (canonical IDs: r01ohm..r10ohm, rTarget) ---
     const wireRes = (() => {
@@ -1136,6 +1143,8 @@ window.addEventListener("DOMContentLoaded", () => {
 // Each marker has a dot at (x,y) and a line to an anchor (ax,ay).
 const LIVE = {
   svg: null,
+
+  // output / relay dots
   markers: [
     (offset = 2.6),
     (l = 3),
@@ -1159,7 +1168,8 @@ const LIVE = {
       ax: 84 - l,
       ay: 81 + offset,
     },
-    // Left side outputs 1..5 (turquoise)
+
+    // Left side outputs 6..10
     {
       id: "o6",
       color: "cyan",
@@ -1201,7 +1211,7 @@ const LIVE = {
       ay: 59 + offset,
     },
 
-    // Right side outputs 6..10 (turquoise)
+    // Right side outputs 5..1
     {
       id: "o5",
       color: "cyan",
@@ -1243,6 +1253,25 @@ const LIVE = {
       ay: 59 + offset,
     },
   ],
+
+  // 👉 Temperature bubble positions (edit x/y to move them)
+  // wire = 1..10 maps to wireTemps[wire-1] from /monitor
+  tempMarkers: [
+    // near left outputs 6..10
+    { wire: 6, x: 20, y: 11 },
+    { wire: 7, x: 20, y: 23 },
+    { wire: 8, x: 20, y: 35 },
+    { wire: 9, x: 20, y: 47 },
+    { wire: 10, x: 20, y: 59 },
+
+    // near right outputs 5..1
+    { wire: 5, x: 80, y: 11 },
+    { wire: 4, x: 80, y: 23 },
+    { wire: 3, x: 80, y: 35 },
+    { wire: 2, x: 80, y: 47 },
+    { wire: 1, x: 80, y: 59 },
+  ],
+
   interval: null,
 };
 
@@ -1252,9 +1281,13 @@ function liveRender() {
   LIVE.svg = svg;
   svg.innerHTML = ""; // reset
 
+  const ns = "http://www.w3.org/2000/svg";
+
   // Draw traces + dots
   for (const m of LIVE.markers) {
-    const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+    if (!m || typeof m !== "object" || !m.id) continue; // skip offset/l/h entries
+
+    const line = document.createElementNS(ns, "line");
     line.setAttribute("class", "trace");
     line.setAttribute("x1", m.x);
     line.setAttribute("y1", m.y);
@@ -1262,16 +1295,38 @@ function liveRender() {
     line.setAttribute("y2", m.ay);
     svg.appendChild(line);
 
-    const dot = document.createElementNS(
-      "http://www.w3.org/2000/svg",
-      "circle"
-    );
+    const dot = document.createElementNS(ns, "circle");
     dot.setAttribute("class", `dot ${m.color} off`);
     dot.setAttribute("r", 3.2);
     dot.setAttribute("cx", m.x);
     dot.setAttribute("cy", m.y);
     dot.dataset.id = m.id;
     svg.appendChild(dot);
+  }
+
+  // Draw temperature badges (initially "--")
+  if (Array.isArray(LIVE.tempMarkers)) {
+    for (const t of LIVE.tempMarkers) {
+      const g = document.createElementNS(ns, "g");
+      g.setAttribute("class", "temp-badge");
+      g.dataset.wire = String(t.wire);
+
+      const c = document.createElementNS(ns, "circle");
+      c.setAttribute("class", "temp-circle");
+      c.setAttribute("r", 4.3);
+      c.setAttribute("cx", t.x);
+      c.setAttribute("cy", t.y);
+
+      const txt = document.createElementNS(ns, "text");
+      txt.setAttribute("class", "temp-label");
+      txt.setAttribute("x", t.x);
+      txt.setAttribute("y", t.y + 0.3);
+      txt.textContent = "--";
+
+      g.appendChild(c);
+      g.appendChild(txt);
+      svg.appendChild(g);
+    }
   }
 }
 
@@ -1295,17 +1350,71 @@ async function pollLiveOnce() {
       r.json()
     );
 
-    // 10 outputs (Live dots)
+    // 10 outputs → Live dots
     const outs = mon?.outputs || {};
-    for (let i = 1; i <= 10; i++) setDot(`o${i}`, !!outs[`output${i}`]);
+    for (let i = 1; i <= 10; i++) {
+      setDot(`o${i}`, !!outs[`output${i}`]);
+    }
 
-    // Relay — trust server, mirror to both tabs
+    // Per-wire estimated temperatures from backend
+    const wireTemps = mon?.wireTemps || [];
+
+    // Attach tooltip on the state dots (optional, if you like)
+    for (let i = 1; i <= 10; i++) {
+      const t = wireTemps[i - 1];
+      const dot = LIVE.svg?.querySelector(`circle[data-id="o${i}"]`);
+      if (!dot) continue;
+
+      if (typeof t === "number" && t > -100) {
+        dot.dataset.temp = t;
+        dot.setAttribute("title", `Wire ${i}: ${t.toFixed(1)}°C`);
+      } else {
+        dot.dataset.temp = "";
+        dot.removeAttribute("title");
+      }
+    }
+
+    // Update temp badge circles
+    if (LIVE.svg && Array.isArray(LIVE.tempMarkers)) {
+      for (const cfg of LIVE.tempMarkers) {
+        const badge = LIVE.svg.querySelector(
+          `g.temp-badge[data-wire="${cfg.wire}"]`
+        );
+        if (!badge) continue;
+
+        const label = badge.querySelector("text.temp-label");
+        const circle = badge.querySelector("circle.temp-circle");
+        if (!label || !circle) continue;
+
+        const t = wireTemps[cfg.wire - 1];
+        let txt = "--";
+
+        badge.classList.remove("warn", "hot");
+
+        if (typeof t === "number" && t > -100) {
+          const rounded = Math.round(t);
+          txt = String(rounded);
+
+          // simple coloring thresholds – adjust as you like
+          if (t >= 400) badge.classList.add("hot");
+          else if (t >= 250) badge.classList.add("warn");
+
+          badge.setAttribute("title", `Wire ${cfg.wire}: ${t.toFixed(1)}°C`);
+        } else {
+          badge.removeAttribute("title");
+        }
+
+        label.textContent = txt;
+      }
+    }
+
+    // Relay — mirror to Live + Manual
     const serverRelay = mon.relay === true;
-    setDot("relay", serverRelay); // Live tab dot
+    setDot("relay", serverRelay);
     const relayToggle = document.getElementById("relayToggle");
-    if (relayToggle) relayToggle.checked = serverRelay; // Manual tab toggle
+    if (relayToggle) relayToggle.checked = serverRelay;
 
-    // AC: trust server flag only (ignore noisy ADC)
+    // AC flag
     setDot("ac", mon.ac === true);
   } catch (e) {
     console.warn("live poll failed", e);
@@ -1334,3 +1443,25 @@ function initLiveTab() {
 }
 
 document.addEventListener("DOMContentLoaded", initLiveTab);
+function sendInstantLogout() {
+  try {
+    const payload = new Blob([JSON.stringify({ action: "disconnect" })], {
+      type: "application/json",
+    });
+    navigator.sendBeacon("/disconnect", payload);
+  } catch (e) {
+    // Fallback if Beacon fails
+    fetch("/disconnect", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "disconnect" }),
+    });
+  }
+}
+
+// Fire on real page teardown (mobile-friendly)
+window.addEventListener("pagehide", sendInstantLogout);
+// Also fire when the tab just goes to background
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") sendInstantLogout();
+});

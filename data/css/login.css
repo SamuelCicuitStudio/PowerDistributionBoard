@@ -1,13 +1,12 @@
 @font-face {
-  font-family: 'Inter';
-  src: url('/fonts/Inter_18pt-Regular.ttf') format('truetype');
+  font-family: "Inter";
+  src: url("/fonts/Inter_18pt-Regular.ttf") format("truetype");
   font-weight: 400;
   font-style: normal;
 }
-
 @font-face {
-  font-family: 'Inter';
-  src: url('/fonts/Inter_18pt-SemiBold.ttf') format('truetype');
+  font-family: "Inter";
+  src: url("/fonts/Inter_18pt-SemiBold.ttf") format("truetype");
   font-weight: 600;
   font-style: normal;
 }
@@ -16,22 +15,49 @@
   box-sizing: border-box;
 }
 
+:root {
+  --bg-1: #0e0e0e;
+  --bg-2: #1c1c1c;
+  --glass: rgba(255, 255, 255, 0.04);
+  --glass-2: rgba(255, 255, 255, 0.02);
+  --stroke: rgba(255, 255, 255, 0.08);
+  --stroke-2: rgba(255, 255, 255, 0.1);
+  --text: #ffffff;
+  --muted: rgba(255, 255, 255, 0.6);
+  --placeholder: rgba(255, 255, 255, 0.5);
+  --neon: #00ffae;
+  --neon-soft: rgba(0, 255, 174, 0.4);
+  --neon-inset: rgba(0, 255, 174, 0.2);
+}
+
+/* Help browsers pick dark UI defaults for controls/autofill popups */
+html,
+body,
+input,
+button {
+  color-scheme: dark;
+}
+
+html,
+body {
+  height: 100%;
+}
+
 body {
   margin: 0;
-  padding: 0;
-  font-family: 'Inter', sans-serif;
-  background: linear-gradient(to bottom right, #0e0e0e, #1c1c1c);
-  color: #fff;
+  font-family: "Inter", sans-serif;
+  background: linear-gradient(to bottom right, var(--bg-1), var(--bg-2));
+  color: var(--text);
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 100vh;
+  min-height: 100%;
 }
 
 .login-container {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--glass);
   backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--stroke);
   border-radius: 20px;
   padding: 40px 30px;
   width: 320px;
@@ -45,13 +71,9 @@ body {
   transform: translateY(30px);
   transition: box-shadow 0.4s ease-in-out;
 }
-
 .login-container:hover {
-  box-shadow:
-    0 0 35px rgba(0, 255, 180, 0.4),
-    0 0 12px rgba(0, 255, 180, 0.2) inset;
+  box-shadow: 0 0 35px var(--neon-soft), 0 0 12px var(--neon-inset) inset;
 }
-
 @keyframes fadeIn {
   to {
     opacity: 1;
@@ -63,15 +85,13 @@ body {
   width: 100px;
   height: 100px;
   background-color: rgba(255, 255, 255, 0.05);
-  border: 2px solid rgba(255, 255, 255, 0.1);
+  border: 2px solid var(--stroke-2);
   border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: grid;
+  place-items: center;
   margin-bottom: 30px;
   box-shadow: 0 0 12px rgba(0, 255, 180, 0.25);
 }
-
 .logo-circle img {
   width: 60%;
   height: 60%;
@@ -79,78 +99,209 @@ body {
   filter: drop-shadow(0 0 4px rgba(0, 255, 180, 0.3));
 }
 
-/* Input group with icon and text perfectly aligned */
+/* Input groups */
 .input-group {
   width: 100%;
+  position: relative; /* for eye button */
   display: flex;
   align-items: center;
-  background-color: rgba(255, 255, 255, 0.02);
+  background-color: var(--glass-2);
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--stroke);
   margin-bottom: 20px;
   padding: 0 12px;
   height: 48px;
-  transition: box-shadow 0.3s ease-in-out;
+  transition: box-shadow 0.3s, border-color 0.3s, background 0.3s;
 }
-
 .input-group img {
   width: 20px;
   height: 20px;
   margin-right: 10px;
   filter: brightness(0.9);
 }
-
 .input-group input {
   flex: 1;
   background: transparent;
   border: none;
-  color: #fff;
+  color: var(--text);
   font-size: 1em;
   height: 100%;
+  caret-color: var(--neon);
+  padding-right: 46px; /* space for eye */
 }
-
 .input-group input::placeholder {
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--placeholder);
 }
-
 .input-group input:focus {
   outline: none;
 }
-
 .input-group:focus-within {
-  border-color: #00ffae;
-  box-shadow: 0 0 6px #00ffae;
+  border-color: var(--neon);
+  box-shadow: 0 0 6px var(--neon);
+  background: linear-gradient(
+    to right,
+    rgba(0, 255, 174, 0.06),
+    var(--glass-2) 30%,
+    var(--glass-2)
+  );
 }
 
-/* Button styling */
-.login-container button {
+/* Password eye INSIDE the field area, on the right */
+.toggle-eye {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 34px;
+  height: 34px;
+  display: inline-grid;
+  place-items: center;
+  appearance: none;
+  -webkit-appearance: none;
+  border: 1px solid transparent;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s, background 0.2s,
+    transform 0.04s;
+}
+.toggle-eye:hover {
+  border-color: var(--neon);
+  box-shadow: inset 0 0 8px rgba(0, 255, 174, 0.15),
+    0 0 6px rgba(0, 255, 174, 0.25);
+}
+.toggle-eye:active {
+  transform: translateY(-50%) scale(0.96);
+}
+.toggle-eye svg {
+  fill: var(--text);
+  opacity: 0.85;
+}
+.toggle-eye .eye-open {
+  display: block;
+}
+.toggle-eye .eye-closed {
+  display: none;
+}
+.toggle-eye.is-showing {
+  background: rgba(0, 255, 174, 0.1);
+  border-color: var(--neon);
+  box-shadow: 0 0 8px rgba(0, 255, 174, 0.25),
+    inset 0 0 10px rgba(0, 255, 174, 0.12);
+}
+.toggle-eye.is-showing .eye-open {
+  display: none;
+}
+.toggle-eye.is-showing .eye-closed {
+  display: block;
+}
+
+/* Selection color inside typing zone */
+::selection {
+  background: rgba(0, 255, 174, 0.35);
+  color: #06110c;
+}
+
+/* Login button */
+.login-btn {
   width: 100%;
   padding: 12px;
   font-size: 1em;
-  background: #00ffae;
+  background: var(--neon);
   color: #000;
   border: none;
   border-radius: 12px;
-  font-weight: bold;
+  font-weight: 600;
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 10px;
   cursor: pointer;
   transition: background 0.3s;
 }
-
-.login-container button img {
+.login-btn img {
   width: 20px;
   height: 20px;
-  margin-right: 10px;
 }
-
-.login-container button:hover {
+.login-btn:hover {
   background: #00e6a0;
 }
 
-.login-container .footer {
+.footer {
   margin-top: 20px;
   font-size: 0.85em;
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--muted);
+}
+
+/* a11y helper */
+.visually-hidden {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  clip: rect(0 0 0 0);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+/* === Fixed Login Stage === */
+:root {
+  --LOGIN_W: 360px;
+  --LOGIN_H: 420px;
+}
+html,
+body {
+  min-width: calc(var(--LOGIN_W) + 40px);
+  min-height: calc(var(--LOGIN_H) + 40px);
+  overflow: auto; /* scroll when window smaller */
+}
+.login-container {
+  width: var(--LOGIN_W);
+  height: var(--LOGIN_H);
+  min-width: var(--LOGIN_W);
+  min-height: var(--LOGIN_H);
+  max-width: var(--LOGIN_W);
+  max-height: var(--LOGIN_H);
+  flex: none;
+  overflow: hidden;
+}
+
+/* =========================
+   Autofill / Suggestions Fix
+   ========================= */
+/* Chrome/Edge/Safari (WebKit/Blink) */
+.input-group input:-webkit-autofill,
+.input-group input:-webkit-autofill:hover,
+.input-group input:-webkit-autofill:focus,
+.input-group input:-webkit-autofill:active {
+  -webkit-text-fill-color: var(--text) !important;
+  caret-color: var(--neon);
+  /* Overwrite UA's pale/yellow autofill background with our glass color */
+  -webkit-box-shadow: 0 0 0px 1000px var(--glass-2) inset !important;
+  box-shadow: 0 0 0px 1000px var(--glass-2) inset !important;
+
+  /* Keep it dark even after autofill applies its bg (long transition trick) */
+  transition: background-color 9999s ease-in-out 0s;
+}
+
+/* Ensure first line in autofilled text uses our font/size */
+.input-group input:-webkit-autofill::first-line {
+  font-family: "Inter", sans-serif;
+  font-size: 1em;
+  color: var(--text);
+}
+
+/* Firefox */
+.input-group input:-moz-autofill {
+  box-shadow: 0 0 0 1000px var(--glass-2) inset !important;
+  -moz-text-fill-color: var(--text) !important;
+}
+
+/* When the field is focused and autofilled, keep the same glow/border */
+.input-group:focus-within input:-webkit-autofill,
+.input-group:focus-within input:-moz-autofill {
+  -webkit-box-shadow: 0 0 0px 1000px var(--glass-2) inset, 0 0 6px var(--neon) !important;
+  box-shadow: 0 0 0px 1000px var(--glass-2) inset, 0 0 6px var(--neon) !important;
 }

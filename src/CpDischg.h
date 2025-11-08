@@ -9,10 +9,9 @@
 
 class CpDischg {
 public:
-    explicit CpDischg(HeaterManager* heater, Relay* relay)
-        : heaterManager(heater), relay(relay) {}
+    explicit CpDischg( Relay* relay)
+        :relay(relay) {}
 
-    inline void setHeaterManager(HeaterManager* h) { heaterManager = h; }
     inline void setRelay(Relay* r) { relay = r; }
 
     inline void setBypassRelayGate(bool enable) { bypassRelayGate = enable; }
@@ -26,8 +25,6 @@ public:
 
 private:
     float adcCodeToBusVolts(uint16_t raw) const;
-
-    HeaterManager* heaterManager = nullptr;
     Relay*         relay         = nullptr;
 
     volatile bool  bypassRelayGate = true;

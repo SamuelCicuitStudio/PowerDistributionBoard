@@ -98,10 +98,15 @@
 #define R08OHM_KEY  "R08OHM"
 #define R09OHM_KEY  "R09OHM"
 #define R10OHM_KEY  "R10OHM"
+
+#define IDLE_CURR_KEY "IIDLE"
+#define DEFAULT_IDLE_CURR 0.0f
 // ---------- Target Resistance for all  Output (Ohms) ----------
 #define DEFAULT_TARG_RES_OHMS  14.0f  // default target for all outputs
 // 6-char NVS keys (one per output)
 #define R0XTGT_KEY  "R0XTGT"  // OUTXX target resistance
+#define WIRE_OHM_PER_M_KEY               "WOPERM"    // float: Ω per meter for installed nichrome
+#define DEFAULT_WIRE_OHM_PER_M           2.0f        // 2 Ω/m nichrome (your current wire)
 // ==================================================
 // Default Values for Preferences
 // ==================================================

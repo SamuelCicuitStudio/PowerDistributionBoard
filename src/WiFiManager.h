@@ -4,12 +4,12 @@
 #include "Device.h"
 #include "Config.h"
 #include "RGBLed.h"
+#include "HeaterManager.h"
 
 // ================= Build-time Wi-Fi mode selection =================
 // If 1 → start in Station (STA) mode using saved creds or the macros below.
 // If 0 → start in Access Point (AP) mode.
 #define WIFI_START_IN_STA 1
-
 #ifndef WIFI_STA_SSID
 #define WIFI_STA_SSID "FASTWEB-ES28CD"
 #endif
@@ -107,6 +107,7 @@ private:
         CTRL_BUZZER_MUTE,      // b1 = true/false
         CTRL_TARGET_RES,
         CTRL_WIRE_RES,
+        CTRL_WIRE_OHM_PER_M,
     };
 
     struct ControlCmd {

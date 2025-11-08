@@ -218,12 +218,19 @@ void WiFiManager::registerRoutes_() {
             float t = (i < DEVICE->tempSensor->getSensorCount()) ? DEVICE->tempSensor->getTemperature(i) : -127;
             temps.add((t == -127) ? -127 : t);
         }
+        JsonArray wireTemps = doc.createNestedArray("wireTemps");
+        for (uint8_t i = 1; i <= HeaterManager::kWireCount; ++i) {
+            float t = WIRE->getWireEstimatedTemp(i);
+            // You said “add int”: send rounded int °C, -127 if not valid
+            int tInt = (isfinite(t)) ? (int) lroundf(t) : -127;
+            wireTemps.add(tInt);
+        }
         doc["ready"] = digitalRead(READY_LED_PIN);
         doc["off"]   = digitalRead(POWER_OFF_LED_PIN);
         doc["ac"]    = digitalRead(DETECT_12V_PIN) == HIGH;
         doc["relay"] = DEVICE->relayControl->isOn();
         JsonObject outputs = doc.createNestedObject("outputs");
-        for (int i = 1; i <= 10; ++i) outputs["output" + String(i)] = DEVICE->heaterManager->getOutputState(i);
+        for (int i = 1; i <= 10; ++i) outputs["output" + String(i)] = WIRE->getOutputState(i);
 
         doc["fanSpeed"] = FAN->getSpeedPercent();
 
@@ -269,6 +276,7 @@ void WiFiManager::registerRoutes_() {
                 else if (target == "buzzerMute")                { c.type = CTRL_BUZZER_MUTE; c.b1 = value.as<bool>(); }
                 else if (target.startsWith("wireRes"))        { c.type = CTRL_WIRE_RES; c.i1 = target.substring(7).toInt(); c.f1 = value.as<float>(); }
                 else if (target == "targetRes")               { c.type = CTRL_TARGET_RES; c.f1 = value.as<float>(); }
+                else if (target == "wireOhmPerM")               { c.type = CTRL_WIRE_OHM_PER_M;     c.f1 = value.as<float>(); } 
                 else { request->send(400, "application/json", "{\"error\":\"Unknown target\"}"); return; }
 
                 sendCmd(c);
@@ -308,6 +316,7 @@ void WiFiManager::registerRoutes_() {
         doc["acFrequency"]     = CONF->GetInt(AC_FREQUENCY_KEY, 50);
         doc["chargeResistor"]  = CONF->GetFloat(CHARGE_RESISTOR_KEY, 0.0f);
         doc["dcVoltage"]       = CONF->GetFloat(DC_VOLTAGE_KEY, 0.0f);
+        doc["wireOhmPerM"]     = CONF->GetFloat(WIRE_OHM_PER_M_KEY, DEFAULT_WIRE_OHM_PER_M);
         bool relayOn           = DEVICE->relayControl->isOn();
         doc["relay"]           = relayOn;
         doc["ready"]           = digitalRead(READY_LED_PIN);
@@ -315,7 +324,7 @@ void WiFiManager::registerRoutes_() {
         doc["buzzerMute"]      = CONF->GetBool(BUZMUT_KEY, BUZMUT_DEFAULT);
 
         JsonObject outputs = doc.createNestedObject("outputs");
-        for (int i = 1; i <= 10; ++i) outputs["output" + String(i)] = DEVICE->heaterManager->getOutputState(i);
+        for (int i = 1; i <= 10; ++i) outputs["output" + String(i)] = WIRE->getOutputState(i);
 
         const char* accessKeys[10] = {
             OUT01_ACCESS_KEY, OUT02_ACCESS_KEY, OUT03_ACCESS_KEY, OUT04_ACCESS_KEY, OUT05_ACCESS_KEY,
@@ -413,14 +422,17 @@ void WiFiManager::startInactivityTimer() {
     }
 }
 
+// WiFiManager.cpp
 void WiFiManager::onUserConnected() {
     if (lock()) { wifiStatus = WiFiStatus::UserConnected; unlock(); }
+    heartbeat(); // <<< start / refresh the heartbeat task
     DEBUG_PRINTLN("[WiFiManager] User connected 🌐");
     RGB->postOverlay(OverlayEvent::WEB_USER_ACTIVE);
 }
 
 void WiFiManager::onAdminConnected() {
     if (lock()) { wifiStatus = WiFiStatus::AdminConnected; unlock(); }
+    heartbeat(); // <<< start / refresh the heartbeat task
     DEBUG_PRINTLN("[WiFiManager] Admin connected 🔐");
     RGB->postOverlay(OverlayEvent::WEB_ADMIN_ACTIVE);
 }
@@ -602,7 +614,7 @@ void WiFiManager::handleControl(const ControlCmd& c) {
             if (c.i1 >= 1 && c.i1 <= 10) {
                 BUZZ->bip();
                 if (isAdminConnected()) {
-                    DEVICE->heaterManager->setOutput(c.i1, c.b1);
+                    WIRE->setOutput(c.i1, c.b1);
                     DEVICE->indicator->setLED(c.i1, c.b1);
                     RGB->postOutputEvent(c.i1, c.b1);
                 } else if (isUserConnected()) {
@@ -613,7 +625,7 @@ void WiFiManager::handleControl(const ControlCmd& c) {
                     bool allowed = CONF->GetBool(accessKeys[c.i1 - 1], false);
                     DEBUG_PRINTF("[WiFiManager]   User access check: %s\n", allowed ? "ALLOWED" : "DENIED");
                     if (allowed) {
-                        DEVICE->heaterManager->setOutput(c.i1, c.b1);
+                        WIRE->setOutput(c.i1, c.b1);
                         DEVICE->indicator->setLED(c.i1, c.b1);
                         RGB->postOutputEvent(c.i1, c.b1);
                     }
@@ -663,7 +675,7 @@ void WiFiManager::handleControl(const ControlCmd& c) {
             BUZZ->bip();
             DEVICE->currentState = DeviceState::Idle;
             DEVICE->indicator->clearAll();
-            DEVICE->heaterManager->disableAll();
+            WIRE->disableAll();
             RGB->setIdle();
             break;
 
@@ -695,6 +707,17 @@ void WiFiManager::handleControl(const ControlCmd& c) {
             FAN->setSpeedPercent(pct);
             if (pct <= 0) RGB->postOverlay(OverlayEvent::FAN_OFF);
             else          RGB->postOverlay(OverlayEvent::FAN_ON);
+            break;
+        }
+        case CTRL_WIRE_OHM_PER_M: {
+            float ohmPerM = c.f1;
+            if (ohmPerM <= 0.0f) {
+                DEBUG_PRINTLN("[WiFiManager] CTRL_WIRE_OHM_PER_M → invalid value, using default");
+                ohmPerM = DEFAULT_WIRE_OHM_PER_M;
+            }
+            BUZZ->bip();
+            CONF->PutFloat(WIRE_OHM_PER_M_KEY, ohmPerM);
+            DEBUG_PRINTF("[WiFiManager] CTRL_WIRE_OHM_PER_M → %.3f Ω/m saved\n", ohmPerM);
             break;
         }
 

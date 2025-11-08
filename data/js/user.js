@@ -281,7 +281,7 @@ function startMonitorPolling(intervalMs = 1000) {
 // ───────────────────────────────────────────────────────────────
 // ❤️ HEARTBEAT PINGER — Ensures server connection is alive
 // ───────────────────────────────────────────────────────────────
-function startHeartbeat(intervalMs = 3000) {
+function startHeartbeat(intervalMs = 1500) {
   setInterval(() => {
     fetch("/heartbeat")
       .then((res) => res.text())
@@ -353,7 +353,7 @@ function disconnectDevice() {
 // ───────────────────────────────────────────────────────────────
 window.addEventListener("DOMContentLoaded", () => {
   loadControls();
-  // startHeartbeat(); // Uncomment if needed
+  startHeartbeat(); // Uncomment if needed
   startMonitorPolling();
 
   const disconnectBtn = document.getElementById("disconnectBtn");
@@ -385,4 +385,26 @@ window.addEventListener("load", () => {
       "Please refresh the page using Ctrl+F5 or clear your browser cache to load the latest interface."
     );
   }
+});
+function sendInstantLogout() {
+  try {
+    const payload = new Blob([JSON.stringify({ action: "disconnect" })], {
+      type: "application/json",
+    });
+    navigator.sendBeacon("/disconnect", payload);
+  } catch (e) {
+    // Fallback if Beacon fails
+    fetch("/disconnect", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "disconnect" }),
+    });
+  }
+}
+
+// Fire on real page teardown (mobile-friendly)
+window.addEventListener("pagehide", sendInstantLogout);
+// Also fire when the tab just goes to background
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") sendInstantLogout();
 });
