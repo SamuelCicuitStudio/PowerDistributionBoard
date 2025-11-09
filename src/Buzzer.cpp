@@ -69,8 +69,9 @@ bool Buzzer::begin() {
                                 BUZZER_TASK_PRIORITY, &_task);
     if (ok != pdPASS) return false;
   }
-
-  DEBUG_PRINTLN("### Buzzer.begin(): task and queue ready");
+  DEBUGGSTART();
+  DEBUG_PRINTLN("[Buzzer] task and queue ready");
+  DEBUGGSTOP();
   return true;
 }
 

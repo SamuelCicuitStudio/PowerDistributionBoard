@@ -151,7 +151,7 @@ void HeaterManager::loadWireConfig() {
         const float massG    = w.massKg * 1000.0f;             // kg → g
 
         DEBUG_PRINTF(
-            "[HeaterManager] Wire %u: R=%.3f Ω | L=%.4f m | A=%.6f mm² | "
+            "[HeaterManager] Wire %u: R=%.2f Ω | L=%.3f m | A=%.3f mm² | "
             "V=%.3f cm³ | m=%.3f g\n",
             w.index,
             w.resistanceOhm,

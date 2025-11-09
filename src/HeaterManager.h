@@ -18,6 +18,12 @@
 #include "Utils.h"
 #include "NVSManager.h"
 #include "Config.h"  // Rxx keys, WIRE_OHM_PER_M_KEY, defaults
+// ---------------------------------------------------------------------
+// Material constants (nichrome, approximate)
+// ---------------------------------------------------------------------
+#define NICHROME_RESISTIVITY    1.10e-6f // Ω·m
+#define NICHROME_DENSITY        8400.0f  // kg/m³
+#define NICHROME_SPECIFIC_HEAT  450.0f   // J/(kg·K) (reserved)
 
 /**
  * @brief Aggregated information for one heater wire.
@@ -220,12 +226,7 @@ private:
 
     static HeaterManager* s_instance;
 
-    // ---------------------------------------------------------------------
-    // Material constants (nichrome, approximate)
-    // ---------------------------------------------------------------------
-    static constexpr float NICHROME_RESISTIVITY   = 1.10e-6f; // Ω·m
-    static constexpr float NICHROME_DENSITY       = 8400.0f;  // kg/m³
-    static constexpr float NICHROME_SPECIFIC_HEAT = 450.0f;   // J/(kg·K) (reserved)
+
 
     // ---------------------------------------------------------------------
     // Hardware mapping

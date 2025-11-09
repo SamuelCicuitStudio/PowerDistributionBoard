@@ -35,7 +35,7 @@ void SwitchManager::detectTapOrHold() {
                 // Replaced blink(...) with RGB overlay
                 RGB->postOverlay(OverlayEvent::RESET_TRIGGER);
                 DEBUGGSTART();
-                DEBUG_PRINTLN("Long press detected 🕒");
+                DEBUG_PRINTLN("[Switch]Long press detected 🕒");
                 DEBUG_PRINTLN("###########################################################");
                 DEBUG_PRINTLN("#                   Resetting device 🔄                   #");
                 DEBUG_PRINTLN("###########################################################");
@@ -59,7 +59,7 @@ void SwitchManager::detectTapOrHold() {
                     // Replaced blink(...) with a Wi-Fi overlay hint
                     RGB->postOverlay(OverlayEvent::WIFI_AP_);
 
-                    DEBUG_PRINTLN("Triple tap detected 🖱️🖱️🖱️");
+                    DEBUG_PRINTLN("[Switch]Triple tap detected 🖱️🖱️🖱️");
                     WIFI->begin();   // begin() itself will show STA/AP overlays too
                     tapCount = 0;
                 } else {
@@ -90,10 +90,10 @@ void SwitchManager::detectTapOrHold() {
                 }
 
                 tapCount = 0;
-                DEBUG_PRINTLN("One tap detected 🖱️");
+                DEBUG_PRINTLN("[Switch]One tap detected 🖱️");
             } else {
                 tapCount = 0;
-                DEBUG_PRINTLN("Tap timeout ⏱️");
+                DEBUG_PRINTLN("[Switch]Tap timeout ⏱️");
             }
         }
         vTaskDelay(pdMS_TO_TICKS(SWITCH_TASK_LOOP_DELAY_MS));

@@ -56,7 +56,7 @@ void FanManager::begin() {
     Cmd initCmd; initCmd.type = CMD_STOP; initCmd.pct = 0;
     sendCmd(initCmd);
 
-    DEBUG_PRINTLN("[FanManager] Initialized and STOP command queued 🛑");
+    DEBUG_PRINTLN("[Fan] Initialized and STOP command queued 🛑");
 }
 
 // ======================================================================
@@ -149,7 +149,7 @@ void FanManager::hwApplySpeedPercent(uint8_t pct) {
     unlock();
 
     // Print after unlock to keep critical section minimal
-    DEBUG_PRINTF("[FanManager] Fan speed set to %u%% (duty %u) 🌀\n", pct, duty);
+    DEBUG_PRINTF("[Fan] Fan speed set to %u%% (duty %u) 🌀\n", pct, duty);
 }
 
 void FanManager::hwApplyStop() {
@@ -157,5 +157,5 @@ void FanManager::hwApplyStop() {
     currentDuty = 0;
     ledcWrite(FAN_PWM_CHANNEL, 0);
     unlock();
-    DEBUG_PRINTLN("[FanManager] Fan stopped ⛔");
+    DEBUG_PRINTLN("[Fan] Fan stopped ⛔");
 }
