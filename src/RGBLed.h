@@ -50,7 +50,20 @@ enum class OverlayEvent : uint8_t {
   PWR_BYPASS_ON,
   PWR_WAIT_BUTTON,
   PWR_START,
+
+  // Power & protection detail
+  PWR_12V_LOST,            // 12 V supply dropped while active
+  PWR_DC_LOW,              // DC bus under threshold (but not fully lost)
+  FAULT_OVERCURRENT,       // latched overcurrent
+  FAULT_THERMAL_GLOBAL,    // global thermal lock / all wires blocked
+  FAULT_THERMAL_CH_LOCK,   // some channels thermally locked
+  FAULT_SENSOR_MISSING,    // temp/current sensor missing / invalid
+  FAULT_CFG_ERROR,         // invalid configuration / NVS / calibration issue
+  DISCHG_ACTIVE,           // capacitor discharge ongoing
+  DISCHG_DONE,             // discharge finished
+  BYPASS_FORCED_OFF        // bypass MOSFET forced off due to safety
 };
+
 
 // ---------- Pattern options payload ----------
 struct PatternOpts {

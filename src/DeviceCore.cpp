@@ -344,28 +344,25 @@ void Device::handleOverCurrentFault()
 {
     DEBUG_PRINTLN("[Device] ⚡ Over-current detected → EMERGENCY SHUTDOWN");
 
-    // Latch device state into a fault if your enum supports it,
-    // otherwise fall back to Idle.
-    if (currentState != DeviceState::Shutdown) {
-        currentState = DeviceState::Error;   // or FaultOverCurrent if you have it
+    // 1) Latch global state to FAULT
+    if (StateLock()) {
+        currentState = DeviceState::Error;
+        StateUnlock();
     }
 
-    // 1) Immediately disable all heater outputs.
-    if (WIRE) {
-        WIRE->disableAll();
-    }
+    // 2) Immediately disable all loads and power paths
+    if (WIRE)       WIRE->disableAll();
+    if (indicator)  indicator->clearAll();
+    if (bypassFET)  bypassFET->disable();
+    if (relayControl) relayControl->turnOff();
 
-    // 2) Turn off indicator LEDs to avoid confusion.
-    if (indicator) {
-        indicator->clearAll();
-    }
-
-    // 4) Open the main relay to physically cut power path.
-    if (relayControl) {
-        relayControl->turnOff(); // adjust to your actual relay API
-    }
-    // 6) Optional: user feedback (buzzer / RGB)
+    // 3) Feedback: critical current trip
     if (RGB) {
-        RGB->postOverlay(OverlayEvent::CURR_WARN);
+        RGB->setDeviceState(DevState::FAULT);          // red strobe background
+        RGB->postOverlay(OverlayEvent::CURR_TRIP);     // short critical burst
+    }
+
+    if (BUZZ) {
+        BUZZ->bipFault();  // reuse your existing FAULT pattern
     }
 }

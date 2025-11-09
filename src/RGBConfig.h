@@ -179,5 +179,28 @@
 #ifndef RGB_OVR_PWR_START
 #define RGB_OVR_PWR_START      RGB_HEX(0,   200, 0)   // start flash
 #endif
+// =============================== Protection & Fault Overlays ===============================
+// These distinguish *what* caused FAULT / protection, while DevState::FAULT
+// remains the background strobe.
+
+// 12V / DC issues
+#define RGB_OVR_12V_LOST          RGB_HEX(255, 40, 0)   // hard orange-red, critical
+#define RGB_OVR_DC_LOW            RG_AMB                // soft amber: DC below threshold while running
+
+// Over-current
+#define RGB_OVR_OVERCURRENT       RGB_OVR_CURR_TRIP    // alias for clarity
+
+// Thermal model / wires
+#define RGB_OVR_THERMAL_GLOBAL    RGB_HEX(255, 80, 0)   // orange: global thermal lock
+#define RGB_OVR_THERMAL_CH_LOCK   RGB_HEX(255,180, 0)   // yellow: some channels locked
+
+// Sensor / config faults
+#define RGB_OVR_SENSOR_MISSING    RGB_HEX(255,120, 0)   // amber double-blink: probe / sensor missing
+#define RGB_OVR_CFG_ERROR         RGB_HEX(255, 60, 0)   // strong orange-red: invalid config / NVS issue
+
+// Discharge / bypass states
+#define RGB_OVR_DISCHG_ACTIVE     RGB_HEX(200,200, 0)   // yellow breathe: capacitor discharge running
+#define RGB_OVR_DISCHG_DONE       RG_GRN                // green flash: discharge complete
+#define RGB_OVR_BYPASS_FORCED_OFF RGB_HEX(255,120, 0)   // amber: bypass disabled due to fault
 
 #endif // RGB_CONFIG_H

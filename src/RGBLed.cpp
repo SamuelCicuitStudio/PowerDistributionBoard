@@ -242,6 +242,99 @@ void RGBLed::postOverlay(OverlayEvent e) {
       o.color = rgOnly(RGB_OVR_PWR_START);
       o.onMs = 200; o.priority = PRIO_ALERT; o.preempt = true; o.durationMs = 240;
       break;
+
+    // ---- Power & protection detail ----
+
+    case OverlayEvent::PWR_12V_LOST:
+      c.pattern = Pattern::FLASH_ONCE;
+      o.color = rgOnly(RGB_OVR_12V_LOST);
+      o.onMs = 220;
+      o.priority = PRIO_CRITICAL;
+      o.preempt = true;
+      o.durationMs = 800;      // short brutal flash; DevState::FAULT will take over background
+      break;
+
+    case OverlayEvent::PWR_DC_LOW:
+      c.pattern = Pattern::BLINK;
+      o.color = rgOnly(RGB_OVR_DC_LOW);
+      o.periodMs = 300;
+      o.priority = PRIO_ALERT;
+      o.preempt = true;
+      o.durationMs = 1500;
+      break;
+
+    case OverlayEvent::FAULT_OVERCURRENT:
+      c.pattern = Pattern::BLINK;
+      o.color = rgOnly(RGB_OVR_OVERCURRENT);
+      o.periodMs = 120;        // rapid red strobe burst
+      o.priority = PRIO_CRITICAL;
+      o.preempt = true;
+      o.durationMs = 900;
+      break;
+
+    case OverlayEvent::FAULT_THERMAL_GLOBAL:
+      c.pattern = Pattern::BREATHE;
+      o.color = rgOnly(RGB_OVR_THERMAL_GLOBAL);
+      o.periodMs = 600;        // aggressive breathe
+      o.priority = PRIO_ALERT;
+      o.preempt = true;
+      o.durationMs = 2500;
+      break;
+
+    case OverlayEvent::FAULT_THERMAL_CH_LOCK:
+      c.pattern = Pattern::BLINK;
+      o.color = rgOnly(RGB_OVR_THERMAL_CH_LOCK);
+      o.periodMs = 700;
+      o.priority = PRIO_ACTION;
+      o.preempt = true;
+      o.durationMs = 2000;
+      break;
+
+    case OverlayEvent::FAULT_SENSOR_MISSING:
+      c.pattern = Pattern::BLINK;
+      o.color = rgOnly(RGB_OVR_SENSOR_MISSING);
+      o.periodMs = 400;        // clear visible blink
+      o.priority = PRIO_ALERT;
+      o.preempt = true;
+      o.durationMs = 2600;
+      break;
+
+    case OverlayEvent::FAULT_CFG_ERROR:
+      c.pattern = Pattern::HEARTBEAT2;
+      o.color = rgOnly(RGB_OVR_CFG_ERROR);
+      o.periodMs = 900;
+      o.priority = PRIO_ALERT;
+      o.preempt = true;
+      o.durationMs = 3000;
+      break;
+
+    case OverlayEvent::DISCHG_ACTIVE:
+      c.pattern = Pattern::BREATHE;
+      o.color = rgOnly(RGB_OVR_DISCHG_ACTIVE);
+      o.periodMs = 800;        // yellow breathe while dumping energy
+      o.priority = PRIO_ACTION;
+      o.preempt = true;
+      o.durationMs = 0;        // let caller repost/stop as state changes
+      break;
+
+    case OverlayEvent::DISCHG_DONE:
+      c.pattern = Pattern::FLASH_ONCE;
+      o.color = rgOnly(RGB_OVR_DISCHG_DONE);
+      o.onMs = 180;
+      o.priority = PRIO_ACTION;
+      o.preempt = true;
+      o.durationMs = 220;
+      break;
+
+    case OverlayEvent::BYPASS_FORCED_OFF:
+      c.pattern = Pattern::BLINK;
+      o.color = rgOnly(RGB_OVR_BYPASS_FORCED_OFF);
+      o.periodMs = 500;
+      o.priority = PRIO_ALERT;
+      o.preempt = true;
+      o.durationMs = 2500;
+      break;
+
   }
 
   c.opts = o;
