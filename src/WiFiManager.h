@@ -11,10 +11,10 @@
 // If 0 → start in Access Point (AP) mode.
 #define WIFI_START_IN_STA 1
 #ifndef WIFI_STA_SSID
-#define WIFI_STA_SSID "FASTWEB-ES28CD"
+#define WIFI_STA_SSID "pboard"
 #endif
 #ifndef WIFI_STA_PASS
-#define WIFI_STA_PASS "9PFSLSA349"
+#define WIFI_STA_PASS "samsamsam"
 #endif
 
 // Connection timeout before falling back to AP (ms)

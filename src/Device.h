@@ -1,69 +1,64 @@
 /**
- * @brief Main heating loop entry point.
+ * @brief Main heating loop & RTOS-oriented coordination.
  *
- * This function runs the core heater sequencing logic once the device has
- * transitioned to DeviceState::Running. It uses the shared thermal model,
- * current sensor feedback, and event flags to safely drive the nichrome wires
- * in one of two modes:
+ * Once the device enters DeviceState::Running, the Device class coordinates
+ * nichrome heater drive in one of two compile-time modes:
  *
- * - DEVICE_LOOP_MODE_SEQUENTIAL
- * - DEVICE_LOOP_MODE_ADVANCED (Batch / grouped drive)
+ *  - DEVICE_LOOP_MODE_SEQUENTIAL
+ *  - DEVICE_LOOP_MODE_ADVANCED
  *
- * Common behavior (both modes):
- * - Blocks on entry with waitForWiresNearAmbient() to ensure all virtual wire
- *   temperatures are close to the current ambient before starting a new cycle.
- *   This keeps the thermal model consistent across multiple runs / re-arms.
- * - Starts background temperature monitoring (DS18B20) and enables the bypass
- *   MOSFET once the system is ready.
- * - Uses checkAllowedOutputs(), which combines configuration flags and
- *   thermal lockout state, so overheated wires (>= 150°C) are automatically
- *   excluded from scheduling until they cool below the re-enable threshold.
- * - Uses delayWithPowerWatch() in all timing phases to:
- *     - Abort immediately on 12V loss (handle12VDrop()).
- *     - React to STOP requests via the event group.
- * - The actual per-wire temperatures are not computed here but continuously
- *   maintained by LedUpdateTask() → applyHeatingFromCapture(), which:
- *     - Reads total current from ACS781.
- *     - Distributes power across active wires using R(T) and the parallel
- *       conductance model.
- *     - Applies heating, cooling toward ambient, 150°C clamp, and lockout.
+ * The responsibilities are cleanly split:
  *
- * Sequential mode (DEVICE_LOOP_MODE_SEQUENTIAL):
- * - Only one heater output is driven at a time.
- * - For each activation step:
- *     - Re-evaluates allowedOutputs[] via checkAllowedOutputs().
- *     - Selects the COOLEST eligible wire using its virtual temperature
- *       (getWireEstimatedTemp), not simple round-robin.
- *     - Turns that wire ON for onTime, then OFF for offTime, both guarded by
- *       delayWithPowerWatch().
- * - This "coolest-first" strategy, combined with the thermal model and
- *   lockout, naturally equalizes wire usage and prevents any wire from
- *   exceeding the safe band around 150°C.
+ *  - CurrentSensor:
+ *      - Runs a continuous sampling task.
+ *      - Maintains a 10s ring buffer of (timestamp, current).
  *
- * Advanced mode (DEVICE_LOOP_MODE_ADVANCED):
- * - Drives multiple wires in parallel as groups to approximate a target
- *   equivalent resistance (R_eq) for batch recharge / discharge cycles.
- * - On each cycle:
- *     - Updates allowedOutputs[] (config + thermal safety).
- *     - Builds an allowedMask and computes an activation plan where each
- *       group is a bitmask of wires chosen to match the desired R_eq subject
- *       to max active outputs.
- *     - For each group:
- *         - Enables all wires in the mask simultaneously.
- *         - Holds them for onTime / offTime via delayWithPowerWatch().
- * - Between group sequences, the loop can wait for capacitor voltage recovery
- *   while keeping the device in Running state. Thermal lockout and the
- *   current-driven model ensure that overheated wires are skipped
- *   automatically and cooler wires are preferentially used.
+ *  - HeaterManager:
+ *      - Owns all heater GPIOs.
+ *      - Applies output masks atomically.
+ *      - Logs output-mask changes into a small ring buffer.
+ *
+ *  - Device thermal integration (thermal task):
+ *      - Sole owner of virtual wire temperatures and lockout state.
+ *      - Periodically consumes:
+ *          - current history from CurrentSensor,
+ *          - output history from HeaterManager.
+ *      - For each time segment, applies:
+ *          - cooling toward ambient using per-wire tau,
+ *          - heating based on measured I(t), active mask, and R(T),
+ *          - clamping at 150°C and re-enable hysteresis.
+ *      - Publishes results via HeaterManager::setWireEstimatedTemp().
+ *
+ *  - Device loop (sequential / advanced):
+ *      - Uses checkAllowedOutputs() (config + thermal lockout) to determine
+ *        eligible wires.
+ *      - In SEQUENTIAL mode:
+ *          - Picks the coolest eligible wire (virtual temperature),
+ *            drives it alone for onTime, idles for offTime.
+ *      - In ADVANCED mode:
+ *          - Uses the existing planner to build a sequence of group masks
+ *            approximating a target R_eq, respecting MAX_ACTIVE and
+ *            allowedOutputs[].
+ *          - Applies each mask for onTime / offTime via HeaterManager.
+ *      - All timings use delayWithPowerWatch() to react immediately to:
+ *          - 12V supply loss (handle12VDrop()),
+ *          - STOP requests (event group).
+ *
+ * On entry:
+ *  - waitForWiresNearAmbient() ensures a stable starting point.
+ *  - Background DS18B20 monitoring is started.
+ *  - CurrentSensor continuous sampling and the thermal task are active.
  *
  * On exit:
- * - stopTemperatureMonitor() is called.
- * - All heater outputs and indicator LEDs are forced OFF/cleared.
- * - Control returns to the higher-level state machine in loopTask(), which
- *   may transition the device back to Idle/Shutdown or restart a new cycle.
+ *  - stopTemperatureMonitor() is called.
+ *  - All heater outputs and indicators are forced OFF.
+ *  - Control returns to loopTask(), which may transition to Idle/Shutdown
+ *    or start another run.
  */
+
 #ifndef DEVICE_H
 #define DEVICE_H
+
 #include <Arduino.h>
 #include "HeaterManager.h"
 #include "FanManager.h"
@@ -77,67 +72,89 @@
 #include "NVSManager.h"
 #include "utils.h"
 #include "Buzzer.h"
+
 // -----------------------------------------------------------------------------
 // Constants and Macros
 // -----------------------------------------------------------------------------
+
+/// Voltage ratio required on the DC bus before enabling full-power operation.
 #define GO_THRESHOLD_RATIO (0.78f * CONF->GetFloat(DC_VOLTAGE_KEY, DEFAULT_DC_VOLTAGE))
+
 // -----------------------------------------------------------------------------
-// LOOP MODE SWITCH (compile-time)
+// Loop Mode Selection (compile-time)
 // -----------------------------------------------------------------------------
-/*
- * Choose the behavior of Device::StartLoop():
+
+/**
+ * @brief Selects the behavior of Device::StartLoop().
  *
- * DEVICE_LOOP_MODE_ADVANCED   → keeps existing behavior (multi-output plan + recharge)
- * DEVICE_LOOP_MODE_SEQUENTIAL → new simple loop: toggles one allowed output at a time
- *                               using saved ON_TIME / OFF_TIME.
+ *  - DEVICE_LOOP_MODE_ADVANCED:
+ *        Multi-output / grouped drive using the resistance planner and
+ *        batch-style recharge behavior.
  *
- * To use the simple loop, set:
- *     #define DEVICE_LOOP_MODE DEVICE_LOOP_MODE_SEQUENTIAL
- * in this header (below), then rebuild.
+ *  - DEVICE_LOOP_MODE_SEQUENTIAL:
+ *        Simple mode: drives one allowed output at a time based on virtual
+ *        temperature (coolest-first), using ON_TIME / OFF_TIME.
  */
 #define DEVICE_LOOP_MODE_ADVANCED   0
 #define DEVICE_LOOP_MODE_SEQUENTIAL 1
-#define DEVICE_LOOP_MODE DEVICE_LOOP_MODE_ADVANCED  // default preserves current behavior
 
+/// Default mode (preserves advanced grouped behavior).
+#define DEVICE_LOOP_MODE DEVICE_LOOP_MODE_ADVANCED
 
 // -----------------------------------------------------------------------------
 // Global Synchronization Objects
 // -----------------------------------------------------------------------------
+
 extern SemaphoreHandle_t gStateMtx;
 extern EventGroupHandle_t gEvt;
 
-// Event flags for state transitions
+// Event flags for high-level state transitions.
 #define EVT_WAKE_REQ  (1 << 0)
 #define EVT_RUN_REQ   (1 << 1)
 #define EVT_STOP_REQ  (1 << 2)
 
-// Safe state transition lock/unlock
+// Safe state transition lock helpers.
 static inline bool StateLock()   { return xSemaphoreTake(gStateMtx, portMAX_DELAY) == pdTRUE; }
 static inline void StateUnlock() { xSemaphoreGive(gStateMtx); }
 
+/// Maximum number of simultaneously active heater outputs in advanced mode.
 #define MAX_ACTIVE 4
+
+/// Planner preference: favor equivalent resistances >= target when possible.
 #define PREF_ABOVE true
 
 // -----------------------------------------------------------------------------
 // Enumerations
 // -----------------------------------------------------------------------------
+
 /**
- * @brief Defines the operating recharge modes for the device.
+ * @brief Operating recharge strategies for the device.
  */
 enum class RechargeMode : uint8_t {
-    BatchRecharge = 0,  ///< Relay OFF during pulses, then ON until voltage threshold reached
-    KeepRecharge  = 1   ///< Limited recharge path kept active during pulses
+    BatchRecharge = 0,  ///< Relay off during pulses, then on until voltage threshold is reached.
+    KeepRecharge  = 1   ///< Maintain a restricted recharge path during pulses.
 };
 
 // -----------------------------------------------------------------------------
-// Device Class Definition
+// Device Class
 // -----------------------------------------------------------------------------
+
 /**
  * @class Device
- * @brief Central controller class managing the main hardware subsystems.
+ * @brief Central controller for power path, heaters, sensing, and loop control.
  *
- * This class coordinates system startup, safe shutdown, state transitions,
- * and periodic monitoring of temperature, indicators, and operational loops.
+ * High-level responsibilities:
+ *  - Manage state machine (Idle, Running, Fault, etc.).
+ *  - Coordinate power path (relay, bypass MOSFET, discharge).
+ *  - Start/stop:
+ *      - main loop task,
+ *      - temperature monitoring,
+ *      - thermal integration task (history-based),
+ *      - LED / indicator task.
+ *  - Execute sequential / advanced heater loops using:
+ *      - HeaterManager for mask control,
+ *      - planner helpers for group selection,
+ *      - thermal model outputs for safety decisions.
  */
 class Device {
 public:
@@ -145,9 +162,6 @@ public:
     // Singleton Interface
     // -------------------------------------------------------------------------
 
-    /**
-     * @brief Initializes the Device singleton with subsystem pointers.
-     */
     static void Init(TempSensor* temp,
                      CurrentSensor* current,
                      Relay* relay,
@@ -155,17 +169,15 @@ public:
                      CpDischg* discharger,
                      Indicator* ledIndicator);
 
-    /**
-     * @brief Returns the singleton instance (nullptr until initialized).
-     */
     static Device* Get();
 
-    /// Public access for legacy compatibility
+    /// Public singleton pointer (legacy access).
     static Device* instance;
 
     // -------------------------------------------------------------------------
-    // Construction & Initialization
+    // Construction & Lifecycle
     // -------------------------------------------------------------------------
+
     Device(TempSensor* temp,
            CurrentSensor* current,
            Relay* relay,
@@ -173,100 +185,158 @@ public:
            CpDischg* discharger,
            Indicator* ledIndicator);
 
-    void begin();          ///< Performs system startup and initialization
-    void StartLoop();      ///< Main operational loop
-    void shutdown();       ///< Executes safe shutdown and discharge sequence
-    void checkAllowedOutputs();  ///< Updates allowed output states based on configuration
+    void begin();                     ///< System startup and initialization.
+    void StartLoop();                 ///< Main heating loop (sequential/advanced).
+    void shutdown();                  ///< Safe shutdown and discharge.
+    void checkAllowedOutputs();       ///< Refresh allowedOutputs[] from config + thermal.
 
     // -------------------------------------------------------------------------
     // Mode Control
     // -------------------------------------------------------------------------
+
     void setRechargeMode(RechargeMode mode) { rechargeMode = mode; }
 
     // -------------------------------------------------------------------------
     // RTOS Task Management
     // -------------------------------------------------------------------------
-    void startLoopTask();                              ///< Starts main loop as RTOS task
-    static void loopTaskWrapper(void* pvParameters);   ///< Wrapper for FreeRTOS task
-    void loopTask();                                   ///< Actual loop logic
 
-    void startTemperatureMonitor();                    ///< Launches temperature monitoring
-    static void monitorTemperatureTask(void* param);   ///< Temperature monitoring task handler
-    void stopTemperatureMonitor();                     ///< Stops temperature monitoring
+    void startLoopTask();                       ///< Start main loop as FreeRTOS task.
+    static void loopTaskWrapper(void* param);   ///< Static wrapper for loopTask().
+    void loopTask();                            ///< Top-level state machine / dispatcher.
 
-    void stopLoopTask();                               ///< Stops main loop task
+    void startTemperatureMonitor();             ///< Start DS18B20 monitoring task.
+    static void monitorTemperatureTask(void*);  ///< DS18B20 monitor task entry.
+    void stopTemperatureMonitor();              ///< Stop DS18B20 monitoring.
 
-    void updateLed();                                  ///< Manual LED update
-    static void LedUpdateTask(void* param);            ///< LED update RTOS task
-    bool is12VPresent() const;
-    void handle12VDrop();                // emergency stop when 12V is lost
-    bool delayWithPowerWatch(uint32_t ms);  // like delay(), but aborts if 12V disappears
-    void initWireThermalModelOnce();
+    void startThermalTask();                    ///< Start history-based thermal integration.
+    static void thermalTaskWrapper(void*);      ///< Thermal task wrapper.
+    void thermalTask();                         ///< Thermal integration loop.
+
+    void stopLoopTask();                        ///< Stop main loop task.
+
+    void updateLed();                           ///< Update LEDs / indicators.
+    static void LedUpdateTask(void* param);     ///< LED / status task.
+
+    // -------------------------------------------------------------------------
+    // Power & Safety Utilities
+    // -------------------------------------------------------------------------
+
+    bool is12VPresent() const;                  ///< Check 12 V supply presence.
+    void handle12VDrop();                       ///< Emergency shutdown on 12 V loss.
+
+    /**
+     * @brief Delay while monitoring power and STOP requests.
+     *
+     * @param ms Maximum delay in milliseconds.
+     * @return false if aborted due to power loss or STOP, true otherwise.
+     */
+    bool delayWithPowerWatch(uint32_t ms);
+
+    // -------------------------------------------------------------------------
+    // Thermal Model Interface (history-based)
+// -------------------------------------------------------------------------
+
+    void initWireThermalModelOnce();            ///< Initialize virtual wire states.
     float wireResistanceAtTemp(uint8_t idx, float T) const;
-    void updateWireCoolingAll();
-    uint16_t getActiveMaskFromHeater() const;
-    void applyHeatingFromCapture();
-    void calibrateIdleCurrent();           ///< Measure & store idle current baseline
+    uint16_t getActiveMaskFromHeater() const;   ///< Convenience: read current mask.
+    void calibrateIdleCurrent();                ///< Measure & store baseline idle current.
+
+    /**
+     * @brief Integrate thermal model using CurrentSensor + HeaterManager history.
+     *
+     * This is called exclusively from thermalTask() and:
+     *  - consumes new current samples (getHistorySince),
+     *  - consumes new output-mask events (getOutputHistorySince),
+     *  - updates wireThermal[], lockouts, and HeaterManager temperatures.
+     */
+    void updateWireThermalFromHistory();
+    // ---------------------------------------------------------------------
+    // Over-current fault handling
+    // ---------------------------------------------------------------------
+
+    /**
+     * @brief Handle a latched over-current: shut down all power paths safely.
+     *
+     * This is called automatically from delayWithPowerWatch() when the
+     * CurrentSensor reports an over-current latch.
+     */
+    void handleOverCurrentFault();
 
     // -------------------------------------------------------------------------
     // Subsystem References
     // -------------------------------------------------------------------------
-    TempSensor*    tempSensor;
-    CurrentSensor* currentSensor;
-    Relay*         relayControl;
-    BypassMosfet*  bypassFET;
-    CpDischg*      discharger;
-    Indicator*     indicator;
+
+    TempSensor*    tempSensor         = nullptr;
+    CurrentSensor* currentSensor      = nullptr;
+    Relay*         relayControl       = nullptr;
+    BypassMosfet*  bypassFET          = nullptr;
+    CpDischg*      discharger         = nullptr;
+    Indicator*     indicator          = nullptr;
 
     // -------------------------------------------------------------------------
     // State and Configuration
     // -------------------------------------------------------------------------
-    volatile DeviceState currentState = DeviceState::Idle;
-    volatile RechargeMode rechargeMode = RechargeMode::BatchRecharge;
-    bool allowedOutputs[10] = {false};
+
+    volatile DeviceState  currentState   = DeviceState::Idle;
+    volatile RechargeMode rechargeMode   = RechargeMode::BatchRecharge;
+    bool                  allowedOutputs[10] = { false };
 
     // -------------------------------------------------------------------------
     // RTOS Task Handles
     // -------------------------------------------------------------------------
-    TaskHandle_t loopTaskHandle       = nullptr;
-    TaskHandle_t tempMonitorTaskHandle = nullptr;
-    TaskHandle_t ledTaskHandle         = nullptr;
+
+    TaskHandle_t loopTaskHandle         = nullptr;
+    TaskHandle_t tempMonitorTaskHandle  = nullptr;
+    TaskHandle_t ledTaskHandle          = nullptr;
+    TaskHandle_t thermalTaskHandle      = nullptr;
 
 private:
-    // ---- Wire temperature estimation model ----
+    // ---------------------------------------------------------------------
+    // Virtual Wire Thermal Model
+    // ---------------------------------------------------------------------
+
     struct WireThermalState {
-        float     T;                 // last estimated temperature [°C]
-        uint32_t  lastUpdateMs;      // last time this wire was updated
-        float     R0;                // cold resistance [Ω]
-        float     C_th;              // thermal capacity [J/K] = m * cp
-        float     tau;               // thermal time constant [s]
-        bool      locked;            // true if hit T_MAX
-        uint32_t  cooldownReleaseMs; // optional time-based hysteresis
+        float     T;                 ///< Last estimated temperature [°C].
+        uint32_t  lastUpdateMs;      ///< Last integration time.
+        float     R0;                ///< Cold resistance [Ω].
+        float     C_th;              ///< Thermal capacity [J/K].
+        float     tau;               ///< Thermal time constant [s].
+        bool      locked;            ///< Overtemperature lockout flag.
+        uint32_t  cooldownReleaseMs; ///< Earliest ms to allow re-enable.
     };
 
-    static constexpr float WIRE_T_MAX_C        = 150.0f;
-    static constexpr float WIRE_T_REENABLE_C   = 140.0f;
-    static constexpr float NICHROME_CP_J_PER_KG = 450.0f;      // DS / literature
-    static constexpr float NICHROME_ALPHA      = 0.00017f;     // dR/R per °C (tune!)
-    static constexpr float DEFAULT_TAU_SEC     = 1.5f;         // tune per design
-    static constexpr uint32_t LOCK_MIN_COOLDOWN_MS = 500;      // small safety margin
+    static constexpr float   WIRE_T_MAX_C          = 150.0f;
+    static constexpr float   WIRE_T_REENABLE_C     = 140.0f;
+    static constexpr float   NICHROME_CP_J_PER_KG  = 450.0f;
+    static constexpr float   NICHROME_ALPHA        = 0.00017f;
+    static constexpr float   DEFAULT_TAU_SEC       = 1.5f;
+    static constexpr uint32_t LOCK_MIN_COOLDOWN_MS = 500;
 
     WireThermalState wireThermal[HeaterManager::kWireCount];
-    float ambientC          = 25.0f;
-    bool  thermalInitDone   = false;
-    uint32_t lastAmbientUpdateMs = 0;   // <--- add this
 
-    // For associating active masks with captured current samples.
-    uint16_t captureMasks[CURRENT_CAPTURE_MAX_SAMPLES];
-    void updateAmbientFromSensors(bool force = false); // <--- add this
+    float    ambientC            = 25.0f;
+    bool     thermalInitDone     = false;
+    uint32_t lastAmbientUpdateMs = 0;
+
+    // Baseline current (non-heater loads), set by calibrateIdleCurrent().
+    float    idleCurrentA        = 0.0f;
+
+    // History cursors for incremental integration.
+    uint32_t currentHistorySeq   = 0;   ///< Last consumed CurrentSensor seq.
+    uint32_t outputHistorySeq    = 0;   ///< Last consumed HeaterManager seq.
+
+    // Last known heater mask (for continuity between thermal updates).
+    uint16_t lastHeaterMask      = 0;
+
+    // Internal helpers
+    void updateAmbientFromSensors(bool force = false);
     void waitForWiresNearAmbient(float tolC, uint32_t maxWaitMs = 0);
-
-
 };
 
 // -----------------------------------------------------------------------------
-// Global Accessor Macro
+// Global Accessor
 // -----------------------------------------------------------------------------
+
 #define DEVICE Device::Get()
 
 #endif // DEVICE_H

@@ -560,7 +560,6 @@ void WiFiManager::handleControl(const ControlCmd& c) {
             DEBUG_PRINTF("[WiFiManager] CTRL_BUZZER_MUTE → %s\n", c.b1 ? "MUTED" : "ACTIVE");
             BUZZ->bip();
             BUZZ->setMuted(c.b1);
-            CONF->PutBool(BUZMUT_KEY, c.b1);     // <-- add this line
             break;
 
         case CTRL_ON_TIME_MS:

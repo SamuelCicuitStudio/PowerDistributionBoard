@@ -7,18 +7,34 @@ Buzzer* Buzzer::s_inst = nullptr;
 void Buzzer::Init(int pin, bool activeLow) {
   if (!s_inst) s_inst = new Buzzer();
 
-  // Resolve pin strictly from BUZZER_PIN when available.
-  s_inst->_pin = pin;         // fallback only if BUZZER_PIN is not defined
+  // 1) Start from compile-time defaults (used only if NVS empty)
   s_inst->_activeLow = activeLow;
+  s_inst->_muted     = false;
 
-  // Apply GPIO now so begin() can proceed immediately.
+  // 2) Load persisted state (if present). This may override _activeLow/_muted.
+  s_inst->loadFromPrefs_();
+
+  // 3) Resolve pin:
+  //    - Prefer BUZZER_PIN when defined.
+  //    - Otherwise use the provided pin argument.
+#ifdef BUZZER_PIN
+  s_inst->_pin = BUZZER_PIN;
+#else
+  if (pin >= 0) {
+    s_inst->_pin = pin;
+  }
+#endif
+
+  // 4) Configure GPIO according to the resolved pin and polarity.
   if (s_inst->_pin >= 0) {
     pinMode(s_inst->_pin, OUTPUT);
-    s_inst->idleOff();
+    s_inst->idleOff();   // idle state, no sound; honored even if muted.
   }
 
-  // Persist only polarity/mute (pin is not persisted)
-  s_inst->storeToPrefs_();
+  // IMPORTANT:
+  // - We DO NOT call storeToPrefs_() here.
+  //   Calling it would overwrite BUZMUT_KEY with the default on every boot,
+  //   destroying the previously saved mute state.
 }
 
 Buzzer* Buzzer::Get() {
@@ -30,11 +46,18 @@ Buzzer* Buzzer::TryGet() { return s_inst; }
 
 // ===== Lifecycle =====
 bool Buzzer::begin() {
-  // Load polarity/mute from CONF; resolve pin from BUZZER_PIN.
+  // Load polarity/mute from CONF and resolve pin from BUZZER_PIN again,
+  // to be 100% sure we're honoring persisted settings.
   loadFromPrefs_();
+
+#ifdef BUZZER_PIN
   _pin = BUZZER_PIN;
-  pinMode(_pin, OUTPUT);
-  idleOff();
+#endif
+
+  if (_pin >= 0) {
+    pinMode(_pin, OUTPUT);
+    idleOff();
+  }
 
   if (!_mtx)   _mtx   = xSemaphoreCreateMutex();
   if (!_queue) _queue = xQueueCreate(BUZZER_QUEUE_LEN, sizeof(Mode));
@@ -46,41 +69,56 @@ bool Buzzer::begin() {
                                 BUZZER_TASK_PRIORITY, &_task);
     if (ok != pdPASS) return false;
   }
+
   DEBUG_PRINTLN("### Buzzer.begin(): task and queue ready");
   return true;
 }
 
 void Buzzer::end() {
-  if (_task) { TaskHandle_t t = _task; _task = nullptr; vTaskDelete(t); }
+  if (_task)  { TaskHandle_t t = _task; _task = nullptr; vTaskDelete(t); }
   if (_queue) { vQueueDelete(_queue); _queue = nullptr; }
   if (_mtx)   { vSemaphoreDelete(_mtx); _mtx = nullptr; }
   idleOff();
 }
 
-// NOTE: attachPin does NOT persist the pin anymore.
-// It only rebinds runtime pin; polarity change IS persisted.
+// NOTE: attachPin does NOT persist the pin.
+// It only rebinds runtime pin; polarity/mute ARE persisted.
 void Buzzer::attachPin(int pin, bool activeLow) {
-  _pin = pin;
+  _pin       = pin;
   _activeLow = activeLow;
 
   if (_pin >= 0) {
     pinMode(_pin, OUTPUT);
     idleOff();
   }
-  storeToPrefs_();  // polarity/mute only
+
+  // Persist polarity + current mute state (but NOT pin).
+  storeToPrefs_();
 }
 
 void Buzzer::setMuted(bool on) {
+  if (_muted == on) {
+    // No change -> no need to touch NVS or queue.
+    return;
+  }
+
   _muted = on;
+
   if (on) {
     // Stop any current tone immediately and clear pending sounds
-    noTone(_pin);
-    idleOff();
-    if (_queue) xQueueReset(_queue);   // drop everything pending
+    if (_pin >= 0) {
+      noTone(_pin);
+      idleOff();
+    }
+    if (_queue) {
+      xQueueReset(_queue);   // drop everything pending
+    }
   }
-  storeToPrefs_();  // persist mute flag
-}
 
+  // Persist new mute flag (this is the ONLY time we change BUZMUT_KEY,
+  // aside from explicit polarity changes).
+  storeToPrefs_();
+}
 
 // ===== Public API (enqueue) =====
 void Buzzer::bip()                   { enqueue(Mode::BIP); }
@@ -121,7 +159,7 @@ void Buzzer::taskThunk(void* arg) {
 void Buzzer::taskLoop() {
   for (;;) {
     Mode m;
-    // Blocks forever with zero CPU until something is enqueued (not enqueued while muted)
+    // Blocks forever until something is enqueued (enqueue is a no-op when muted)
     if (xQueueReceive(_queue, &m, portMAX_DELAY) == pdTRUE) {
       playMode(m);
       idleOff();
@@ -133,21 +171,24 @@ void Buzzer::taskLoop() {
 void Buzzer::playTone(int freqHz, int durationMs) {
   if (_pin < 0) return;
 
-  // If already muted, return quickly
-  if (_muted) { idleOff(); return; }
+  // If already muted, ensure idle and bail
+  if (_muted) {
+    idleOff();
+    return;
+  }
 
-  // Start a continuous tone and then sleep in small slices so we can abort
   tone(_pin, freqHz);
 
-  int remaining = durationMs;
-  const int slice = 10; // ms, adjust if you want even snappier (<10ms) stops
+  int remaining      = durationMs;
+  const int sliceMs  = 10;
+
   while (remaining > 0) {
-    if (_muted) {                // mute toggled during play -> abort immediately
+    if (_muted) {
       noTone(_pin);
       idleOff();
       return;
     }
-    int step = remaining < slice ? remaining : slice;
+    int step = (remaining < sliceMs) ? remaining : sliceMs;
     vTaskDelay(pdMS_TO_TICKS(step));
     remaining -= step;
   }
@@ -155,7 +196,6 @@ void Buzzer::playTone(int freqHz, int durationMs) {
   noTone(_pin);
   idleOff();
 }
-
 
 // ===== Patterns =====
 void Buzzer::playMode(Mode mode) {
@@ -178,8 +218,12 @@ void Buzzer::playMode(Mode mode) {
 
 // ===== Persistence (no pin in NVS) =====
 void Buzzer::loadFromPrefs_() {
-  // Always resolve pin from BUZZER_PIN (if defined); otherwise keep current _pin.
+  // Always resolve pin from BUZZER_PIN if defined.
+#ifdef BUZZER_PIN
   _pin = BUZZER_PIN;
+#endif
+
+  // Use current members as defaults so Init() can seed first-boot values.
   _activeLow = CONF->GetBool(BUZLOW_KEY, _activeLow);
   _muted     = CONF->GetBool(BUZMUT_KEY, _muted);
 }

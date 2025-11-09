@@ -221,10 +221,6 @@ void Device::LedUpdateTask(void* param) {
             }
         }
 
-        // Update per-wire virtual temperatures based on:
-        //  - current sensor reading
-        //  - which outputs are ON
-        device->applyHeatingFromCapture();
 
         vTaskDelay(delayTicks);
     }
@@ -271,25 +267,43 @@ void Device::handle12VDrop() {
  * @brief Sleep for ms, but wake early if 12V disappears (or STOP requested).
  * @return true if full sleep elapsed, false if aborted.
  */
-bool Device::delayWithPowerWatch(uint32_t ms) {
-    const uint32_t slice = 25; // ms granularity for responsiveness
-    uint32_t elapsed = 0;
-    while (elapsed < ms) {
+bool Device::delayWithPowerWatch(uint32_t ms)
+{
+    const TickType_t start = xTaskGetTickCount();
+    const TickType_t period = pdMS_TO_TICKS(10); // or whatever granularity you used
+
+    while ((xTaskGetTickCount() - start) * portTICK_PERIOD_MS < ms) {
+        vTaskDelay(period);
+
+        // 1) Check 12V presence (existing behavior)
         if (!is12VPresent()) {
+            DEBUG_PRINTLN("[Device] 12V lost during wait → abort");
             handle12VDrop();
             return false;
         }
-        // Also honor STOP while we’re here
+
+        // 2) Check STOP request (existing behavior)
         if (gEvt) {
-            EventBits_t b = xEventGroupGetBits(gEvt);
-            if (b & EVT_STOP_REQ) return false;
+            EventBits_t bits = xEventGroupGetBits(gEvt);
+            if (bits & EVT_STOP_REQ) {
+                DEBUG_PRINTLN("[Device] STOP requested during wait → abort");
+                xEventGroupClearBits(gEvt, EVT_STOP_REQ);
+                currentState = DeviceState::Idle;
+                return false;
+            }
         }
-        uint32_t step = (ms - elapsed < slice) ? (ms - elapsed) : slice;
-        vTaskDelay(pdMS_TO_TICKS(step));
-        elapsed += step;
+
+        // 3) NEW: Check over-current latch
+        if (currentSensor && currentSensor->isOverCurrentLatched()) {
+            DEBUG_PRINTLN("[Device] Over-current latch set during wait → abort");
+            handleOverCurrentFault();
+            return false;
+        }
     }
+
     return true;
 }
+
 void Device::calibrateIdleCurrent() {
     if (!currentSensor) {
         DEBUG_PRINTLN("[Device] Idle current calibration skipped (no CurrentSensor) ⚠️");
@@ -324,4 +338,34 @@ void Device::calibrateIdleCurrent() {
     CONF->PutFloat(IDLE_CURR_KEY, idle);
 
     DEBUG_PRINTF("[Device] Idle current calibrated: %.4f A (relay+AC, no heaters)\n", idle);
+}
+
+void Device::handleOverCurrentFault()
+{
+    DEBUG_PRINTLN("[Device] ⚡ Over-current detected → EMERGENCY SHUTDOWN");
+
+    // Latch device state into a fault if your enum supports it,
+    // otherwise fall back to Idle.
+    if (currentState != DeviceState::Shutdown) {
+        currentState = DeviceState::Error;   // or FaultOverCurrent if you have it
+    }
+
+    // 1) Immediately disable all heater outputs.
+    if (WIRE) {
+        WIRE->disableAll();
+    }
+
+    // 2) Turn off indicator LEDs to avoid confusion.
+    if (indicator) {
+        indicator->clearAll();
+    }
+
+    // 4) Open the main relay to physically cut power path.
+    if (relayControl) {
+        relayControl->turnOff(); // adjust to your actual relay API
+    }
+    // 6) Optional: user feedback (buzzer / RGB)
+    if (RGB) {
+        RGB->postOverlay(OverlayEvent::CURR_WARN);
+    }
 }

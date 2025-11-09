@@ -14,7 +14,7 @@ static const char* WIRE_RES_KEYS[HeaterManager::kWireCount] = {
 };
 
 // ==========================================================================
-// Singleton access (NVS-style)
+// Singleton access
 // ==========================================================================
 
 void HeaterManager::Init() {
@@ -38,7 +38,10 @@ HeaterManager::HeaterManager()
     : wireOhmPerM(0.0f),
       targetResOhms(0.0f),
       _initialized(false),
-      _mutex(nullptr)
+      _mutex(nullptr),
+      _currentMask(0),
+      _historyHead(0),
+      _historySeq(0)
 {
     for (uint8_t i = 0; i < kWireCount; ++i) {
         wires[i].index              = i + 1;
@@ -68,10 +71,12 @@ void HeaterManager::begin() {
 
     _mutex = xSemaphoreCreateMutex();
 
+    // Configure all outputs as OFF.
     for (uint8_t i = 0; i < kWireCount; ++i) {
         pinMode(enaPins[i], OUTPUT);
-        digitalWrite(enaPins[i], LOW); // all OFF
+        digitalWrite(enaPins[i], LOW);
     }
+    _currentMask = 0;
 
     loadWireConfig();
     _initialized = true;
@@ -83,7 +88,7 @@ void HeaterManager::begin() {
 
 bool HeaterManager::lock() const {
     if (_mutex == nullptr) {
-        return true;  // allow non-fatal use before begin()
+        return true;  // allow limited use before begin()
     }
     return (xSemaphoreTake(_mutex, portMAX_DELAY) == pdTRUE);
 }
@@ -99,8 +104,6 @@ void HeaterManager::unlock() const {
 // ==========================================================================
 
 void HeaterManager::loadWireConfig() {
-    // CONF is NVS::Get() via NVSManager (NVS-style singleton) :contentReference[oaicite:1]{index=1}
-
     if (CONF) {
         // Global Ω/m
         wireOhmPerM = CONF->GetFloat(WIRE_OHM_PER_M_KEY, DEFAULT_WIRE_OHM_PER_M);
@@ -131,7 +134,7 @@ void HeaterManager::loadWireConfig() {
         }
     }
 
-    // Recompute geometry
+    // Recompute geometry for each wire
     for (uint8_t i = 0; i < kWireCount; ++i) {
         computeWireGeometry(wires[i]);
     }
@@ -156,11 +159,13 @@ void HeaterManager::loadWireConfig() {
     DEBUGGSTOP();
 }
 
+// Compute derived geometric/thermal properties for one wire.
 void HeaterManager::computeWireGeometry(WireInfo& w) {
     const float R = w.resistanceOhm;
 
     if (!isfinite(R) || R <= 0.0f ||
-        !isfinite(wireOhmPerM) || wireOhmPerM <= 0.0f) {
+        !isfinite(wireOhmPerM) || wireOhmPerM <= 0.0f)
+    {
         w.lengthM            = 0.0f;
         w.crossSectionAreaM2 = 0.0f;
         w.volumeM3           = 0.0f;
@@ -180,42 +185,197 @@ void HeaterManager::computeWireGeometry(WireInfo& w) {
 }
 
 // ==========================================================================
-// Output control
+// Output control (single-channel)
 // ==========================================================================
 
 void HeaterManager::setOutput(uint8_t index, bool enable) {
-    if (index == 0 || index > kWireCount) return;
-    const uint8_t pinIndex = index - 1;
+    if (index == 0 || index > kWireCount) {
+        return;
+    }
+    const uint8_t bit = index - 1;
 
-    if (!lock()) return;
+    if (!lock()) {
+        return;
+    }
 
-    digitalWrite(enaPins[pinIndex], enable ? HIGH : LOW);
+    uint16_t newMask = _currentMask;
+    if (enable) {
+        newMask |= (1u << bit);
+    } else {
+        newMask &= ~(1u << bit);
+    }
+
+    // Update hardware pin
+    digitalWrite(enaPins[bit], enable ? HIGH : LOW);
+
+    // If effective mask changed, log it
+    if (newMask != _currentMask) {
+        _currentMask = newMask;
+        logOutputMaskChange(_currentMask);
+    }
+
     unlock();
 }
 
 void HeaterManager::disableAll() {
-    if (!lock()) return;
+    if (!lock()) {
+        return;
+    }
 
-    for (uint8_t i = 0; i < kWireCount; ++i) {
-        digitalWrite(enaPins[i], LOW);
+    if (_currentMask != 0) {
+        // Only touch pins if anything is on
+        for (uint8_t i = 0; i < kWireCount; ++i) {
+            digitalWrite(enaPins[i], LOW);
+        }
+        _currentMask = 0;
+        logOutputMaskChange(0);
     }
 
     unlock();
 }
 
 bool HeaterManager::getOutputState(uint8_t index) const {
-    if (index == 0 || index > kWireCount) return false;
-    const uint8_t pinIndex = index - 1;
+    if (index == 0 || index > kWireCount) {
+        return false;
+    }
+    const uint8_t bit = index - 1;
 
-    if (!lock()) return false;
+    if (!lock()) {
+        return false;
+    }
 
-    const bool state = (digitalRead(enaPins[pinIndex]) == HIGH);
+    // We trust _currentMask as the source of truth.
+    const bool state = ((_currentMask & (1u << bit)) != 0);
+
     unlock();
     return state;
 }
 
 // ==========================================================================
-// Resistance / target
+// Output control (mask-based)
+// ==========================================================================
+
+void HeaterManager::setOutputMask(uint16_t mask) {
+    // Only 10 bits are meaningful
+    mask &= ((1u << kWireCount) - 1u);
+
+    if (!lock()) {
+        return;
+    }
+
+    if (mask == _currentMask) {
+        // Nothing to do
+        unlock();
+        return;
+    }
+
+    // Update only changed pins to minimize glitches
+    uint16_t diff = mask ^ _currentMask;
+    for (uint8_t i = 0; i < kWireCount; ++i) {
+        uint16_t bit = (1u << i);
+        if (diff & bit) {
+            bool on = (mask & bit) != 0;
+            digitalWrite(enaPins[i], on ? HIGH : LOW);
+        }
+    }
+
+    _currentMask = mask;
+    logOutputMaskChange(_currentMask);
+
+    unlock();
+}
+
+uint16_t HeaterManager::getOutputMask() const {
+    if (!lock()) {
+        return 0;
+    }
+    uint16_t m = _currentMask;
+    unlock();
+    return m;
+}
+
+// ==========================================================================
+// Output history API
+// ==========================================================================
+
+void HeaterManager::logOutputMaskChange(uint16_t newMask) {
+    // Assumes _mutex is already held.
+    // Do not record duplicate entries with same mask (should be guaranteed
+    // by callers, but we guard anyway).
+    if (_historySeq > 0) {
+        const uint32_t lastIdx = (_historyHead == 0)
+                               ? (OUTPUT_HISTORY_SIZE - 1)
+                               : (_historyHead - 1) % OUTPUT_HISTORY_SIZE;
+        if (_history[lastIdx].mask == newMask) {
+            return;
+        }
+    }
+
+    const uint32_t idx = _historyHead % OUTPUT_HISTORY_SIZE;
+    _history[idx].timestampMs = millis();
+    _history[idx].mask        = newMask;
+
+    _historyHead++;
+    _historySeq++;
+}
+
+size_t HeaterManager::getOutputHistorySince(uint32_t lastSeq,
+                                            OutputEvent* out,
+                                            size_t maxOut,
+                                            uint32_t& newSeq) const
+{
+    if (!out || maxOut == 0) {
+        newSeq = lastSeq;
+        return 0;
+    }
+
+    if (!const_cast<HeaterManager*>(this)->lock()) {
+        newSeq = lastSeq;
+        return 0;
+    }
+
+    const uint32_t seqNow = _historySeq;
+
+    if (seqNow == 0) {
+        // No events yet
+        unlock();
+        newSeq = 0;
+        return 0;
+    }
+
+    // Oldest sequence index still available in the ring
+    const uint32_t maxSpan = (seqNow > OUTPUT_HISTORY_SIZE)
+                           ? OUTPUT_HISTORY_SIZE
+                           : seqNow;
+    const uint32_t minSeq = seqNow - maxSpan;
+
+    // Clamp lastSeq inside available window
+    if (lastSeq < minSeq) {
+        lastSeq = minSeq;
+    }
+    if (lastSeq > seqNow) {
+        lastSeq = seqNow;
+    }
+
+    uint32_t available = seqNow - lastSeq;
+    if (available > maxOut) {
+        available = maxOut;
+    }
+
+    for (uint32_t i = 0; i < available; ++i) {
+        uint32_t sSeq = lastSeq + i;
+        uint32_t idx  = sSeq % OUTPUT_HISTORY_SIZE;
+        out[i] = _history[idx];
+    }
+
+    newSeq = lastSeq + available;
+
+    unlock();
+    return static_cast<size_t>(available);
+}
+
+// ==========================================================================
+// Resistance / target configuration
 // ==========================================================================
 
 void HeaterManager::setWireResistance(uint8_t index, float ohms) {
@@ -242,7 +402,8 @@ float HeaterManager::getWireResistance(uint8_t index) const {
 
     if (!lock()) return 0.0f;
 
-    const float r = wires[i].resistanceOhm;
+    float r = wires[i].resistanceOhm;
+
     unlock();
     return r;
 }
@@ -261,7 +422,7 @@ void HeaterManager::setTargetResistanceAll(float ohms) {
 }
 
 // ==========================================================================
-// WireInfo / temperature
+// Wire info / temperature
 // ==========================================================================
 
 WireInfo HeaterManager::getWireInfo(uint8_t index) const {
@@ -277,6 +438,7 @@ WireInfo HeaterManager::getWireInfo(uint8_t index) const {
     if (!lock()) return out;
 
     out = wires[i];
+
     unlock();
     return out;
 }
@@ -288,6 +450,7 @@ void HeaterManager::setWireEstimatedTemp(uint8_t index, float tempC) {
     if (!lock()) return;
 
     wires[i].temperatureC = tempC;
+
     unlock();
 }
 
@@ -299,11 +462,7 @@ float HeaterManager::getWireEstimatedTemp(uint8_t index) const {
 
     if (!lock()) return NAN;
 
-#if __cplusplus >= 201103L
-    const float t = wires[i].temperatureC;
-#else
     float t = wires[i].temperatureC;
-#endif
 
     unlock();
     return t;

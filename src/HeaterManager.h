@@ -20,7 +20,7 @@
 #include "Config.h"  // Rxx keys, WIRE_OHM_PER_M_KEY, defaults
 
 /**
- * Aggregated info for one heater wire.
+ * @brief Aggregated information for one heater wire.
  */
 struct WireInfo {
     uint8_t index;               ///< 1..10 channel index
@@ -37,13 +37,33 @@ public:
     static constexpr uint8_t kWireCount = 10;
 
     // ---------------------------------------------------------------------
+    // Output history (for RTOS/thermal integration)
+    // ---------------------------------------------------------------------
+
+    /**
+     * @brief Output state transition event.
+     *
+     * Emitted whenever the effective 10-bit output mask changes.
+     * Used by higher-level logic (e.g. thermal task) to reconstruct
+     * which wires were active over time.
+     */
+    struct OutputEvent {
+        uint32_t timestampMs;    ///< millis() when mask became active
+        uint16_t mask;           ///< 10-bit mask (bit i => wire i+1 ON)
+    };
+
+    // Last-N transitions; small but enough, because control task
+    // changes outputs relatively infrequently compared to current sampling.
+    static constexpr size_t OUTPUT_HISTORY_SIZE = 128;
+
+    // ---------------------------------------------------------------------
     // Singleton access (NVS-style)
     // ---------------------------------------------------------------------
 
     /**
      * @brief Ensure singleton is constructed.
      *
-     * Call once at boot (optional but recommended), e.g.:
+     * Call once at boot (recommended):
      *      HeaterManager::Init();
      *      WIRE->begin();
      */
@@ -60,9 +80,9 @@ public:
     // ---------------------------------------------------------------------
 
     /**
-     * @brief Initialize hardware + wire model (idempotent).
+     * @brief Initialize hardware and internal wire model (idempotent).
      *
-     * - Create mutex (once)
+     * - Create mutex
      * - Configure ENAxx pins as outputs (all OFF)
      * - Load:
      *      - global Ω/m (WIRE_OHM_PER_M_KEY)
@@ -73,17 +93,75 @@ public:
     void begin();
 
     // ---------------------------------------------------------------------
-    // Output control
+    // Output control (single-channel)
     // ---------------------------------------------------------------------
 
-    /** Enable or disable one of the 10 outputs (1..10). Thread-safe. */
+    /**
+     * @brief Enable or disable a single output channel (1..10).
+     *
+     * Thread-safe.
+     * Also updates the internal 10-bit mask and logs an OutputEvent
+     * if the effective mask changes.
+     */
     void setOutput(uint8_t index, bool enable);
 
-    /** Disable ALL outputs immediately. Thread-safe. */
+    /**
+     * @brief Disable all outputs immediately.
+     *
+     * Thread-safe. Also logs an OutputEvent if any channel was ON.
+     */
     void disableAll();
 
-    /** Return current digital state of ENA pin (true if HIGH). Thread-safe. */
+    /**
+     * @brief Get the current digital state of one ENA pin.
+     *
+     * @return true if HIGH (ON), false otherwise.
+     * Thread-safe.
+     */
     bool getOutputState(uint8_t index) const;
+
+    // ---------------------------------------------------------------------
+    // Output control (mask-based, RTOS-friendly)
+    // ---------------------------------------------------------------------
+
+    /**
+     * @brief Atomically apply a full 10-bit output mask.
+     *
+     * Each bit i corresponds to wire (i+1).
+     * Only channels whose state changes are toggled.
+     *
+     * Thread-safe.
+     * Emits one OutputEvent if the mask actually changes.
+     */
+    void setOutputMask(uint16_t mask);
+
+    /**
+     * @brief Get the current 10-bit output mask.
+     *
+     * Bit i set => wire (i+1) is ON.
+     *
+     * Thread-safe.
+     */
+    uint16_t getOutputMask() const;
+
+    /**
+     * @brief Fetch output mask transitions since a given sequence index.
+     *
+     * Intended for a single consumer (e.g. thermal integration task) to
+     * incrementally read output changes and correlate them with current
+     * samples.
+     *
+     * @param lastSeq  Input: last consumed sequence value (0 for "from oldest").
+     * @param out      Output array of events.
+     * @param maxOut   Capacity of @p out.
+     * @param newSeq   Output: updated sequence value for next call.
+     *
+     * @return Number of events written to @p out.
+     */
+    size_t getOutputHistorySince(uint32_t lastSeq,
+                                 OutputEvent* out,
+                                 size_t maxOut,
+                                 uint32_t& newSeq) const;
 
     // ---------------------------------------------------------------------
     // Wire resistance / target configuration
@@ -116,7 +194,8 @@ public:
 
     /**
      * @brief Set last estimated temperature for a given wire (°C).
-     *        (to be updated by higher-level safety logic)
+     *
+     * Typically called by the thermal model / safety logic.
      */
     void setWireEstimatedTemp(uint8_t index, float tempC);
 
@@ -135,11 +214,11 @@ private:
     // ---------------------------------------------------------------------
     // Singleton internals
     // ---------------------------------------------------------------------
-    HeaterManager();                            // Private constructor
+    HeaterManager();
     HeaterManager(const HeaterManager&) = delete;
     HeaterManager& operator=(const HeaterManager&) = delete;
 
-    static HeaterManager* s_instance;           // Singleton instance pointer
+    static HeaterManager* s_instance;
 
     // ---------------------------------------------------------------------
     // Material constants (nichrome, approximate)
@@ -159,11 +238,19 @@ private:
     // ---------------------------------------------------------------------
     // State
     // ---------------------------------------------------------------------
-    WireInfo          wires[kWireCount];  ///< Per-channel wire info
-    float             wireOhmPerM;        ///< Ω/m from NVS
-    float             targetResOhms;      ///< Global target resistance
-    bool              _initialized;       ///< begin() completed
-    SemaphoreHandle_t _mutex;             ///< Protects ENA + caches
+    WireInfo          wires[kWireCount];   ///< Per-channel wire info.
+    float             wireOhmPerM;         ///< Ω/m from NVS.
+    float             targetResOhms;       ///< Global target resistance.
+    bool              _initialized;        ///< begin() completed.
+    SemaphoreHandle_t _mutex;              ///< Protects ENA pins + caches.
+
+    // Current effective 10-bit mask (bit i => wire i+1 ON).
+    uint16_t          _currentMask = 0;
+
+    // Output history ring buffer.
+    OutputEvent       _history[OUTPUT_HISTORY_SIZE];
+    uint32_t          _historyHead = 0;    ///< Next write index (monotonic).
+    uint32_t          _historySeq  = 0;    ///< Monotonic sequence for events.
 
     // ---------------------------------------------------------------------
     // Helpers
@@ -173,6 +260,14 @@ private:
 
     void loadWireConfig();                 ///< Load Ω/m, Rxx, targetR, recompute geometry.
     void computeWireGeometry(WireInfo& w); ///< Compute length/area/volume/mass for one wire.
+
+    /**
+     * @brief Record a new output mask transition in the history buffer.
+     *
+     * Assumes _mutex is already held.
+     * Only called when the effective mask actually changes.
+     */
+    void logOutputMaskChange(uint16_t newMask);
 };
 
 /**

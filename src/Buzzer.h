@@ -24,13 +24,14 @@ public:
   };
 
   // Singleton access.
-  // NOTE: pin is resolved from BUZZER_PIN; param kept for API parity but ignored unless BUZZER_PIN is undefined.
+  // NOTE: BUZZER_PIN (from Config.h) is the authority for pin if defined.
+  //       Init() now RESPECTS stored mute state and does NOT overwrite it.
   static void    Init(int pin = -1, bool activeLow = true);
   static Buzzer* Get();
   static Buzzer* TryGet();
 
   // Lifecycle
-  bool begin();   // loads polarity/mute from CONF, resolves pin from BUZZER_PIN, starts task
+  bool begin();   // loads polarity/mute from CONF, resolves pin, starts task
   void end();
 
   // Runtime changes (pin change is NOT persisted; polarity/mute ARE).
@@ -65,7 +66,7 @@ private:
 
   void playMode(Mode m);
   void playTone(int freqHz, int durationMs);
-  inline void idleOff() { digitalWrite(_pin, _activeLow ? HIGH : LOW); }
+  inline void idleOff() { if (_pin >= 0) digitalWrite(_pin, _activeLow ? HIGH : LOW); }
 
   // Persist/load helpers (NO pin in NVS)
   void loadFromPrefs_();
@@ -75,9 +76,9 @@ private:
   static Buzzer* s_inst;
 
   // HW
-  int   _pin       = -1;     // always comes from BUZZER_PIN (or last attachPin call), not NVS
-  bool  _activeLow = true;   // persisted
-  volatile bool  _muted     = false;  // persisted, checked from ISR/task/queue paths
+  int           _pin       = -1;     // from BUZZER_PIN or last attachPin
+  bool          _activeLow = true;   // persisted
+  volatile bool _muted     = false;  // persisted
 
   // RTOS
   TaskHandle_t      _task  = nullptr;

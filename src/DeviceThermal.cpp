@@ -1,18 +1,45 @@
 #include "Device.h"
 #include "Utils.h"
 #include <math.h>
+#ifndef THERMAL_TASK_STACK_SIZE
+#define THERMAL_TASK_STACK_SIZE 4096
+#endif
 
-// ---- 1) Initialize model once ------------------------------------------------
+#ifndef THERMAL_TASK_PRIORITY
+#define THERMAL_TASK_PRIORITY 4
+#endif
+
+#ifndef THERMAL_TASK_CORE
+#define THERMAL_TASK_CORE 1
+#endif
+
+// Integration period for thermalTask (ms).
+// Should be faster than thermal time constants, slower than ADC sampling.
+#ifndef THERMAL_TASK_PERIOD_MS
+#define THERMAL_TASK_PERIOD_MS 25  // 40 Hz integration over 200 Hz samples
+#endif
+
+
+// ============================================================================
+// 1) Initialize per-wire thermal model
+// ============================================================================
+//
+// Called once before using the virtual temperatures. Uses:
+//  - WireInfo from HeaterManager (R0, massKg).
+//  - DS18B20 sensors (index 0 & 1) for ambient estimate.
+// ============================================================================
 
 void Device::initWireThermalModelOnce() {
-    if (thermalInitDone || !tempSensor || !WIRE) return;
+    if (thermalInitDone || !tempSensor || !WIRE) {
+        return;
+    }
 
-    // Ambient from DS18B20 (sensor 0 & 1), fallback 25°C
+    // Ambient estimate from first two DS18B20 sensors
     float t0 = tempSensor->getTemperature(0);
     float t1 = tempSensor->getTemperature(1);
 
     if (isnan(t0) && isnan(t1)) {
-        ambientC = 25.0f;
+        ambientC = 25.0f;  // fallback
     } else if (isnan(t0)) {
         ambientC = t1;
     } else if (isnan(t1)) {
@@ -25,18 +52,19 @@ void Device::initWireThermalModelOnce() {
 
     for (uint8_t i = 0; i < HeaterManager::kWireCount; ++i) {
         WireInfo wi = WIRE->getWireInfo(i + 1);
-        WireThermalState &ws = wireThermal[i];
+        WireThermalState& ws = wireThermal[i];
 
+        // Cold resistance
         ws.R0 = (wi.resistanceOhm > 0.01f) ? wi.resistanceOhm : 1.0f;
 
-        // Mass from HeaterManager (already computed), fallback small
+        // Thermal capacity C_th = m * cp
         const float m = (wi.massKg > 0.0f) ? wi.massKg : 0.0001f;
         ws.C_th = m * NICHROME_CP_J_PER_KG;
         if (!isfinite(ws.C_th) || ws.C_th <= 0.0f) {
-            ws.C_th = 0.05f; // safe tiny default
+            ws.C_th = 0.05f;  // safe tiny default
         }
 
-        // One tunable tau (can be made per-wire later)
+        // First-order time constant tau (can be tuned per design)
         ws.tau = (DEFAULT_TAU_SEC > 0.05f) ? DEFAULT_TAU_SEC : 0.05f;
 
         ws.T                 = ambientC;
@@ -47,67 +75,41 @@ void Device::initWireThermalModelOnce() {
         WIRE->setWireEstimatedTemp(i + 1, ws.T);
     }
 
+    lastAmbientUpdateMs = now;
+
     DEBUG_PRINTF("[Thermal] Model initialized, ambient=%.1f°C\n", ambientC);
     thermalInitDone = true;
 }
 
-// ---- 2) R(T) for Nichrome ----------------------------------------------------
+// ============================================================================
+// 2) R(T) for Nichrome wires
+// ============================================================================
+//
+// Simple linear tempco model around ambient:
+//      R(T) = R0 * (1 + alpha * (T - ambient))
+// with clamping to avoid extreme values.
+// ============================================================================
 
 float Device::wireResistanceAtTemp(uint8_t idx, float T) const {
-    if (idx >= HeaterManager::kWireCount) return 1e6f;
-    const WireThermalState &ws = wireThermal[idx];
+    if (idx >= HeaterManager::kWireCount) {
+        return 1e6f; // out-of-range guard
+    }
 
-    // Linear tempco around ambient
+    const WireThermalState& ws = wireThermal[idx];
+
     const float dT    = T - ambientC;
     float scale = 1.0f + NICHROME_ALPHA * dT;
 
-    // Clamp to avoid insane values
+    // Clamp scale for safety
     if (scale < 0.2f) scale = 0.2f;
     if (scale > 3.0f) scale = 3.0f;
 
     return ws.R0 * scale;
 }
 
-// ---- 3) Helper: pure cooling of all wires -----------------------------------
-
-void Device::updateWireCoolingAll() {
-    if (!thermalInitDone) return;
-
-    const uint32_t now = millis();
-
-    for (uint8_t i = 0; i < HeaterManager::kWireCount; ++i) {
-        WireThermalState &ws = wireThermal[i];
-        if (ws.lastUpdateMs == 0 || ws.tau <= 0.0f) {
-            ws.lastUpdateMs = now;
-            continue;
-        }
-
-        float dt = (now - ws.lastUpdateMs) / 1000.0f;
-        if (dt <= 0.0f) {
-            ws.lastUpdateMs = now;
-            continue;
-        }
-
-        // RC cooling toward ambient
-        float dTcool = -(ws.T - ambientC) * (dt / ws.tau);
-        ws.T += dTcool;
-
-        if (ws.T < ambientC) ws.T = ambientC;
-
-        // Locked wires: check for re-enable
-        if (ws.locked &&
-            ws.T <= WIRE_T_REENABLE_C &&
-            now >= ws.cooldownReleaseMs) {
-            ws.locked = false;
-            DEBUG_PRINTF("[Thermal] Wire %u re-enabled at %.1f°C\n", i + 1, ws.T);
-        }
-
-        ws.lastUpdateMs = now;
-        WIRE->setWireEstimatedTemp(i + 1, ws.T);
-    }
-}
-
-// ---- 4) Active mask from HeaterManager (ignores locked) ---------------------
+// ============================================================================
+// 4) Utility: derive active mask from HeaterManager, ignoring locked wires
+// ============================================================================
 
 uint16_t Device::getActiveMaskFromHeater() const {
     uint16_t m = 0;
@@ -119,157 +121,22 @@ uint16_t Device::getActiveMaskFromHeater() const {
     return m;
 }
 
-// ---- 5) Core thermal update: current-driven model ---------------------------
+// ============================================================================
+// 5) Ambient tracking from DS18B20 sensors
+// ============================================================================
 //
-// Call this periodically (we hook it from LedUpdateTask).
-// Uses:
-//  - Total current from ACS781 (CurrentSensor)
-//  - Which wires are ON
-//  - Nichrome R(T) + thermal inertia
-// Applies:
-//  - Per-wire heating
-//  - Cooling
-//  - 150°C lock + 140°C hysteresis
-//
-void Device::applyHeatingFromCapture() {
-    if (!currentSensor || !WIRE) return;
-    if (!thermalInitDone) {
-        initWireThermalModelOnce();
-    } else {
-        // Periodically refresh ambient from DS18B20 #0/#1
-        updateAmbientFromSensors(false);
-    }
-    const uint32_t now = millis();
+// Keeps ambientC slowly tracking real measurements.
+// Called from applyHeatingFromCapture() / waitForWiresNearAmbient().
+// ============================================================================
 
-    // --- Read current and subtract idle baseline ---
-    // Adjust this to your CurrentSensor API if needed.
-    float I_meas = currentSensor->readCurrent();        // [A] total measured
-    float I_idle = CONF->GetFloat(IDLE_CURR_KEY,DEFAULT_IDLE_CURR);   // baseline when no wires are on
-    float I_net  = I_meas - I_idle;
-    if (I_net < 0.0f) I_net = 0.0f;
-
-    // --- Build active mask (ignore locked wires, and force locked OFF) ---
-    uint16_t activeMask = 0;
-    for (uint8_t i = 0; i < HeaterManager::kWireCount; ++i) {
-        WireThermalState &ws = wireThermal[i];
-
-        // Safety: ensure locked wires are OFF physically.
-        if (ws.locked && WIRE->getOutputState(i + 1)) {
-            WIRE->setOutput(i + 1, false);
-            if (indicator) indicator->setLED(i + 1, false);
-        }
-
-        if (WIRE->getOutputState(i + 1) && !ws.locked) {
-            activeMask |= (1u << i);
-        }
-    }
-
-    // If no active wires or no net current → only cooling
-    if (activeMask == 0 || I_net <= 0.0005f) {
-        updateWireCoolingAll();
-        return;
-    }
-
-    // --- Pre-pass: cooling + compute R(T) + total conductance ---
-    float R_T[HeaterManager::kWireCount] = {0};
-    float G_tot = 0.0f;
-
-    for (uint8_t i = 0; i < HeaterManager::kWireCount; ++i) {
-        WireThermalState &ws = wireThermal[i];
-
-        if (ws.lastUpdateMs == 0) {
-            ws.lastUpdateMs = now;
-        }
-
-        float dt = (now - ws.lastUpdateMs) / 1000.0f;
-        if (dt < 0.0f) dt = 0.0f;
-
-        // Cooling towards ambient (applies to ALL wires)
-        if (ws.tau > 0.0f && dt > 0.0f) {
-            float dTcool = -(ws.T - ambientC) * (dt / ws.tau);
-            ws.T += dTcool;
-        }
-        if (ws.T < ambientC) ws.T = ambientC;
-
-        // For active, non-locked wires: compute R(T) and contribution to G_tot
-        if ((activeMask & (1u << i)) && !ws.locked) {
-            float R = wireResistanceAtTemp(i, ws.T);
-            if (R < 0.01f) R = 0.01f;
-            R_T[i] = R;
-            G_tot += 1.0f / R;
-        }
-    }
-
-    if (G_tot <= 0.0f) {
-        // Should not happen if activeMask != 0, but guard anyway
-        for (uint8_t i = 0; i < HeaterManager::kWireCount; ++i) {
-            wireThermal[i].lastUpdateMs = now;
-            WIRE->setWireEstimatedTemp(i + 1, wireThermal[i].T);
-        }
-        return;
-    }
-
-    // --- Solve supply voltage from total current ---
-    const float V_est = I_net / G_tot;  // V across all active wires
-
-    // --- Heating pass: distribute power per active wire ---
-    for (uint8_t i = 0; i < HeaterManager::kWireCount; ++i) {
-        WireThermalState &ws = wireThermal[i];
-
-        float dt = (now - ws.lastUpdateMs) / 1000.0f;
-        if (dt <= 0.0f) dt = 0.0f;
-
-        // Only active + not locked wires get heating
-        if ((activeMask & (1u << i)) && !ws.locked) {
-            float R = R_T[i];
-            if (R < 0.01f) R = 0.01f;
-
-            float I_i = V_est / R;           // A
-            if (I_i < 0.0f) I_i = 0.0f;
-
-            float P_i = I_i * I_i * R;       // W
-            if (ws.C_th > 0.0f && dt > 0.0f) {
-                float dTheat = (P_i * dt) / ws.C_th;
-                ws.T += dTheat;
-            }
-        }
-
-        // --- Safety: clamp, lock, unlock ---
-        if (!ws.locked && ws.T >= WIRE_T_MAX_C) {
-            ws.T = WIRE_T_MAX_C;
-            ws.locked = true;
-            ws.cooldownReleaseMs = now + LOCK_MIN_COOLDOWN_MS;
-
-            // Force this wire OFF for safety
-            WIRE->setOutput(i + 1, false);
-            if (indicator) indicator->setLED(i + 1, false);
-
-            DEBUG_PRINTF("[Thermal] Wire %u LOCKED at %.1f°C\n", i + 1, ws.T);
-        }
-
-        if (ws.locked &&
-            ws.T <= WIRE_T_REENABLE_C &&
-            now >= ws.cooldownReleaseMs) {
-            ws.locked = false;
-            DEBUG_PRINTF("[Thermal] Wire %u re-enabled at %.1f°C\n", i + 1, ws.T);
-        }
-
-        ws.lastUpdateMs = now;
-        WIRE->setWireEstimatedTemp(i + 1, ws.T);
-    }
-
-    // Total power consistency (optional debug)
-    // float P_tot = V_est * I_net;
-    // DEBUG_PRINTF("[Thermal] I_net=%.3fA V_est=%.2fV P_tot=%.2fW\n", I_net, V_est, P_tot);
-}
 void Device::updateAmbientFromSensors(bool force) {
     if (!tempSensor) return;
 
     const uint32_t now = millis();
-    const uint32_t AMBIENT_UPDATE_INTERVAL_MS = 2000; // every 2s is enough
+    const uint32_t AMBIENT_UPDATE_INTERVAL_MS = 2000; // update every 2s
 
     if (!force && (now - lastAmbientUpdateMs) < AMBIENT_UPDATE_INTERVAL_MS) {
-        return;
+        return; // not yet
     }
     lastAmbientUpdateMs = now;
 
@@ -280,7 +147,7 @@ void Device::updateAmbientFromSensors(bool force) {
     bool v1 = !isnan(t1);
 
     if (!v0 && !v1) {
-        // No fresh readings; keep existing ambientC
+        // No new data; keep current ambientC
         return;
     }
 
@@ -289,42 +156,42 @@ void Device::updateAmbientFromSensors(bool force) {
         newAmb = 0.5f * (t0 + t1);
     } else if (v0) {
         newAmb = t0;
-    } else { // v1
+    } else {
         newAmb = t1;
     }
 
     if (!thermalInitDone) {
-        // During first init we already set ambientC, but keep logic consistent
         ambientC = newAmb;
     } else {
-        // Smooth changes to avoid jumps (simple low-pass filter)
-        const float alpha = 0.15f; // 0..1; higher = faster tracking
+        // Low-pass filter to avoid jumps
+        const float alpha = 0.15f;
         ambientC = ambientC + alpha * (newAmb - ambientC);
     }
-
-    // (No need to renormalize wire temps here; they converge via cooling.)
 }
+
+// ============================================================================
+// 6) Wait until all wires are near ambient (used before new loop starts)
+// ============================================================================
+
 void Device::waitForWiresNearAmbient(float tolC, uint32_t maxWaitMs) {
     if (!thermalInitDone) {
-        // Nothing meaningful yet; init will align them to ambient on first run.
+        // Will be initialized on first use; nothing to wait for yet.
         return;
     }
 
     if (tolC < 0.5f) {
-        tolC = 0.5f; // avoid over-strict / noise sensitivity
+        tolC = 0.5f; // avoid unrealistic strictness
     }
 
     const uint32_t start = millis();
-    DEBUG_PRINTF("[Thermal] Waiting for wires to cool within %.1f°C of ambient...\n", tolC);
+    DEBUG_PRINTF("[Thermal] Waiting for wires within %.1f°C of ambient...\n", tolC);
 
     while (true) {
-        // Keep ambient aligned with sensors while we wait
         updateAmbientFromSensors(false);
 
         bool allOk = true;
         for (uint8_t i = 0; i < HeaterManager::kWireCount; ++i) {
-            float T = wireThermal[i].T;
-            float d = fabsf(T - ambientC);
+            float d = fabsf(wireThermal[i].T - ambientC);
             if (d > tolC) {
                 allOk = false;
                 break;
@@ -332,33 +199,296 @@ void Device::waitForWiresNearAmbient(float tolC, uint32_t maxWaitMs) {
         }
 
         if (allOk) {
-            DEBUG_PRINTF("[Thermal] All wires near ambient (%.1f°C). Ready to restart heating.\n", ambientC);
+            DEBUG_PRINTF("[Thermal] All wires near ambient (%.1f°C). Ready.\n", ambientC);
             break;
         }
 
-        // Safety: if input power drops during wait, bail out
+        // Abort if power lost
         if (!is12VPresent()) {
-            DEBUG_PRINTLN("[Thermal] 12V lost during cool-down wait.");
+            DEBUG_PRINTLN("[Thermal] 12V lost while waiting for cool-down.");
             handle12VDrop();
             break;
         }
 
-        // If STOP requested again while we are waiting, respect it
+        // Respect STOP during wait
         if (gEvt) {
             EventBits_t b = xEventGroupGetBits(gEvt);
             if (b & EVT_STOP_REQ) {
-                DEBUG_PRINTLN("[Thermal] STOP requested during cool-down wait.");
+                DEBUG_PRINTLN("[Thermal] STOP during cool-down wait.");
                 xEventGroupClearBits(gEvt, EVT_STOP_REQ);
                 break;
             }
         }
 
-        // Optional safety timeout: proceed best-effort if taking too long
         if (maxWaitMs > 0 && (millis() - start) >= maxWaitMs) {
-            DEBUG_PRINTLN("[Thermal] Cool-down wait timeout, proceeding with best-effort temperatures.");
+            DEBUG_PRINTLN("[Thermal] Cool-down wait timeout; proceeding best-effort.");
             break;
         }
 
         vTaskDelay(pdMS_TO_TICKS(200));
     }
+}
+
+void Device::startThermalTask() {
+    if (thermalTaskHandle != nullptr) {
+        return;
+    }
+
+    BaseType_t ok = xTaskCreatePinnedToCore(
+        Device::thermalTaskWrapper,
+        "ThermalTask",
+        THERMAL_TASK_STACK_SIZE,
+        this,
+        THERMAL_TASK_PRIORITY,
+        &thermalTaskHandle,
+        THERMAL_TASK_CORE
+    );
+
+    if (ok != pdPASS) {
+        DEBUG_PRINTLN("[Thermal] Failed to create ThermalTask ❌");
+        thermalTaskHandle = nullptr;
+    } else {
+        DEBUG_PRINTLN("[Thermal] ThermalTask started ✅");
+    }
+}
+
+void Device::thermalTaskWrapper(void* param) {
+    Device* self = static_cast<Device*>(param);
+    self->thermalTask();
+}
+
+void Device::thermalTask() {
+    initWireThermalModelOnce();
+
+    // Load idle current baseline if available.
+    idleCurrentA = CONF->GetFloat(IDLE_CURR_KEY, 0.0f);
+    if (idleCurrentA < 0.0f) idleCurrentA = 0.0f;
+
+    const TickType_t period = pdMS_TO_TICKS(THERMAL_TASK_PERIOD_MS);
+
+    while (true) {
+        // Integrate using whatever new history is available.
+        updateWireThermalFromHistory();
+
+        // Run at a fixed, modest rate.
+        vTaskDelay(period);
+    }
+}
+
+void Device::updateWireThermalFromHistory() {
+    if (!currentSensor || !WIRE) {
+        return;
+    }
+    if (!thermalInitDone) {
+        initWireThermalModelOnce();
+    }
+
+    // Refresh ambient slowly.
+    updateAmbientFromSensors(false);
+
+    // Buffers for incremental reads.
+    CurrentSensor::Sample       curBuf[64];
+    HeaterManager::OutputEvent  outBuf[32];
+
+    uint32_t newCurSeq = currentHistorySeq;
+    uint32_t newOutSeq = outputHistorySeq;
+
+    const size_t nCur = currentSensor->getHistorySince(
+        currentHistorySeq, curBuf, (size_t)64, newCurSeq);
+
+    const size_t nOut = WIRE->getOutputHistorySince(
+        outputHistorySeq, outBuf, (size_t)32, newOutSeq);
+
+    // Case 1: no new samples, no new events -> pure cooling to "now"
+    if (nCur == 0 && nOut == 0) {
+        const uint32_t now = millis();
+        for (uint8_t w = 0; w < HeaterManager::kWireCount; ++w) {
+            WireThermalState& ws = wireThermal[w];
+            if (!ws.lastUpdateMs) {
+                ws.lastUpdateMs = now;
+                continue;
+            }
+
+            float dt = (now - ws.lastUpdateMs) * 0.001f;
+            if (dt <= 0.0f) continue;
+
+            // Cooling towards ambient.
+            const float Tinf   = ambientC;
+            const float factor = expf(-dt / ws.tau);
+            ws.T = Tinf + (ws.T - Tinf) * factor;
+            ws.lastUpdateMs = now;
+
+            // Unlock logic.
+            if (ws.locked && ws.T <= WIRE_T_REENABLE_C &&
+                now >= ws.cooldownReleaseMs)
+            {
+                ws.locked = false;
+            }
+
+            WIRE->setWireEstimatedTemp(w + 1, ws.T);
+        }
+        return;
+    }
+
+    // Case 2: only mask events, no current samples.
+    // We cannot compute new heating without I, but we can:
+    //  - apply cooling up to last event timestamp,
+    //  - update lastHeaterMask for continuity.
+    if (nCur == 0 && nOut > 0) {
+        const uint32_t lastTs = outBuf[nOut - 1].timestampMs;
+
+        for (uint8_t w = 0; w < HeaterManager::kWireCount; ++w) {
+            WireThermalState& ws = wireThermal[w];
+            if (!ws.lastUpdateMs) {
+                ws.lastUpdateMs = lastTs;
+                continue;
+            }
+
+            float dt = (lastTs - ws.lastUpdateMs) * 0.001f;
+            if (dt > 0.0f) {
+                const float Tinf   = ambientC;
+                const float factor = expf(-dt / ws.tau);
+                ws.T = Tinf + (ws.T - Tinf) * factor;
+            }
+
+            // Lock/unlock as usual.
+            if (ws.T > WIRE_T_MAX_C) {
+                ws.T = WIRE_T_MAX_C;
+            }
+
+            if (ws.locked &&
+                ws.T <= WIRE_T_REENABLE_C &&
+                lastTs >= ws.cooldownReleaseMs)
+            {
+                ws.locked = false;
+            }
+
+            ws.lastUpdateMs = lastTs;
+            WIRE->setWireEstimatedTemp(w + 1, ws.T);
+        }
+
+        // Advance cursors & remember final mask.
+        currentHistorySeq = newCurSeq;
+        outputHistorySeq  = newOutSeq;
+        lastHeaterMask    = outBuf[nOut - 1].mask;
+        return;
+    }
+
+    // Case 3: we have current samples (nCur > 0).
+    // Merge mask events with samples and integrate segment-by-segment.
+
+    uint16_t currentMask = lastHeaterMask;
+    size_t   outIndex    = 0;
+
+    for (size_t i = 0; i < nCur; ++i) {
+        const uint32_t ts    = curBuf[i].timestampMs;
+        const float    Imeas = curBuf[i].currentA;
+
+        // Apply all mask changes up to this sample timestamp.
+        while (outIndex < nOut && outBuf[outIndex].timestampMs <= ts) {
+            currentMask = outBuf[outIndex].mask;
+            ++outIndex;
+        }
+
+        // Per-wire cooling over dt = (ts - lastUpdateMs) for each wire.
+        for (uint8_t w = 0; w < HeaterManager::kWireCount; ++w) {
+            WireThermalState& ws = wireThermal[w];
+
+            if (!ws.lastUpdateMs) {
+                ws.lastUpdateMs = ts;
+                continue;
+            }
+
+            float dt = (ts - ws.lastUpdateMs) * 0.001f;
+            if (dt > 0.0f) {
+                const float Tinf   = ambientC;
+                const float factor = expf(-dt / ws.tau);
+                ws.T = Tinf + (ws.T - Tinf) * factor;
+            }
+        }
+
+        // Net heater current (cannot be negative).
+        float I_net = Imeas - idleCurrentA;
+        if (I_net < 0.0f) I_net = 0.0f;
+
+        // Heating only if some wires are active and there is net heater current.
+        if (currentMask != 0 && I_net > 0.0f) {
+            float Gtot = 0.0f;
+
+            // Compute total conductance with current temperatures.
+            for (uint8_t w = 0; w < HeaterManager::kWireCount; ++w) {
+                if (currentMask & (1u << w)) {
+                    WireThermalState& ws = wireThermal[w];
+                    if (ws.locked) continue;
+                    float R = wireResistanceAtTemp(w, ws.T);
+                    if (R > 0.01f && isfinite(R)) {
+                        Gtot += 1.0f / R;
+                    }
+                }
+            }
+
+            if (Gtot > 0.0f) {
+                const float V = I_net / Gtot;
+
+                // Apply Joule heating over the same dt used for cooling per wire.
+                for (uint8_t w = 0; w < HeaterManager::kWireCount; ++w) {
+                    if (!(currentMask & (1u << w))) continue;
+
+                    WireThermalState& ws = wireThermal[w];
+                    if (ws.locked) continue;
+
+                    float R = wireResistanceAtTemp(w, ws.T);
+                    if (!(R > 0.01f && isfinite(R))) continue;
+
+                    float dt = (ts - ws.lastUpdateMs) * 0.001f;
+                    if (dt <= 0.0f) continue;
+
+                    const float P    = (V * V) / R;
+                    const float dT_h = (P * dt) / ws.C_th;
+
+                    ws.T += dT_h;
+                }
+            }
+        }
+
+        // Clamp, lock/unlock, publish temps, and set lastUpdateMs = ts.
+        for (uint8_t w = 0; w < HeaterManager::kWireCount; ++w) {
+            WireThermalState& ws = wireThermal[w];
+
+            if (ws.T > WIRE_T_MAX_C) {
+                ws.T = WIRE_T_MAX_C;
+            }
+            if (ws.T < ambientC - 10.0f) {
+                ws.T = ambientC - 10.0f; // avoid unrealistic negative drift
+            }
+
+            // Lock if over max.
+            if (!ws.locked && ws.T >= WIRE_T_MAX_C) {
+                ws.locked = true;
+                ws.cooldownReleaseMs = ts + LOCK_MIN_COOLDOWN_MS;
+            }
+
+            // Unlock if cooled and cooldown elapsed.
+            if (ws.locked &&
+                ws.T <= WIRE_T_REENABLE_C &&
+                ts >= ws.cooldownReleaseMs)
+            {
+                ws.locked = false;
+            }
+
+            ws.lastUpdateMs = ts;
+            WIRE->setWireEstimatedTemp(w + 1, ws.T);
+        }
+    }
+
+    // Consume all events in this window to update final mask for next call.
+    while (outIndex < nOut) {
+        currentMask = outBuf[outIndex].mask;
+        ++outIndex;
+    }
+
+    // Update cursors + remember mask for continuity.
+    currentHistorySeq = newCurSeq;
+    outputHistorySeq  = newOutSeq;
+    lastHeaterMask    = currentMask;
 }
