@@ -145,18 +145,24 @@ void HeaterManager::loadWireConfig() {
     DEBUGGSTART();
     for (uint8_t i = 0; i < kWireCount; ++i) {
         const WireInfo& w = wires[i];
+
+        const float areaMm2  = w.crossSectionAreaM2 * 1.0e6f;  // m² → mm²
+        const float volumeCm3 = w.volumeM3 * 1.0e6f;           // m³ → cm³
+        const float massG    = w.massKg * 1000.0f;             // kg → g
+
         DEBUG_PRINTF(
-            "[HeaterManager] Wire %u: R=%.3f Ω | L=%.4f m | A=%.6e m² | "
-            "V=%.6e m³ | m=%.6e kg\n",
+            "[HeaterManager] Wire %u: R=%.3f Ω | L=%.4f m | A=%.6f mm² | "
+            "V=%.3f cm³ | m=%.3f g\n",
             w.index,
             w.resistanceOhm,
             w.lengthM,
-            w.crossSectionAreaM2,
-            w.volumeM3,
-            w.massKg
+            areaMm2,
+            volumeCm3,
+            massG
         );
     }
     DEBUGGSTOP();
+
 }
 
 // Compute derived geometric/thermal properties for one wire.
