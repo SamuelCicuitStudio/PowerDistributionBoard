@@ -69,6 +69,7 @@ void Device::begin() {
 
     checkAllowedOutputs();
 
+
     // Per-channel LED feedback maintainer
     xTaskCreatePinnedToCore(
         Device::LedUpdateTask,
@@ -79,30 +80,39 @@ void Device::begin() {
         &ledTaskHandle,
         LED_UPDATE_TASK_CORE
     );
-
+    // Initialize persistent power/session statistics
+    POWER_TRACKER->begin();
     DEBUG_PRINTLN("[Device] Configuring system I/O pins 🧰");
 }
 
 void Device::checkAllowedOutputs() {
     DEBUG_PRINTLN("[Device] Checking allowed outputs from preferences 🔍");
     for (uint8_t i = 0; i < 10; ++i) {
-        const bool cfgAllowed = CONF->GetBool(outputKeys[i], false);
+        const bool cfgAllowed   = CONF->GetBool(outputKeys[i], false);
+        const bool thermLocked  = thermalInitDone && wireThermal[i].locked;
 
-        // If thermal model says this wire is locked, it is NOT allowed,
-        // regardless of config.
-        const bool thermLocked = thermalInitDone && wireThermal[i].locked;
+        bool presenceOk = true;
+        if (WIRE) {
+            WireInfo wi = WIRE->getWireInfo(i + 1);
+            // Only enforce if we've actually probed (we treat default=true)
+            if (!wi.connected) {
+                presenceOk = false;
+            }
+        }
 
-        allowedOutputs[i] = cfgAllowed && !thermLocked;
+        allowedOutputs[i] = cfgAllowed && !thermLocked && presenceOk;
 
         DEBUG_PRINTF(
-            "[Device] OUT%02u => %s (cfg=%s, thermal=%s)\n",
+            "[Device] OUT%02u => %s (cfg=%s, thermal=%s, presence=%s)\n",
             i + 1,
             allowedOutputs[i] ? "ENABLED ✅" : "DISABLED ⛔",
-            cfgAllowed ? "ON" : "OFF",
-            thermLocked ? "LOCKED" : "OK"
+            cfgAllowed  ? "ON" : "OFF",
+            thermLocked ? "LOCKED" : "OK",
+            presenceOk  ? "OK" : "NO-WIRE"
         );
     }
 }
+
 
 void Device::shutdown() {
     DEBUGGSTART();

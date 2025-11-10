@@ -176,7 +176,7 @@ void NVS::initializeVariables() {
   String mac = WiFi.macAddress();        // Example: "24:6F:28:1A:2B:3C"
   mac.replace(":", "");                  // Remove colons → "246F281A2B3C"
   String suffix = mac.substring(6);      // Take last 6 hex characters → "1A2B3C"
-  String ssid = String(DEVICE_WIFI_HOTSPOT_NAME) + suffix;  // Final SSID → "PDis_1A2B3C"
+  String ssid = String(DEVICE_WIFI_HOTSPOT_NAME) + suffix;  // "PDis_1A2B3C"
 
   // Wi-Fi credentials
   PutString(DEVICE_WIFI_HOTSPOT_NAME_KEY, ssid);
@@ -220,25 +220,39 @@ void NVS::initializeVariables() {
 
   // Temperature sensor count
   PutInt(TEMP_SENSOR_COUNT_KEY, DEFAULT_TEMP_SENSOR_COUNT);
-  PutFloat(IDLE_CURR_KEY,DEFAULT_IDLE_CURR); 
-  // --- Buzzer configuration ---
-  PutBool(BUZLOW_KEY, BUZLOW_DEFAULT);   // Active-low logic (default false)
-  PutBool(BUZMUT_KEY, BUZMUT_DEFAULT);   // Muted state (default false)
+  PutFloat(IDLE_CURR_KEY, DEFAULT_IDLE_CURR); 
 
-  // --- Nichrome wire resistances (Ohms, default 44.0) ---
+  // --- Buzzer configuration ---
+  PutBool(BUZLOW_KEY, BUZLOW_DEFAULT);   // Active-low logic
+  PutBool(BUZMUT_KEY, BUZMUT_DEFAULT);   // Muted state
+
+  // --- Nichrome wire resistances (Ohms, default) ---
   PutFloat(R01OHM_KEY, DEFAULT_WIRE_RES_OHMS);
   PutFloat(R02OHM_KEY, DEFAULT_WIRE_RES_OHMS);
-    PutFloat(R03OHM_KEY, DEFAULT_WIRE_RES_OHMS);
-    PutFloat(R04OHM_KEY, DEFAULT_WIRE_RES_OHMS);
-    PutFloat(R05OHM_KEY, DEFAULT_WIRE_RES_OHMS);
-    PutFloat(R06OHM_KEY, DEFAULT_WIRE_RES_OHMS);
-    PutFloat(R07OHM_KEY, DEFAULT_WIRE_RES_OHMS);
-    PutFloat(R08OHM_KEY, DEFAULT_WIRE_RES_OHMS);
-    PutFloat(R09OHM_KEY, DEFAULT_WIRE_RES_OHMS);
-    PutFloat(R10OHM_KEY, DEFAULT_WIRE_RES_OHMS);
- // --- Target resistance per output (Ohms, default 14.0) ---
-    PutFloat(R0XTGT_KEY, DEFAULT_TARG_RES_OHMS);
-    PutFloat(WIRE_OHM_PER_M_KEY, DEFAULT_WIRE_OHM_PER_M);
+  PutFloat(R03OHM_KEY, DEFAULT_WIRE_RES_OHMS);
+  PutFloat(R04OHM_KEY, DEFAULT_WIRE_RES_OHMS);
+  PutFloat(R05OHM_KEY, DEFAULT_WIRE_RES_OHMS);
+  PutFloat(R06OHM_KEY, DEFAULT_WIRE_RES_OHMS);
+  PutFloat(R07OHM_KEY, DEFAULT_WIRE_RES_OHMS);
+  PutFloat(R08OHM_KEY, DEFAULT_WIRE_RES_OHMS);
+  PutFloat(R09OHM_KEY, DEFAULT_WIRE_RES_OHMS);
+  PutFloat(R10OHM_KEY, DEFAULT_WIRE_RES_OHMS);
+
+  // --- Target resistance + wire ohm/m ---
+  PutFloat(R0XTGT_KEY,        DEFAULT_TARG_RES_OHMS);
+  PutFloat(WIRE_OHM_PER_M_KEY, DEFAULT_WIRE_OHM_PER_M);
+
+  // --- Power tracker persistent statistics (all <= 6 chars) ---
+  // Totals
+  PutFloat(PT_KEY_TOTAL_ENERGY_WH,     PT_DEF_TOTAL_ENERGY_WH);
+  PutInt  (PT_KEY_TOTAL_SESSIONS,      PT_DEF_TOTAL_SESSIONS);
+  PutInt  (PT_KEY_TOTAL_SESSIONS_OK,   PT_DEF_TOTAL_SESSIONS_OK);
+
+  // Last session snapshot
+  PutFloat(PT_KEY_LAST_SESS_ENERGY_WH, PT_DEF_LAST_SESS_ENERGY_WH);
+  PutInt  (PT_KEY_LAST_SESS_DURATION_S,PT_DEF_LAST_SESS_DURATION_S);
+  PutFloat(PT_KEY_LAST_SESS_PEAK_W,    PT_DEF_LAST_SESS_PEAK_W);
+  PutFloat(PT_KEY_LAST_SESS_PEAK_A,    PT_DEF_LAST_SESS_PEAK_A);
 }
 
 

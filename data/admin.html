@@ -34,7 +34,6 @@
         color: white;
         cursor: pointer;
       }
-
       /* === Device Settings: scoped, compact, no vertical scroll === */
       #deviceSettingsTab.content,
       #deviceSettingsTab .content {
@@ -42,7 +41,6 @@
         padding: 14px 18px 10px;
         overflow-y: hidden;
       }
-
       /* Make the single box fill available width and fit the frame height */
       .user-modal-content.device-settings-box {
         width: 100%; /* override any base 300px width */
@@ -52,7 +50,6 @@
         flex-direction: column; /* grid + actions stacked */
         gap: 14px;
       }
-
       /* Two-column grid inside the box */
       .device-settings-box .device-grid {
         display: grid;
@@ -61,18 +58,15 @@
         align-items: start;
         min-width: 0;
       }
-
       .device-settings-box .device-col {
         display: flex;
         flex-direction: column;
         gap: 8px;
         min-width: 0;
       }
-
       .device-settings-box h3 {
         margin: 0 0 8px;
       }
-
       /* Inputs with right-side unit tag */
       .input-with-unit {
         position: relative;
@@ -90,7 +84,6 @@
         opacity: 0.75;
         pointer-events: none;
       }
-
       /* Nichrome calibration grid: 5 x 2 for R01..R10 + 1 full-width target row */
       .nichrome-grid {
         display: grid;
@@ -112,13 +105,11 @@
       .nichrome-grid .field.target {
         grid-column: 1 / -1; /* span entire row */
       }
-
       /* Actions always visible and tidy */
       .device-settings-box .user-modal-actions.round-actions {
         margin-top: 8px;
         justify-content: center;
       }
-
       /* Optional: tiny responsive fallback if viewport is very short or narrow */
       @media (max-height: 640px) {
         .user-modal-content.device-settings-box {
@@ -308,13 +299,13 @@
                     <path
                       class="gauge-bg"
                       d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 
-                          a15.9155 15.9155 0 1 1 0 -31.831"
+                        a15.9155 15.9155 0 1 1 0 -31.831"
                     />
                     <path
                       class="gauge-fg temperature"
                       stroke-dasharray="21, 100"
                       d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 
-                          a15.9155 15.9155 0 1 1 0 -31.831"
+                        a15.9155 15.9155 0 1 1 0 -31.831"
                     />
                   </g>
                   <text
@@ -980,29 +971,118 @@
           </div>
         </div>
       </div>
-      <!-- New Live tab (place near the end of content panels) -->
+
+      <!-- Live Tab -->
+      <!-- Live Tab -->
       <div class="content" id="liveTab">
         <div class="content-header">
           <h2></h2>
         </div>
 
         <div class="live-wrap">
-          <div class="live-stage">
-            <!-- Backgroundless board in /icons as you said -->
-            <img src="icons/board.png" alt="Board" />
+          <!-- Legend -->
+          <div class="live-legend">
+            <span class="chip on-chip">
+              <span class="dot-sample on"></span>
+              ON (energized)
+            </span>
+            <span class="chip off-chip">
+              <span class="dot-sample off"></span>
+              OFF (connected)
+            </span>
+            <span class="chip cyan-chip">
+              <span class="dot-sample cyan"></span>
+              No wire / Not connected
+            </span>
+          </div>
 
-            <!-- SVG overlay draws traces + dots; viewBox=percent units -->
+          <!-- Centralized radial stage -->
+          <div class="live-stage">
+            <!-- SVG: traces + dots + temp circles -->
             <svg
               class="live-overlay"
               viewBox="0 0 100 100"
-              preserveAspectRatio="none"
+              preserveAspectRatio="xMidYMid meet"
             ></svg>
+
+            <!-- Center core: current session data -->
+            <div class="live-core">
+              <div class="live-core-header">
+                <div class="live-core-label">Current Session</div>
+                <button
+                  id="sessionHistoryBtn"
+                  type="button"
+                  class="session-history-btn"
+                >
+                  History
+                </button>
+              </div>
+
+              <div
+                id="sessionStatus"
+                class="session-status session-status-idle"
+              >
+                No active session
+              </div>
+
+              <div class="live-core-metrics">
+                <div class="metric">
+                  <div class="metric-label">Energy</div>
+                  <div id="sessionEnergy" class="metric-value">-- Wh</div>
+                </div>
+                <div class="metric">
+                  <div class="metric-label">Duration</div>
+                  <div id="sessionDuration" class="metric-value">-- s</div>
+                </div>
+                <div class="metric">
+                  <div class="metric-label">Peak Power</div>
+                  <div id="sessionPeakPower" class="metric-value">-- W</div>
+                </div>
+                <div class="metric">
+                  <div class="metric-label">Peak Current</div>
+                  <div id="sessionPeakCurrent" class="metric-value">-- A</div>
+                </div>
+              </div>
+            </div>
           </div>
 
-          <div class="live-legend">
-            <span class="chip red"></span> AC input
-            <span class="chip yellow"></span> Input relay
-            <span class="chip cyan"></span> Outputs 1–10
+          <!-- Session History modal (unchanged skeleton, just kept below) -->
+          <div id="sessionHistoryModal" class="session-history-modal">
+            <div
+              class="session-history-backdrop"
+              onclick="closeSessionHistory()"
+            ></div>
+            <div class="session-history-content">
+              <div class="session-history-header">
+                <h3>Session History</h3>
+                <button
+                  type="button"
+                  class="session-history-close"
+                  onclick="closeSessionHistory()"
+                >
+                  ✕
+                </button>
+              </div>
+              <div class="session-history-body">
+                <p class="session-history-placeholder">
+                  No history loaded yet. Backend will populate this table.
+                </p>
+                <table class="session-history-table">
+                  <thead>
+                    <tr>
+                      <th>Time</th>
+                      <th>Duration</th>
+                      <th>Energy (Wh)</th>
+                      <th>Peak P (W)</th>
+                      <th>Peak I (A)</th>
+                    </tr>
+                  </thead>
+                  <tbody id="sessionHistoryTableBody">
+                    <!-- rows from backend -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -1010,11 +1090,13 @@
       <!-- Footer -->
       <div class="footer">&copy; 2025 Power Distribution Admin Interface</div>
     </div>
+
     <!-- enable/disable: set window.USE_MOCK=true/false before mock.js -->
     <script>
       window.USE_MOCK = false;
     </script>
     <script src="js/admin.js"></script>
+
     <!-- Confirm dialog -->
     <div id="confirmModal" class="user-modal" style="display: none">
       <div
@@ -1031,6 +1113,7 @@
       </div>
     </div>
   </body>
+
   <style>
     /* === Fixed App Stage (change these if you want another size) === */
     :root {

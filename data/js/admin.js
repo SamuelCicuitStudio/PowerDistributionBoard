@@ -900,9 +900,10 @@
   };
 
   (function initLiveMarkers() {
+    deltax = 10;
     const offset = 2.6;
     const l = 3;
-    const h = 2.5;
+    const h = 2.5 - deltax;
 
     LIVE.markers = [
       // AC (red) bottom-left
@@ -911,8 +912,9 @@
         color: "red",
         x: 8 + h,
         y: 81 + offset,
-        ax: 16 + l,
-        ay: 81 + offset,
+        tx: 35, // where you want it to touch near live-core
+        ty: 65,
+        layout: "L", // 90° path
       },
       // Relay (yellow) bottom-right
       {
@@ -920,8 +922,9 @@
         color: "yellow",
         x: 92 - h,
         y: 81 + offset,
-        ax: 84 - l,
-        ay: 81 + offset,
+        tx: 65, // where you want it to touch near live-core
+        ty: 65,
+        layout: "L", // 90° path
       },
       // Left side outputs 6..10
       {
@@ -929,40 +932,45 @@
         color: "cyan",
         x: 8 + h,
         y: 11 + offset,
-        ax: 13 + l,
-        ay: 11 + offset,
+        tx: 45,
+        ty: 40,
+        layout: "L", // vertical then horizontal
       },
       {
         id: "o7",
         color: "cyan",
         x: 8 + h,
         y: 23 + offset,
-        ax: 13 + l,
-        ay: 23 + offset,
+        tx: 35,
+        ty: 40,
+        layout: "L", // vertical then horizontal
       },
       {
         id: "o8",
         color: "cyan",
         x: 8 + h,
         y: 35 + offset,
-        ax: 13 + l,
-        ay: 35 + offset,
+        tx: 45,
+        ty: 35 + offset,
+        layout: "straight",
       },
       {
         id: "o9",
         color: "cyan",
         x: 8 + h,
         y: 47 + offset,
-        ax: 13 + l,
-        ay: 47 + offset,
+        tx: 45,
+        ty: 47 + offset,
+        layout: "straight",
       },
       {
         id: "o10",
         color: "cyan",
         x: 8 + h,
         y: 59 + offset,
-        ax: 13 + l,
-        ay: 59 + offset,
+        tx: 45,
+        ty: 59 + offset,
+        layout: "straight",
       },
       // Right side outputs 5..1
       {
@@ -970,87 +978,99 @@
         color: "cyan",
         x: 92 - h,
         y: 11 + offset,
-        ax: 87 - l,
-        ay: 11 + offset,
+        tx: 55,
+        ty: 40,
+        layout: "L", // vertical then horizontal
       },
       {
         id: "o4",
         color: "cyan",
         x: 92 - h,
         y: 23 + offset,
-        ax: 87 - l,
-        ay: 23 + offset,
+        tx: 65,
+        ty: 40,
+        layout: "L", // vertical then horizontal
       },
       {
         id: "o3",
         color: "cyan",
         x: 92 - h,
         y: 35 + offset,
-        ax: 87 - l,
-        ay: 35 + offset,
+        tx: 45,
+        ty: 35 + offset,
+        layout: "straight",
       },
       {
         id: "o2",
         color: "cyan",
         x: 92 - h,
         y: 47 + offset,
-        ax: 87 - l,
-        ay: 47 + offset,
+        tx: 45,
+        ty: 47 + offset,
+        layout: "straight",
       },
       {
         id: "o1",
         color: "cyan",
         x: 92 - h,
         y: 59 + offset,
-        ax: 87 - l,
-        ay: 59 + offset,
+        tx: 45,
+        ty: 59 + offset,
+        layout: "straight",
       },
     ];
+    delaty = 2.5;
 
     LIVE.tempMarkers = [
       // near left outputs 6..10
-      { wire: 6, x: 20, y: 11 },
-      { wire: 7, x: 20, y: 23 },
-      { wire: 8, x: 20, y: 35 },
-      { wire: 9, x: 20, y: 47 },
-      { wire: 10, x: 20, y: 59 },
+      { wire: 6, x: 20 - deltax, y: 11 + delaty },
+      { wire: 7, x: 20 - deltax, y: 23 + delaty },
+      { wire: 8, x: 20 - deltax, y: 35 + delaty },
+      { wire: 9, x: 20 - deltax, y: 47 + delaty },
+      { wire: 10, x: 20 - deltax, y: 59 + delaty },
       // near right outputs 5..1
-      { wire: 5, x: 80, y: 11 },
-      { wire: 4, x: 80, y: 23 },
-      { wire: 3, x: 80, y: 35 },
-      { wire: 2, x: 80, y: 47 },
-      { wire: 1, x: 80, y: 59 },
+      { wire: 5, x: 80 + deltax, y: 11 + delaty },
+      { wire: 4, x: 80 + deltax, y: 23 + delaty },
+      { wire: 3, x: 80 + deltax, y: 35 + delaty },
+      { wire: 2, x: 80 + deltax, y: 47 + delaty },
+      { wire: 1, x: 80 + deltax, y: 59 + delaty },
     ];
   })();
 
   function liveRender() {
     const svg = document.querySelector("#liveTab .live-overlay");
     if (!svg) return;
+
     LIVE.svg = svg;
     svg.innerHTML = "";
 
     const ns = "http://www.w3.org/2000/svg";
+    const coreBox = computeCoreBox(svg);
+    LIVE.coreBox = coreBox;
 
-    // Markers: traces + dots
+    // ---- Traces + dots ----
     for (const m of LIVE.markers) {
-      const line = document.createElementNS(ns, "line");
-      line.setAttribute("class", "trace");
-      line.setAttribute("x1", m.x);
-      line.setAttribute("y1", m.y);
-      line.setAttribute("x2", m.ax);
-      line.setAttribute("y2", m.ay);
-      svg.appendChild(line);
+      const pts = buildTracePoints(m, coreBox);
+      if (!pts || pts.length < 2) continue;
 
+      // Draw the trace as a polyline (supports straight or L)
+      const poly = document.createElementNS(ns, "polyline");
+      poly.setAttribute("class", "trace");
+      poly.setAttribute("points", pts.map((p) => `${p.x},${p.y}`).join(" "));
+      svg.appendChild(poly);
+
+      // Dot at the first point (wire endpoint)
+      const first = pts[0];
       const dot = document.createElementNS(ns, "circle");
       dot.setAttribute("class", "dot " + m.color + " off");
       dot.setAttribute("r", 3.2);
-      dot.setAttribute("cx", m.x);
-      dot.setAttribute("cy", m.y);
+      dot.setAttribute("cx", first.x);
+      dot.setAttribute("cy", first.y);
       dot.dataset.id = m.id;
       svg.appendChild(dot);
     }
 
-    // Temperature badges
+    // ---- Temperature badges (unchanged) ----
     for (const t of LIVE.tempMarkers) {
       const g = document.createElementNS(ns, "g");
       g.setAttribute("class", "temp-badge");
@@ -1074,11 +1094,26 @@
     }
   }
 
-  function setDot(id, on) {
+  function setDot(id, state) {
     if (!LIVE.svg) return;
+
     const c = LIVE.svg.querySelector('circle[data-id="' + id + '"]');
     if (!c) return;
-    c.classList.toggle("on", !!on);
+
+    // Remove previous state flags
+    c.classList.remove("on", "off", "missing");
+
+    // Support:
+    //  - true  => ON
+    //  - false => OFF (connected)
+    //  - "missing"/"disconnected"/null => not connected (cyan / missing)
+    if (state === "missing" || state === "disconnected" || state === null) {
+      c.classList.add("missing");
+      return;
+    }
+
+    const on = !!state;
+    c.classList.toggle("on", on);
     c.classList.toggle("off", !on);
   }
 
@@ -1138,6 +1173,197 @@
     } catch (err) {
       console.warn("live poll failed:", err);
     }
+  }
+  function computeCoreBox(svg) {
+    const core = document.querySelector("#liveTab .live-core");
+    if (!svg || !core) return null;
+
+    const vb = svg.viewBox.baseVal;
+    const svgRect = svg.getBoundingClientRect();
+    const coreRect = core.getBoundingClientRect();
+
+    const scaleX = vb.width / svgRect.width;
+    const scaleY = vb.height / svgRect.height;
+
+    const x1 = (coreRect.left - svgRect.left) * scaleX;
+    const y1 = (coreRect.top - svgRect.top) * scaleY;
+    const x2 = (coreRect.right - svgRect.left) * scaleX;
+    const y2 = (coreRect.bottom - svgRect.top) * scaleY;
+
+    return {
+      x1,
+      y1,
+      x2,
+      y2,
+      cx: (x1 + x2) / 2,
+      cy: (y1 + y2) / 2,
+    };
+  }
+
+  function clamp(v, min, max) {
+    return v < min ? min : v > max ? max : v;
+  }
+
+  function makeTracePath(start, end, layout) {
+    // layout:
+    //  - "straight"  => direct line
+    //  - "L" / "Lh"  => 90° with horizontal-then-vertical
+    //  - "Lv"        => 90° with vertical-then-horizontal
+    //  - undefined   => default "L"
+
+    const mode = layout || "L";
+
+    if (mode === "straight") {
+      return [start, end];
+    }
+
+    // Decide orientation for L
+    if (mode === "Lv") {
+      // vertical then horizontal
+      const mid = { x: start.x, y: end.y };
+      return [start, mid, end];
+    }
+
+    // "L" or "Lh" or default:
+    // horizontal then vertical
+    const horizontalFirst =
+      mode === "Lh" ||
+      mode === "L" ||
+      Math.abs(end.x - start.x) >= Math.abs(end.y - start.y);
+
+    if (horizontalFirst) {
+      const mid = { x: end.x, y: start.y };
+      return [start, mid, end];
+    } else {
+      const mid = { x: start.x, y: end.y };
+      return [start, mid, end];
+    }
+  }
+
+  function getCoreAnchor(start, coreBox) {
+    // Hit the nearest edge of the live-core box, perpendicular-style
+    if (!coreBox) return start;
+
+    const { x1, y1, x2, y2 } = coreBox;
+
+    // Left of core -> go to left edge
+    if (start.x < x1) {
+      return { x: x1, y: clamp(start.y, y1, y2) };
+    }
+
+    // Right of core -> go to right edge
+    if (start.x > x2) {
+      return { x: x2, y: clamp(start.y, y1, y2) };
+    }
+
+    // Above core -> go to top edge
+    if (start.y < y1) {
+      return { x: clamp(start.x, x1, x2), y: y1 };
+    }
+
+    // Below core -> go to bottom edge
+    return { x: clamp(start.x, x1, x2), y: y2 };
+  }
+  function buildTracePoints(m, coreBox) {
+    const start = { x: m.x, y: m.y };
+
+    // 1) Full manual override: explicit polyline
+    //    m.points = [ {x,y}, {x,y}, ... ]
+    if (Array.isArray(m.points) && m.points.length >= 2) {
+      return m.points;
+    }
+
+    // 2) New: explicit end point with chosen layout
+    //    m.tx, m.ty, optional m.layout
+    if (typeof m.tx === "number" && typeof m.ty === "number") {
+      const end = { x: m.tx, y: m.ty };
+      return makeTracePath(start, end, m.layout);
+    }
+
+    // 3) Backward compat: ax/ay (old style)
+    //    Now also respects m.layout if present
+    if (typeof m.ax === "number" && typeof m.ay === "number") {
+      const end = { x: m.ax, y: m.ay };
+      return makeTracePath(start, end, m.layout);
+    }
+
+    // 4) If we can't see the core, only show the dot
+    if (!coreBox) return [start];
+
+    // 5) Auto: anchor on live-core box + layout rules
+    const anchor = getCoreAnchor(start, coreBox);
+    return makeTracePath(start, anchor, m.layout);
+  }
+
+  // ========================================================
+  // ===============   Session Stats Frontend   =============
+  // ========================================================
+  //
+  // Pure UI helpers; backend will call updateSessionStatsUI()
+  // later with:
+  // {
+  //   valid: bool,
+  //   running: bool,            // optional, if current session
+  //   energy_Wh: number,
+  //   duration_s: number,
+  //   peakPower_W: number,
+  //   peakCurrent_A: number
+  // }
+
+  function updateSessionStatsUI(session) {
+    const statusEl = document.getElementById("sessionStatus");
+    const eEl = document.getElementById("sessionEnergy");
+    const dEl = document.getElementById("sessionDuration");
+    const pWEl = document.getElementById("sessionPeakPower");
+    const pAEl = document.getElementById("sessionPeakCurrent");
+
+    if (!statusEl || !eEl || !dEl || !pWEl || !pAEl) return;
+
+    // No data / no active session
+    if (!session || !session.valid) {
+      statusEl.textContent = "No active session";
+      statusEl.className = "session-status session-status-idle";
+
+      eEl.textContent = "-- Wh";
+      dEl.textContent = "-- s";
+      pWEl.textContent = "-- W";
+      pAEl.textContent = "-- A";
+      return;
+    }
+
+    const running = !!session.running;
+
+    if (running) {
+      statusEl.textContent = "Session running";
+      statusEl.className = "session-status session-status-running";
+    } else {
+      statusEl.textContent = "Last session";
+      statusEl.className = "session-status session-status-finished";
+    }
+
+    eEl.textContent = (session.energy_Wh ?? 0).toFixed(2) + " Wh";
+    dEl.textContent = (session.duration_s ?? 0).toString() + " s";
+    pWEl.textContent = (session.peakPower_W ?? 0).toFixed(1) + " W";
+    pAEl.textContent = (session.peakCurrent_A ?? 0).toFixed(2) + " A";
+  }
+
+  // History modal controls (frontend only)
+  function openSessionHistory() {
+    const m = document.getElementById("sessionHistoryModal");
+    if (!m) return;
+    m.classList.add("show");
+  }
+
+  function closeSessionHistory() {
+    const m = document.getElementById("sessionHistoryModal");
+    if (!m) return;
+    m.classList.remove("show");
+  }
+
+  function bindSessionHistoryButton() {
+    const btn = document.getElementById("sessionHistoryBtn");
+    if (!btn) return;
+    btn.addEventListener("click", openSessionHistory);
   }
 
   function scheduleLiveInterval() {
@@ -1292,10 +1518,11 @@
     liveRender();
     scheduleLiveInterval();
 
-    startHeartbeat();
+    //startHeartbeat();
     startMonitorPolling();
     loadControls();
-
+    bindSessionHistoryButton();
+    updateSessionStatsUI(null);
     // Disconnect button
     const disconnectBtn = document.getElementById("disconnectBtn");
     if (disconnectBtn) {
@@ -1354,4 +1581,7 @@
   window.resetSystem = resetSystem;
   window.rebootSystem = rebootSystem;
   window.loadControls = loadControls;
+  window.openSessionHistory = openSessionHistory;
+  window.closeSessionHistory = closeSessionHistory;
+  window.updateSessionStatsUI = updateSessionStatsUI; // for backend to call later
 })();

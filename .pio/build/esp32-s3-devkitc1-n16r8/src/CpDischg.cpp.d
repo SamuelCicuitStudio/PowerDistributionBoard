@@ -238,4 +238,5 @@
  .pio/libdeps/esp32-s3-devkitc1-n16r8/ArduinoJson/src/ArduinoJson/Configuration.hpp \
  .pio/libdeps/esp32-s3-devkitc1-n16r8/OneWire/OneWire.h \
  .pio/libdeps/esp32-s3-devkitc1-n16r8/OneWire/util/OneWire_direct_regtype.h \
- src/Utils.h src/HeaterManager.h src/NVSManager.h src/Relay.h
+ src/Utils.h src/HeaterManager.h src/NVSManager.h src/CurrentSensor.h \
+ src/Relay.h

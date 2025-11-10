@@ -51,6 +51,8 @@ HeaterManager::HeaterManager()
         wires[i].volumeM3           = 0.0f;
         wires[i].massKg             = 0.0f;
         wires[i].temperatureC       = NAN;
+        wires[i].connected          = true;   // default: unknown / not confirmed
+        wires[i].presenceCurrentA   = 0.0f;
     }
 }
 
@@ -482,4 +484,169 @@ void HeaterManager::resetAllEstimatedTemps(float ambientC) {
     }
 
     unlock();
+}
+
+void HeaterManager::probeWirePresence(CurrentSensor& cs,
+                                      float busVoltage,
+                                      float minValidFraction,
+                                      float maxValidFraction,
+                                      uint16_t settleMs,
+                                      uint8_t samples)
+{
+    // 1) Resolve bus voltage
+    if (busVoltage <= 0.0f && CONF) {
+        busVoltage = CONF->GetFloat(DC_VOLTAGE_KEY, 0.0f);
+        if (busVoltage <= 0.0f) {
+            busVoltage = CONF->GetFloat(DESIRED_OUTPUT_VOLTAGE_KEY, 0.0f);
+        }
+    }
+
+    if (busVoltage <= 0.0f) {
+        DEBUG_PRINTLN("[HeaterManager] probeWirePresence: No valid bus voltage, abort.");
+        return;
+    }
+
+    // 2) Snapshot current states
+    bool prevStates[kWireCount];
+    for (uint8_t i = 0; i < kWireCount; ++i) {
+        prevStates[i] = getOutputState(i + 1);
+    }
+
+    // Ensure all OFF for clean measurements
+    setOutputMask(0);
+    delay(settleMs);
+
+    DEBUGGSTART();
+    DEBUG_PRINTF("[HeaterManager] Probing wire presence at %.2f V\n", busVoltage);
+
+    for (uint8_t idx = 0; idx < kWireCount; ++idx) {
+        WireInfo& w = wires[idx];
+
+        // Skip nonsense resistances
+        if (!isfinite(w.resistanceOhm) || w.resistanceOhm <= 0.01f) {
+            w.connected        = false;
+            w.presenceCurrentA = 0.0f;
+            DEBUG_PRINTF("  CH%u: skipped (invalid R=%.3f Ω)\n",
+                         w.index, w.resistanceOhm);
+            continue;
+        }
+
+        // 3) Enable only this channel
+        uint16_t mask = (1u << idx);
+        setOutputMask(mask);
+        delay(settleMs);
+
+        // 4) Measure average current
+        float sumA = 0.0f;
+        for (uint8_t s = 0; s < samples; ++s) {
+            sumA += cs.readCurrent();
+            delay(2);
+        }
+        float avgA = sumA / (float)samples;
+
+        float expectedA = busVoltage / w.resistanceOhm;
+        if (expectedA < 0.01f) expectedA = 0.01f;
+
+        float ratio = avgA / expectedA;
+
+        bool connected;
+        if (!isfinite(avgA) || avgA < 0.01f) {
+            // basically no current → open
+            connected = false;
+        } else if (ratio < minValidFraction) {
+            // too low vs expected → open/bad contact
+            connected = false;
+        } else if (ratio > maxValidFraction) {
+            // too high → suspicious (short / wrong value); treat as not OK
+            connected = false;
+        } else {
+            // in band → looks like a real load
+            connected = true;
+        }
+
+        w.connected        = connected;
+        w.presenceCurrentA = avgA;
+
+        DEBUG_PRINTF("  CH%u: I=%.3f A, R=%.3f Ω, Iexp=%.3f A, ratio=%.2f => %s\n",
+                     w.index,
+                     avgA,
+                     w.resistanceOhm,
+                     expectedA,
+                     ratio,
+                     connected ? "CONNECTED" : "OPEN/FAULT");
+
+        // 5) Turn this channel off before the next one
+        setOutputMask(0);
+        delay(settleMs);
+    }
+
+    // 6) Restore previous states
+    for (uint8_t i = 0; i < kWireCount; ++i) {
+        if (prevStates[i]) {
+            setOutput(i + 1, true);
+        }
+    }
+
+    DEBUGGSTOP();
+}
+void HeaterManager::updatePresenceFromMask(uint16_t mask,
+                                           float totalCurrentA,
+                                           float busVoltage,
+                                           float minValidRatio)
+{
+    if (mask == 0) return;
+    if (totalCurrentA < 0.0f) totalCurrentA = 0.0f;
+
+    // Resolve bus voltage if not provided
+    if (busVoltage <= 0.0f && CONF) {
+        busVoltage = CONF->GetFloat(DC_VOLTAGE_KEY, 0.0f);
+        if (busVoltage <= 0.0f) {
+            busVoltage = CONF->GetFloat(DESIRED_OUTPUT_VOLTAGE_KEY, 0.0f);
+        }
+    }
+    if (busVoltage <= 0.0f) return;
+
+    // Expected total current from wires in mask that are still "connected"
+    float G = 0.0f;
+    for (uint8_t i = 0; i < kWireCount; ++i) {
+        if (mask & (1u << i)) {
+            const WireInfo& w = wires[i];
+            if (!w.connected) continue;          // already considered missing
+            const float R = w.resistanceOhm;
+            if (R > 0.01f && isfinite(R)) {
+                G += 1.0f / R;
+            }
+        }
+    }
+    if (G <= 0.0f) return;
+
+    const float expectedI = busVoltage * G;
+    if (expectedI <= 0.0f) return;
+
+    const float ratio = totalCurrentA / expectedI;
+
+    // If we're far below expected current, treat these wires as gone.
+    if (!isfinite(ratio) || ratio < minValidRatio) {
+        for (uint8_t i = 0; i < kWireCount; ++i) {
+            if (mask & (1u << i)) {
+                wires[i].connected        = false;
+                wires[i].presenceCurrentA = totalCurrentA;
+                DEBUG_PRINTF(
+                    "[HeaterManager] Wire %u marked NO-PRESENCE "
+                    "(I=%.3fA, Iexp=%.3fA, ratio=%.2f)\n",
+                    wires[i].index,
+                    totalCurrentA,
+                    expectedI,
+                    ratio
+                );
+            }
+        }
+    }
+}
+
+bool HeaterManager::hasAnyConnected() const {
+    for (uint8_t i = 0; i < kWireCount; ++i) {
+        if (wires[i].connected) return true;
+    }
+    return false;
 }

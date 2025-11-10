@@ -177,11 +177,14 @@ static inline uint16_t _allowedMaskFrom(const bool allowed[10]) {
 // Helper: run one ON pulse with RTOS-friendly mask control
 // ============================================================================
 //
-// - Uses HeaterManager::setOutputMask(mask) so mask changes are logged.
+// **Modified for dynamic presence detection**
+//
+// - Uses HeaterManager::setOutputMask(mask).
 // - Uses delayWithPowerWatch() for STOP/12V monitoring.
-// - Optionally mirrors state on per-channel indicator LEDs.
-// - No direct interaction with CurrentSensor or thermal model here;
-//   the thermal task consumes history asynchronously.
+// - Mirrors on indicator LEDs if enabled.
+// - On a completed pulse, reads current and calls
+//   HeaterManager::updatePresenceFromMask(mask, I)
+//   so wire presence (connect / disconnect) is tracked live.
 // ============================================================================
 
 static bool _runMaskedPulse(Device* self,
@@ -193,10 +196,10 @@ static bool _runMaskedPulse(Device* self,
         return true; // nothing to do
     }
 
-    // Apply mask atomically (this logs an OutputEvent internally).
+    // Apply mask atomically.
     WIRE->setOutputMask(mask);
 
-    // Optional immediate LED feedback (LedUpdateTask will also track via WIRE).
+    // Optional LED mirror.
     if (ledFeedback && self->indicator) {
         for (uint8_t i = 0; i < 10; ++i) {
             bool on = (mask & (1u << i)) != 0;
@@ -204,10 +207,21 @@ static bool _runMaskedPulse(Device* self,
         }
     }
 
-    // Guarded ON duration.
+    // Keep ON for requested time, with power/STOP checks.
     bool ok = self->delayWithPowerWatch(onTimeMs);
 
-    // Ensure all outputs off, even on abort.
+    // If we completed the pulse (not aborted), sample current once
+    // with the mask still active and update presence.
+    if (ok && self->currentSensor) {
+        float I = self->currentSensor->readCurrent();
+        // This must be implemented in HeaterManager:
+        //  - For SEQ: single-bit mask → update that wire.
+        //  - For ADV: multi-bit mask → update all bits in that group
+        //    consistently based on ratio vs expected.
+        WIRE->updatePresenceFromMask(mask, I);
+    }
+
+    // Always turn everything OFF after the pulse / abort.
     WIRE->setOutputMask(0);
 
     if (ledFeedback && self->indicator) {
@@ -216,6 +230,7 @@ static bool _runMaskedPulse(Device* self,
 
     return ok;
 }
+
 
 // ============================================================================
 // Loop task management & main state machine
@@ -317,7 +332,12 @@ void Device::loopTask() {
         // Learn idle current baseline (AC+relay+caps only)
         calibrateIdleCurrent();
 
-        // Initialize allowed outputs from config + thermal lockouts
+        // Initial wire presence scan (static)
+        if (WIRE && currentSensor) {
+            WIRE->probeWirePresence(*currentSensor);
+        }
+
+        // Initialize allowed outputs from config + thermal lockouts + presence
         checkAllowedOutputs();
         BUZZ->bipSystemReady();
         RGB->postOverlay(OverlayEvent::WAKE_FLASH);
@@ -366,7 +386,7 @@ void Device::loopTask() {
         RGB->postOverlay(OverlayEvent::PWR_START);
         RGB->setRun();
 
-        // Execute main heating loop (blocks until STOP/FAULT)
+        // Execute main heating loop (blocks until STOP/FAULT/NO-WIRE)
         StartLoop();
 
         // =================== CLEAN SHUTDOWN → OFF ===================
@@ -389,9 +409,11 @@ void Device::StartLoop() {
         return;
     }
 
+    DEBUGGSTART();
     DEBUG_PRINTLN("-----------------------------------------------------------");
     DEBUG_PRINTLN("[Device] Initiating Loop Sequence 🔻 (RTOS/history-based)");
     DEBUG_PRINTLN("-----------------------------------------------------------");
+    DEBUGGSTOP();
 
     // Ensure thermal model is initialized and wires are near ambient.
     initWireThermalModelOnce();
@@ -412,8 +434,29 @@ void Device::StartLoop() {
     relayControl->turnOn();
     bypassFET->enable();
 
-    // Initial evaluation of allowed outputs.
+    // Initial evaluation of allowed outputs (cfg + thermal + presence).
     checkAllowedOutputs();
+
+    // -------- PowerTracker: start a new heating session --------
+    float busV = DEFAULT_DC_VOLTAGE;
+    if (CONF) {
+        float vdc = CONF->GetFloat(DC_VOLTAGE_KEY, 0.0f);
+        if (vdc > 0.0f) {
+            busV = vdc;
+        } else {
+            float vset = CONF->GetFloat(DESIRED_OUTPUT_VOLTAGE_KEY, DEFAULT_DESIRED_OUTPUT_VOLTAGE);
+            if (vset > 0.0f) busV = vset;
+        }
+    }
+
+    float idleA = DEFAULT_IDLE_CURR;
+    if (CONF) {
+        idleA = CONF->GetFloat(IDLE_CURR_KEY, DEFAULT_IDLE_CURR);
+    }
+    if (idleA < 0.0f) idleA = 0.0f;
+
+    // Start session even if currentSensor is null: will at least count duration/sessions.
+    POWER_TRACKER->startSession(busV, idleA);
 
     const uint16_t onTime      = CONF->GetInt(ON_TIME_KEY,  DEFAULT_ON_TIME);
     const uint16_t offTime     = CONF->GetInt(OFF_TIME_KEY, DEFAULT_OFF_TIME);
@@ -432,10 +475,15 @@ void Device::StartLoop() {
 #if (DEVICE_LOOP_MODE == DEVICE_LOOP_MODE_SEQUENTIAL)
 
     // =====================================================================
-    // SEQUENTIAL MODE (RTOS / history-based):
+    // SEQUENTIAL MODE:
     //  - Drive ONE allowed output at a time.
-    //  - Always pick the coolest eligible wire (virtual temp from thermalTask).
-    //  - ThermalTask uses current + mask history to refine temperatures.
+    //  - Always pick the coolest eligible wire.
+    //  - Dynamic presence:
+    //      * Each pulse updates WireInfo.connected via updatePresenceFromMask().
+    //      * checkAllowedOutputs() folds presence into allowedOutputs[].
+    //      * If no wires remain connected → stop loop.
+    //  - PowerTracker:
+    //      * update() called regularly to integrate Wh from history.
     // =====================================================================
 
     DEBUG_PRINTLN("[Device] Loop mode: SEQUENTIAL (coolest-first, history-based)");
@@ -456,8 +504,25 @@ void Device::StartLoop() {
             }
         }
 
-        // Refresh permissions (cfg + thermal lockouts)
+        // Refresh permissions (cfg + thermal lockouts + dynamic presence)
         checkAllowedOutputs();
+
+        // If all wires are now considered missing, abort safely.
+        if (WIRE && !WIRE->hasAnyConnected()) {
+            DEBUG_PRINTLN("[Device] No connected heater wires remain → aborting SEQ loop.");
+            if (RGB) {
+                RGB->setFault();
+                RGB->postOverlay(OverlayEvent::FAULT_SENSOR_MISSING);
+            }
+            if (BUZZ) {
+                BUZZ->bipFault();
+            }
+            if (StateLock()) {
+                currentState = DeviceState::Error;
+                StateUnlock();
+            }
+            break;
+        }
 
         // Pick coolest allowed wire
         bool    found    = false;
@@ -480,7 +545,8 @@ void Device::StartLoop() {
         }
 
         if (!found) {
-            // No eligible wires: wait a bit (cooling/thermal unlock) with abort checks.
+            // No eligible wires: either thermal-locked or temporarily none.
+            // Wait a bit with abort checks; planner will re-evaluate.
             if (!delayWithPowerWatch(100)) {
                 if (!is12VPresent()) {
                     handle12VDrop();
@@ -490,7 +556,12 @@ void Device::StartLoop() {
                 }
                 break;
             }
-            continue; // re-evaluate; do NOT exit the loop yet
+
+            // Track energy during idle wait (uses current history)
+            if (currentSensor) {
+                POWER_TRACKER->update(*currentSensor);
+            }
+            continue;
         }
 
         const uint16_t mask = (1u << bestIdx);
@@ -506,6 +577,11 @@ void Device::StartLoop() {
             break;
         }
 
+        // Integrate energy for this ON period.
+        if (currentSensor) {
+            POWER_TRACKER->update(*currentSensor);
+        }
+
         // OFF window between activations.
         if (!delayWithPowerWatch(offTime)) {
             if (!is12VPresent()) {
@@ -516,15 +592,24 @@ void Device::StartLoop() {
             }
             break;
         }
+
+        // Integrate during OFF / background as well.
+        if (currentSensor) {
+            POWER_TRACKER->update(*currentSensor);
+        }
     }
 
 #else // DEVICE_LOOP_MODE == DEVICE_LOOP_MODE_ADVANCED
 
     // =====================================================================
-    // ADVANCED MODE (RTOS / history-based):
-    //  - Multi-output grouped drive using same planner as before.
-    //  - Planner chooses masks; _runMaskedPulse applies them.
-    //  - ThermalTask + CurrentSensor history handle energy/temperature.
+    // ADVANCED MODE:
+    //  - Multi-output grouped drive using planner.
+    //  - Dynamic presence:
+    //      * Each group pulse calls updatePresenceFromMask().
+    //      * checkAllowedOutputs() uses presence each cycle.
+    //      * If no wires remain connected → stop loop.
+    //  - PowerTracker:
+    //      * update() called regularly to integrate Wh from history.
     // =====================================================================
 
     DEBUG_PRINTLN("[Device] Loop mode: ADVANCED (planner + history-based thermal)");
@@ -545,12 +630,30 @@ void Device::StartLoop() {
             }
         }
 
-        // Refresh allowed outputs from cfg + current thermal lockouts.
+        // Refresh allowed outputs from cfg + thermal + dynamic presence.
         checkAllowedOutputs();
+
+        // If all wires are gone, abort safely.
+        if (WIRE && !WIRE->hasAnyConnected()) {
+            DEBUG_PRINTLN("[Device] No connected heater wires remain → aborting ADV loop.");
+            if (RGB) {
+                RGB->setFault();
+                RGB->postOverlay(OverlayEvent::FAULT_SENSOR_MISSING);
+            }
+            if (BUZZ) {
+                BUZZ->bipFault();
+            }
+            if (StateLock()) {
+                currentState = DeviceState::Error;
+                StateUnlock();
+            }
+            break;
+        }
 
         const uint16_t allowedMask = _allowedMaskFrom(allowedOutputs);
         if (allowedMask == 0) {
-            // Nothing available right now → short wait, let thermal unlock do its job.
+            // Nothing available right now → short wait, let thermal or presence
+            // changes re-open options.
             if (!delayWithPowerWatch(100)) {
                 if (!is12VPresent()) {
                     handle12VDrop();
@@ -559,6 +662,10 @@ void Device::StartLoop() {
                     currentState = DeviceState::Idle;
                 }
                 break;
+            }
+
+            if (currentSensor) {
+                POWER_TRACKER->update(*currentSensor);
             }
             continue;
         }
@@ -577,9 +684,9 @@ void Device::StartLoop() {
             CONF->GetFloat(R10OHM_KEY, DEFAULT_WIRE_RES_OHMS),
         };
 
-        const float targetRes         = CONF->GetFloat(R0XTGT_KEY, DEFAULT_TARG_RES_OHMS);
-        const uint8_t maxActive       = MAX_ACTIVE;
-        const bool    preferAboveEq   = PREF_ABOVE;
+        const float    targetRes     = CONF->GetFloat(R0XTGT_KEY, DEFAULT_TARG_RES_OHMS);
+        const uint8_t  maxActive     = MAX_ACTIVE;
+        const bool     preferAboveEq = PREF_ABOVE;
 
         std::vector<uint16_t> plan;
         _buildPlan(plan, allowedMask, R, targetRes, maxActive, preferAboveEq);
@@ -594,6 +701,10 @@ void Device::StartLoop() {
                     currentState = DeviceState::Idle;
                 }
                 break;
+            }
+
+            if (currentSensor) {
+                POWER_TRACKER->update(*currentSensor);
             }
             continue;
         }
@@ -614,6 +725,11 @@ void Device::StartLoop() {
                 break;
             }
 
+            // Integrate after each group pulse.
+            if (currentSensor) {
+                POWER_TRACKER->update(*currentSensor);
+            }
+
             // OFF window between groups.
             if (!delayWithPowerWatch(offTime)) {
                 if (!is12VPresent()) {
@@ -624,9 +740,14 @@ void Device::StartLoop() {
                 }
                 break;
             }
+
+            // Integrate during OFF as well.
+            if (currentSensor) {
+                POWER_TRACKER->update(*currentSensor);
+            }
         }
 
-        // Optional: recharge handling (kept from previous logic).
+        // Optional: recharge handling preserved as-is, with tracking.
         if (rechargeMode == RechargeMode::BatchRecharge &&
             currentState == DeviceState::Running)
         {
@@ -657,11 +778,27 @@ void Device::StartLoop() {
                     }
                     break;
                 }
+
+                if (currentSensor) {
+                    POWER_TRACKER->update(*currentSensor);
+                }
             }
         }
     }
 
 #endif // DEVICE_LOOP_MODE
+
+    // --- Finalize power tracking session (any exit path) ---
+    if (POWER_TRACKER->isSessionActive()) {
+        if (currentSensor) {
+            // Consume remaining history window
+            POWER_TRACKER->update(*currentSensor);
+        }
+
+        // Treat non-Error as "successful" session; Error / FAULT as aborted.
+        bool success = (currentState != DeviceState::Error);
+        POWER_TRACKER->endSession(success);
+    }
 
     // Common exit: ensure everything is off & safe.
     if (WIRE)      WIRE->disableAll();

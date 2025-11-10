@@ -72,7 +72,7 @@
 #include "NVSManager.h"
 #include "utils.h"
 #include "Buzzer.h"
-
+#include "PowerTracker.h"
 // -----------------------------------------------------------------------------
 // Constants and Macros
 // -----------------------------------------------------------------------------

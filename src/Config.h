@@ -107,6 +107,29 @@
 #define R0XTGT_KEY  "R0XTGT"  // OUTXX target resistance
 #define WIRE_OHM_PER_M_KEY               "WOPERM"    // float: Ω per meter for installed nichrome
 #define DEFAULT_WIRE_OHM_PER_M           2.0f        // 2 Ω/m nichrome (your current wire)
+// NVS keys for persistent statistics (<= 6 chars each)
+
+// Totals (lifetime)
+#define PT_KEY_TOTAL_ENERGY_WH          "STWH"    // total energy [Wh]
+#define PT_KEY_TOTAL_SESSIONS           "STCNT"   // total sessions
+#define PT_KEY_TOTAL_SESSIONS_OK        "STCSOK"  // total successful sessions
+
+// Last session snapshot
+#define PT_KEY_LAST_SESS_ENERGY_WH      "LSEWH"   // last session energy [Wh]
+#define PT_KEY_LAST_SESS_DURATION_S     "LSDUR"   // last session duration [s]
+#define PT_KEY_LAST_SESS_PEAK_W         "LSPKW"   // last session peak power [W]
+#define PT_KEY_LAST_SESS_PEAK_A         "LSPKA"   // last session peak current [A]
+
+// Default values for all stats
+#define PT_DEF_TOTAL_ENERGY_WH          0.0f
+#define PT_DEF_TOTAL_SESSIONS           0
+#define PT_DEF_TOTAL_SESSIONS_OK        0
+
+#define PT_DEF_LAST_SESS_ENERGY_WH      0.0f
+#define PT_DEF_LAST_SESS_DURATION_S     0
+#define PT_DEF_LAST_SESS_PEAK_W         0.0f
+#define PT_DEF_LAST_SESS_PEAK_A         0.0f
+
 // ==================================================
 // Default Values for Preferences
 // ==================================================
