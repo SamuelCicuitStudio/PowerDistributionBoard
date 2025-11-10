@@ -184,6 +184,48 @@ void WiFiManager::registerRoutes_() {
         }
     );
 
+    server.on("/session_history", HTTP_GET, [this](AsyncWebServerRequest *request) {
+        if (!isAuthenticated(request)) return;
+        if (lock()) { lastActivityMillis = millis(); unlock(); }
+
+        if (SPIFFS.begin(false) && SPIFFS.exists(POWERTRACKER_HISTORY_FILE)) {
+            // Stream the same JSON stored on SPIFFS
+            request->send(SPIFFS, POWERTRACKER_HISTORY_FILE, "application/json");
+            return;
+        }
+
+        // Fallback: build from in-RAM history (e.g. first boot, or if file missing)
+        StaticJsonDocument<2048> doc; // bumped size
+        JsonArray arr = doc.createNestedArray("history");
+
+        uint16_t count = POWER_TRACKER->getHistoryCount();
+        for (uint16_t i = 0; i < count; ++i) {
+            PowerTracker::HistoryEntry h;
+            if (!POWER_TRACKER->getHistoryEntry(i, h) || !h.valid) continue;
+
+            JsonObject row = arr.createNestedObject();
+            row["start_ms"]      = h.startMs;
+            row["duration_s"]    = h.stats.duration_s;
+            row["energy_Wh"]     = h.stats.energy_Wh;
+            row["peakPower_W"]   = h.stats.peakPower_W;
+            row["peakCurrent_A"] = h.stats.peakCurrent_A;
+        }
+
+        String json;
+        serializeJson(doc, json);
+        request->send(200, "application/json", json);
+    });
+    server.on("/History.json", HTTP_GET, [this](AsyncWebServerRequest *request) {
+        if (!isAuthenticated(request)) return;
+        if (lock()) { lastActivityMillis = millis(); unlock(); }
+
+        if (SPIFFS.begin(false) && SPIFFS.exists(POWERTRACKER_HISTORY_FILE)) {
+            request->send(SPIFFS, POWERTRACKER_HISTORY_FILE, "application/json");
+        } else {
+            request->send(200, "application/json", "{\"history\":[]}");
+        }
+    });
+
     // ---------- Disconnect ----------
     server.on("/disconnect", HTTP_POST, [](AsyncWebServerRequest* request) {},
         nullptr,
@@ -233,6 +275,39 @@ void WiFiManager::registerRoutes_() {
         for (int i = 1; i <= 10; ++i) outputs["output" + String(i)] = WIRE->getOutputState(i);
 
         doc["fanSpeed"] = FAN->getSpeedPercent();
+        {
+            JsonObject totals = doc.createNestedObject("sessionTotals");
+            totals["totalEnergy_Wh"]   = POWER_TRACKER->getTotalEnergy_Wh();
+            totals["totalSessions"]    = POWER_TRACKER->getTotalSessions();
+            totals["totalSessionsOk"]  = POWER_TRACKER->getTotalSuccessful();
+        }
+
+        // --- current / last session snapshot ---
+        {
+            JsonObject sess = doc.createNestedObject("session");
+
+            PowerTracker::SessionStats cur  = POWER_TRACKER->getCurrentSessionSnapshot();
+            const PowerTracker::SessionStats &last = POWER_TRACKER->getLastSession();
+
+            if (cur.valid) {
+                sess["valid"]         = true;
+                sess["running"]       = true;
+                sess["energy_Wh"]     = cur.energy_Wh;
+                sess["duration_s"]    = cur.duration_s;
+                sess["peakPower_W"]   = cur.peakPower_W;
+                sess["peakCurrent_A"] = cur.peakCurrent_A;
+            } else if (last.valid) {
+                sess["valid"]         = true;
+                sess["running"]       = false;
+                sess["energy_Wh"]     = last.energy_Wh;
+                sess["duration_s"]    = last.duration_s;
+                sess["peakPower_W"]   = last.peakPower_W;
+                sess["peakCurrent_A"] = last.peakCurrent_A;
+            } else {
+                sess["valid"]   = false;
+                sess["running"] = false;
+            }
+        }
 
         String json; serializeJson(doc, json);
         request->send(200, "application/json", json);

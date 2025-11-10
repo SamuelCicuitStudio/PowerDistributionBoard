@@ -1122,6 +1122,26 @@
       const res = await fetch("/monitor", { cache: "no-store" });
       if (!res.ok) return;
       const mon = await res.json();
+      // --- Session stats (Live tab headline) ---
+      if (mon.session) {
+        updateSessionStatsUI(mon.session);
+      }
+
+      // --- Lifetime counters ---
+      if (mon.sessionTotals) {
+        const t = mon.sessionTotals;
+        const totalEnergyEl = document.getElementById("totalEnergy");
+        const totalSessionsEl = document.getElementById("totalSessions");
+        const totalOkEl = document.getElementById("totalSessionsOk");
+
+        if (totalEnergyEl)
+          totalEnergyEl.textContent =
+            (t.totalEnergy_Wh || 0).toFixed(2) + " Wh";
+        if (totalSessionsEl)
+          totalSessionsEl.textContent = (t.totalSessions || 0).toString();
+        if (totalOkEl)
+          totalOkEl.textContent = (t.totalSessionsOk || 0).toString();
+      }
 
       const outs = mon.outputs || {};
       for (let i = 1; i <= 10; i++) {
@@ -1363,7 +1383,76 @@
   function bindSessionHistoryButton() {
     const btn = document.getElementById("sessionHistoryBtn");
     if (!btn) return;
-    btn.addEventListener("click", openSessionHistory);
+
+    btn.addEventListener("click", loadSessionHistoryAndOpen);
+  }
+
+  async function loadSessionHistoryAndOpen() {
+    try {
+      // Load from SPIFFS/static file
+      const res = await fetch("/History.json", { cache: "no-store" });
+      if (!res.ok) {
+        console.error("Failed to load History.json:", res.status);
+        openSessionHistory(); // Show empty modal instead of doing nothing
+        return;
+      }
+
+      const data = await res.json();
+
+      // Support both { history: [...] } and plain [...]
+      const history = Array.isArray(data) ? data : data.history || [];
+
+      const tbody = document.getElementById("sessionHistoryTableBody");
+      const placeholder = document.querySelector(
+        ".session-history-placeholder"
+      );
+      if (!tbody) {
+        openSessionHistory();
+        return;
+      }
+
+      // Clear previous rows
+      tbody.innerHTML = "";
+
+      // Hide "No history loaded yet" placeholder once we try to load
+      if (placeholder) {
+        placeholder.style.display = "none";
+      }
+
+      if (!history.length) {
+        const tr = document.createElement("tr");
+        const td = document.createElement("td");
+        td.colSpan = 5;
+        td.textContent = "No sessions recorded yet.";
+        tr.appendChild(td);
+        tbody.appendChild(tr);
+      } else {
+        history.forEach((s, idx) => {
+          const tr = document.createElement("tr");
+
+          const startSec = (s.start_ms || 0) / 1000;
+          const duration = s.duration_s || 0;
+          const energyWh = Number(s.energy_Wh || 0);
+          const peakP = Number(s.peakPower_W || 0);
+          const peakI = Number(s.peakCurrent_A || 0);
+
+          tr.innerHTML = `
+          <td>${idx + 1}</td>
+          <td>${startSec.toFixed(0)} s</td>
+          <td>${duration}s</td>
+          <td>${energyWh.toFixed(2)} Wh</td>
+          <td>${peakP.toFixed(1)} W</td>
+          <td>${peakI.toFixed(2)} A</td>
+        `;
+          tbody.appendChild(tr);
+        });
+      }
+
+      // ✅ Open the modal (this is the correct function)
+      openSessionHistory();
+    } catch (e) {
+      console.error("Session history load failed", e);
+    }
   }
 
   function scheduleLiveInterval() {
@@ -1518,7 +1607,7 @@
     liveRender();
     scheduleLiveInterval();
 
-    //startHeartbeat();
+    startHeartbeat();
     startMonitorPolling();
     loadControls();
     bindSessionHistoryButton();

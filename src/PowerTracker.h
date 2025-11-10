@@ -7,16 +7,11 @@
 #include "NVSManager.h"
 
 // ----------------------------------------------------------------------------
-// PowerTracker
+// Persistent history configuration
 // ----------------------------------------------------------------------------
-// - Integrates energy from CurrentSensor 10s history.
-// - Uses (Imeas - idleCurrentA)+ as net heater current.
-// - Uses a nominal / supplied bus voltage for power estimation.
-// - Call begin() once at boot.
-// - Call startSession() when heating loop starts.
-// - Call update() periodically during RUN (any mode).
-// - Call endSession() when StartLoop() exits.
-// ----------------------------------------------------------------------------
+
+#define POWERTRACKER_HISTORY_MAX   800
+#define POWERTRACKER_HISTORY_FILE  "/History.json"
 
 class PowerTracker {
 public:
@@ -28,48 +23,39 @@ public:
         float     peakCurrent_A  = 0.0f;
     };
 
-    // Singleton-style access (optional but convenient)
+    struct HistoryEntry {
+        bool        valid   = false;
+        uint32_t    startMs = 0;   // millis() when session started
+        SessionStats stats;        // final stats snapshot
+    };
+
+    // Singleton-style access
     static PowerTracker* Get() {
         static PowerTracker instance;
         return &instance;
     }
 
     // Load persisted totals & last session stats from NVS.
+    // Also loads history from /History.json (SPIFFS) if present.
     void begin();
 
     // Start a new heating session.
-    //
-    //  - nominalBusV: estimated DC bus / heater voltage (V)
-    //  - idleCurrentA: baseline current to subtract (AC, relay, etc.)
-    //
-    // You typically call this right after transitioning to DeviceState::Running
-    // and after calibrateIdleCurrent().
     void startSession(float nominalBusV, float idleCurrentA);
 
-    // Update integration from CurrentSensor 10s history.
-    //
-    // Call this regularly while RUNNING (e.g. inside the main loop in both
-    // SEQUENTIAL and ADVANCED modes). As long as it's called at least once
-    // every few seconds, no samples are lost.
+    // Update integration from CurrentSensor history.
     void update(CurrentSensor& cs);
 
-    // End the current session.
-    //
-    //  - success: true if loop finished normally; false if aborted/fault.
-    // Flushes pending samples, finalizes SessionStats, and persists:
-    //   - total energy
-    //   - session counters
-    //   - last-session KPIs
+    // End the current session and persist KPIs + history.
+    //  success = true  => normal finish
+    //          = false => aborted/fault (still logged in history)
     void endSession(bool success);
 
     bool isSessionActive() const { return _active; }
 
-    // --- Exposed stats for web / diagnostics ---
-
-    // Lifetime totals (since device install / last reset)
-    float    getTotalEnergy_Wh()      const { return _totalEnergy_Wh; }
-    uint32_t getTotalSessions()       const { return _totalSessions; }
-    uint32_t getTotalSuccessful()     const { return _totalSessionsOk; }
+    // Lifetime totals
+    float    getTotalEnergy_Wh()  const { return _totalEnergy_Wh; }
+    uint32_t getTotalSessions()   const { return _totalSessions; }
+    uint32_t getTotalSuccessful() const { return _totalSessionsOk; }
 
     // Last completed session
     const SessionStats& getLastSession() const { return _lastSession; }
@@ -88,13 +74,30 @@ public:
         return s;
     }
 
+    // ------------------------------------------------------------------------
+    // History API (used by WiFiManager /session_history, etc.)
+    // indexFromNewest: 0 = most recent, 1 = previous, ...
+    // ------------------------------------------------------------------------
+
+    uint16_t getHistoryCount() const { return _historyCount; }
+
+    bool getHistoryEntry(uint16_t indexFromNewest, HistoryEntry& out) const;
+
+    // Optional: clear all history + delete file
+    void clearHistory();
+
 private:
     PowerTracker() = default;
 
-    // Internal helpers
+    // NVS helpers
     void loadFromNVS();
     void saveTotalsToNVS() const;
     void saveLastSessionToNVS() const;
+
+    // History helpers (SPIFFS)
+    void loadHistoryFromFile();
+    bool saveHistoryToFile() const;
+    void appendHistoryEntry(const HistoryEntry& e);
 
     // Session state
     bool      _active            = false;
@@ -114,7 +117,12 @@ private:
     uint32_t  _totalSessions     = 0;
     uint32_t  _totalSessionsOk   = 0;
 
-    // Last session snapshot
+    // Circular buffer for last POWERTRACKER_HISTORY_MAX sessions
+    HistoryEntry _history[POWERTRACKER_HISTORY_MAX];
+    uint16_t     _historyHead  = 0;   // next write index
+    uint16_t     _historyCount = 0;   // number of valid entries
+
+    // Last session snapshot (for quick access)
     SessionStats _lastSession;
 };
 
