@@ -2,7 +2,8 @@
   "idf.portWin": "COM7",
   "files.associations": {
     "*.dbclient-js": "javascript",
-    "new": "cpp"
+    "new": "cpp",
+    "cmath": "cpp"
   },
   "liveServer.settings.port": 5501
 }

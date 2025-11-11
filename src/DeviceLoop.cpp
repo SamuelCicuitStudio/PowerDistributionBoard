@@ -4,20 +4,12 @@
 #include "Buzzer.h"
 #include <vector>
 #include <math.h>
-#include <string.h> // for memset if ever needed
+#include <string.h>
 
-// === Multi-output heating helpers (file-local; no header changes needed) ====
-//
-// These helpers implement the same planner logic as your Python tester:
-//  - _pop10     : tiny popcount for 10-bit masks
-//  - _req       : parallel equivalent resistance for subset mask
-//  - _chooseBest: best subset vs target Req with tie-breakers
-//  - _buildPlan : covers all allowed wires at least once
-//
-// They are used only in ADVANCED mode to compute batch/group masks.
+// ============================================================================
+// Helper: tiny popcount for 10-bit masks (planner only, no HW side effects)
 // ============================================================================
 
-// tiny popcount for 10-bit masks
 static inline uint8_t _pop10(uint16_t m) {
 #if defined(__GNUC__)
     return (uint8_t)__builtin_popcount(m);
@@ -28,7 +20,10 @@ static inline uint8_t _pop10(uint16_t m) {
 #endif
 }
 
-// parallel equivalent resistance for a set of wires
+// ============================================================================
+// Helper: parallel Req for subset mask (planner only)
+// ============================================================================
+
 static inline float _req(uint16_t mask, const float R[10]) {
     float g = 0.0f;
     for (uint8_t i = 0; i < 10; ++i) {
@@ -43,7 +38,10 @@ static inline float _req(uint16_t mask, const float R[10]) {
     return 1.0f / g;
 }
 
-// choose best subset (≤ maxActive) inside allowedMask w.r.t. target
+// ============================================================================
+// Helper: choose best subset vs target Req (planner only)
+// ============================================================================
+
 static uint16_t _chooseBest(uint16_t allowedMask,
                             const float R[10],
                             float target,
@@ -51,14 +49,13 @@ static uint16_t _chooseBest(uint16_t allowedMask,
                             bool preferAboveOrEqual,
                             uint16_t recentMask)
 {
-    float    bestScore = INFINITY;
-    uint16_t best      = 0;
+    float    bestScore  = INFINITY;
+    uint16_t best       = 0;
     bool     foundAbove = false;
     const uint16_t FULL = (1u << 10);
 
     for (uint16_t m = 1; m < FULL; ++m) {
-        // Must be subset of allowed
-        if ((m & ~allowedMask) != 0) continue;
+        if ((m & ~allowedMask) != 0) continue;      // must be subset
 
         const uint8_t k = _pop10(m);
         if (k == 0 || k > maxActive) continue;
@@ -71,27 +68,20 @@ static uint16_t _chooseBest(uint16_t allowedMask,
 
         if (preferAboveOrEqual) {
             if (above && !foundAbove) {
-                // First candidate that is ≥ target:
-                // reset selection space to only consider "above" from now.
                 foundAbove = true;
                 bestScore  = INFINITY;
                 best       = 0;
             }
             if (!above && foundAbove) {
-                // Once we have ≥ target options, ignore undershoots.
-                continue;
+                continue; // once we have ≥target, ignore undershoots
             }
         }
 
         float score = err;
         if (m == recentMask) {
-            score += 0.0001f; // mild fairness penalty for repeating last mask
+            score += 0.0001f; // tiny bias to avoid repeating same mask
         }
 
-        // Tie-breakers:
-        //  1) lower score
-        //  2) fewer active wires
-        //  3) for equal size: higher Req (safer, less current)
         if (score < bestScore ||
             (score == bestScore && k < _pop10(best)) ||
             (score == bestScore && k == _pop10(best) && Req > _req(best, R)))
@@ -101,16 +91,19 @@ static uint16_t _chooseBest(uint16_t allowedMask,
         }
     }
 
-    // If we insisted on ≥ target but got nothing, retry once without that constraint
+    // Fallback if "≥target" constraint was too strict
     if (preferAboveOrEqual && best == 0) {
-        return _chooseBest(allowedMask, R, target, maxActive,
-                           /*preferAboveOrEqual=*/false, recentMask);
+        return _chooseBest(allowedMask, R, target,
+                           maxActive, /*preferAboveOrEqual=*/false, recentMask);
     }
 
     return best;
 }
 
-// build one supercycle "plan": covers every allowed wire at least once
+// ============================================================================
+// Helper: build one planner "supercycle" (planner only; no HW)
+// ============================================================================
+
 static void _buildPlan(std::vector<uint16_t>& plan,
                        uint16_t allowedMask,
                        const float R[10],
@@ -126,7 +119,7 @@ static void _buildPlan(std::vector<uint16_t>& plan,
         uint16_t pick = _chooseBest(remaining, R, target,
                                     maxActive, preferAboveOrEqual, last);
         if (pick == 0) {
-            // No multi-group available → pick best single wire to finish coverage
+            // Fallback: pick best single to cover remaining
             float    bestErr = INFINITY;
             uint16_t solo    = 0;
             for (uint8_t i = 0; i < 10; ++i) {
@@ -149,22 +142,10 @@ static void _buildPlan(std::vector<uint16_t>& plan,
     }
 }
 
-// turn a group ON/OFF with LED mirroring
-static void _applyMask(Device* self, uint16_t mask, bool on, bool ledFeedback)
-{
-    for (uint8_t i = 0; i < 10; ++i) {
-        if (mask & (1u << i)) {
-            if (WIRE) {
-                WIRE->setOutput(i + 1, on);
-            }
-            if (ledFeedback && self->indicator) {
-                self->indicator->setLED(i + 1, on);
-            }
-        }
-    }
-}
+// ============================================================================
+// Helper: allowed[] -> bitmask
+// ============================================================================
 
-// boolean array -> 10-bit allowed mask
 static inline uint16_t _allowedMaskFrom(const bool allowed[10]) {
     uint16_t m = 0;
     for (uint8_t i = 0; i < 10; ++i) {
@@ -174,17 +155,16 @@ static inline uint16_t _allowedMaskFrom(const bool allowed[10]) {
 }
 
 // ============================================================================
-// Helper: run one ON pulse with RTOS-friendly mask control
+// Helper: single guarded ON pulse for a mask
 // ============================================================================
 //
-// **Modified for dynamic presence detection**
-//
-// - Uses HeaterManager::setOutputMask(mask).
-// - Uses delayWithPowerWatch() for STOP/12V monitoring.
-// - Mirrors on indicator LEDs if enabled.
-// - On a completed pulse, reads current and calls
-//   HeaterManager::updatePresenceFromMask(mask, I)
-//   so wire presence (connect / disconnect) is tracked live.
+// HARD SAFETY RULES:
+//  - Only called from StartLoop() while in DeviceState::Running.
+//  - Never called from ctor/begin/Idle/power-tracking/thermal code.
+//  - Uses HeaterManager::setOutputMask(mask) once, then ALWAYS back to 0.
+//  - Uses delayWithPowerWatch() for STOP/12V/OC abort.
+//  - On successful pulse, calls updatePresenceFromMask() (logic-only).
+//  - Never touches PowerTracker (separation of concerns).
 // ============================================================================
 
 static bool _runMaskedPulse(Device* self,
@@ -192,8 +172,11 @@ static bool _runMaskedPulse(Device* self,
                             uint32_t onTimeMs,
                             bool ledFeedback)
 {
-    if (!WIRE || mask == 0 || onTimeMs == 0) {
-        return true; // nothing to do
+    if (!self || !WIRE)              return true;
+    if (mask == 0 || onTimeMs == 0)  return true;
+    if (self->currentState != DeviceState::Running) {
+        // Do not energize if not in RUN
+        return false;
     }
 
     // Apply mask atomically.
@@ -202,28 +185,22 @@ static bool _runMaskedPulse(Device* self,
     // Optional LED mirror.
     if (ledFeedback && self->indicator) {
         for (uint8_t i = 0; i < 10; ++i) {
-            bool on = (mask & (1u << i)) != 0;
-            self->indicator->setLED(i + 1, on);
+            self->indicator->setLED(i + 1, (mask & (1u << i)) != 0);
         }
     }
 
-    // Keep ON for requested time, with power/STOP checks.
+    // Keep ON with protection-aware delay.
     bool ok = self->delayWithPowerWatch(onTimeMs);
 
-    // If we completed the pulse (not aborted), sample current once
-    // with the mask still active and update presence.
+    // If pulse completed (no fault/STOP), update presence from that pulse.
     if (ok && self->currentSensor) {
-        float I = self->currentSensor->readCurrent();
-        // This must be implemented in HeaterManager:
-        //  - For SEQ: single-bit mask → update that wire.
-        //  - For ADV: multi-bit mask → update all bits in that group
-        //    consistently based on ratio vs expected.
+        const float I = self->currentSensor->readCurrent();
+        // Implementation on HeaterManager side must be non-heating logic only.
         WIRE->updatePresenceFromMask(mask, I);
     }
 
-    // Always turn everything OFF after the pulse / abort.
+    // ALWAYS ensure outputs are OFF (success or abort).
     WIRE->setOutputMask(0);
-
     if (ledFeedback && self->indicator) {
         self->indicator->clearAll();
     }
@@ -231,31 +208,30 @@ static bool _runMaskedPulse(Device* self,
     return ok;
 }
 
-
 // ============================================================================
-// Loop task management & main state machine
+// Loop Task Management & State Machine
 // ============================================================================
 
 void Device::startLoopTask() {
-    if (loopTaskHandle == nullptr) {
-        DEBUG_PRINTLN("[Device] Starting main loop task on RTOS 🧵");
+    if (loopTaskHandle != nullptr) {
+        DEBUG_PRINTLN("[Device] Loop task already running");
+        return;
+    }
 
-        BaseType_t result = xTaskCreatePinnedToCore(
-            Device::loopTaskWrapper,
-            "DeviceLoopTask",
-            DEVICE_LOOP_TASK_STACK_SIZE,
-            this,
-            DEVICE_LOOP_TASK_PRIORITY,
-            &loopTaskHandle,
-            DEVICE_LOOP_TASK_CORE
-        );
+    DEBUG_PRINTLN("[Device] Starting main loop task");
+    BaseType_t result = xTaskCreatePinnedToCore(
+        Device::loopTaskWrapper,
+        "DeviceLoopTask",
+        DEVICE_LOOP_TASK_STACK_SIZE,
+        this,
+        DEVICE_LOOP_TASK_PRIORITY,
+        &loopTaskHandle,
+        DEVICE_LOOP_TASK_CORE
+    );
 
-        if (result != pdPASS) {
-            DEBUG_PRINTLN("[Device] Failed to create DeviceLoopTask ❌");
-            loopTaskHandle = nullptr;
-        }
-    } else {
-        DEBUG_PRINTLN("[Device] Loop task is already running ⏳");
+    if (result != pdPASS) {
+        DEBUG_PRINTLN("[Device] Failed to create DeviceLoopTask");
+        loopTaskHandle = nullptr;
     }
 }
 
@@ -268,45 +244,51 @@ void Device::loopTask() {
     DEBUG_PRINTLN("[Device] 🔁 Device loop task started");
     BUZZ->bip();
 
-    // Safe baseline at task start
+    // Hard baseline: no power path, no heaters, no LEDs.
     relayControl->turnOff();
     bypassFET->disable();
     stopTemperatureMonitor();
+    if (WIRE)      WIRE->disableAll();
+    if (indicator) indicator->clearAll();
     RGB->setOff();
 
     for (;;) {
         // ========================= OFF STATE =========================
         if (StateLock()) { currentState = DeviceState::Shutdown; StateUnlock(); }
 
-        // Backward compatibility: remote start shortcut → WAKE+RUN
+        // Legacy remote start → request WAKE+RUN
         if (StartFromremote) {
             StartFromremote = false;
             if (gEvt) xEventGroupSetBits(gEvt, EVT_WAKE_REQ | EVT_RUN_REQ);
         }
 
-        DEBUG_PRINTLN("[Device] State=OFF. Waiting for WAKE (Tap#1 / Web) …");
+        DEBUG_PRINTLN("[Device] State=OFF. Waiting for WAKE …");
 
         if (gEvt) {
-            // Wait until WAKE request; auto-clear consumed bit.
-            xEventGroupWaitBits(gEvt, EVT_WAKE_REQ, pdTRUE, pdFALSE, portMAX_DELAY);
+            xEventGroupWaitBits(
+                gEvt,
+                EVT_WAKE_REQ,
+                pdTRUE,
+                pdFALSE,
+                portMAX_DELAY
+            );
         }
 
         // ===================== POWER-UP SEQUENCE =====================
         RGB->setWait();
         BUZZ->bip();
-        DEBUG_PRINTLN("[Device] Waiting for 12V input… 🔋");
+        DEBUG_PRINTLN("[Device] Waiting for 12V input…");
 
         while (!digitalRead(DETECT_12V_PIN)) {
             vTaskDelay(pdMS_TO_TICKS(100));
         }
 
-        DEBUG_PRINTLN("[Device] 12V Detected – Enabling input relay ✅");
+        DEBUG_PRINTLN("[Device] 12V detected → enabling relay");
         relayControl->turnOn();
         RGB->postOverlay(OverlayEvent::RELAY_ON);
-
         vTaskDelay(pdMS_TO_TICKS(150));
 
-        // Charge capacitor bank to GO_THRESHOLD_RATIO
+        // Charge capacitors to GO_THRESHOLD_RATIO.
         TickType_t lastChargePost = 0;
         while (discharger->readCapVoltage() < GO_THRESHOLD_RATIO) {
             TickType_t now = xTaskGetTickCount();
@@ -314,35 +296,32 @@ void Device::loopTask() {
                 RGB->postOverlay(OverlayEvent::PWR_CHARGING);
                 lastChargePost = now;
             }
-
-            DEBUG_PRINTF("[Device] Charging… Cap: %.2fV / Target: %.2fV ⏳\n",
+            DEBUG_PRINTF("[Device] Charging… Cap=%.2fV Target=%.2fV\n",
                          discharger->readCapVoltage(), GO_THRESHOLD_RATIO);
             vTaskDelay(pdMS_TO_TICKS(200));
         }
 
-        RGB->postOverlay(OverlayEvent::PWR_THRESH_OK);
-        DEBUG_PRINTLN("[Device] Voltage threshold met ✅ Bypassing inrush resistor 🔄");
+        DEBUG_PRINTLN("[Device] Threshold met → bypass inrush");
         bypassFET->enable();
         RGB->postOverlay(OverlayEvent::PWR_BYPASS_ON);
 
-        // Ensure no heaters during idle calibration
+        // Ensure NO heaters during idle calibration.
         if (WIRE)      WIRE->disableAll();
         if (indicator) indicator->clearAll();
 
-        // Learn idle current baseline (AC+relay+caps only)
+        // Idle current calibration (uses only relay+AC; no heaters).
         calibrateIdleCurrent();
 
-        // Initial wire presence scan (static)
-        if (WIRE && currentSensor) {
-            WIRE->probeWirePresence(*currentSensor);
-        }
+        // IMPORTANT:
+        //  No probeWirePresence() here.
+        //  No mask pulses here.
+        //  We start with config+thermal only; presence refined in StartLoop().
 
-        // Initialize allowed outputs from config + thermal lockouts + presence
         checkAllowedOutputs();
         BUZZ->bipSystemReady();
         RGB->postOverlay(OverlayEvent::WAKE_FLASH);
 
-        // If RUN already requested (e.g., from web), skip IDLE
+        // ======================= IDLE STATE =======================
         bool runRequested = false;
         if (gEvt) {
             EventBits_t bits = xEventGroupGetBits(gEvt);
@@ -353,52 +332,95 @@ void Device::loopTask() {
         }
 
         if (!runRequested) {
-            // ======================= IDLE STATE =======================
             if (StateLock()) { currentState = DeviceState::Idle; StateUnlock(); }
-            DEBUG_PRINTLN("[Device] State=IDLE. Waiting for RUN (Tap#2) or STOP …");
+            DEBUG_PRINTLN("[Device] State=IDLE. Waiting for RUN or STOP");
             RGB->setIdle();
 
             if (gEvt) {
                 EventBits_t got = xEventGroupWaitBits(
                     gEvt,
                     EVT_RUN_REQ | EVT_STOP_REQ,
-                    pdTRUE,      // clear bits on exit
+                    pdTRUE,
                     pdFALSE,
                     portMAX_DELAY
                 );
 
                 if (got & EVT_STOP_REQ) {
-                    // Back to OFF, full power-down
-                    DEBUG_PRINTLN("[Device] STOP in IDLE → OFF");
+                    DEBUG_PRINTLN("[Device] STOP in IDLE → full OFF");
                     RGB->postOverlay(OverlayEvent::RELAY_OFF);
                     relayControl->turnOff();
                     bypassFET->disable();
+                    if (WIRE)      WIRE->disableAll();
+                    if (indicator) indicator->clearAll();
                     RGB->setOff();
-                    continue; // restart OFF loop
+                    continue; // back to OFF state
                 }
             }
         }
 
         // ======================== RUN STATE =========================
         if (StateLock()) { currentState = DeviceState::Running; StateUnlock(); }
-        DEBUG_PRINTLN("[Device] State=RUN. Launching main loop ▶️");
+        DEBUG_PRINTLN("[Device] State=RUN. Entering StartLoop()");
         BUZZ->successSound();
         RGB->postOverlay(OverlayEvent::PWR_START);
         RGB->setRun();
 
-        // Execute main heating loop (blocks until STOP/FAULT/NO-WIRE)
-        StartLoop();
+        StartLoop(); // will block until STOP/FAULT/NO-WIRE
 
         // =================== CLEAN SHUTDOWN → OFF ===================
-        DEBUG_PRINTLN("[Device] StartLoop returned. Clean shutdown 🛑");
+        DEBUG_PRINTLN("[Device] StartLoop finished → clean shutdown");
         BUZZ->bipSystemShutdown();
+
         RGB->postOverlay(OverlayEvent::RELAY_OFF);
         relayControl->turnOff();
         bypassFET->disable();
+
+        if (WIRE)      WIRE->disableAll();
+        if (indicator) indicator->clearAll();
         RGB->setOff();
-        // loop back to OFF state
+
+        // loop back to OFF
     }
 }
+
+// ============================================================================
+// RAII guard for PowerTracker session (no heater side effects)
+// ============================================================================
+
+struct RunSessionGuard {
+    Device* dev;
+    bool    active = false;
+
+    explicit RunSessionGuard(Device* d) : dev(d) {}
+
+    void begin(float busV, float idleA) {
+        if (!dev || active) return;
+        POWER_TRACKER->startSession(busV, idleA);
+        active = true;
+    }
+
+    void tick() {
+        if (!dev || !active) return;
+        if (dev->currentSensor) {
+            POWER_TRACKER->update(*dev->currentSensor);
+        }
+    }
+
+    void end(bool success) {
+        if (!dev || !active) return;
+        // Final update
+        tick();
+        POWER_TRACKER->endSession(success);
+        active = false;
+    }
+
+    ~RunSessionGuard() {
+        if (active) {
+            // If we exit unexpectedly, mark as failed but cleanly closed.
+            end(false);
+        }
+    }
+};
 
 // ============================================================================
 // StartLoop(): main heating behavior (sequential / advanced)
@@ -409,42 +431,60 @@ void Device::StartLoop() {
         return;
     }
 
-    DEBUGGSTART();
     DEBUG_PRINTLN("-----------------------------------------------------------");
-    DEBUG_PRINTLN("[Device] Initiating Loop Sequence 🔻 (RTOS/history-based)");
+    DEBUG_PRINTLN("[Device] StartLoop: entering main heating loop");
     DEBUG_PRINTLN("-----------------------------------------------------------");
-    DEBUGGSTOP();
 
-    // Ensure thermal model is initialized and wires are near ambient.
+    // 1) Thermal model ready & wires cooled.
     initWireThermalModelOnce();
     waitForWiresNearAmbient(5.0f, 0);
 
-    // Start continuous current sampling + thermal integration if available.
+    // 2) Auto wire-detect ONLY here, ONLY if all wires are < 150°C.
+    if (WIRE && currentSensor) {
+        const float maxProbeTempC = 150.0f;
+        bool anyTooHot = false;
+
+        for (uint8_t i = 1; i <= HeaterManager::kWireCount; ++i) {
+            const float t = WIRE->getWireEstimatedTemp(i);
+            if (isfinite(t) && t >= maxProbeTempC) {
+                anyTooHot = true;
+                break;
+            }
+        }
+
+        if (!anyTooHot) {
+            DEBUG_PRINTLN("[Device] Auto wire-detect (RUN, <150°C) ✅");
+            WIRE->probeWirePresence(*currentSensor);
+        } else {
+            DEBUG_PRINTLN("[Device] Skip auto wire-detect (hot wire ≥150°C) 🚫");
+        }
+    }
+
+    // 3) Start continuous current & thermal integration (observers only).
     if (currentSensor && !currentSensor->isContinuousRunning()) {
-        currentSensor->startContinuous(0); // default period from CurrentSensor
+        currentSensor->startContinuous(0);
     }
     if (thermalTaskHandle == nullptr) {
         startThermalTask();
     }
-
-    // DS18B20 monitoring in background for ambient/safety.
     startTemperatureMonitor();
 
-    // Ensure bypass and relay are correctly set for active operation.
+    // 4) Ensure power path is ready for active operation.
     relayControl->turnOn();
     bypassFET->enable();
 
-    // Initial evaluation of allowed outputs (cfg + thermal + presence).
+    // 5) Initial allowed outputs (cfg + thermal + presence).
     checkAllowedOutputs();
 
-    // -------- PowerTracker: start a new heating session --------
+    // 6) Setup PowerTracker session (no control over outputs).
     float busV = DEFAULT_DC_VOLTAGE;
     if (CONF) {
         float vdc = CONF->GetFloat(DC_VOLTAGE_KEY, 0.0f);
         if (vdc > 0.0f) {
             busV = vdc;
         } else {
-            float vset = CONF->GetFloat(DESIRED_OUTPUT_VOLTAGE_KEY, DEFAULT_DESIRED_OUTPUT_VOLTAGE);
+            float vset = CONF->GetFloat(DESIRED_OUTPUT_VOLTAGE_KEY,
+                                        DEFAULT_DESIRED_OUTPUT_VOLTAGE);
             if (vset > 0.0f) busV = vset;
         }
     }
@@ -455,14 +495,14 @@ void Device::StartLoop() {
     }
     if (idleA < 0.0f) idleA = 0.0f;
 
-    // Start session even if currentSensor is null: will at least count duration/sessions.
-    POWER_TRACKER->startSession(busV, idleA);
+    RunSessionGuard session(this);
+    session.begin(busV, idleA);
 
     const uint16_t onTime      = CONF->GetInt(ON_TIME_KEY,  DEFAULT_ON_TIME);
     const uint16_t offTime     = CONF->GetInt(OFF_TIME_KEY, DEFAULT_OFF_TIME);
     const bool     ledFeedback = CONF->GetBool(LED_FEEDBACK_KEY, DEFAULT_LED_FEEDBACK);
 
-    DEBUG_PRINTF("[Device] Loop config: onTime=%ums offTime=%ums mode=%s\n",
+    DEBUG_PRINTF("[Device] Loop config: on=%ums off=%ums mode=%s\n",
                  (unsigned)onTime,
                  (unsigned)offTime,
 #if (DEVICE_LOOP_MODE == DEVICE_LOOP_MODE_SEQUENTIAL)
@@ -474,22 +514,12 @@ void Device::StartLoop() {
 
 #if (DEVICE_LOOP_MODE == DEVICE_LOOP_MODE_SEQUENTIAL)
 
-    // =====================================================================
-    // SEQUENTIAL MODE:
-    //  - Drive ONE allowed output at a time.
-    //  - Always pick the coolest eligible wire.
-    //  - Dynamic presence:
-    //      * Each pulse updates WireInfo.connected via updatePresenceFromMask().
-    //      * checkAllowedOutputs() folds presence into allowedOutputs[].
-    //      * If no wires remain connected → stop loop.
-    //  - PowerTracker:
-    //      * update() called regularly to integrate Wh from history.
-    // =====================================================================
+    // ====================== SEQUENTIAL MODE ======================
 
-    DEBUG_PRINTLN("[Device] Loop mode: SEQUENTIAL (coolest-first, history-based)");
+    DEBUG_PRINTLN("[Device] Mode: SEQUENTIAL");
 
     while (currentState == DeviceState::Running) {
-        // Global abort checks
+        // Abort conditions
         if (!is12VPresent()) {
             handle12VDrop();
             break;
@@ -497,26 +527,24 @@ void Device::StartLoop() {
         if (gEvt) {
             EventBits_t bits = xEventGroupGetBits(gEvt);
             if (bits & EVT_STOP_REQ) {
+                DEBUG_PRINTLN("[Device] STOP → exit SEQ loop");
                 xEventGroupClearBits(gEvt, EVT_STOP_REQ);
-                DEBUG_PRINTLN("[Device] STOP requested → exit SEQ loop");
                 currentState = DeviceState::Idle;
                 break;
             }
         }
 
-        // Refresh permissions (cfg + thermal lockouts + dynamic presence)
+        // Refresh allowed.
         checkAllowedOutputs();
 
-        // If all wires are now considered missing, abort safely.
+        // If no connected wires → fault & exit.
         if (WIRE && !WIRE->hasAnyConnected()) {
-            DEBUG_PRINTLN("[Device] No connected heater wires remain → aborting SEQ loop.");
+            DEBUG_PRINTLN("[Device] No connected wires → abort SEQ loop");
             if (RGB) {
                 RGB->setFault();
                 RGB->postOverlay(OverlayEvent::FAULT_SENSOR_MISSING);
             }
-            if (BUZZ) {
-                BUZZ->bipFault();
-            }
+            if (BUZZ) BUZZ->bipFault();
             if (StateLock()) {
                 currentState = DeviceState::Error;
                 StateUnlock();
@@ -524,19 +552,15 @@ void Device::StartLoop() {
             break;
         }
 
-        // Pick coolest allowed wire
+        // Choose coolest allowed wire.
         bool    found    = false;
         uint8_t bestIdx  = 0;
         float   bestTemp = 1e9f;
 
         for (uint8_t i = 0; i < 10; ++i) {
             if (!allowedOutputs[i]) continue;
-
             float t = WIRE->getWireEstimatedTemp(i + 1);
-            if (isnan(t)) {
-                // If no estimate yet, assume ambient (safe/cool).
-                t = ambientC;
-            }
+            if (isnan(t)) t = ambientC;
             if (t < bestTemp) {
                 bestTemp = t;
                 bestIdx  = i;
@@ -545,77 +569,51 @@ void Device::StartLoop() {
         }
 
         if (!found) {
-            // No eligible wires: either thermal-locked or temporarily none.
-            // Wait a bit with abort checks; planner will re-evaluate.
+            // No eligible wires; short wait, still track power.
             if (!delayWithPowerWatch(100)) {
-                if (!is12VPresent()) {
-                    handle12VDrop();
-                } else if (gEvt) {
+                if (!is12VPresent()) handle12VDrop();
+                else {
                     xEventGroupClearBits(gEvt, EVT_STOP_REQ);
                     currentState = DeviceState::Idle;
                 }
                 break;
             }
-
-            // Track energy during idle wait (uses current history)
-            if (currentSensor) {
-                POWER_TRACKER->update(*currentSensor);
-            }
+            session.tick();
             continue;
         }
 
         const uint16_t mask = (1u << bestIdx);
 
-        // Run one guarded pulse on this single wire.
+        // Single guarded pulse.
         if (!_runMaskedPulse(this, mask, onTime, ledFeedback)) {
-            // Aborted by STOP/12V.
-            if (!is12VPresent()) {
-                handle12VDrop();
-            } else {
-                currentState = DeviceState::Idle;
-            }
+            // Aborted by STOP/12V/OC.
+            if (!is12VPresent()) handle12VDrop();
+            else currentState = DeviceState::Idle;
             break;
         }
 
-        // Integrate energy for this ON period.
-        if (currentSensor) {
-            POWER_TRACKER->update(*currentSensor);
-        }
+        session.tick();
 
-        // OFF window between activations.
+        // OFF window.
         if (!delayWithPowerWatch(offTime)) {
-            if (!is12VPresent()) {
-                handle12VDrop();
-            } else if (gEvt) {
+            if (!is12VPresent()) handle12VDrop();
+            else {
                 xEventGroupClearBits(gEvt, EVT_STOP_REQ);
                 currentState = DeviceState::Idle;
             }
             break;
         }
 
-        // Integrate during OFF / background as well.
-        if (currentSensor) {
-            POWER_TRACKER->update(*currentSensor);
-        }
+        session.tick();
     }
 
-#else // DEVICE_LOOP_MODE == DEVICE_LOOP_MODE_ADVANCED
+#else  // DEVICE_LOOP_MODE == DEVICE_LOOP_MODE_ADVANCED
 
-    // =====================================================================
-    // ADVANCED MODE:
-    //  - Multi-output grouped drive using planner.
-    //  - Dynamic presence:
-    //      * Each group pulse calls updatePresenceFromMask().
-    //      * checkAllowedOutputs() uses presence each cycle.
-    //      * If no wires remain connected → stop loop.
-    //  - PowerTracker:
-    //      * update() called regularly to integrate Wh from history.
-    // =====================================================================
+    // ====================== ADVANCED MODE ======================
 
-    DEBUG_PRINTLN("[Device] Loop mode: ADVANCED (planner + history-based thermal)");
+    DEBUG_PRINTLN("[Device] Mode: ADVANCED");
 
     while (currentState == DeviceState::Running) {
-        // Abort checks
         if (!is12VPresent()) {
             handle12VDrop();
             break;
@@ -623,26 +621,22 @@ void Device::StartLoop() {
         if (gEvt) {
             EventBits_t bits = xEventGroupGetBits(gEvt);
             if (bits & EVT_STOP_REQ) {
+                DEBUG_PRINTLN("[Device] STOP → exit ADV loop");
                 xEventGroupClearBits(gEvt, EVT_STOP_REQ);
-                DEBUG_PRINTLN("[Device] STOP requested → exit ADV loop");
                 currentState = DeviceState::Idle;
                 break;
             }
         }
 
-        // Refresh allowed outputs from cfg + thermal + dynamic presence.
         checkAllowedOutputs();
 
-        // If all wires are gone, abort safely.
         if (WIRE && !WIRE->hasAnyConnected()) {
-            DEBUG_PRINTLN("[Device] No connected heater wires remain → aborting ADV loop.");
+            DEBUG_PRINTLN("[Device] No connected wires → abort ADV loop");
             if (RGB) {
                 RGB->setFault();
                 RGB->postOverlay(OverlayEvent::FAULT_SENSOR_MISSING);
             }
-            if (BUZZ) {
-                BUZZ->bipFault();
-            }
+            if (BUZZ) BUZZ->bipFault();
             if (StateLock()) {
                 currentState = DeviceState::Error;
                 StateUnlock();
@@ -652,25 +646,18 @@ void Device::StartLoop() {
 
         const uint16_t allowedMask = _allowedMaskFrom(allowedOutputs);
         if (allowedMask == 0) {
-            // Nothing available right now → short wait, let thermal or presence
-            // changes re-open options.
             if (!delayWithPowerWatch(100)) {
-                if (!is12VPresent()) {
-                    handle12VDrop();
-                } else if (gEvt) {
+                if (!is12VPresent()) handle12VDrop();
+                else {
                     xEventGroupClearBits(gEvt, EVT_STOP_REQ);
                     currentState = DeviceState::Idle;
                 }
                 break;
             }
-
-            if (currentSensor) {
-                POWER_TRACKER->update(*currentSensor);
-            }
+            session.tick();
             continue;
         }
 
-        // Build planner input: base resistances (as before).
         float R[10] = {
             CONF->GetFloat(R01OHM_KEY, DEFAULT_WIRE_RES_OHMS),
             CONF->GetFloat(R02OHM_KEY, DEFAULT_WIRE_RES_OHMS),
@@ -684,70 +671,51 @@ void Device::StartLoop() {
             CONF->GetFloat(R10OHM_KEY, DEFAULT_WIRE_RES_OHMS),
         };
 
-        const float    targetRes     = CONF->GetFloat(R0XTGT_KEY, DEFAULT_TARG_RES_OHMS);
-        const uint8_t  maxActive     = MAX_ACTIVE;
-        const bool     preferAboveEq = PREF_ABOVE;
+        const float   targetRes     = CONF->GetFloat(R0XTGT_KEY, DEFAULT_TARG_RES_OHMS);
+        const uint8_t maxActive     = MAX_ACTIVE;
+        const bool    preferAboveEq = PREF_ABOVE;
 
         std::vector<uint16_t> plan;
         _buildPlan(plan, allowedMask, R, targetRes, maxActive, preferAboveEq);
 
         if (plan.empty()) {
-            DEBUG_PRINTLN("[Device] [ADV] Planner returned empty plan; waiting...");
+            DEBUG_PRINTLN("[Device] [ADV] Planner empty; wait & retry");
             if (!delayWithPowerWatch(200)) {
-                if (!is12VPresent()) {
-                    handle12VDrop();
-                } else if (gEvt) {
+                if (!is12VPresent()) handle12VDrop();
+                else {
                     xEventGroupClearBits(gEvt, EVT_STOP_REQ);
                     currentState = DeviceState::Idle;
                 }
                 break;
             }
-
-            if (currentSensor) {
-                POWER_TRACKER->update(*currentSensor);
-            }
+            session.tick();
             continue;
         }
 
-        // Execute each group mask as one pulse.
         for (uint16_t mask : plan) {
-            if (currentState != DeviceState::Running) {
-                break;
-            }
+            if (currentState != DeviceState::Running) break;
 
             if (!_runMaskedPulse(this, mask, onTime, ledFeedback)) {
-                // Aborted by STOP/12V.
-                if (!is12VPresent()) {
-                    handle12VDrop();
-                } else {
-                    currentState = DeviceState::Idle;
-                }
+                if (!is12VPresent()) handle12VDrop();
+                else currentState = DeviceState::Idle;
                 break;
             }
 
-            // Integrate after each group pulse.
-            if (currentSensor) {
-                POWER_TRACKER->update(*currentSensor);
-            }
+            session.tick();
 
-            // OFF window between groups.
             if (!delayWithPowerWatch(offTime)) {
-                if (!is12VPresent()) {
-                    handle12VDrop();
-                } else if (gEvt) {
+                if (!is12VPresent()) handle12VDrop();
+                else {
                     xEventGroupClearBits(gEvt, EVT_STOP_REQ);
                     currentState = DeviceState::Idle;
                 }
                 break;
             }
 
-            // Integrate during OFF as well.
-            if (currentSensor) {
-                POWER_TRACKER->update(*currentSensor);
-            }
+            session.tick();
         }
 
-        // Optional: recharge handling preserved as-is, with tracking.
+        // Optional recharge between supercycles.
         if (rechargeMode == RechargeMode::BatchRecharge &&
             currentState == DeviceState::Running)
         {
@@ -766,42 +734,30 @@ void Device::StartLoop() {
                     lastChargePost = now;
                 }
 
-                DEBUG_PRINTF("[Device] [ADV] Recharging… Cap: %.2fV / Target: %.2fV\n",
+                DEBUG_PRINTF("[Device] [ADV] Recharging… Cap=%.2fV Target=%.2fV\n",
                              discharger->readCapVoltage(), GO_THRESHOLD_RATIO);
 
                 if (!delayWithPowerWatch(200)) {
-                    if (!is12VPresent()) {
-                        handle12VDrop();
-                    } else if (gEvt) {
+                    if (!is12VPresent()) handle12VDrop();
+                    else {
                         xEventGroupClearBits(gEvt, EVT_STOP_REQ);
                         currentState = DeviceState::Idle;
                     }
                     break;
                 }
 
-                if (currentSensor) {
-                    POWER_TRACKER->update(*currentSensor);
-                }
+                session.tick();
             }
         }
     }
 
 #endif // DEVICE_LOOP_MODE
 
-    // --- Finalize power tracking session (any exit path) ---
-    if (POWER_TRACKER->isSessionActive()) {
-        if (currentSensor) {
-            // Consume remaining history window
-            POWER_TRACKER->update(*currentSensor);
-        }
+    // --- Session finalize & hard-off ---
+    const bool success = (currentState != DeviceState::Error);
+    session.end(success);
 
-        // Treat non-Error as "successful" session; Error / FAULT as aborted.
-        bool success = (currentState != DeviceState::Error);
-        POWER_TRACKER->endSession(success);
-    }
-
-    // Common exit: ensure everything is off & safe.
     if (WIRE)      WIRE->disableAll();
     if (indicator) indicator->clearAll();
-    stopTemperatureMonitor(); // thermalTask continues; it is cheap and safe
+    stopTemperatureMonitor();
 }

@@ -3,7 +3,7 @@
  **************************************************************/
 
 #include "HeaterManager.h"
-
+#include "Device.h"
 // Static singleton pointer
 HeaterManager* HeaterManager::s_instance = nullptr;
 
@@ -264,6 +264,10 @@ bool HeaterManager::getOutputState(uint8_t index) const {
 // ==========================================================================
 
 void HeaterManager::setOutputMask(uint16_t mask) {
+    // Hard gate: never allow mask if device not running
+    if (!DEVICE || DEVICE->currentState != DeviceState::Running) {
+        mask = 0;
+    }
     // Only 10 bits are meaningful
     mask &= ((1u << kWireCount) - 1u);
 
@@ -594,8 +598,17 @@ void HeaterManager::updatePresenceFromMask(uint16_t mask,
                                            float busVoltage,
                                            float minValidRatio)
 {
-    if (mask == 0) return;
-    if (totalCurrentA < 0.0f) totalCurrentA = 0.0f;
+    if (mask == 0) {
+        return;
+    }
+    if (totalCurrentA < 0.0f) {
+        totalCurrentA = 0.0f;
+    }
+
+    // We only want to use auto presence-detect on wires that are not overheated.
+    // Above this temp, wires are considered "actively hot" and their reduced
+    // current vs cold-R is expected, not a sign of disconnection.
+    static constexpr float kMaxPresenceTempC = 150.0f;
 
     // Resolve bus voltage if not provided
     if (busVoltage <= 0.0f && CONF) {
@@ -604,42 +617,80 @@ void HeaterManager::updatePresenceFromMask(uint16_t mask,
             busVoltage = CONF->GetFloat(DESIRED_OUTPUT_VOLTAGE_KEY, 0.0f);
         }
     }
-    if (busVoltage <= 0.0f) return;
+    if (busVoltage <= 0.0f) {
+        return;
+    }
 
-    // Expected total current from wires in mask that are still "connected"
+    // Expected total conductance from wires in mask that:
+    //  - are still marked connected
+    //  - have a valid resistance
+    //  - are BELOW kMaxPresenceTempC
     float G = 0.0f;
     for (uint8_t i = 0; i < kWireCount; ++i) {
         if (mask & (1u << i)) {
             const WireInfo& w = wires[i];
-            if (!w.connected) continue;          // already considered missing
+
+            // Skip wires already considered missing
+            if (!w.connected) {
+                continue;
+            }
+
+            // Skip hot wires from the expectation model so we don't treat
+            // their higher resistance / lower current as "missing".
+            if (isfinite(w.temperatureC) && w.temperatureC >= kMaxPresenceTempC) {
+                continue;
+            }
+
             const float R = w.resistanceOhm;
             if (R > 0.01f && isfinite(R)) {
                 G += 1.0f / R;
             }
         }
     }
-    if (G <= 0.0f) return;
+
+    // If no eligible cool wires in this mask, do not run presence logic.
+    if (G <= 0.0f) {
+        return;
+    }
 
     const float expectedI = busVoltage * G;
-    if (expectedI <= 0.0f) return;
+    if (expectedI <= 0.0f) {
+        return;
+    }
 
     const float ratio = totalCurrentA / expectedI;
 
-    // If we're far below expected current, treat these wires as gone.
+    // If we're far below expected current, mark ONLY cool wires in this mask
+    // as no-presence. Hot wires are ignored here.
     if (!isfinite(ratio) || ratio < minValidRatio) {
         for (uint8_t i = 0; i < kWireCount; ++i) {
-            if (mask & (1u << i)) {
-                wires[i].connected        = false;
-                wires[i].presenceCurrentA = totalCurrentA;
-                DEBUG_PRINTF(
-                    "[HeaterManager] Wire %u marked NO-PRESENCE "
-                    "(I=%.3fA, Iexp=%.3fA, ratio=%.2f)\n",
-                    wires[i].index,
-                    totalCurrentA,
-                    expectedI,
-                    ratio
-                );
+            if (!(mask & (1u << i))) {
+                continue;
             }
+
+            WireInfo& w = wires[i];
+
+            // Never flip presence based on samples taken while the wire is hot.
+            if (isfinite(w.temperatureC) && w.temperatureC >= kMaxPresenceTempC) {
+                continue;
+            }
+
+            // Only affect wires that were previously considered connected.
+            if (!w.connected) {
+                continue;
+            }
+
+            w.connected        = false;
+            w.presenceCurrentA = totalCurrentA;
+
+            DEBUG_PRINTF(
+                "[HeaterManager] Wire %u marked NO-PRESENCE "
+                "(I=%.3fA, Iexp=%.3fA, ratio=%.2f)\n",
+                w.index,
+                totalCurrentA,
+                expectedI,
+                ratio
+            );
         }
     }
 }

@@ -1,5 +1,5 @@
 .pio/build/esp32-s3-devkitc1-n16r8/src/TempSensor.cpp.o: \
- src/TempSensor.cpp src/TempSensor.h src/NVSManager.h src/Config.h \
+ src/TempSensor.cpp src/TempSensor.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/cores/esp32/Arduino.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/cores/esp32/esp_arduino_version.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/freertos/include/freertos/FreeRTOS.h \
@@ -180,6 +180,9 @@
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/esp_hw_support/include/soc/esp32/spiram.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/cores/esp32/io_pin_remap.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/cores/esp32/Arduino.h \
+ .pio/libdeps/esp32-s3-devkitc1-n16r8/OneWire/OneWire.h \
+ .pio/libdeps/esp32-s3-devkitc1-n16r8/OneWire/util/OneWire_direct_regtype.h \
+ src/NVSManager.h src/Config.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/esp_wifi/include/esp_now.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/esp_wifi/include/esp_wifi_types.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/esp_wifi/include/esp_wifi.h \
@@ -235,6 +238,4 @@
  .pio/libdeps/esp32-s3-devkitc1-n16r8/ArduinoJson/src/ArduinoJson.h \
  .pio/libdeps/esp32-s3-devkitc1-n16r8/ArduinoJson/src/ArduinoJson.hpp \
  .pio/libdeps/esp32-s3-devkitc1-n16r8/ArduinoJson/src/ArduinoJson/Configuration.hpp \
- .pio/libdeps/esp32-s3-devkitc1-n16r8/OneWire/OneWire.h \
- .pio/libdeps/esp32-s3-devkitc1-n16r8/OneWire/util/OneWire_direct_regtype.h \
  src/Utils.h

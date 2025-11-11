@@ -22,6 +22,8 @@ CurrentSensor::CurrentSensor()
       _captureBuf(nullptr),
       _captureCapacity(0),
       _captureCount(0),
+      _zeroCurrentMv(ACS781_ZERO_CURRENT_MV),
+      _sensitivityMvPerA(ACS781_SENSITIVITY_MV_PER_A),
       _ocLimitA(0.0f),
       _ocMinDurationMs(0),
       _ocLatched(false),
@@ -31,6 +33,10 @@ CurrentSensor::CurrentSensor()
 
 // ============================================================================
 // begin()
+//   - Create mutex
+//   - Configure ADC pin
+//   - Auto zero-current calibration (NO LOAD at boot)
+//   - Configure default over-current protection
 // ============================================================================
 
 void CurrentSensor::begin() {
@@ -39,23 +45,16 @@ void CurrentSensor::begin() {
     DEBUG_PRINTLN("#                 Initializing Current Sensor             #");
     DEBUG_PRINTLN("###########################################################");
 
-    // Create mutex first so all subsequent APIs are safe
+    // Create mutex first so all subsequent APIs are safe.
     _mutex = xSemaphoreCreateMutex();
     if (_mutex == nullptr) {
         DEBUG_PRINTLN("[CurrentSensor] ERROR: Failed to create mutex ❌");
         DEBUGGSTOP();
         return;
     }
-
-    // Configure hardware input
+    // Configure hardware input.
     pinMode(ACS_LOAD_CURRENT_VOUT_PIN, INPUT);
 
-    // Default over-current protection:
-    //  - Trip above 20 A
-    //  - Sustained for at least 5 ms
-    configureOverCurrent(CURRENT_LIMIT, CURRENT_TIME);
-
-    // Info about history buffer / continuous sampling capabilities
     DEBUG_PRINTF("[CurrentSensor] ADC pin            : %d\n", ACS_LOAD_CURRENT_VOUT_PIN);
     DEBUG_PRINTF("[CurrentSensor] History window     : %u samples @ %u Hz (~%u s)\n",
                  (unsigned)HISTORY_SAMPLES,
@@ -64,7 +63,23 @@ void CurrentSensor::begin() {
     DEBUG_PRINTF("[CurrentSensor] Default sample period: %lu ms\n",
                  (unsigned long)(1000UL / HISTORY_HZ));
 
-    // Over-current configuration summary
+    DEBUG_PRINTF("[CurrentSensor] Nominal zero offset: %.2f mV\n", _zeroCurrentMv);
+    DEBUG_PRINTF("[CurrentSensor] Nominal sensitivity: %.4f mV/A\n", _sensitivityMvPerA);
+
+    // --------------------------------------------------------------------
+    // Auto zero-current calibration at startup
+    // REQUIREMENT: System must be at 0 A during this step.
+    // --------------------------------------------------------------------
+    DEBUG_PRINTLN("[CurrentSensor] Auto zero-current calibration starting (NO LOAD)...");
+    calibrateZeroCurrent(CURRENT_SENSOR_AUTO_ZERO_CAL_SAMPLES,
+                         CURRENT_SENSOR_AUTO_ZERO_CAL_SETTLE_MS);
+    DEBUG_PRINTF("[CurrentSensor] Auto-calibrated zero offset: %.3f mV\n", _zeroCurrentMv);
+
+    // --------------------------------------------------------------------
+    // Default Over-Current configuration for 35 A system
+    // --------------------------------------------------------------------
+    configureOverCurrent(CURRENT_LIMIT, CURRENT_TIME);
+
     if (_ocLimitA > 0.0f && _ocMinDurationMs > 0) {
         DEBUG_PRINTF("[CurrentSensor] Over-current limit : %.2f A for >= %u ms (latched)\n",
                      _ocLimitA,
@@ -77,30 +92,26 @@ void CurrentSensor::begin() {
     DEBUGGSTOP();
 }
 
-
 // ============================================================================
 // sampleOnce()
-//   - Single ADC read -> current in A
+//   - Single ADC read -> current in A using calibrated parameters.
 // ============================================================================
 
 float CurrentSensor::sampleOnce() {
     int   adc        = analogRead(ACS_LOAD_CURRENT_VOUT_PIN);
     float voltage_mv = analogToMillivolts(adc);
-    float delta_mv   = voltage_mv - ACS781_ZERO_CURRENT_MV;
-    float current    = delta_mv / ACS781_SENSITIVITY_MV_PER_A;
+    float delta_mv   = voltage_mv - _zeroCurrentMv;
+    float current    = delta_mv / _sensitivityMvPerA;
     return current;
 }
 
 // ============================================================================
 // readCurrent()
-//   - Legacy behavior:
-//       * If capturing: return last known (_lastCurrentA).
-//       * Else: 25-sample averaged ADC read.
-//   - In continuous mode, _lastCurrentA is already maintained.
+//   - If capturing: return last known (_lastCurrentA).
+//   - Else: 25-sample averaged ADC read (using calibration).
 // ============================================================================
 
 float CurrentSensor::readCurrent() {
-    // During explicit capture, do NOT disturb timing with extra ADC loops.
     if (_capturing) {
         return _lastCurrentA;
     }
@@ -108,7 +119,6 @@ float CurrentSensor::readCurrent() {
     constexpr uint8_t NUM_SAMPLES = 25;
 
     if (!lock()) {
-        // Best-effort fallback: single sample
         return sampleOnce();
     }
 
@@ -119,8 +129,8 @@ float CurrentSensor::readCurrent() {
 
     int   adc        = static_cast<int>(sumAdc / NUM_SAMPLES);
     float voltage_mv = analogToMillivolts(adc);
-    float delta_mv   = voltage_mv - ACS781_ZERO_CURRENT_MV;
-    float current    = delta_mv / ACS781_SENSITIVITY_MV_PER_A;
+    float delta_mv   = voltage_mv - _zeroCurrentMv;
+    float current    = delta_mv / _sensitivityMvPerA;
 
     _lastCurrentA = current;
     _updateOverCurrentStateLocked(current, millis());
@@ -135,10 +145,10 @@ float CurrentSensor::readCurrent() {
 
 void CurrentSensor::startContinuous(uint32_t samplePeriodMs) {
     if (samplePeriodMs == 0) {
-        samplePeriodMs = 1000 / HISTORY_HZ; // default based on HISTORY_HZ
+        samplePeriodMs = 1000 / HISTORY_HZ;
     }
     if (samplePeriodMs == 0) {
-        samplePeriodMs = 5;                 // absolute floor
+        samplePeriodMs = 5; // absolute floor
     }
 
     if (!lock()) {
@@ -150,6 +160,8 @@ void CurrentSensor::startContinuous(uint32_t samplePeriodMs) {
     // If already running, just update the period.
     if (_continuousRunning) {
         unlock();
+        DEBUG_PRINTF("[CurrentSensor] Updated continuous period to %lu ms\n",
+                     (unsigned long)_samplePeriodMs);
         return;
     }
 
@@ -163,12 +175,11 @@ void CurrentSensor::startContinuous(uint32_t samplePeriodMs) {
 
     unlock();
 
-    // Create sampling task if not already created.
     if (_samplingTaskHandle == nullptr) {
         BaseType_t ok = xTaskCreate(
             _samplingTaskThunk,
             "CurrentSampler",
-            4096,           // stack size; tune if needed
+            4096,
             this,
             tskIDLE_PRIORITY + 1,
             &_samplingTaskHandle
@@ -196,11 +207,11 @@ void CurrentSensor::stopContinuous() {
     if (!lock()) return;
     _continuousRunning = false;
     unlock();
-    // Sampling task will see this and self-delete.
+    // Task will exit and self-delete.
 }
 
 // ============================================================================
-// Continuous Sampling Task (static thunk + loop)
+// Continuous Sampling Task
 // ============================================================================
 
 void CurrentSensor::_samplingTaskThunk(void* arg) {
@@ -214,7 +225,6 @@ void CurrentSensor::_samplingTaskLoop() {
     for (;;) {
         vTaskDelayUntil(&lastWake, pdMS_TO_TICKS(_samplePeriodMs));
 
-        // Check run flag
         if (!lock()) {
             continue;
         }
@@ -225,32 +235,27 @@ void CurrentSensor::_samplingTaskLoop() {
             break;
         }
 
-        // Take one sample
         float    current = sampleOnce();
         uint32_t nowMs   = millis();
 
         if (!lock()) {
-            // Best effort: keep lastCurrent updated without history/OC
             _lastCurrentA = current;
             continue;
         }
 
         _lastCurrentA = current;
 
-        // Append to ring buffer (single producer)
         const uint32_t idx = _historyHead % HISTORY_SAMPLES;
         _history[idx].timestampMs = nowMs;
         _history[idx].currentA    = current;
         _historyHead++;
         _historySeq++;
 
-        // Update over-current state
         _updateOverCurrentStateLocked(current, nowMs);
 
         unlock();
     }
 
-    // Mark task as stopped
     if (lock()) {
         _samplingTaskHandle = nullptr;
         unlock();
@@ -261,7 +266,6 @@ void CurrentSensor::_samplingTaskLoop() {
 
 // ============================================================================
 // getHistorySince()
-//   - SPSC-style consumer API for 10s ring buffer
 // ============================================================================
 
 size_t CurrentSensor::getHistorySince(uint32_t lastSeq,
@@ -282,19 +286,16 @@ size_t CurrentSensor::getHistorySince(uint32_t lastSeq,
     const uint32_t seqNow = _historySeq;
 
     if (seqNow == 0) {
-        // No samples yet
-        unlock();
+        const_cast<CurrentSensor*>(this)->unlock();
         newSeq = 0;
         return 0;
     }
 
-    // Oldest sequence still valid (ring overwrite)
     const uint32_t maxSpan = (seqNow > HISTORY_SAMPLES)
                            ? HISTORY_SAMPLES
                            : seqNow;
     const uint32_t minSeq = seqNow - maxSpan;
 
-    // Clamp lastSeq
     if (lastSeq < minSeq) lastSeq = minSeq;
     if (lastSeq > seqNow) lastSeq = seqNow;
 
@@ -311,14 +312,12 @@ size_t CurrentSensor::getHistorySince(uint32_t lastSeq,
 
     newSeq = lastSeq + available;
 
-    unlock();
-    return static_cast<size_t>(available);
+    const_cast<CurrentSensor*>(this)->unlock();
+    return (size_t)available;
 }
 
 // ============================================================================
 // startCapture()
-//   - Allocate/prepare dedicated capture buffer
-//   - Stop continuous sampling if active
 // ============================================================================
 
 bool CurrentSensor::startCapture(size_t maxSamples) {
@@ -326,17 +325,14 @@ bool CurrentSensor::startCapture(size_t maxSamples) {
         return false;
     }
 
-    // Stop continuous mode while using explicit capture.
     _continuousRunning = false;
 
-    // If already capturing with buffer, just reset.
     if (_capturing && _captureBuf != nullptr) {
         _captureCount = 0;
         unlock();
         return true;
     }
 
-    // Free any previous buffer
     if (_captureBuf != nullptr) {
 #ifdef ESP32
         heap_caps_free(_captureBuf);
@@ -348,12 +344,10 @@ bool CurrentSensor::startCapture(size_t maxSamples) {
         _captureCount    = 0;
     }
 
-    // Clamp requested samples
     if (maxSamples == 0 || maxSamples > CURRENT_CAPTURE_MAX_SAMPLES) {
         maxSamples = CURRENT_CAPTURE_MAX_SAMPLES;
     }
 
-    // Try PSRAM, then internal RAM
 #ifdef ESP32
     _captureBuf = static_cast<Sample*>(
         heap_caps_malloc(maxSamples * sizeof(Sample),
@@ -400,7 +394,6 @@ void CurrentSensor::stopCapture() {
 
 // ============================================================================
 // addCaptureSample()
-//   - Only if capturing=true and buffer not full
 // ============================================================================
 
 bool CurrentSensor::addCaptureSample() {
@@ -423,10 +416,8 @@ bool CurrentSensor::addCaptureSample() {
 
     const bool ok = pushCaptureSample(current, nowMs);
 
-    // Over-current detection also applies to captured samples.
     _updateOverCurrentStateLocked(current, nowMs);
 
-    // Auto-stop if full
     if (!ok || _captureCount >= _captureCapacity) {
         _capturing = false;
     }
@@ -444,7 +435,7 @@ size_t CurrentSensor::getCapture(Sample* out, size_t maxCount) const {
     if (!const_cast<CurrentSensor*>(this)->lock()) return 0;
 
     if (_captureBuf == nullptr || _captureCount == 0) {
-        unlock();
+        const_cast<CurrentSensor*>(this)->unlock();
         return 0;
     }
 
@@ -453,7 +444,7 @@ size_t CurrentSensor::getCapture(Sample* out, size_t maxCount) const {
         out[i] = _captureBuf[i];
     }
 
-    unlock();
+    const_cast<CurrentSensor*>(this)->unlock();
     return n;
 }
 
@@ -482,7 +473,7 @@ void CurrentSensor::freeCaptureBuffer() {
 }
 
 // ============================================================================
-// pushCaptureSample() - internal helper for explicit capture
+// pushCaptureSample()
 // ============================================================================
 
 inline bool CurrentSensor::pushCaptureSample(float currentA, uint32_t tsMs) {
@@ -502,7 +493,6 @@ inline bool CurrentSensor::pushCaptureSample(float currentA, uint32_t tsMs) {
 
 void CurrentSensor::_updateOverCurrentStateLocked(float currentA, uint32_t nowMs)
 {
-    // Disabled or already latched?
     if (_ocLimitA <= 0.0f || _ocMinDurationMs == 0 || _ocLatched) {
         return;
     }
@@ -510,7 +500,6 @@ void CurrentSensor::_updateOverCurrentStateLocked(float currentA, uint32_t nowMs
     const float a = fabsf(currentA);
 
     if (a >= _ocLimitA) {
-        // Above threshold
         if (_ocOverStartMs == 0) {
             _ocOverStartMs = nowMs;
         } else {
@@ -520,7 +509,6 @@ void CurrentSensor::_updateOverCurrentStateLocked(float currentA, uint32_t nowMs
             }
         }
     } else {
-        // Back below threshold: reset window
         _ocOverStartMs = 0;
     }
 }
@@ -534,7 +522,6 @@ void CurrentSensor::configureOverCurrent(float limitA, uint32_t minDurationMs)
     if (!lock()) return;
 
     if (limitA <= 0.0f || minDurationMs == 0) {
-        // Disable detection
         _ocLimitA        = 0.0f;
         _ocMinDurationMs = 0;
         _ocOverStartMs   = 0;
@@ -568,6 +555,142 @@ void CurrentSensor::clearOverCurrentLatch()
 }
 
 // ============================================================================
+// Calibration helpers
+// ============================================================================
+
+void CurrentSensor::setCalibration(float zeroCurrentMv, float sensitivityMvPerA)
+{
+    if (!lock()) return;
+
+    if (sensitivityMvPerA > 0.0f) {
+        _sensitivityMvPerA = sensitivityMvPerA;
+    }
+
+    if (zeroCurrentMv > 0.0f &&
+        zeroCurrentMv < (ADC_REF_VOLTAGE * 1000.0f)) {
+        _zeroCurrentMv = zeroCurrentMv;
+    }
+
+    unlock();
+
+    DEBUG_PRINTF("[CurrentSensor] Calibration set: zero=%.3f mV, sens=%.5f mV/A\n",
+                 _zeroCurrentMv, _sensitivityMvPerA);
+}
+
+void CurrentSensor::calibrateZeroCurrent(uint16_t samples, uint16_t settleMs)
+{
+    if (samples == 0) {
+        samples = 200;
+    }
+
+    if (!lock()) {
+        return;
+    }
+
+    DEBUG_PRINTLN("[CurrentSensor] Zero-current calibration started (NO LOAD required)");
+
+    _ocLatched     = false;
+    _ocOverStartMs = 0;
+
+    unlock();
+
+    vTaskDelay(pdMS_TO_TICKS(settleMs));
+
+    uint64_t sum = 0;
+
+    for (uint16_t i = 0; i < samples; ++i) {
+        int adc = analogRead(ACS_LOAD_CURRENT_VOUT_PIN);
+        sum += (uint32_t)adc;
+#ifdef ESP32
+        ets_delay_us(100);
+#else
+        delayMicroseconds(100);
+#endif
+    }
+
+    int   avgAdc = (int)(sum / samples);
+    float mv     = analogToMillivolts(avgAdc);
+
+    if (!lock()) {
+        return;
+    }
+
+    _zeroCurrentMv = mv;
+
+    unlock();
+
+    DEBUG_PRINTF("[CurrentSensor] Zero-current calibrated to: %.3f mV\n", _zeroCurrentMv);
+}
+
+// ============================================================================
+// getRmsCurrent() - RMS over recent window using history buffer
+// ============================================================================
+
+float CurrentSensor::getRmsCurrent(uint32_t windowMs) const
+{
+    const uint32_t maxWindow = HISTORY_SECONDS * 1000UL;
+    if (windowMs == 0 || windowMs > maxWindow) {
+        windowMs = maxWindow;
+    }
+
+    if (!const_cast<CurrentSensor*>(this)->lock()) {
+        return fabsf(_lastCurrentA);
+    }
+
+    const uint32_t seqNow = _historySeq;
+
+    if (seqNow == 0) {
+        float last = _lastCurrentA;
+        const_cast<CurrentSensor*>(this)->unlock();
+        return fabsf(last);
+    }
+
+    uint32_t maxCount = (seqNow > HISTORY_SAMPLES)
+                      ? HISTORY_SAMPLES
+                      : seqNow;
+
+    if (maxCount == 0) {
+        float last = _lastCurrentA;
+        const_cast<CurrentSensor*>(this)->unlock();
+        return fabsf(last);
+    }
+
+    const uint32_t newestSeq = seqNow - 1;
+    const uint32_t newestIdx = newestSeq % HISTORY_SAMPLES;
+    const uint32_t newestTs  = _history[newestIdx].timestampMs;
+
+    const uint32_t minTs = (newestTs > windowMs)
+                         ? (newestTs - windowMs)
+                         : 0;
+
+    double    sumSq = 0.0;
+    uint32_t  n     = 0;
+
+    for (uint32_t i = 0; i < maxCount; ++i) {
+        const uint32_t sSeq = seqNow - 1 - i;
+        const uint32_t idx  = sSeq % HISTORY_SAMPLES;
+        const Sample&  s    = _history[idx];
+
+        if (s.timestampMs < minTs) {
+            break;
+        }
+
+        const double ia = (double)s.currentA;
+        sumSq += ia * ia;
+        ++n;
+    }
+
+    const_cast<CurrentSensor*>(this)->unlock();
+
+    if (n == 0) {
+        return fabsf(_lastCurrentA);
+    }
+
+    const double rms = sqrt(sumSq / (double)n);
+    return (float)rms;
+}
+
+// ============================================================================
 // analogToMillivolts()
 // ============================================================================
 
@@ -575,6 +698,7 @@ float CurrentSensor::analogToMillivolts(int adcValue) const {
     if (adcValue < 0) {
         adcValue = 0;
     }
+
 #if defined(ADC_MAX) && defined(ADC_REF_VOLTAGE)
     if (adcValue > (int)ADC_MAX) {
         adcValue = (int)ADC_MAX;
@@ -583,5 +707,6 @@ float CurrentSensor::analogToMillivolts(int adcValue) const {
 #else
     const float v = (static_cast<float>(adcValue) / 4095.0f) * 3.3f;
 #endif
+
     return v * 1000.0f; // mV
 }

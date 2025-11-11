@@ -304,11 +304,11 @@ bool Device::delayWithPowerWatch(uint32_t ms)
         }
 
         // 3) NEW: Check over-current latch
-        if (currentSensor && currentSensor->isOverCurrentLatched()) {
+        /*if (currentSensor && currentSensor->isOverCurrentLatched()) {
             DEBUG_PRINTLN("[Device] Over-current latch set during wait → abort");
             handleOverCurrentFault();
             return false;
-        }
+        }*/
     }
 
     return true;

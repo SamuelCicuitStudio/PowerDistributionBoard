@@ -26,6 +26,7 @@
 #define NICHROME_DENSITY        8400.0f  // kg/m³
 #define NICHROME_SPECIFIC_HEAT  450.0f   // J/(kg·K) (reserved)
 
+class Device;
 /**
  * @brief Aggregated information for one heater wire.
  */
