@@ -1607,7 +1607,7 @@
     liveRender();
     scheduleLiveInterval();
 
-    //startHeartbeat();
+    startHeartbeat();
     startMonitorPolling();
     loadControls();
     bindSessionHistoryButton();
