@@ -253,6 +253,13 @@ void NVS::initializeVariables() {
   PutInt  (PT_KEY_LAST_SESS_DURATION_S,PT_DEF_LAST_SESS_DURATION_S);
   PutFloat(PT_KEY_LAST_SESS_PEAK_W,    PT_DEF_LAST_SESS_PEAK_W);
   PutFloat(PT_KEY_LAST_SESS_PEAK_A,    PT_DEF_LAST_SESS_PEAK_A);
+
+  PutString(TSB0ID_KEY, "");
+  PutString(TSB1ID_KEY, "");
+  PutString(TSHSID_KEY, "");
+  // Optional flag:
+  PutBool(TSMAP_KEY, false);
+
 }
 
 

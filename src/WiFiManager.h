@@ -19,9 +19,9 @@
 #define DEVICE_HOSTNAME_MODE 1
 
 #if DEVICE_HOSTNAME_MODE == 0
-  #define DEVICE_HOSTNAME CONF->GetString(DEVICE_WIFI_HOTSPOT_NAME_KEY, DEVICE_WIFI_HOTSPOT_NAME)   // http://PDis_XXXXXX.local
+  #define DEVICE_HOSTNAME CONF->GetString(DEVICE_WIFI_HOTSPOT_NAME_KEY, DEVICE_WIFI_HOTSPOT_NAME).c_str()   // http://PDis_XXXXXX.local
 #else
-  #define DEVICE_HOSTNAME "powerboard" // -> http://powerboard.local
+  #define DEVICE_HOSTNAME "powerboard" // -> http://powerboard.local/login
 #endif
 
 

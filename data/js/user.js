@@ -288,12 +288,12 @@ function startHeartbeat(intervalMs = 1500) {
       .then((text) => {
         if (text !== "alive") {
           console.warn("Unexpected heartbeat:", text);
-          window.location.href = "http://192.168.4.1/login";
+          window.location.href = "http://powerboard.local/login";
         }
       })
       .catch((err) => {
         console.error("Heartbeat error:", err);
-        window.location.href = "http://192.168.4.1/login";
+        window.location.href = "http://powerboard.local/login";
       });
   }, intervalMs);
 }

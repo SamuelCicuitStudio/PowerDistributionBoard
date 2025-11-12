@@ -11,7 +11,6 @@ FanManager* FanManager::s_instance = nullptr;
 void FanManager::Init() {
     if (!s_instance) s_instance = new FanManager();
 }
-
 FanManager* FanManager::Get() {
     if (!s_instance) s_instance = new FanManager();
     return s_instance;
@@ -19,7 +18,7 @@ FanManager* FanManager::Get() {
 
 // ===== Ctor kept lightweight; heavy work happens in begin() =====
 FanManager::FanManager() {
-    // members are already default-initialized in the header
+    // members default-initialized in header
 }
 
 void FanManager::begin() {
@@ -28,72 +27,74 @@ void FanManager::begin() {
 
     DEBUGGSTART();
     DEBUG_PRINTLN("###########################################################");
-    DEBUG_PRINTLN("#                 Starting Fan Manager 🌀                 #");
+    DEBUG_PRINTLN("#             Starting Dual-Fan Manager 🌀🌀              #");
     DEBUG_PRINTLN("###########################################################");
     DEBUGGSTOP();
 
-    // 1) Create mutex first so all future hardware writes are protected
+    // 1) Create mutex so all future hardware writes are protected
     _mutex = xSemaphoreCreateMutex();
 
-    // 2) Configure LEDC PWM hardware channel
-    ledcSetup(FAN_PWM_CHANNEL, PWM_FREQ, PWM_RESOLUTION);
-    ledcAttachPin(FAN_PWM_PIN, FAN_PWM_CHANNEL);
+    // 2) Configure LEDC PWM hardware channels (both fans)
+    ledcSetup(FAN_CAP_PWM_CHANNEL,  FAN_PWM_FREQ, FAN_PWM_RESOLUTION);
+    ledcSetup(FAN_HS_PWM_CHANNEL,   FAN_PWM_FREQ, FAN_PWM_RESOLUTION);
+
+    ledcAttachPin(FAN_CAP_PWM_PIN,  FAN_CAP_PWM_CHANNEL);
+    ledcAttachPin(FAN_HS_PWM_PIN,   FAN_HS_PWM_CHANNEL);
 
     // 3) Create command queue
     _queue = xQueueCreate(FAN_CMD_QUEUE_LEN, sizeof(Cmd));
 
-    // 4) Start worker task which will consume the queue
+    // 4) Start worker task to consume queue
     xTaskCreate(
         taskTrampoline,
         "FanTask",
-        4096,           // bigger stack: formatted logging + safety
+        4096,
         this,
         1,
         &_taskHandle
     );
 
-    // 5) Start in a known safe state (fan OFF).
-    Cmd initCmd; initCmd.type = CMD_STOP; initCmd.pct = 0;
-    sendCmd(initCmd);
+    // 5) Start in a known safe state (both OFF)
+    sendCmd({CMD_STOP, 0, FanSel::Cap});
+    sendCmd({CMD_STOP, 0, FanSel::Heatsink});
 
-    DEBUG_PRINTLN("[Fan] Initialized and STOP command queued 🛑");
+    DEBUG_PRINTLN("[Fan] Dual-fan initialized; both STOP queued 🛑");
 }
 
 // ======================================================================
-// Public API (producers)
+// Back-compat API (maps to CAP fan)
 // ======================================================================
+void FanManager::setSpeedPercent(uint8_t pct)      { setCapSpeedPercent(pct); }
+void FanManager::stop()                            { stopCap(); }
+uint8_t FanManager::getSpeedPercent() const        { return getCapSpeedPercent(); }
 
-void FanManager::setSpeedPercent(uint8_t pct) {
-    Cmd cmd; cmd.type = CMD_SET_SPEED; cmd.pct = pct; // clamp in handleCmd
-    sendCmd(cmd);
+// ======================================================================
+// New dual-fan API
+// ======================================================================
+void FanManager::setCapSpeedPercent(uint8_t pct)        { sendCmd({CMD_SET_SPEED, pct, FanSel::Cap}); }
+void FanManager::stopCap()                               { sendCmd({CMD_STOP, 0,    FanSel::Cap}); }
+uint8_t FanManager::getCapSpeedPercent() const {
+    uint8_t d=0;
+    if (lock()) { d = currentDuty_[0]; unlock(); } else { d = currentDuty_[0]; }
+    float pct = (d / 255.0f) * 100.0f + 0.5f;
+    return (uint8_t)pct;
 }
 
-void FanManager::stop() {
-    Cmd cmd; cmd.type = CMD_STOP; cmd.pct = 0;
-    sendCmd(cmd);
-}
-
-uint8_t FanManager::getSpeedPercent() const {
-    // Snapshot duty safely
-    uint8_t dutySnapshot;
-    if (lock()) {
-        dutySnapshot = currentDuty;
-        unlock();
-    } else {
-        dutySnapshot = currentDuty;
-    }
-    // Convert back to %
-    float pct = (dutySnapshot / 255.0f) * 100.0f + 0.5f;
-    return static_cast<uint8_t>(pct);
+void FanManager::setHeatsinkSpeedPercent(uint8_t pct)   { sendCmd({CMD_SET_SPEED, pct, FanSel::Heatsink}); }
+void FanManager::stopHeatsink()                          { sendCmd({CMD_STOP, 0,    FanSel::Heatsink}); }
+uint8_t FanManager::getHeatsinkSpeedPercent() const {
+    uint8_t d=0;
+    if (lock()) { d = currentDuty_[1]; unlock(); } else { d = currentDuty_[1]; }
+    float pct = (d / 255.0f) * 100.0f + 0.5f;
+    return (uint8_t)pct;
 }
 
 // ======================================================================
 // Internal queue helper
 // ======================================================================
-
 void FanManager::sendCmd(const Cmd &cmd) {
     if (!_queue) return;
-    // Non-blocking; if full, drop oldest then enqueue newest (newest-wins)
+    // Non-blocking; newest-wins if full
     if (xQueueSendToBack(_queue, &cmd, 0) != pdTRUE) {
         Cmd drop;
         if (xQueueReceive(_queue, &drop, 0) == pdTRUE) {
@@ -105,13 +106,11 @@ void FanManager::sendCmd(const Cmd &cmd) {
 // ======================================================================
 // RTOS task plumbing
 // ======================================================================
-
 void FanManager::taskTrampoline(void* pv) {
-    FanManager* self = static_cast<FanManager*>(pv);
+    auto* self = static_cast<FanManager*>(pv);
     self->taskLoop();
-    vTaskDelete(nullptr); // never returns
+    vTaskDelete(nullptr);
 }
-
 void FanManager::taskLoop() {
     Cmd cmd;
     for (;;) {
@@ -120,17 +119,15 @@ void FanManager::taskLoop() {
         }
     }
 }
-
 void FanManager::handleCmd(const Cmd &cmd) {
     switch (cmd.type) {
         case CMD_SET_SPEED: {
-            // clamp 0..100
             uint8_t pct = constrain(cmd.pct, 0, 100);
-            hwApplySpeedPercent(pct);
+            hwApplySpeedPercent(cmd.which, pct);
             break;
         }
         case CMD_STOP:
-            hwApplyStop();
+            hwApplyStop(cmd.which);
             break;
     }
 }
@@ -138,24 +135,45 @@ void FanManager::handleCmd(const Cmd &cmd) {
 // ======================================================================
 // Low-level hardware ops (called ONLY from worker task)
 // ======================================================================
-
-void FanManager::hwApplySpeedPercent(uint8_t pct) {
-    // Convert % -> duty (0..255)
-    uint8_t duty = static_cast<uint8_t>((pct / 100.0f) * 255.0f);
+void FanManager::hwApplySpeedPercent(FanSel which, uint8_t pct) {
+    const uint8_t duty = (uint8_t)((pct / 100.0f) * 255.0f);
 
     if (!lock()) return;
-    currentDuty = duty;
-    ledcWrite(FAN_PWM_CHANNEL, duty);
+
+    if (which == FanSel::Cap) {
+        currentDuty_[0] = duty;
+        ledcWrite(FAN_CAP_PWM_CHANNEL, duty);
+    } else {
+        currentDuty_[1] = duty;
+        ledcWrite(FAN_HS_PWM_CHANNEL, duty);
+    }
+
     unlock();
 
     // Print after unlock to keep critical section minimal
-    DEBUG_PRINTF("[Fan] Fan speed set to %u%% (duty %u) 🌀\n", pct, duty);
+    if (which == FanSel::Cap) {
+        DEBUG_PRINTF("[Fan] CAP speed -> %u%% (duty %u) 🌀\n", pct, duty);
+    } else {
+        DEBUG_PRINTF("[Fan] HS  speed -> %u%% (duty %u) 🌀\n", pct, duty);
+    }
 }
 
-void FanManager::hwApplyStop() {
+void FanManager::hwApplyStop(FanSel which) {
     if (!lock()) return;
-    currentDuty = 0;
-    ledcWrite(FAN_PWM_CHANNEL, 0);
+
+    if (which == FanSel::Cap) {
+        currentDuty_[0] = 0;
+        ledcWrite(FAN_CAP_PWM_CHANNEL, 0);
+    } else {
+        currentDuty_[1] = 0;
+        ledcWrite(FAN_HS_PWM_CHANNEL, 0);
+    }
+
     unlock();
-    DEBUG_PRINTLN("[Fan] Fan stopped ⛔");
+
+    if (which == FanSel::Cap) {
+        DEBUG_PRINTLN("[Fan] CAP stopped ⛔");
+    } else {
+        DEBUG_PRINTLN("[Fan] HS  stopped ⛔");
+    }
 }

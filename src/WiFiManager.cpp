@@ -123,7 +123,7 @@ void WiFiManager::StartWifiAP() {
 
 #if defined(DEVICE_HOSTNAME)
     // Set hostname for the AP interface (correct API for SoftAP)
-    WiFi.softAPsetHostname(DEVICE_HOSTNAME.c_str());
+    WiFi.softAPsetHostname(DEVICE_HOSTNAME);
 #endif
 
     const IPAddress apIp = WiFi.softAPIP();
@@ -174,7 +174,7 @@ bool WiFiManager::StartWifiSTA() {
 
 #if defined(DEVICE_HOSTNAME)
     // Set hostname for STA *before* begin()
-    WiFi.setHostname(DEVICE_HOSTNAME.c_str());
+    WiFi.setHostname(DEVICE_HOSTNAME);
 #endif
 
     WiFi.begin(ssid.c_str(), pass.c_str());

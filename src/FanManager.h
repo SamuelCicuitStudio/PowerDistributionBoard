@@ -4,34 +4,66 @@
 #include "Utils.h"
 #include <Arduino.h>
 
-// --------- Defaults (only used if not provided by your Config.h) ----------
-#define FAN_PWM_FREQ       10000 // 10 kHz is quiet for most fans
-#define FAN_PWM_RESOLUTION 8     // 8-bit (0..255)
-// Backward-compatible aliases in case older code used these names:
-#define PWM_FREQ FAN_PWM_FREQ
-#define PWM_RESOLUTION FAN_PWM_RESOLUTION
+// ================= Defaults (override in Config.h if you like) =================
+#ifndef FAN_PWM_FREQ
+#define FAN_PWM_FREQ       10000   // 10 kHz (quiet)
+#endif
 
-// FanManager
-// ----------
-// Thread-safe, ordered fan control with a global singleton accessor.
-// Usage:
-//   FanManager::Init();        // (once)
-//   FAN->begin();              // start PWM + worker task
-//   FAN->setSpeedPercent(60);  // anywhere in code
+#ifndef FAN_PWM_RESOLUTION
+#define FAN_PWM_RESOLUTION 8       // 8-bit (0..255)
+#endif
 
+// Back-compat: if older code defined FAN1/FAN2 pins/channels, honor them first
+#if defined(FAN1_PWM_PIN) && !defined(FAN_CAP_PWM_PIN)
+  #define FAN_CAP_PWM_PIN FAN1_PWM_PIN
+#endif
+#if defined(FAN1_PWM_CHANNEL) && !defined(FAN_CAP_PWM_CHANNEL)
+  #define FAN_CAP_PWM_CHANNEL FAN1_PWM_CHANNEL
+#endif
+#if defined(FAN2_PWM_PIN) && !defined(FAN_HS_PWM_PIN)
+  #define FAN_HS_PWM_PIN FAN2_PWM_PIN
+#endif
+#if defined(FAN2_PWM_CHANNEL) && !defined(FAN_HS_PWM_CHANNEL)
+  #define FAN_HS_PWM_CHANNEL FAN2_PWM_CHANNEL
+#endif
+
+// If nothing provided, choose sensible defaults
+#ifndef FAN_CAP_PWM_PIN
+#define FAN_CAP_PWM_PIN       14
+#endif
+#ifndef FAN_CAP_PWM_CHANNEL
+#define FAN_CAP_PWM_CHANNEL   2
+#endif
+#ifndef FAN_HS_PWM_PIN
+#define FAN_HS_PWM_PIN        42
+#endif
+#ifndef FAN_HS_PWM_CHANNEL
+#define FAN_HS_PWM_CHANNEL    3     // NOTE: different channel than capacitor fan
+#endif
+
+// ============================== Fan Manager ===============================
 class FanManager {
 public:
     // ===== Singleton API =====
-    static void Init();                 // ensure the singleton exists
-    static FanManager* Get();           // always returns a valid pointer
+    static void Init();
+    static FanManager* Get();
 
     // ===== Lifecycle =====
-    void begin();                       // idempotent
+    void begin();  // idempotent
 
-    // ===== Public API (non-blocking; enqueues commands) =====
-    void setSpeedPercent(uint8_t pct);  // 0..100%
-    void stop();
-    uint8_t getSpeedPercent() const;    // last applied (0..100)
+    // ===== Back-compat (controls the CAPACITOR/BOARD fan only) =====
+    void setSpeedPercent(uint8_t pct);    // legacy → CAP fan
+    void stop();                          // legacy → CAP fan
+    uint8_t getSpeedPercent() const;      // legacy → CAP fan
+
+    // ===== New dual-fan API =====
+    void setCapSpeedPercent(uint8_t pct);     // 0..100 %
+    void stopCap();
+    uint8_t getCapSpeedPercent() const;
+
+    void setHeatsinkSpeedPercent(uint8_t pct); // 0..100 %
+    void stopHeatsink();
+    uint8_t getHeatsinkSpeedPercent() const;
 
 private:
     // ----- Singleton internals -----
@@ -41,21 +73,23 @@ private:
     FanManager& operator=(const FanManager&) = delete;
     static FanManager* s_instance;
 
+    // Which fan
+    enum class FanSel : uint8_t { Cap = 0, Heatsink = 1 };
+
     // ===================== Command model =====================
     enum CmdType : uint8_t { CMD_SET_SPEED, CMD_STOP };
-    struct Cmd { CmdType type; uint8_t pct; };
+    struct Cmd { CmdType type; uint8_t pct; FanSel which; };
 
     // ===================== Internal state ====================
-    // Last duty actually applied to hardware (0..255)
-    volatile uint8_t currentDuty = 0;
+    // Last duties actually applied to hardware (0..255)
+    volatile uint8_t currentDuty_[2] = {0,0}; // [Cap, Heatsink]
 
-    // One-time init guard for begin()
     bool started_ = false;
 
-    // Mutex protects currentDuty and ledcWrite() critical section.
+    // Mutex protects currentDuty_ and LEDC writes
     SemaphoreHandle_t _mutex = nullptr;
 
-    // Queue + worker task to serialize actual fan updates.
+    // Queue + worker task to serialize updates
     QueueHandle_t _queue = nullptr;
     TaskHandle_t  _taskHandle = nullptr;
 
@@ -66,17 +100,15 @@ private:
     }
     inline void unlock() const { if (_mutex) xSemaphoreGive(_mutex); }
 
-    // Push command to queue (non-blocking). Newest wins if full.
     void sendCmd(const Cmd &cmd);
 
-    // RTOS task plumbing
     static void taskTrampoline(void* pv);
     void taskLoop();
     void handleCmd(const Cmd &cmd);
 
-    // Low-level / critical section: apply a duty to hardware.
-    void hwApplySpeedPercent(uint8_t pct);
-    void hwApplyStop();
+    // Low-level: apply a duty to the selected fan
+    void hwApplySpeedPercent(FanSel which, uint8_t pct);
+    void hwApplyStop(FanSel which);
 };
 
 // Convenience macro (pointer style)

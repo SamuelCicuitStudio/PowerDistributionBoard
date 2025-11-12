@@ -122,6 +122,18 @@ static inline void StateUnlock() { xSemaphoreGive(gStateMtx); }
 
 /// Planner preference: favor equivalent resistances >= target when possible.
 #define PREF_ABOVE true
+// ===== Fan control thresholds (°C) and timing =====
+#define HS_FAN_ON_C         45.0f   // start ramp for heatsink
+#define HS_FAN_FULL_C       75.0f   // full speed by this temp
+#define HS_FAN_OFF_C        40.0f   // off below (hysteresis)
+
+#define CAP_FAN_ON_C        45.0f   // start ramp for capacitor/board
+#define CAP_FAN_FULL_C      70.0f   // full speed by this temp
+#define CAP_FAN_OFF_C       40.0f   // off below (hysteresis)
+
+#define FAN_MIN_RUN_PCT     18      // some 12/24V fans need a kick to spin
+#define FAN_CMD_DEADBAND_PCT 2      // ignore tiny % changes to avoid chatter
+#define FAN_CTRL_PERIOD_MS  500     // loop period (0.5 s)
 
 // -----------------------------------------------------------------------------
 // Enumerations
@@ -261,6 +273,10 @@ public:
      * CurrentSensor reports an over-current latch.
      */
     void handleOverCurrentFault();
+    // Fan control task
+    void startFanControlTask();
+    void stopFanControlTask();
+    static void fanControlTask(void* param);
 
     // -------------------------------------------------------------------------
     // Subsystem References
@@ -289,6 +305,7 @@ public:
     TaskHandle_t tempMonitorTaskHandle  = nullptr;
     TaskHandle_t ledTaskHandle          = nullptr;
     TaskHandle_t thermalTaskHandle      = nullptr;
+    TaskHandle_t fanTaskHandle          = nullptr;
 
 private:
     // ---------------------------------------------------------------------
@@ -327,7 +344,8 @@ private:
 
     // Last known heater mask (for continuity between thermal updates).
     uint16_t lastHeaterMask      = 0;
-
+    uint8_t lastCapFanPct = 0;
+    uint8_t lastHsFanPct  = 0;
     // Internal helpers
     void updateAmbientFromSensors(bool force = false);
     void waitForWiresNearAmbient(float tolC, uint32_t maxWaitMs = 0);

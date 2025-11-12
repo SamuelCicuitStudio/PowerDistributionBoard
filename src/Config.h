@@ -119,7 +119,11 @@
 #define PT_KEY_LAST_SESS_DURATION_S     "LSDUR"   // last session duration [s]
 #define PT_KEY_LAST_SESS_PEAK_W         "LSPKW"   // last session peak power [W]
 #define PT_KEY_LAST_SESS_PEAK_A         "LSPKA"   // last session peak current [A]
-
+// --- DS18B20 identity keys (hex string of 8 bytes) ---
+#define TSB0ID_KEY  "TSB0ID"  // Board sensor #0 ROM
+#define TSB1ID_KEY  "TSB1ID"  // Board sensor #1 ROM
+#define TSHSID_KEY  "TSHSID"  // Heatsink ROM
+#define TSMAP_KEY   "TSMEP"
 // Default values for all stats
 #define PT_DEF_TOTAL_ENERGY_WH          0.0f
 #define PT_DEF_TOTAL_SESSIONS           0
@@ -197,7 +201,7 @@
 
 #define READY_LED_PIN                  2                   // System ready indicator
 #define POWER_OFF_LED_PIN              16                    // Power off indicator LED
-
+#define LED_R3_LED_PIN              46                    // Power off indicator LED
 // ==================================================
 // Floor Heater LED Indicators
 // ==================================================
@@ -244,8 +248,10 @@
 #define INA_OPT_PWM_PIN                1                    // INA_OPT controls nichrome overdrive
 #define INA_OPT_PWM_CHANNEL            1
 
-#define FAN_PWM_PIN                    14                   // FAN output
-#define FAN_PWM_CHANNEL                2
+#define FAN1_PWM_PIN                    14                   // FAN output
+#define FAN1_PWM_CHANNEL                2
+#define FAN2_PWM_PIN                    42                   // FAN output
+#define FAN2_PWM_CHANNEL                2
 
 #define PWM_DUTY_CYCLE                 173                  // Default duty (68%)
 
@@ -262,7 +268,7 @@
 // Additional I/O
 // ==================================================
 
-#define BUZZER_PIN       46      // Buzzer control output
+#define BUZZER_PIN       1      // Buzzer control output
 
 #define BUZLOW_KEY       "BUZLOW"   // bool (activeLow)
 #define BUZMUT_KEY       "BUZMUT"   // bool (muted)
