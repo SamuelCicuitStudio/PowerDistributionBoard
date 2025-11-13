@@ -6,12 +6,17 @@
 #include "HeaterManager.h"
 #include "Relay.h"
 #include "Utils.h"
+
 // ----- ADC / Divider configuration -----
-// Tune via build flags / Config.h if needed.
-#define ADC_OFFSET              14          // Raw ADC offset in counts
+// Cal constants can be overridden from Config.h via -D or #define
+
+// Raw ADC offset in counts (keep your existing trim)
+#define ADC_OFFSET              14
+
 #ifndef ADC_REF_VOLTAGE
 #define ADC_REF_VOLTAGE         3.3f        // ADC full-scale voltage
 #endif
+
 #ifndef ADC_MAX
 #define ADC_MAX                 4095.0f     // 12-bit ADC
 #endif
@@ -22,15 +27,24 @@
 
 // Divider: top to HV, bottom to GND
 #ifndef DIVIDER_TOP_OHMS
-#define DIVIDER_TOP_OHMS        470000.0f   // 470 kΩ
-#endif
-#ifndef DIVIDER_BOTTOM_OHMS
-#define DIVIDER_BOTTOM_OHMS     4700.0f     // 4.7 kΩ
+#define DIVIDER_TOP_OHMS        470000.0f   // 470 kΩ (top)
 #endif
 
-#ifndef VOLTAGE_DIVIDER_RATIO
-#define VOLTAGE_DIVIDER_RATIO \
-    ((DIVIDER_TOP_OHMS + DIVIDER_BOTTOM_OHMS) / DIVIDER_BOTTOM_OHMS)
+// *** UPDATED: bottom resistor is 3.9 kΩ (was 4.7 kΩ) ***
+#ifndef DIVIDER_BOTTOM_OHMS
+#define DIVIDER_BOTTOM_OHMS     3900.0f     // 3.9 kΩ (bottom)
+#endif
+
+// *** NEW: allow for op-amp gain (your MCP6001 buffer is unity) ***
+#ifndef OPAMP_GAIN
+#define OPAMP_GAIN              1.0f
+#endif
+
+// Overall scale factor from ADC voltage to bus voltage:
+// Vbus = Vadc * ((Rtop + Rbot) / Rbot) / OPAMP_GAIN
+#ifndef VOLTAGE_SCALE
+#define VOLTAGE_SCALE \
+    ( ((DIVIDER_TOP_OHMS + DIVIDER_BOTTOM_OHMS) / DIVIDER_BOTTOM_OHMS) / (OPAMP_GAIN) )
 #endif
 
 class CpDischg {
@@ -72,20 +86,15 @@ private:
     // Ensure the monitor task is running; restart if it died or stalled.
     void ensureMonitorTask();
 
-    Relay*       relay           = nullptr;
+    Relay*       relay            = nullptr;
     volatile bool bypassRelayGate = true;
 
-    // Shared state protected by voltageMutex:
-    // - lastMinBusVoltage: last computed min over a valid 300ms window
-    // - lastSampleTick:    tick count of last successful update
+    // Shared state protected by voltageMutex
     float        lastMinBusVoltage = 0.0f;
     TickType_t   lastSampleTick    = 0;
 
-    // Mutex to protect access to lastMinBusVoltage / lastSampleTick.
-    SemaphoreHandle_t voltageMutex = nullptr;
-
-    // Background sampling task handle.
-    TaskHandle_t monitorTaskHandle = nullptr;
+    SemaphoreHandle_t voltageMutex   = nullptr;
+    TaskHandle_t      monitorTaskHandle = nullptr;
 };
 
 #endif // CPDISCHG_H

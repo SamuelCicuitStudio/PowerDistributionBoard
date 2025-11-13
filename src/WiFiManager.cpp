@@ -203,7 +203,7 @@ bool WiFiManager::StartWifiSTA() {
 #if defined(DEVICE_HOSTNAME)
     if (MDNS.begin(DEVICE_HOSTNAME)) {
         MDNS.addService("http", "tcp", 80);
-        DEBUG_PRINTF("[mDNS] STA responder at http://%s.local -> %s\n",
+        DEBUG_PRINTF("[mDNS] STA responder at http://%s.local/login -> %s\n",
                      DEVICE_HOSTNAME,
                      ip.toString().c_str());
     } else {
