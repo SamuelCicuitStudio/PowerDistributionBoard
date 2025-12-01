@@ -241,4 +241,4 @@
  src/HeaterManager.h src/CurrentSensor.h src/FanManager.h \
  src/TempSensor.h src/Relay.h src/CpDischg.h src/Indicator.h src/utils.h \
  src/Buzzer.h src/PowerTracker.h src/RGBLed.h src/RGBConfig.h \
- src/SwitchManager.h
+ src/StatusSnapshot.h src/SwitchManager.h src/DeviceTransport.h

@@ -487,7 +487,11 @@
     const isOn = !!checkbox.checked;
     const led = checkbox.parentElement.nextElementSibling;
     if (led) led.classList.toggle("active", isOn);
-    sendControlCommand("set", "output" + index, isOn);
+    const resp = await sendControlCommand("set", "output" + index, isOn);
+    if (resp && resp.error) {
+      if (led) led.classList.toggle("active", !isOn);
+      checkbox.checked = !isOn;
+    }
   }
 
   function updateOutputAccess(index, newState) {
@@ -603,24 +607,25 @@
         return { error: data.error || "HTTP " + res.status };
       }
 
-      if (data.status === "ok" || data.status === "queued") {
-        console.log(`[✔] ${action} '${target}' -> ${data.status}`);
-      } else if (data.state) {
-        console.log("[ℹ] State:", data.state);
-      } else if (data.error) {
-        console.warn("[✖]", data.error);
+      const applied = data.applied === true || data.status === "ok";
+      if (applied) {
+        console.log(`[ack] ${action} '${target}' -> applied`);
+        return { ok: true, ...data };
       }
 
-      return data;
+      if (data.state) {
+        console.log("[state] State:", data.state);
+        return { ok: true, state: data.state };
+      }
+
+      const errMsg = data.error || "unknown_error";
+      console.warn("[ack-fail]", errMsg);
+      return { error: errMsg };
     } catch (err) {
       console.error("Control request failed:", err);
       return { error: String(err) };
     }
   }
-
-  // ========================================================
-  // ===============         MUTE BUTTON        =============
-  // ========================================================
 
   function setMuteUI(muted) {
     const btn = document.getElementById("muteBtn");
@@ -1652,7 +1657,8 @@
     liveRender();
     scheduleLiveInterval();
 
-    //startHeartbeat();
+    // Keep session alive with backend heartbeat
+    startHeartbeat(4000);
     startMonitorPolling();
     loadControls();
     bindSessionHistoryButton();
@@ -1710,3 +1716,5 @@
   window.closeSessionHistory = closeSessionHistory;
   window.updateSessionStatsUI = updateSessionStatsUI; // for backend to call later
 })();
+
+

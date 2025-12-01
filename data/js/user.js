@@ -152,12 +152,16 @@ async function loadControls() {
 // ───────────────────────────────────────────────────────────────
 // 🔘 OUTPUT SWITCH TOGGLE HANDLER — Called on each checkbox change
 // ───────────────────────────────────────────────────────────────
-function handleOutputToggle(index, checkbox) {
+async function handleOutputToggle(index, checkbox) {
   const led = checkbox.parentElement.nextElementSibling;
   const isOn = checkbox.checked;
 
-  led.classList.toggle("active", isOn); // Visual feedback
-  sendControlCommand("set", `output${index}`, isOn); // Send command
+  if (led) led.classList.toggle("active", isOn); // Visual feedback
+  const resp = await sendControlCommand("set", `output${index}`, isOn); // Send command
+  if (resp && resp.error) {
+    if (led) led.classList.toggle("active", !isOn);
+    checkbox.checked = !isOn;
+  }
 }
 
 // ───────────────────────────────────────────────────────────────
@@ -364,31 +368,49 @@ function startStateStream() {
 // ───────────────────────────────────────────────────────────────
 // 🛠️ UNIFIED CONTROL — Sends control commands to the backend
 // ───────────────────────────────────────────────────────────────
-function sendControlCommand(action, target, value) {
+async function sendControlCommand(action, target, value) {
   const payload = { action, target };
   if (value !== undefined) payload.value = value;
 
-  fetch("/control", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  })
-    .then((res) => res.json())
-    .then((data) => {
-      if (data.status === "ok") {
-        console.log(`[✔] '${action}' on '${target}' succeeded`);
-      } else if (data.state) {
-        console.log(`[ℹ] State: ${data.state}`);
-      } else if (data.error) {
-        console.warn(`[✖] ${data.error}`);
-      }
-    })
-    .catch((err) => console.error("Control error:", err));
+  try {
+    const res = await fetch("/control", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    let data = {};
+    try {
+      data = await res.json();
+    } catch {
+      data = {};
+    }
+
+    if (!res.ok) {
+      console.warn("Control error:", res.status, data.error || data);
+      return { error: data.error || "HTTP " + res.status };
+    }
+
+    const applied = data.applied === true || data.status === "ok";
+    if (applied) {
+      console.log(`[ack] ${action} '${target}' -> applied`);
+      return { ok: true, ...data };
+    }
+
+    if (data.state) {
+      console.log("[state] State:", data.state);
+      return { ok: true, state: data.state };
+    }
+
+    const errMsg = data.error || "unknown_error";
+    console.warn("[ack-fail]", errMsg);
+    return { error: errMsg };
+  } catch (err) {
+    console.error("Control error:", err);
+    return { error: String(err) };
+  }
 }
 
-// ───────────────────────────────────────────────────────────────
-// 🔌 DISCONNECT FUNCTION — Terminates session and redirects
-// ───────────────────────────────────────────────────────────────
 function disconnectDevice() {
   fetch("/disconnect", {
     method: "POST",
@@ -416,7 +438,7 @@ function disconnectDevice() {
 // ───────────────────────────────────────────────────────────────
 window.addEventListener("DOMContentLoaded", () => {
   loadControls();
-  //startHeartbeat(); // Uncomment if needed
+  startHeartbeat(4000);
   startMonitorPolling();
   startStateStream();
   startStatePolling();

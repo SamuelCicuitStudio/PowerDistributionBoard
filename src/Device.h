@@ -169,11 +169,45 @@ enum class RechargeMode : uint8_t {
  */
 class Device {
 public:
+    friend class DeviceTransport;
+
     // Snapshot used by other modules to observe state changes.
     struct StateSnapshot {
         DeviceState state;
         uint32_t    sinceMs;
         uint32_t    seq;
+    };
+
+    enum class DevCmdType : uint8_t {
+        SET_LED_FEEDBACK,
+        SET_ON_TIME_MS,
+        SET_OFF_TIME_MS,
+        SET_DESIRED_VOLTAGE,
+        SET_AC_FREQ,
+        SET_CHARGE_RES,
+        SET_DC_VOLT,
+        SET_ACCESS_FLAG,
+        SET_WIRE_RES,
+        SET_TARGET_RES,
+        SET_WIRE_OHM_PER_M,
+        SET_BUZZER_MUTE,
+        SET_RELAY,
+        SET_OUTPUT,
+        REQUEST_RESET
+    };
+
+    struct DevCommand {
+        DevCmdType type;
+        uint32_t   id;
+        int32_t    i1 = 0;
+        float      f1 = 0.0f;
+        bool       b1 = false;
+    };
+
+    struct DevCommandAck {
+        DevCmdType type;
+        uint32_t   id;
+        bool       success;
     };
 
     // -------------------------------------------------------------------------
@@ -256,6 +290,8 @@ public:
     StateSnapshot    getStateSnapshot() const;
     void             setState(DeviceState next);
     bool             waitForStateEvent(StateSnapshot& out, TickType_t toTicks);
+    bool             submitCommand(DevCommand& cmd);
+    bool             waitForCommandAck(DevCommandAck& ack, TickType_t toTicks);
 
     // -------------------------------------------------------------------------
     // Thermal Model Interface (history-based)
@@ -305,6 +341,9 @@ private:
     // Centralized hook for state transitions.
     void onStateChanged(DeviceState prev, DeviceState next);
     bool pushStateEvent(const StateSnapshot& snap);
+    void startCommandTask();
+    static void commandTask(void* param);
+    void handleCommand(const DevCommand& cmd);
 
     // -------------------------------------------------------------------------
     // -------------------------------------------------------------------------
@@ -355,8 +394,12 @@ private:
     volatile RechargeMode rechargeMode   = RechargeMode::BatchRecharge;
     uint32_t              stateSeq       = 0;
     uint32_t              stateSinceMs   = 0;
+    uint32_t              cmdSeq         = 0;
     bool                  allowedOutputs[10] = { false };
     QueueHandle_t         stateEvtQueue  = nullptr;
+    QueueHandle_t         cmdQueue       = nullptr;
+    QueueHandle_t         ackQueue       = nullptr;
+    TaskHandle_t          cmdTaskHandle  = nullptr;
 
     // Last known heater mask (for continuity between thermal updates).
     uint16_t lastHeaterMask      = 0;

@@ -553,18 +553,17 @@ void WiFiManager::registerRoutes_() {
                     return;
                 }
 
-                sendCmd(c);
-                request->send(202, "application/json",
-                              "{\"status\":\"queued\"}");
-            } else if (action == "get" && target == "status") {
-                String statusStr;
-                switch (DEVICE->getState()) {
-                    case DeviceState::Idle:     statusStr = "Idle"; break;
-                    case DeviceState::Running:  statusStr = "Running"; break;
-                    case DeviceState::Error:    statusStr = "Error"; break;
-                    case DeviceState::Shutdown: statusStr = "Shutdown"; break;
-                    default:                    statusStr = "Unknown"; break;
+                const bool ok = handleControl(c);
+                if (ok) {
+                    request->send(200, "application/json",
+                                  "{\"status\":\"ok\",\"applied\":true}");
+                } else {
+                    request->send(400, "application/json",
+                                  "{\"error\":\"apply_failed\"}");
                 }
+            } else if (action == "get" && target == "status") {
+                const Device::StateSnapshot snap = DEVTRAN->getStateSnapshot();
+                const String statusStr = stateName(snap.state);
                 request->send(200, "application/json",
                               "{\"state\":\"" + statusStr + "\"}");
             } else {
@@ -868,15 +867,18 @@ void WiFiManager::controlTaskLoop() {
     }
 }
 
-void WiFiManager::sendCmd(const ControlCmd& c) {
+bool WiFiManager::sendCmd(const ControlCmd& c) {
     if (_ctrlQueue) {
-        xQueueSendToBack(_ctrlQueue, &c, 0); // non-blocking; drop if full
+        return xQueueSendToBack(_ctrlQueue, &c, 0) == pdTRUE; // non-blocking; drop if full
     }
+    return false;
 }
 
-void WiFiManager::handleControl(const ControlCmd& c) {
+bool WiFiManager::handleControl(const ControlCmd& c) {
     DEBUG_PRINTF("[WiFi] Handling control type: %d\n",
                  static_cast<int>(c.type));
+
+    bool ok = true;
 
     switch (c.type) {
         case CTRL_REBOOT:
@@ -890,48 +892,41 @@ void WiFiManager::handleControl(const ControlCmd& c) {
             DEBUG_PRINTLN("[WiFi] CTRL_SYS_RESET → Full system reset...");
             RGB->postOverlay(OverlayEvent::RESET_TRIGGER);
             BUZZ->bip();
-            CONF->PutBool(RESET_FLAG, true);
-            CONF->RestartSysDelayDown(3000);
+            ok = DEVTRAN->requestResetFlagAndRestart();
             break;
 
         case CTRL_LED_FEEDBACK_BOOL:
             BUZZ->bip();
-            CONF->PutBool(LED_FEEDBACK_KEY, c.b1);
+            ok = DEVTRAN->setLedFeedback(c.b1);
             break;
 
         case CTRL_BUZZER_MUTE:
             BUZZ->bip();
-            BUZZ->setMuted(c.b1);
+            ok = DEVTRAN->setBuzzerMute(c.b1);
             break;
 
         case CTRL_ON_TIME_MS:
             BUZZ->bip();
-            CONF->PutInt(ON_TIME_KEY, c.i1);
+            ok = DEVTRAN->setOnTimeMs(c.i1);
             break;
 
         case CTRL_OFF_TIME_MS:
             BUZZ->bip();
-            CONF->PutInt(OFF_TIME_KEY, c.i1);
+            ok = DEVTRAN->setOffTimeMs(c.i1);
             break;
 
         case CTRL_RELAY_BOOL:
             BUZZ->bip();
-            if (c.b1) {
-                DEVICE->relayControl->turnOn();
-                RGB->postOverlay(OverlayEvent::RELAY_ON);
-            } else {
-                DEVICE->relayControl->turnOff();
-                RGB->postOverlay(OverlayEvent::RELAY_OFF);
-            }
+            ok = DEVTRAN->setRelay(c.b1);
+            RGB->postOverlay(c.b1 ? OverlayEvent::RELAY_ON : OverlayEvent::RELAY_OFF);
             break;
 
         case CTRL_OUTPUT_BOOL:
             if (c.i1 >= 1 && c.i1 <= 10) {
                 BUZZ->bip();
                 if (isAdminConnected()) {
-                    WIRE->setOutput(c.i1, c.b1);
-                    DEVICE->indicator->setLED(c.i1, c.b1);
-                    RGB->postOutputEvent(c.i1, c.b1);
+                    ok = DEVTRAN->setOutput(c.i1, c.b1, true);
+                    if (ok) RGB->postOutputEvent(c.i1, c.b1);
                 } else if (isUserConnected()) {
                     const char* accessKeys[10] = {
                         OUT01_ACCESS_KEY, OUT02_ACCESS_KEY, OUT03_ACCESS_KEY,
@@ -942,71 +937,63 @@ void WiFiManager::handleControl(const ControlCmd& c) {
                     bool allowed =
                         CONF->GetBool(accessKeys[c.i1 - 1], false);
                     if (allowed) {
-                        WIRE->setOutput(c.i1, c.b1);
-                        DEVICE->indicator->setLED(c.i1, c.b1);
-                        RGB->postOutputEvent(c.i1, c.b1);
+                        ok = DEVTRAN->setOutput(c.i1, c.b1, true);
+                        if (ok) RGB->postOutputEvent(c.i1, c.b1);
+                    } else {
+                        ok = false;
                     }
+                } else {
+                    ok = false;
                 }
+            } else {
+                ok = false;
             }
             break;
 
         case CTRL_DESIRED_V:
             BUZZ->bip();
-            CONF->PutFloat(DESIRED_OUTPUT_VOLTAGE_KEY, c.f1);
+            ok = DEVTRAN->setDesiredVoltage(c.f1);
             break;
 
         case CTRL_AC_FREQ:
             BUZZ->bip();
-            CONF->PutInt(AC_FREQUENCY_KEY, c.i1);
+            ok = DEVTRAN->setAcFrequency(c.i1);
             break;
 
         case CTRL_CHARGE_RES:
             BUZZ->bip();
-            CONF->PutFloat(CHARGE_RESISTOR_KEY, c.f1);
+            ok = DEVTRAN->setChargeResistor(c.f1);
             break;
 
         case CTRL_DC_VOLT:
             BUZZ->bip();
-            CONF->PutFloat(DC_VOLTAGE_KEY, c.f1);
+            ok = DEVTRAN->setDcVoltage(c.f1);
             break;
 
         case CTRL_ACCESS_BOOL:
             if (c.i1 >= 1 && c.i1 <= 10) {
-                const char* accessKeys[10] = {
-                    OUT01_ACCESS_KEY, OUT02_ACCESS_KEY, OUT03_ACCESS_KEY,
-                    OUT04_ACCESS_KEY, OUT05_ACCESS_KEY, OUT06_ACCESS_KEY,
-                    OUT07_ACCESS_KEY, OUT08_ACCESS_KEY, OUT09_ACCESS_KEY,
-                    OUT10_ACCESS_KEY
-                };
                 BUZZ->bip();
-                CONF->PutBool(accessKeys[c.i1 - 1], c.b1);
+                ok = DEVTRAN->setAccessFlag(c.i1, c.b1);
+            } else {
+                ok = false;
             }
             break;
 
         case CTRL_MODE_IDLE:
             BUZZ->bip();
-            DEVICE->setState(DeviceState::Idle);
-            DEVICE->indicator->clearAll();
-            WIRE->disableAll();
-            RGB->setIdle();
+            ok = DEVTRAN->requestIdle();
             break;
 
         case CTRL_SYSTEM_START:
             BUZZ->bip();
-            DEVICE->startLoopTask();
-            if (gEvt) {
-                xEventGroupSetBits(gEvt,
-                                   EVT_WAKE_REQ | EVT_RUN_REQ);
-            }
-            RGB->postOverlay(OverlayEvent::PWR_START);
+            ok = DEVTRAN->requestRun();
+            if (ok) RGB->postOverlay(OverlayEvent::PWR_START);
             break;
 
         case CTRL_SYSTEM_SHUTDOWN:
             BUZZ->bip();
-            if (gEvt) {
-                xEventGroupSetBits(gEvt, EVT_STOP_REQ);
-            }
-            RGB->postOverlay(OverlayEvent::RELAY_OFF);
+            ok = DEVTRAN->requestStop();
+            if (ok) RGB->postOverlay(OverlayEvent::RELAY_OFF);
             break;
 
         case CTRL_FAN_SPEED: {
@@ -1019,18 +1006,14 @@ void WiFiManager::handleControl(const ControlCmd& c) {
 
         case CTRL_WIRE_RES: {
             int idx = constrain(c.i1, 1, 10);
-            const char* rkeys[10] = {
-                R01OHM_KEY, R02OHM_KEY, R03OHM_KEY, R04OHM_KEY, R05OHM_KEY,
-                R06OHM_KEY, R07OHM_KEY, R08OHM_KEY, R09OHM_KEY, R10OHM_KEY
-            };
             BUZZ->bip();
-            CONF->PutFloat(rkeys[idx - 1], c.f1);
+            ok = DEVTRAN->setWireRes(idx, c.f1);
             break;
         }
 
         case CTRL_TARGET_RES:
             BUZZ->bip();
-            CONF->PutFloat(R0XTGT_KEY, c.f1);
+            ok = DEVTRAN->setTargetRes(c.f1);
             break;
 
         case CTRL_WIRE_OHM_PER_M: {
@@ -1039,15 +1022,20 @@ void WiFiManager::handleControl(const ControlCmd& c) {
                 ohmPerM = DEFAULT_WIRE_OHM_PER_M;
             }
             BUZZ->bip();
-            CONF->PutFloat(WIRE_OHM_PER_M_KEY, ohmPerM);
+            ok = DEVTRAN->setWireOhmPerM(ohmPerM);
             break;
         }
 
         default:
             DEBUG_PRINTF("[WiFi] Unknown control type: %d\n",
                          static_cast<int>(c.type));
+            ok = false;
             break;
     }
+
+    DEBUG_PRINTF("[WiFi] Control result type=%d ok=%d\n",
+                 static_cast<int>(c.type), ok ? 1 : 0);
+    return ok;
 }
 
 // ===================== State streaming (SSE) =====================

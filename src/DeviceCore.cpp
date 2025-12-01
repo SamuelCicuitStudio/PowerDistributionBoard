@@ -51,8 +51,36 @@ DeviceState Device::getState() const {
 }
 
 bool Device::waitForStateEvent(StateSnapshot& out, TickType_t toTicks) {
-    if (!stateEvtQueue) return false;
+    if (!stateEvtQueue) {
+        // queue not ready yet; wait and report false
+        vTaskDelay(toTicks);
+        return false;
+    }
     return xQueueReceive(stateEvtQueue, &out, toTicks) == pdTRUE;
+}
+
+bool Device::waitForCommandAck(DevCommandAck& ack, TickType_t toTicks) {
+    if (!ackQueue) {
+        vTaskDelay(toTicks);
+        return false;
+    }
+    return xQueueReceive(ackQueue, &ack, toTicks) == pdTRUE;
+}
+
+bool Device::submitCommand(DevCommand& cmd) {
+    if (!cmdQueue) return false;
+    DevCommand c = cmd;
+    // assign id
+    if (gStateMtx && xSemaphoreTake(gStateMtx, pdMS_TO_TICKS(50)) == pdTRUE) {
+        cmdSeq++;
+        c.id = cmdSeq;
+        xSemaphoreGive(gStateMtx);
+    } else {
+        cmdSeq++;
+        c.id = cmdSeq;
+    }
+    cmd.id = c.id;
+    return xQueueSendToBack(cmdQueue, &c, 0) == pdTRUE;
 }
 
 static const char* deviceStateName(DeviceState s) {
@@ -64,6 +92,147 @@ static const char* deviceStateName(DeviceState s) {
         default:                    return "?";
     }
 }
+
+void Device::startCommandTask() {
+    if (cmdTaskHandle) return;
+    xTaskCreatePinnedToCore(
+        Device::commandTask,
+        "DevCmdTask",
+        4096,
+        this,
+        1,
+        &cmdTaskHandle,
+        APP_CPU_NUM
+    );
+}
+
+void Device::commandTask(void* param) {
+    Device* self = static_cast<Device*>(param);
+    for (;;) {
+        DevCommand cmd{};
+        if (self->cmdQueue &&
+            xQueueReceive(self->cmdQueue, &cmd, portMAX_DELAY) == pdTRUE) {
+            self->handleCommand(cmd);
+        }
+    }
+}
+
+void Device::handleCommand(const DevCommand& cmd) {
+    auto sendAck = [&](bool ok) {
+        if (!ackQueue) return;
+        DevCommandAck ack{cmd.type, cmd.id, ok};
+        if (xQueueSendToBack(ackQueue, &ack, 0) != pdTRUE) {
+            DevCommandAck dump{};
+            xQueueReceive(ackQueue, &dump, 0);
+            xQueueSendToBack(ackQueue, &ack, 0);
+        }
+    };
+
+    auto requiresSafe = [&](DevCmdType t) {
+        switch (t) {
+            case DevCmdType::SET_BUZZER_MUTE:
+            case DevCmdType::SET_RELAY:
+            case DevCmdType::SET_OUTPUT:
+                return false;
+            default:
+                return true;
+        }
+    };
+
+    if (requiresSafe(cmd.type)) {
+        while (getState() == DeviceState::Running) {
+            vTaskDelay(pdMS_TO_TICKS(50));
+        }
+    }
+
+    bool ok = true;
+    switch (cmd.type) {
+        case DevCmdType::SET_LED_FEEDBACK:
+            CONF->PutBool(LED_FEEDBACK_KEY, cmd.b1);
+            break;
+        case DevCmdType::SET_ON_TIME_MS:
+            CONF->PutInt(ON_TIME_KEY, cmd.i1);
+            break;
+        case DevCmdType::SET_OFF_TIME_MS:
+            CONF->PutInt(OFF_TIME_KEY, cmd.i1);
+            break;
+        case DevCmdType::SET_DESIRED_VOLTAGE:
+            CONF->PutFloat(DESIRED_OUTPUT_VOLTAGE_KEY, cmd.f1);
+            break;
+        case DevCmdType::SET_AC_FREQ:
+            CONF->PutInt(AC_FREQUENCY_KEY, cmd.i1);
+            break;
+        case DevCmdType::SET_CHARGE_RES:
+            CONF->PutFloat(CHARGE_RESISTOR_KEY, cmd.f1);
+            break;
+        case DevCmdType::SET_DC_VOLT:
+            CONF->PutFloat(DC_VOLTAGE_KEY, cmd.f1);
+            break;
+        case DevCmdType::SET_ACCESS_FLAG: {
+            const char* accessKeys[10] = {
+                OUT01_ACCESS_KEY, OUT02_ACCESS_KEY, OUT03_ACCESS_KEY,
+                OUT04_ACCESS_KEY, OUT05_ACCESS_KEY, OUT06_ACCESS_KEY,
+                OUT07_ACCESS_KEY, OUT08_ACCESS_KEY, OUT09_ACCESS_KEY,
+                OUT10_ACCESS_KEY
+            };
+            if (cmd.i1 >= 1 && cmd.i1 <= 10) {
+                CONF->PutBool(accessKeys[cmd.i1 - 1], cmd.b1);
+            } else {
+                ok = false;
+            }
+            break;
+        }
+        case DevCmdType::SET_WIRE_RES: {
+            const char* rkeys[10] = {
+                R01OHM_KEY, R02OHM_KEY, R03OHM_KEY, R04OHM_KEY, R05OHM_KEY,
+                R06OHM_KEY, R07OHM_KEY, R08OHM_KEY, R09OHM_KEY, R10OHM_KEY
+            };
+            if (cmd.i1 >= 1 && cmd.i1 <= 10) {
+                CONF->PutFloat(rkeys[cmd.i1 - 1], cmd.f1);
+            } else {
+                ok = false;
+            }
+            break;
+        }
+        case DevCmdType::SET_TARGET_RES:
+            CONF->PutFloat(R0XTGT_KEY, cmd.f1);
+            break;
+        case DevCmdType::SET_WIRE_OHM_PER_M:
+            CONF->PutFloat(WIRE_OHM_PER_M_KEY, cmd.f1);
+            break;
+        case DevCmdType::SET_BUZZER_MUTE:
+            BUZZ->setMuted(cmd.b1);
+            break;
+        case DevCmdType::SET_RELAY:
+            if (relayControl) {
+                if (cmd.b1) relayControl->turnOn();
+                else        relayControl->turnOff();
+            }
+            break;
+        case DevCmdType::SET_OUTPUT:
+            if (cmd.i1 >= 1 && cmd.i1 <= HeaterManager::kWireCount && WIRE) {
+                WIRE->setOutput(cmd.i1, cmd.b1);
+                if (indicator) indicator->setLED(cmd.i1, cmd.b1);
+            } else {
+                ok = false;
+            }
+            break;
+        case DevCmdType::REQUEST_RESET:
+            if (WIRE) WIRE->disableAll();
+            if (indicator) indicator->clearAll();
+            if (relayControl) relayControl->turnOff();
+            setState(DeviceState::Shutdown);
+            CONF->PutBool(RESET_FLAG, true);
+            CONF->RestartSysDelayDown(3000);
+            break;
+        default:
+            ok = false;
+            break;
+    }
+
+    sendAck(ok);
+}
+
 
 void Device::setState(DeviceState next) {
     DeviceState prev;
@@ -129,6 +298,8 @@ void Device::begin() {
     if (!gStateMtx) gStateMtx = xSemaphoreCreateMutex();
     if (!gEvt)      gEvt      = xEventGroupCreate();
     if (!stateEvtQueue) stateEvtQueue = xQueueCreate(8, sizeof(StateSnapshot));
+    if (!cmdQueue)  cmdQueue  = xQueueCreate(12, sizeof(DevCommand));
+    if (!ackQueue)  ackQueue  = xQueueCreate(12, sizeof(DevCommandAck));
 
     setState(DeviceState::Shutdown);        // OFF at boot
     wifiStatus   = WiFiStatus::NotConnected;
@@ -162,6 +333,9 @@ void Device::begin() {
     POWER_TRACKER->begin();
     // Start fans (dual-channel) and the closed-loop control task
     startFanControlTask(); // runs continuously; reads DS18B20 roles
+
+    // Start external command handler
+    startCommandTask();
 
     DEBUG_PRINTLN("[Device] Configuring system I/O pins 🧰");
 }

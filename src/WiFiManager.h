@@ -8,7 +8,7 @@
 #include "Config.h"
 #include "RGBLed.h"
 #include "HeaterManager.h"
-#include "DeviceTransport.h"
+#include "StatusSnapshot.h"
 
 // ================= Build-time Wi-Fi mode selection =================
 // If 1 → start in Station (STA) mode using creds/macros below.
@@ -38,24 +38,6 @@
 #ifndef WIFI_STA_CONNECT_TIMEOUT_MS
 #define WIFI_STA_CONNECT_TIMEOUT_MS 12000
 #endif
-
-// --- Lightweight status snapshot for HTTP handlers ---
-// Updated periodically in a background task so HTTP handlers stay cheap.
-struct StatusSnapshot {
-    float capVoltage = 0.0f;
-    float current    = 0.0f;
-
-    float temps[MAX_TEMP_SENSORS] = {0};                    // DS18B20s (cached)
-    float wireTemps[HeaterManager::kWireCount] = {0};       // virtual wire temps
-    bool  outputs[HeaterManager::kWireCount]   = {false};   // output states
-
-    bool  relayOn   = false;
-    bool  acPresent = false;
-
-    uint32_t updatedMs = 0; // last refresh (millis)
-};
-
-// ==================================================================
 
 class WiFiManager {
 public:
@@ -176,8 +158,8 @@ private:
 
     static void controlTaskTrampoline(void* pv);
     void controlTaskLoop();
-    void handleControl(const ControlCmd& c);
-    void sendCmd(const ControlCmd& c); // non-blocking enqueue
+    bool handleControl(const ControlCmd& c);
+    bool sendCmd(const ControlCmd& c); // non-blocking enqueue
 
     // State stream task
     void startStateStreamTask();

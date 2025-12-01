@@ -2,6 +2,7 @@
 #define DEVICE_TRANSPORT_H
 
 #include "Device.h"
+#include "StatusSnapshot.h"
 
 /**
  * @brief Thin facade for WiFi/UI to interact with Device without touching internals.
@@ -12,6 +13,38 @@ public:
 
   Device::StateSnapshot getStateSnapshot() const;
   bool waitForStateEvent(Device::StateSnapshot& out, TickType_t toTicks);
+
+  // Requests (thin wrappers)
+  bool requestRun();
+  bool requestStop();
+  bool requestIdle();
+  bool requestWake();
+  bool ensureLoopTask();
+
+  // Telemetry snapshot reused by WiFiManager snapshot task
+  bool getTelemetry(StatusSnapshot& out) const;
+
+  // Output / relay helpers for UI control paths
+  bool setRelay(bool on);
+  bool setOutput(uint8_t idx, bool on, bool allowUser);
+
+  // Config/NVS setters (centralized)
+  bool setLedFeedback(bool on);
+  bool setOnTimeMs(int v);
+  bool setOffTimeMs(int v);
+  bool setDesiredVoltage(float v);
+  bool setAcFrequency(int v);
+  bool setChargeResistor(float v);
+  bool setDcVoltage(float v);
+  bool setAccessFlag(uint8_t idx, bool on);
+  bool setWireRes(uint8_t idx, float ohms);
+  bool setTargetRes(float ohms);
+  bool setWireOhmPerM(float ohmsPerM);
+  bool setBuzzerMute(bool on);
+  bool requestResetFlagAndRestart();
+
+private:
+  bool sendCommandAndWait(Device::DevCmdType t, int32_t i1 = 0, float f1 = 0.0f, bool b1 = false, TickType_t to = pdMS_TO_TICKS(500));
 
 private:
   static DeviceTransport* s_inst;
