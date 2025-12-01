@@ -4,12 +4,14 @@ This board controls **10 nichrome-wire outputs**, an **inrush (bypass) MOSFET**,
 
 > **Quick highlights**
 >
-> - One physical **yellow button** on the board for **power/start/stop** and **Wi-Fi wake** actions.
+> - One physical **yellow button** on the board for **power/start/stop** and **Wi‑Fi wake** actions.
+> - One **BOOT button (IO0)** for a **safe full reset** and as a **hardware wake source** from deep sleep.
 > - Two web roles: **Admin** and **User** (with **per-output access control**).
 > - Web UI has **Dashboard**, **Manual**, **User Settings**, and **Admin Settings** tabs.
 > - Wi-Fi client mode (**STA**) with **auto-fallback AP** if credentials fail.
-> - **AP auto-sleeps** after inactivity. **Triple-tap the yellow button** to wake Wi-Fi again.
-> - Wi-Fi may be sleeping. **Triple-press the yellow button**, reconnect to the board (use password **`1234567890`** in AP), and try again.
+> - **Wi‑Fi auto-sleeps** after inactivity. **Triple-tap the yellow button** to wake Wi‑Fi again.
+> - The whole board can enter **deep sleep** when Wi‑Fi is disabled and the device is not running; wake it with the **yellow button** or **BOOT** button.
+> - Wi‑Fi may be sleeping. **Triple-press the yellow button**, reconnect to the board (use password **`1234567890`** in AP), and try again.
 
 ---
 
@@ -45,6 +47,9 @@ This board controls **10 nichrome-wire outputs**, an **inrush (bypass) MOSFET**,
 
 - **Yellow Button**  
   Single onboard push button used to **wake/start/stop** the system and to **wake Wi-Fi** (triple-press). See the detailed flows below.
+
+- **BOOT Button (IO0)**  
+  Second physical button typically near the USB connector. A **long hold** triggers a **full reset** via the firmware (safe shutdown + restart). It is also configured as a **deep‑sleep wake source** together with the yellow button.
 
 - **10 Nichrome Outputs**  
   Individually switchable channels for heating loads (nichrome wires). You can enable/disable each output in **Manual** mode and enforce end-user access in **User Settings**.
