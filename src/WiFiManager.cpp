@@ -233,7 +233,7 @@ void WiFiManager::registerRoutes_() {
     server.on("/heartbeat", HTTP_GET, [this](AsyncWebServerRequest* request) {
         if (!isAuthenticated(request)) {
             BUZZ->bipFault();
-            request->redirect("/login");
+            request->redirect("http://powerboard.local/login");
             return;
         }
         if (lock()) {
@@ -394,7 +394,7 @@ void WiFiManager::registerRoutes_() {
                 unlock();
             }
             RGB->postOverlay(OverlayEvent::WIFI_LOST);
-            request->redirect("/login.html");
+            request->redirect("http://powerboard.local/login");
         }
     );
 
@@ -527,7 +527,6 @@ void WiFiManager::registerRoutes_() {
                 else if (target == "mode")                    c.type = CTRL_MODE_IDLE;
                 else if (target == "systemStart")             c.type = CTRL_SYSTEM_START;
                 else if (target == "systemShutdown")          c.type = CTRL_SYSTEM_SHUTDOWN;
-                else if (target == "bypass")                  { c.type = CTRL_BYPASS_BOOL;       c.b1 = value.as<bool>(); }
                 else if (target == "fanSpeed")                { c.type = CTRL_FAN_SPEED;         c.i1 = constrain(value.as<int>(), 0, 100); }
                 else if (target == "buzzerMute")              { c.type = CTRL_BUZZER_MUTE;       c.b1 = value.as<bool>(); }
                 else if (target.startsWith("wireRes"))        { c.type = CTRL_WIRE_RES;          c.i1 = target.substring(7).toInt(); c.f1 = value.as<float>(); }
@@ -993,12 +992,6 @@ void WiFiManager::handleControl(const ControlCmd& c) {
                 xEventGroupSetBits(gEvt, EVT_STOP_REQ);
             }
             RGB->postOverlay(OverlayEvent::RELAY_OFF);
-            break;
-
-        case CTRL_BYPASS_BOOL:
-            BUZZ->bip();
-            if (c.b1) DEVICE->bypassFET->enable();
-            else      DEVICE->bypassFET->disable();
             break;
 
         case CTRL_FAN_SPEED: {

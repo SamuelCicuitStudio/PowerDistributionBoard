@@ -19,12 +19,11 @@ Device* Device::instance = nullptr;
 void Device::Init(TempSensor* temp,
                   CurrentSensor* current,
                   Relay* relay,
-                  BypassMosfet* bypass,
                   CpDischg* discharger,
                   Indicator* ledIndicator)
 {
     if (!instance) {
-        instance = new Device(temp, current, relay, bypass, discharger, ledIndicator);
+        instance = new Device(temp, current, relay, discharger, ledIndicator);
     }
 }
 
@@ -35,13 +34,11 @@ Device* Device::Get() {
 Device::Device(TempSensor* temp,
                CurrentSensor* current,
                Relay* relay,
-               BypassMosfet* bypass,
                CpDischg* discharger,
                Indicator* ledIndicator)
     : tempSensor(temp),
       currentSensor(current),
       relayControl(relay),
-      bypassFET(bypass),
       discharger(discharger),
       indicator(ledIndicator) {}
 
@@ -134,9 +131,6 @@ void Device::shutdown() {
 
     DEBUG_PRINTLN("[Device] Starting Capacitor Discharge ⚡");
     // discharger->discharge();
-
-    DEBUG_PRINTLN("[Device] Disabling Inrush Bypass MOSFET ⛔");
-    bypassFET->disable();
 
     DEBUG_PRINTLN("[Device] Updating Status LEDs 💡");
     RGB->setOff();  // final visual
@@ -268,7 +262,6 @@ void Device::handle12VDrop() {
     // Cut power paths & loads immediately
     WIRE->disableAll();
     indicator->clearAll();
-    bypassFET->disable();
     relayControl->turnOff();
 
     // Flip state under lock so StartLoop() will unwind
@@ -368,7 +361,6 @@ void Device::handleOverCurrentFault()
     // 2) Immediately disable all loads and power paths
     if (WIRE)       WIRE->disableAll();
     if (indicator)  indicator->clearAll();
-    if (bypassFET)  bypassFET->disable();
     if (relayControl) relayControl->turnOff();
 
     // 3) Feedback: critical current trip

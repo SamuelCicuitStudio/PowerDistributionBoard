@@ -25,7 +25,6 @@ CpDischg*      discharger    = nullptr;
 CurrentSensor* currentSensor = nullptr;
 TempSensor*    tempSensor    = nullptr;
 Relay*         mainRelay     = nullptr;
-BypassMosfet*  bypassFET     = nullptr;
 SwitchManager* sw            = nullptr;
 
 // ──────────────────────────────────────────────────────────────
@@ -84,7 +83,7 @@ void setup() {
   // --------------------------------------------------
   // 3. Status / Indicators (so we can signal states & faults)
   // --------------------------------------------------
-  RGB->RGBLed::Init(POWER_OFF_LED_PIN, READY_LED_PIN, false);
+  RGB->RGBLed::Init(POWER_OFF_LED_PIN, READY_LED_PIN, LED_R3_LED_PIN);
   RGB->begin();
   RGB->setDeviceState(DevState::BOOT);   // Show we're in boot sequence
 
@@ -105,11 +104,6 @@ void setup() {
   mainRelay = new Relay();
   mainRelay->begin();
   mainRelay->turnOff();                  // Ensure load path is open
-
-  // Bypass MOSFET
-  bypassFET = new BypassMosfet();
-  bypassFET->begin();
-  // Assume begin() leaves it OFF; do NOT enable here.
 
   // Capacitor Discharge Manager
   discharger = new CpDischg(mainRelay);
@@ -149,7 +143,7 @@ void setup() {
   //      - Temps are online
   //    → Hand over to Device state machine.
   // --------------------------------------------------
-  Device::Init(tempSensor, currentSensor, mainRelay, bypassFET, discharger, indicator);
+  Device::Init(tempSensor, currentSensor, mainRelay, discharger, indicator);
   DEVICE->begin();                       // Handles 12V detect, cap charge, etc.
 
   DEBUG_PRINTLN("[Setup] Device initialized.");

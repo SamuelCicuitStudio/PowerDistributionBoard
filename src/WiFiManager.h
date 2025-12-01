@@ -151,7 +151,6 @@ private:
         CTRL_MODE_IDLE,
         CTRL_SYSTEM_START,
         CTRL_SYSTEM_SHUTDOWN,
-        CTRL_BYPASS_BOOL,
         CTRL_FAN_SPEED,         // i1=0..100
         CTRL_BUZZER_MUTE,       // b1
         CTRL_TARGET_RES,        // f1

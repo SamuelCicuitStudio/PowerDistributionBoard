@@ -65,7 +65,6 @@
 #include "TempSensor.h"
 #include "CurrentSensor.h"
 #include "Relay.h"
-#include "BypassMosfet.h"
 #include "CpDischg.h"
 #include "Indicator.h"
 #include "WiFiManager.h"
@@ -177,7 +176,6 @@ public:
     static void Init(TempSensor* temp,
                      CurrentSensor* current,
                      Relay* relay,
-                     BypassMosfet* bypass,
                      CpDischg* discharger,
                      Indicator* ledIndicator);
 
@@ -193,7 +191,6 @@ public:
     Device(TempSensor* temp,
            CurrentSensor* current,
            Relay* relay,
-           BypassMosfet* bypass,
            CpDischg* discharger,
            Indicator* ledIndicator);
 
@@ -285,7 +282,6 @@ public:
     TempSensor*    tempSensor         = nullptr;
     CurrentSensor* currentSensor      = nullptr;
     Relay*         relayControl       = nullptr;
-    BypassMosfet*  bypassFET          = nullptr;
     CpDischg*      discharger         = nullptr;
     Indicator*     indicator          = nullptr;
 

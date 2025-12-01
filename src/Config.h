@@ -52,8 +52,8 @@
 #define DEVICE_AP_AUTH_PASS_KEY        "APPSS"     // Hotspot password key
 #define RESET_FLAG                     "RTFLG"     // Preferences reset flag
 
-#define STA_SSID_KEY                   "WIFSSD"  // Station Mode SSID key
-#define STA_PASS_KEY                   "WIFPASS"  // Station Mode password key
+#define STA_SSID_KEY                   "WIFSSD"    // Station Mode SSID key
+#define STA_PASS_KEY                   "WIFPASS"   // Station Mode password key
 // ---------- Authentication (Max 1 Admin, 1 User) ----------
 #define ADMIN_ID_KEY                   "ADMID"     // Admin login username
 #define ADMIN_PASS_KEY                 "ADMPW"     // Admin login password
@@ -70,7 +70,7 @@
 #define AC_FREQUENCY_KEY               "ACFRQ"     // AC line frequency key
 #define AC_VOLTAGE_KEY                 "ACVLT"     // AC line voltage key
 #define DC_VOLTAGE_KEY                 "DCVLT"     // Target DC output voltage key
-#define DESIRED_OUTPUT_VOLTAGE_KEY     "DOUTV"    // User-defined target output voltage
+#define DESIRED_OUTPUT_VOLTAGE_KEY     "DOUTV"     // User-defined target output voltage
 #define TEMP_SENSOR_COUNT_KEY          "TMPCNT"    // Number of temperature sensors detected
 
 // ---------- Output Access Flags ----------
@@ -83,7 +83,7 @@
 #define OUT07_ACCESS_KEY               "OUT7F"
 #define OUT08_ACCESS_KEY               "OUT8F"
 #define OUT09_ACCESS_KEY               "OUT9F"
-#define OUT10_ACCESS_KEY              "OUT10F"
+#define OUT10_ACCESS_KEY               "OUT10F"
 // ---------- Nichrome Wire Resistance (Ohms) ----------
 #define DEFAULT_WIRE_RES_OHMS  44.0f   // default for all 10 wires
 
@@ -139,10 +139,10 @@
 // ==================================================
 
 // ---------- Wi-Fi Defaults ----------
-#define DEVICE_WIFI_HOTSPOT_NAME       "PDis_"   // Default SSID
-#define DEVICE_AP_AUTH_PASS_DEFAULT    "1234567890"     // Default password
-#define DEFAULT_STA_SSID               "nothing"              // Optional default station SSID (blank)
-#define DEFAULT_STA_PASS               "nothing"              // Optional default station password (blank)
+#define DEVICE_WIFI_HOTSPOT_NAME       "PDis_"         // Default SSID
+#define DEVICE_AP_AUTH_PASS_DEFAULT    "1234567890"    // Default password
+#define DEFAULT_STA_SSID               "nothing"       // Optional default station SSID (blank)
+#define DEFAULT_STA_PASS               "nothing"       // Optional default station password (blank)
 
 // ---------- Timing & Behavior Defaults ----------
 #define DEFAULT_ON_TIME                10               // ms
@@ -154,9 +154,8 @@
 #define DEFAULT_AC_FREQUENCY           50               // Hz
 #define DEFAULT_AC_VOLTAGE             230.0f           // Volts
 #define DEFAULT_DC_VOLTAGE             325.0f           // Volts
-#define DEFAULT_DESIRED_OUTPUT_VOLTAGE 180.0f     // Volts (safe default power level)
-#define DEFAULT_TEMP_SENSOR_COUNT      12           // Default to 4 sensor unless discovered otherwise
-
+#define DEFAULT_DESIRED_OUTPUT_VOLTAGE 180.0f           // Volts (safe default power level)
+#define DEFAULT_TEMP_SENSOR_COUNT      12               // Default to 12 sensors unless discovered otherwise
 
 // ---------- Output Access Defaults ----------
 #define DEFAULT_OUT01_ACCESS           true
@@ -173,8 +172,8 @@
 // ---------- Authentication Defaults ----------
 #define DEFAULT_ADMIN_ID               "admin"          // Default admin username
 #define DEFAULT_ADMIN_PASS             "admin123"       // Default admin password
-#define DEFAULT_USER_ID                "user"          // Default customer username
-#define DEFAULT_USER_PASS              "user123"               // Blank password (set via UI)
+#define DEFAULT_USER_ID                "user"           // Default customer username
+#define DEFAULT_USER_PASS              "user123"        // Default customer password
 
 // ==================================================
 // APMODE Definitions
@@ -183,33 +182,31 @@
 #define LOCAL_IP                       IPAddress(192, 168, 4, 1)
 #define GATEWAY                        IPAddress(192, 168, 4, 1)
 #define SUBNET                         IPAddress(255, 255, 255, 0)
-#define INACTIVITY_TIMEOUT_MS           180000  // 3 minutes
-// ==================================================
-// Time Configuration
-// ==================================================
+#define INACTIVITY_TIMEOUT_MS          180000  // 3 minutes
 
 // ==================================================
 // Switch Configuration
 // ==================================================
 
-#define SW_USER_BOOT_PIN               0                    // Boot button pin
-#define POWER_ON_SWITCH_PIN            6                    // Physical power button
+#define SW_USER_BOOT_PIN               0                    // Boot button pin (IO0 / BOOT)
+#define POWER_ON_SWITCH_PIN            6                    // Physical power button (IO6)
 
 // ==================================================
 // LED Configuration
 // ==================================================
 
-#define READY_LED_PIN                  2                   // System ready indicator
-#define POWER_OFF_LED_PIN              16                    // Power off indicator LED
-#define LED_R3_LED_PIN              46                    // Power off indicator LED
+#define READY_LED_PIN                  16                   // READY indicator (schematic READY on IO16)
+#define POWER_OFF_LED_PIN              2                    // OFF indicator (schematic OFF on IO2)
+#define LED_R3_LED_PIN                 46                   // R3 indicator (IO46)
+
 // ==================================================
 // Floor Heater LED Indicators
 // ==================================================
 
 // 8 LEDs connected to a shift register (74HC595)
 #define SHIFT_SER_PIN                  10                   // Serial data input (SER)
-#define SHIFT_SCK_PIN                  8                   // Shift clock (SCK)
-#define SHIFT_RCK_PIN                  9                   // Latch clock (RCK)
+#define SHIFT_SCK_PIN                  8                    // Shift clock (SCK)
+#define SHIFT_RCK_PIN                  9                    // Latch clock (RCK)
 
 // 2 LEDs controlled directly via GPIO
 #define FL06_LED_PIN                   18
@@ -219,19 +216,19 @@
 // Sensor & Detection Pins
 // ==================================================
 
-#define DETECT_12V_PIN                 4                    // Detect 12V input presence
-#define ACS_LOAD_CURRENT_VOUT_PIN      5                    // Analog output from ACS781 current sensor
-#define CAPACITOR_ADC_PIN              15                   // ADC input for monitoring capacitor voltage
+#define DETECT_12V_PIN                 4                    // Detect 12V input presence (IO4)
+#define ACS_LOAD_CURRENT_VOUT_PIN      5                    // ACS781 current sensor VOUT (IO5)
+#define CAPACITOR_ADC_PIN              15                   // Capacitor voltage ADC (IO15)
 #define CHARGE_THRESHOLD_PERCENT       85.0f                // Percentage threshold for capacitor charge
-#define ONE_WIRE_BUS                   3                    // DS18B20 temperature sensor bus
-#define FLAG_INPUT_PIN                 3                    // Input pin for external flag signal
+#define ONE_WIRE_BUS                   3                    // DS18B20 temperature sensor bus (IO3)
+#define FLAG_INPUT_PIN                 3                    // External flag input (IO3)
 
 // ==================================================
 // Nichrome Wire Control - Opto Enable Pins (active low)
 // ==================================================
 
 #define ENA01_E_PIN                    47
-#define ENA02_E_PIN                    45
+#define ENA02_E_PIN                    45   // updated to match schematic
 #define ENA03_E_PIN                    12
 #define ENA04_E_PIN                    13
 #define ENA05_E_PIN                    7
@@ -245,38 +242,52 @@
 // PWM Control Configuration
 // ==================================================
 
-#define INA_OPT_PWM_PIN                1                    // INA_OPT controls nichrome overdrive
-#define INA_OPT_PWM_CHANNEL            1
-
-#define FAN1_PWM_PIN                    14                   // FAN output
-#define FAN1_PWM_CHANNEL                2
-#define FAN2_PWM_PIN                    42                   // FAN output
-#define FAN2_PWM_CHANNEL                2
+#define FAN1_PWM_PIN                   14                   // FAN1 output (IO14)
+#define FAN1_PWM_CHANNEL               4                   // dedicated LEDC channel for FAN1
+#define FAN2_PWM_PIN                   42                   // FAN2 output (IO42)
+#define FAN2_PWM_CHANNEL               5                   // dedicated LEDC channel for FAN2
 
 #define PWM_DUTY_CYCLE                 173                  // Default duty (68%)
+
+// --- LEDC channel allocation (keep unique per peripheral) ---
+#define BUZZER_PWM_CHANNEL             0
+#define RGB_R_PWM_CHANNEL              1
+#define RGB_G_PWM_CHANNEL              2
+#define RGB_B_PWM_CHANNEL              3
+
+// RGB LED PWM settings (used by RGBLed.cpp)
+#define RGB_PWM_FREQ                   5000
+#define RGB_PWM_RESOLUTION             8
+
+static_assert(FAN1_PWM_CHANNEL != FAN2_PWM_CHANNEL, "FAN LEDC channels must differ");
+static_assert(BUZZER_PWM_CHANNEL != RGB_R_PWM_CHANNEL &&
+              BUZZER_PWM_CHANNEL != RGB_G_PWM_CHANNEL &&
+              BUZZER_PWM_CHANNEL != RGB_B_PWM_CHANNEL, "Buzzer LEDC channel must be unique");
+static_assert(BUZZER_PWM_CHANNEL != FAN1_PWM_CHANNEL &&
+              BUZZER_PWM_CHANNEL != FAN2_PWM_CHANNEL, "Buzzer LEDC channel must be unique vs fans");
+static_assert(RGB_R_PWM_CHANNEL != FAN1_PWM_CHANNEL &&
+              RGB_R_PWM_CHANNEL != FAN2_PWM_CHANNEL, "RGB R channel must be unique vs fans");
+static_assert(RGB_G_PWM_CHANNEL != FAN1_PWM_CHANNEL &&
+              RGB_G_PWM_CHANNEL != FAN2_PWM_CHANNEL, "RGB G channel must be unique vs fans");
+static_assert(RGB_B_PWM_CHANNEL != FAN1_PWM_CHANNEL &&
+              RGB_B_PWM_CHANNEL != FAN2_PWM_CHANNEL, "RGB B channel must be unique vs fans");
 
 // ==================================================
 // Capacitor Bank Charging Control
 // ==================================================
 
-#define RELAY_CONTROL_PIN              21                   // Relay controlling capacitor input power
-#define INA_RELAY_BYPASS_PIN           42                   // INA controls bypass MOSFET for inrush resistor
-
-
+#define RELAY_CONTROL_PIN              21                   // Relay controlling capacitor input power (IO21)
 
 // ==================================================
 // Additional I/O
 // ==================================================
-
-#define BUZZER_PIN       1      // Buzzer control output
-
-#define BUZLOW_KEY       "BUZLOW"   // bool (activeLow)
-#define BUZMUT_KEY       "BUZMUT"   // bool (muted)
+#define BUZZER_PIN                     1      // Buzzer control output (IO1)
+#define BUZLOW_KEY                     "BUZLOW"   // bool (activeLow)
+#define BUZMUT_KEY                     "BUZMUT"   // bool (muted)
 
 // --- Default configuration values ---
-#define BUZLOW_DEFAULT   false   // Default: buzzer active HIGH
-#define BUZMUT_DEFAULT   false   // Default: buzzer not muted
-
+#define BUZLOW_DEFAULT                 false   // Default: buzzer active HIGH
+#define BUZMUT_DEFAULT                 false   // Default: buzzer not muted
 
 // ==================================================
 //  RTOS CONFIGURATION: Task Priorities
@@ -294,7 +305,7 @@
 //  RTOS CONFIGURATION: Core Assignments
 // ==================================================
 #define DEVICE_LOOP_TASK_CORE             APP_CPU_NUM
-#define TASK_MONITOR_TASK_CORE             APP_CPU_NUM
+#define TASK_MONITOR_TASK_CORE            APP_CPU_NUM
 #define TEMP_MONITOR_TASK_CORE            APP_CPU_NUM
 #define LED_UPDATE_TASK_CORE              PRO_CPU_NUM
 #define CAP_VOLTAGE_TASK_CORE             APP_CPU_NUM
@@ -308,7 +319,7 @@
 #define DEVICE_LOOP_TASK_STACK_SIZE       8192
 #define TASK_MONITOR_TASK_STACK_SIZE      8192
 #define TEMP_MONITOR_TASK_STACK_SIZE      8192
-#define LED_UPDATE_TASK_STACK_SIZE        15360  
+#define LED_UPDATE_TASK_STACK_SIZE        15360
 #define CAP_VOLTAGE_TASK_STACK_SIZE       4096
 #define SWITCH_TASK_STACK_SIZE            8192
 #define TEMP_SENSOR_TASK_STACK_SIZE       8192
@@ -350,7 +361,7 @@ enum class WiFiStatus {
 // Globals shared with other modules
 // NOTE: WiFiManager now updates wifiStatus under its own mutex,
 // and Device updates StartFromremote under its own mutex. We
-// keep them volatile here because multiple tasks read them. :contentReference[oaicite:3]{index=3}
+// keep them volatile here because multiple tasks read them.
 extern volatile WiFiStatus wifiStatus;
 extern volatile bool StartFromremote;
 

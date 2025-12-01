@@ -5,7 +5,7 @@
 #include "Config.h"
 #include <Arduino.h>
 
-// ---------- Priorities (bigger = stronger) ----------
+// ---------- Priorities (higher preempts) ----------
 enum : uint8_t {
   PRIO_BACKGROUND = 0,
   PRIO_ACTION     = 1,
@@ -13,16 +13,24 @@ enum : uint8_t {
   PRIO_CRITICAL   = 3
 };
 
-// ---------- Patterns ----------
-enum class Pattern : uint8_t {
-  OFF, SOLID, BLINK, BREATHE, RAINBOW, HEARTBEAT2, FLASH_ONCE,
-};
+// ---------- Patterns (status-focused) ----------
+enum class Pattern : uint8_t { OFF, SOLID, BLINK, BREATHE, HEARTBEAT2, FLASH_ONCE, STROBE };
 
 // ---------- Background states ----------
 enum class DevState : uint8_t {
-  BOOT, INIT, PAIRING, READY_ONLINE, READY_OFFLINE, SLEEP,
-  START, IDLE, RUN, OFF, FAULT, MAINT,
-  WAIT   // unified “waiting” background (12V/button)
+  BOOT,
+  INIT,
+  PAIRING,
+  READY_ONLINE,
+  READY_OFFLINE,
+  SLEEP,
+  START,
+  IDLE,
+  RUN,
+  OFF,
+  FAULT,
+  MAINT,
+  WAIT   // waiting for 12V/button/ready
 };
 
 // ---------- Overlay events ----------
@@ -52,25 +60,24 @@ enum class OverlayEvent : uint8_t {
   PWR_START,
 
   // Power & protection detail
-  PWR_12V_LOST,            // 12 V supply dropped while active
-  PWR_DC_LOW,              // DC bus under threshold (but not fully lost)
-  FAULT_OVERCURRENT,       // latched overcurrent
-  FAULT_THERMAL_GLOBAL,    // global thermal lock / all wires blocked
-  FAULT_THERMAL_CH_LOCK,   // some channels thermally locked
-  FAULT_SENSOR_MISSING,    // temp/current sensor missing / invalid
-  FAULT_CFG_ERROR,         // invalid configuration / NVS / calibration issue
-  DISCHG_ACTIVE,           // capacitor discharge ongoing
-  DISCHG_DONE,             // discharge finished
-  BYPASS_FORCED_OFF        // bypass MOSFET forced off due to safety
+  PWR_12V_LOST,
+  PWR_DC_LOW,
+  FAULT_OVERCURRENT,
+  FAULT_THERMAL_GLOBAL,
+  FAULT_THERMAL_CH_LOCK,
+  FAULT_SENSOR_MISSING,
+  FAULT_CFG_ERROR,
+  DISCHG_ACTIVE,
+  DISCHG_DONE,
+  BYPASS_FORCED_OFF
 };
-
 
 // ---------- Pattern options payload ----------
 struct PatternOpts {
   uint32_t color      = RGB_HEX(255,255,255);
   uint16_t periodMs   = 300;
   uint16_t onMs       = 100;
-  uint32_t durationMs = 0;
+  uint32_t durationMs = 0;     // 0 => indefinite
   uint8_t  priority   = PRIO_ACTION;
   bool     preempt    = true;
 };
@@ -109,12 +116,12 @@ public:
   void solid(uint32_t color, uint8_t priority = PRIO_ACTION, bool preempt = true, uint32_t durationMs = 0);
   void blink(uint32_t color, uint16_t periodMs, uint8_t priority = PRIO_ACTION, bool preempt = true, uint32_t durationMs = 0);
   void breathe(uint32_t color, uint16_t periodMs, uint8_t priority = PRIO_ACTION, bool preempt = true, uint32_t durationMs = 0);
-  void rainbow(uint16_t stepMs = 20, uint8_t priority = PRIO_BACKGROUND, bool preempt = true, uint32_t durationMs = 0);
   void heartbeat(uint32_t color, uint16_t periodMs = 1500, uint8_t priority = PRIO_ACTION, bool preempt = true, uint32_t durationMs = 0);
   void flash(uint32_t color, uint16_t onMs = 120, uint8_t priority = PRIO_ACTION, bool preempt = true);
+  void strobe(uint32_t color, uint16_t onMs = 60, uint16_t offMs = 60, uint8_t priority = PRIO_CRITICAL, bool preempt = true, uint32_t durationMs = 0);
   void playPattern(Pattern pat, const PatternOpts& opts);
 
-  // Pins (pass pinB = -1 if Blue not wired)
+  // Pins (Blue is expected; pass pinB = -1 only if unwired)
   void attachPins(int pinR, int pinG, int pinB = -1, bool activeLow = true);
 
 private:
@@ -130,29 +137,20 @@ private:
   static void taskThunk(void* arg);
   void        taskLoop();
 
+  void applyBackground();
+  void applyBackground(DevState s);
+  void setActivePattern(Pattern pat, const PatternOpts& opts);
+
   // Low-level I/O
   void writeColor(uint8_t r, uint8_t g, uint8_t b);
 
   // Helpers
   bool sendCmd(const Cmd& c, TickType_t to = 0);
-  void stepRainbow(uint16_t stepMs);
   void stepBlink(uint32_t color, uint16_t periodMs);
   void stepBreathe(uint32_t color, uint16_t periodMs);
   void doHeartbeat2(uint32_t color, uint16_t periodMs);
   void doFlashOnce(uint32_t color, uint16_t onMs);
-  void applyBackground(DevState s);
-
-  // NEW: asymmetric strobe for FAULT background (private helper)
   void doStrobe(uint32_t color, uint16_t onMs, uint16_t offMs);
-
-  // RG-only utility: strip blue channel if needed
-  inline uint32_t rgOnly(uint32_t c) const {
-#if RGB_FORCE_RG_ONLY
-    return RGB_HEX(RGB_R(c), RGB_G(c), 0);
-#else
-    return c;
-#endif
-  }
 
 private:
   // -------- Singleton storage --------
@@ -169,13 +167,13 @@ private:
   // RTOS
   TaskHandle_t      _task  = nullptr;
   QueueHandle_t     _queue = nullptr;
-  SemaphoreHandle_t _mtx   = nullptr;
 
   // live state (owned by worker)
-  uint8_t     _currentPrio = PRIO_BACKGROUND;
-  Pattern     _currentPat  = Pattern::OFF;
-  PatternOpts _currentOpts {};
-  bool        _haveCurrent = false;
+  uint8_t     _currentPrio    = PRIO_BACKGROUND;
+  Pattern     _currentPat     = Pattern::OFF;
+  PatternOpts _currentOpts    {};
+  bool        _haveCurrent    = false;
+  uint32_t    _currentStartMs = 0;
 
   // background (worker owns)
   DevState _bgState = DevState::START;

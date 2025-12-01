@@ -3,7 +3,8 @@
   "files.associations": {
     "*.dbclient-js": "javascript",
     "new": "cpp",
-    "cmath": "cpp"
+    "cmath": "cpp",
+    "vector": "cpp"
   },
   "liveServer.settings.port": 5501
 }

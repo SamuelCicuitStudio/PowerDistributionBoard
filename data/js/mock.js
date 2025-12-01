@@ -15,7 +15,6 @@
     outputs: Array(10).fill(false), // 10 outputs
     outputAccess: Array(10).fill(true),
     relay: false,
-    bypass: false,
     ledFeedback: true,
     buzzerMute: false,
     fanSpeed: 0, // 0..255
@@ -207,9 +206,6 @@
             break;
           case "relay":
             S.relay = !!value;
-            break;
-          case "bypass":
-            S.bypass = !!value;
             break;
           case "fanSpeed":
             S.fanSpeed = Math.max(0, Math.min(255, +value || 0));

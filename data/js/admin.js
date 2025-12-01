@@ -511,7 +511,7 @@
     })
       .then((response) => {
         if (response.redirected) {
-          window.location.href = response.url;
+          window.location.href = "http://powerboard.local/login";
         } else {
           return response.json().then((data) => {
             openAlert("Disconnect", data.error || "Unexpected response");
@@ -520,7 +520,7 @@
       })
       .catch((err) => {
         console.error("Disconnect failed:", err);
-        window.location.href = "/login.html";
+        window.location.href = "http://powerboard.local/login";
       });
   }
 
@@ -1607,7 +1607,7 @@
     liveRender();
     scheduleLiveInterval();
 
-    startHeartbeat();
+    //startHeartbeat();
     startMonitorPolling();
     loadControls();
     bindSessionHistoryButton();
@@ -1624,15 +1624,6 @@
       relayToggle.addEventListener("change", async () => {
         await ensureManualTakeover("relay");
         sendControlCommand("set", "relay", relayToggle.checked);
-      });
-    }
-
-    // Bypass toggle
-    const bypassToggle = document.getElementById("bypassToggle");
-    if (bypassToggle) {
-      bypassToggle.addEventListener("change", async () => {
-        await ensureManualTakeover("bypass");
-        sendControlCommand("set", "bypass", bypassToggle.checked);
       });
     }
 

@@ -1,6 +1,5 @@
 #include "RGBLed.h"
 
-// -------- Singleton backing pointer --------
 RGBLed* RGBLed::s_instance = nullptr;
 
 void RGBLed::Init(int pinR, int pinG, int pinB, bool activeLow) {
@@ -18,629 +17,596 @@ RGBLed* RGBLed::Get() {
 
 RGBLed* RGBLed::TryGet() { return s_instance; }
 
-// ---------- Debug helpers ----------
-#ifndef DEBUG_PRINT
-#define DEBUG_PRINT(x)   do{}while(0)
-#define DEBUG_PRINTLN(x) do{}while(0)
-#endif
-
-static const char* patternName(Pattern p) {
-  switch (p) {
-    case Pattern::OFF:         return "OFF";
-    case Pattern::SOLID:       return "SOLID";
-    case Pattern::BLINK:       return "BLINK";
-    case Pattern::BREATHE:     return "BREATHE";
-    case Pattern::RAINBOW:     return "RAINBOW";
-    case Pattern::HEARTBEAT2:  return "HEARTBEAT2";
-    case Pattern::FLASH_ONCE:  return "FLASH_ONCE";
-    default:                   return "?";
-  }
-}
-
-// ---------------- Pin attach ----------------
-void RGBLed::attachPins(int pinR, int pinG, int pinB, bool activeLow) {
-  _pinR = pinR; _pinG = pinG; _pinB = pinB; _activeLow = activeLow;
-}
-
-// ---------------- Lifecycle ----------------
 bool RGBLed::begin() {
-  if (_pinR < 0 || _pinG < 0) return false;
+  if (_pinR < 0 || _pinG < 0 || _pinB < 0) return false;
+
   pinMode(_pinR, OUTPUT);
   pinMode(_pinG, OUTPUT);
-  if (_pinB >= 0) pinMode(_pinB, OUTPUT);
+  pinMode(_pinB, OUTPUT);
 
-  writeColor(0,0,0);
+  if (ledcSetup(RGB_R_PWM_CHANNEL, RGB_PWM_FREQ, RGB_PWM_RESOLUTION) == 0) return false;
+  if (ledcSetup(RGB_G_PWM_CHANNEL, RGB_PWM_FREQ, RGB_PWM_RESOLUTION) == 0) return false;
+  if (ledcSetup(RGB_B_PWM_CHANNEL, RGB_PWM_FREQ, RGB_PWM_RESOLUTION) == 0) return false;
 
-  _mtx = xSemaphoreCreateMutex();
+  ledcAttachPin(_pinR, RGB_R_PWM_CHANNEL);
+  ledcAttachPin(_pinG, RGB_G_PWM_CHANNEL);
+  ledcAttachPin(_pinB, RGB_B_PWM_CHANNEL);
+
+  writeColor(0, 0, 0);
+
   _queue = xQueueCreate(RGB_CMD_QUEUE_LEN, sizeof(Cmd));
-  if (!_mtx || !_queue) return false;
+  if (!_queue) return false;
 
   if (xTaskCreate(&RGBLed::taskThunk, "RGBLed", RGB_TASK_STACK, this,
                   RGB_TASK_PRIORITY, &_task) != pdPASS) return false;
 
-  // default background at startup -> START
   setDeviceState(DevState::START);
   return true;
 }
 
 void RGBLed::end() {
   if (!_queue) return;
-  Cmd c{}; c.type = CmdType::SHUTDOWN;
+  Cmd c{};
+  c.type = CmdType::SHUTDOWN;
   sendCmd(c, portMAX_DELAY);
 }
 
-// ---------------- Public API: background state ----------------
+void RGBLed::attachPins(int pinR, int pinG, int pinB, bool activeLow) {
+  _pinR = pinR;
+  _pinG = pinG;
+  _pinB = pinB;
+  _activeLow = activeLow;
+}
+
 void RGBLed::setDeviceState(DevState s) {
-  Cmd c{}; c.type = CmdType::SET_BACKGROUND; c.bgState = s;
+  Cmd c{};
+  c.type    = CmdType::SET_BACKGROUND;
+  c.bgState = s;
   sendCmd(c, 0);
 }
 
-// ---------------- Public API: overlay events ----------------
-void RGBLed::postOverlay(OverlayEvent e) {
-  PatternOpts o{};
-  Cmd c{}; c.type = CmdType::PLAY;
-
-  switch (e) {
-    // General
-    case OverlayEvent::WAKE_FLASH:
-      c.pattern = Pattern::FLASH_ONCE;
-      o.color = rgOnly(RGB_OVR_WAKE_FLASH);
-      o.onMs = 180; o.priority = PRIO_ACTION; o.preempt = true; o.durationMs = 220;
-      break;
-
-    case OverlayEvent::NET_RECOVER:
-      c.pattern = Pattern::FLASH_ONCE;
-      o.color = rgOnly(RGB_OVR_NET_RECOVER);
-      o.onMs = 160; o.priority = PRIO_ACTION; o.preempt = true; o.durationMs = 200;
-      break;
-
-    case OverlayEvent::RESET_TRIGGER:
-      c.pattern = Pattern::BLINK;
-      o.color = rgOnly(RGB_OVR_RESET_TRIGGER);
-      o.periodMs = 180; o.priority = PRIO_ALERT; o.preempt = true; o.durationMs = 600;
-      break;
-
-    case OverlayEvent::LOW_BATT:
-      c.pattern = Pattern::BLINK;
-      o.color = rgOnly(RGB_OVR_LOW_BATT);
-      o.periodMs = 900; o.priority = PRIO_ACTION; o.preempt = true; o.durationMs = 4000;
-      break;
-
-    case OverlayEvent::CRITICAL_BATT:
-      c.pattern = Pattern::BLINK; // short red strobe burst
-      o.color = rgOnly(RGB_OVR_CRITICAL_BATT);
-      o.periodMs = 160; o.priority = PRIO_CRITICAL; o.preempt = true; o.durationMs = 800;
-      break;
-
-    // Wi-Fi / Web
-    case OverlayEvent::WIFI_STATION:
-      c.pattern = Pattern::FLASH_ONCE;
-      o.color = rgOnly(RGB_OVR_WIFI_STA);
-      o.onMs = 140; o.priority = PRIO_ACTION; o.preempt = true; o.durationMs = 180;
-      break;
-
-    case OverlayEvent::WIFI_AP_:
-      c.pattern = Pattern::HEARTBEAT2;
-      o.color = rgOnly(RGB_OVR_WIFI_AP);
-      o.periodMs = 1500; o.priority = PRIO_ACTION; o.preempt = true; o.durationMs = 3000;
-      break;
-
-    case OverlayEvent::WIFI_LOST:
-      c.pattern = Pattern::BLINK;
-      o.color = rgOnly(RGB_OVR_WIFI_LOST);
-      o.periodMs = 250; o.priority = PRIO_ALERT; o.preempt = true; o.durationMs = 800;
-      break;
-
-    case OverlayEvent::WEB_ADMIN_ACTIVE:
-      c.pattern = Pattern::BREATHE;
-      o.color = rgOnly(RGB_OVR_WEB_ADMIN);
-      o.periodMs = 900; o.priority = PRIO_ACTION; o.preempt = true; o.durationMs = 2500;
-      break;
-
-    case OverlayEvent::WEB_USER_ACTIVE:
-      c.pattern = Pattern::BREATHE;
-      o.color = rgOnly(RGB_OVR_WEB_USER);
-      o.periodMs = 900; o.priority = PRIO_ACTION; o.preempt = true; o.durationMs = 2500;
-      break;
-
-    // Fan / Relay
-    case OverlayEvent::FAN_ON:
-      c.pattern = Pattern::FLASH_ONCE;
-      o.color = rgOnly(RGB_OVR_FAN_ON);
-      o.onMs = 120; o.priority = PRIO_ACTION; o.preempt = true; o.durationMs = 160;
-      break;
-
-    case OverlayEvent::FAN_OFF:
-      c.pattern = Pattern::FLASH_ONCE;
-      o.color = rgOnly(RGB_OVR_FAN_OFF);
-      o.onMs = 120; o.priority = PRIO_ACTION; o.preempt = true; o.durationMs = 160;
-      break;
-
-    case OverlayEvent::RELAY_ON:
-      c.pattern = Pattern::FLASH_ONCE;
-      o.color = rgOnly(RGB_OVR_RELAY_ON);
-      o.onMs = 140; o.priority = PRIO_ACTION; o.preempt = true; o.durationMs = 180;
-      break;
-
-    case OverlayEvent::RELAY_OFF:
-      c.pattern = Pattern::FLASH_ONCE;
-      o.color = rgOnly(RGB_OVR_RELAY_OFF);
-      o.onMs = 140; o.priority = PRIO_ACTION; o.preempt = true; o.durationMs = 180;
-      break;
-
-    // Temperature / Current
-    case OverlayEvent::TEMP_WARN:
-      c.pattern = Pattern::BLINK;
-      o.color = rgOnly(RGB_OVR_TEMP_WARN);
-      o.periodMs = 600; o.priority = PRIO_ALERT; o.preempt = true; o.durationMs = 2400;
-      break;
-
-    case OverlayEvent::TEMP_CRIT:
-      c.pattern = Pattern::BLINK; // rapid red burst
-      o.color = rgOnly(RGB_OVR_TEMP_CRIT);
-      o.periodMs = 160; o.priority = PRIO_CRITICAL; o.preempt = true; o.durationMs = 600;
-      break;
-
-    case OverlayEvent::CURR_WARN:
-      c.pattern = Pattern::BLINK;
-      o.color = rgOnly(RGB_OVR_CURR_WARN);
-      o.periodMs = 400; o.priority = PRIO_ALERT; o.preempt = true; o.durationMs = 1600;
-      break;
-
-    case OverlayEvent::CURR_TRIP:
-      c.pattern = Pattern::BLINK; // rapid red burst
-      o.color = rgOnly(RGB_OVR_CURR_TRIP);
-      o.periodMs = 160; o.priority = PRIO_CRITICAL; o.preempt = true; o.durationMs = 600;
-      break;
-
-    // Generic output toggles
-    case OverlayEvent::OUTPUT_TOGGLED_ON:
-      c.pattern = Pattern::FLASH_ONCE;
-      o.color = rgOnly(RGB_OVR_OUTPUT_ON);
-      o.onMs = 120; o.priority = PRIO_ACTION; o.preempt = true; o.durationMs = 150;
-      break;
-
-    case OverlayEvent::OUTPUT_TOGGLED_OFF:
-      c.pattern = Pattern::FLASH_ONCE;
-      o.color = rgOnly(RGB_OVR_OUTPUT_OFF);
-      o.onMs = 120; o.priority = PRIO_ACTION; o.preempt = true; o.durationMs = 150;
-      break;
-
-    // ---- Power-up sequence overlays ----
-    case OverlayEvent::PWR_WAIT_12V:
-      c.pattern = Pattern::BREATHE;
-      o.color = rgOnly(RGB_OVR_PWR_WAIT_12V);
-      o.periodMs = 1200; o.priority = PRIO_ACTION; o.preempt = true; o.durationMs = 2000;
-      break;
-
-    case OverlayEvent::PWR_CHARGING:
-      c.pattern = Pattern::BREATHE;
-      o.color = rgOnly(RGB_OVR_PWR_CHARGING);
-      o.periodMs = 800; o.priority = PRIO_ACTION; o.preempt = true; o.durationMs = 1000; // shorter; post ≤1/s from caller
-      break;
-
-    case OverlayEvent::PWR_THRESH_OK:
-      c.pattern = Pattern::FLASH_ONCE;
-      o.color = rgOnly(RGB_OVR_PWR_THRESH_OK);
-      o.onMs = 180; o.priority = PRIO_ALERT; o.preempt = true; o.durationMs = 220;
-      break;
-
-    case OverlayEvent::PWR_BYPASS_ON:
-      c.pattern = Pattern::FLASH_ONCE;
-      o.color = rgOnly(RGB_OVR_PWR_BYPASS_ON);
-      o.onMs = 160; o.priority = PRIO_ACTION; o.preempt = true; o.durationMs = 200;
-      break;
-
-    case OverlayEvent::PWR_WAIT_BUTTON:
-      c.pattern = Pattern::HEARTBEAT2;
-      o.color = rgOnly(RGB_OVR_PWR_WAIT_BUTTON);
-      o.periodMs = 1400; o.priority = PRIO_ACTION; o.preempt = true; o.durationMs = 3500;
-      break;
-
-    case OverlayEvent::PWR_START:
-      c.pattern = Pattern::FLASH_ONCE;
-      o.color = rgOnly(RGB_OVR_PWR_START);
-      o.onMs = 200; o.priority = PRIO_ALERT; o.preempt = true; o.durationMs = 240;
-      break;
-
-    // ---- Power & protection detail ----
-
-    case OverlayEvent::PWR_12V_LOST:
-      c.pattern = Pattern::FLASH_ONCE;
-      o.color = rgOnly(RGB_OVR_12V_LOST);
-      o.onMs = 220;
-      o.priority = PRIO_CRITICAL;
-      o.preempt = true;
-      o.durationMs = 800;      // short brutal flash; DevState::FAULT will take over background
-      break;
-
-    case OverlayEvent::PWR_DC_LOW:
-      c.pattern = Pattern::BLINK;
-      o.color = rgOnly(RGB_OVR_DC_LOW);
-      o.periodMs = 300;
-      o.priority = PRIO_ALERT;
-      o.preempt = true;
-      o.durationMs = 1500;
-      break;
-
-    case OverlayEvent::FAULT_OVERCURRENT:
-      c.pattern = Pattern::BLINK;
-      o.color = rgOnly(RGB_OVR_OVERCURRENT);
-      o.periodMs = 120;        // rapid red strobe burst
-      o.priority = PRIO_CRITICAL;
-      o.preempt = true;
-      o.durationMs = 900;
-      break;
-
-    case OverlayEvent::FAULT_THERMAL_GLOBAL:
-      c.pattern = Pattern::BREATHE;
-      o.color = rgOnly(RGB_OVR_THERMAL_GLOBAL);
-      o.periodMs = 600;        // aggressive breathe
-      o.priority = PRIO_ALERT;
-      o.preempt = true;
-      o.durationMs = 2500;
-      break;
-
-    case OverlayEvent::FAULT_THERMAL_CH_LOCK:
-      c.pattern = Pattern::BLINK;
-      o.color = rgOnly(RGB_OVR_THERMAL_CH_LOCK);
-      o.periodMs = 700;
-      o.priority = PRIO_ACTION;
-      o.preempt = true;
-      o.durationMs = 2000;
-      break;
-
-    case OverlayEvent::FAULT_SENSOR_MISSING:
-      c.pattern = Pattern::BLINK;
-      o.color = rgOnly(RGB_OVR_SENSOR_MISSING);
-      o.periodMs = 400;        // clear visible blink
-      o.priority = PRIO_ALERT;
-      o.preempt = true;
-      o.durationMs = 2600;
-      break;
-
-    case OverlayEvent::FAULT_CFG_ERROR:
-      c.pattern = Pattern::HEARTBEAT2;
-      o.color = rgOnly(RGB_OVR_CFG_ERROR);
-      o.periodMs = 900;
-      o.priority = PRIO_ALERT;
-      o.preempt = true;
-      o.durationMs = 3000;
-      break;
-
-    case OverlayEvent::DISCHG_ACTIVE:
-      c.pattern = Pattern::BREATHE;
-      o.color = rgOnly(RGB_OVR_DISCHG_ACTIVE);
-      o.periodMs = 800;        // yellow breathe while dumping energy
-      o.priority = PRIO_ACTION;
-      o.preempt = true;
-      o.durationMs = 0;        // let caller repost/stop as state changes
-      break;
-
-    case OverlayEvent::DISCHG_DONE:
-      c.pattern = Pattern::FLASH_ONCE;
-      o.color = rgOnly(RGB_OVR_DISCHG_DONE);
-      o.onMs = 180;
-      o.priority = PRIO_ACTION;
-      o.preempt = true;
-      o.durationMs = 220;
-      break;
-
-    case OverlayEvent::BYPASS_FORCED_OFF:
-      c.pattern = Pattern::BLINK;
-      o.color = rgOnly(RGB_OVR_BYPASS_FORCED_OFF);
-      o.periodMs = 500;
-      o.priority = PRIO_ALERT;
-      o.preempt = true;
-      o.durationMs = 2500;
-      break;
-
-  }
-
-  c.opts = o;
-  sendCmd(c, 0);
-}
-
-// Output index signaling: blink "channelIndex" times in chosen color
-void RGBLed::postOutputEvent(uint8_t channelIndex, bool on, uint8_t priority) {
-  if (!channelIndex) return;
-  const uint32_t col = rgOnly(on ? RGB_OVR_OUTPUT_ON : RGB_OVR_OUTPUT_OFF);
-
-  // Encode as short grouped pulses: (count) x [ON 120ms, OFF 120ms], pause 350ms
-  // Repeat the group twice for visibility if priority >= ALERT
-  uint8_t groups = (priority >= PRIO_ALERT) ? 2 : 1;
-  for (uint8_t g = 0; g < groups; ++g) {
-    for (uint8_t i = 0; i < channelIndex; ++i) {
-      flash(col, 120, priority, true);
-      vTaskDelay(pdMS_TO_TICKS(120));
-    }
-    vTaskDelay(pdMS_TO_TICKS(350));
-  }
-}
-
-// ---------------- Public helpers ----------------
 void RGBLed::off(uint8_t priority, bool preempt) {
-  PatternOpts o{}; o.priority = priority; o.preempt = preempt;
+  PatternOpts o{};
+  o.color    = RGB_OFF;
+  o.priority = priority;
+  o.preempt  = preempt;
   playPattern(Pattern::OFF, o);
 }
 
 void RGBLed::solid(uint32_t color, uint8_t priority, bool preempt, uint32_t durationMs) {
-  PatternOpts o{}; o.color = rgOnly(color); o.priority = priority; o.preempt = preempt; o.durationMs = durationMs;
+  PatternOpts o{};
+  o.color      = color;
+  o.periodMs   = 500;
+  o.onMs       = 500;
+  o.durationMs = durationMs;
+  o.priority   = priority;
+  o.preempt    = preempt;
   playPattern(Pattern::SOLID, o);
 }
 
 void RGBLed::blink(uint32_t color, uint16_t periodMs, uint8_t priority, bool preempt, uint32_t durationMs) {
-  PatternOpts o{}; o.color = rgOnly(color); o.periodMs = periodMs; o.priority = priority; o.preempt = preempt; o.durationMs = durationMs;
+  PatternOpts o{};
+  o.color      = color;
+  o.periodMs   = periodMs;
+  o.onMs       = periodMs / 2;
+  o.durationMs = durationMs;
+  o.priority   = priority;
+  o.preempt    = preempt;
   playPattern(Pattern::BLINK, o);
 }
 
 void RGBLed::breathe(uint32_t color, uint16_t periodMs, uint8_t priority, bool preempt, uint32_t durationMs) {
-  PatternOpts o{}; o.color = rgOnly(color); o.periodMs = periodMs; o.priority = priority; o.preempt = preempt; o.durationMs = durationMs;
+  PatternOpts o{};
+  o.color      = color;
+  o.periodMs   = periodMs;
+  o.onMs       = 0;
+  o.durationMs = durationMs;
+  o.priority   = priority;
+  o.preempt    = preempt;
   playPattern(Pattern::BREATHE, o);
 }
 
-void RGBLed::rainbow(uint16_t stepMs, uint8_t priority, bool preempt, uint32_t durationMs) {
-  PatternOpts o{}; o.periodMs = stepMs; o.priority = priority; o.preempt = preempt; o.durationMs = durationMs;
-  playPattern(Pattern::RAINBOW, o);
-}
-
 void RGBLed::heartbeat(uint32_t color, uint16_t periodMs, uint8_t priority, bool preempt, uint32_t durationMs) {
-  PatternOpts o{}; o.color = rgOnly(color); o.periodMs = periodMs; o.priority = priority; o.preempt = preempt; o.durationMs = durationMs;
+  PatternOpts o{};
+  o.color      = color;
+  o.periodMs   = periodMs;
+  o.onMs       = 90;
+  o.durationMs = durationMs;
+  o.priority   = priority;
+  o.preempt    = preempt;
   playPattern(Pattern::HEARTBEAT2, o);
 }
 
 void RGBLed::flash(uint32_t color, uint16_t onMs, uint8_t priority, bool preempt) {
-  PatternOpts o{}; o.color = rgOnly(color); o.onMs = onMs; o.priority = priority; o.preempt = preempt; o.durationMs = onMs + 20;
+  PatternOpts o{};
+  o.color      = color;
+  o.periodMs   = onMs * 2;
+  o.onMs       = onMs;
+  o.durationMs = o.periodMs;
+  o.priority   = priority;
+  o.preempt    = preempt;
   playPattern(Pattern::FLASH_ONCE, o);
 }
 
+void RGBLed::strobe(uint32_t color, uint16_t onMs, uint16_t offMs, uint8_t priority, bool preempt, uint32_t durationMs) {
+  PatternOpts o{};
+  o.color      = color;
+  o.periodMs   = onMs + offMs;
+  o.onMs       = onMs;
+  o.durationMs = durationMs;
+  o.priority   = priority;
+  o.preempt    = preempt;
+  playPattern(Pattern::STROBE, o);
+}
+
 void RGBLed::playPattern(Pattern pat, const PatternOpts& opts) {
-  Cmd c{}; c.type = CmdType::PLAY; c.pattern = pat; c.opts = opts;
+  Cmd c{};
+  c.type    = CmdType::PLAY;
+  c.pattern = pat;
+  c.opts    = opts;
   sendCmd(c, 0);
 }
 
-// ---------------- Worker task ----------------
-void RGBLed::taskThunk(void* arg) {
-  static_cast<RGBLed*>(arg)->taskLoop();
+void RGBLed::postOverlay(OverlayEvent e) {
+  PatternOpts o{};
+  Pattern pat = Pattern::FLASH_ONCE;
+
+  switch (e) {
+    // General
+    case OverlayEvent::WAKE_FLASH:
+      pat = Pattern::FLASH_ONCE;
+      o.color = RGB_OVR_WAKE_FLASH;
+      o.onMs = 160; o.periodMs = 220; o.durationMs = 220; o.priority = PRIO_ACTION;
+      break;
+    case OverlayEvent::NET_RECOVER:
+      pat = Pattern::FLASH_ONCE;
+      o.color = RGB_OVR_NET_RECOVER;
+      o.onMs = 140; o.periodMs = 200; o.durationMs = 220; o.priority = PRIO_ACTION;
+      break;
+    case OverlayEvent::RESET_TRIGGER:
+      pat = Pattern::FLASH_ONCE;
+      o.color = RGB_OVR_RESET_TRIGGER;
+      o.onMs = 140; o.periodMs = 220; o.durationMs = 300; o.priority = PRIO_ALERT;
+      break;
+    case OverlayEvent::LOW_BATT:
+      pat = Pattern::BLINK;
+      o.color = RGB_OVR_LOW_BATT;
+      o.periodMs = 900; o.onMs = 300; o.durationMs = 0; o.priority = PRIO_ALERT;
+      break;
+    case OverlayEvent::CRITICAL_BATT:
+      pat = Pattern::STROBE;
+      o.color = RGB_OVR_CRITICAL_BATT;
+      o.onMs = 70; o.periodMs = 140; o.durationMs = 800; o.priority = PRIO_CRITICAL;
+      break;
+
+    // Wi-Fi + Web roles
+    case OverlayEvent::WIFI_STATION:
+      pat = Pattern::FLASH_ONCE;
+      o.color = RGB_OVR_WIFI_STA;
+      o.onMs = 160; o.periodMs = 200; o.durationMs = 220; o.priority = PRIO_ACTION;
+      break;
+    case OverlayEvent::WIFI_AP_:
+      pat = Pattern::FLASH_ONCE;
+      o.color = RGB_OVR_WIFI_AP;
+      o.onMs = 160; o.periodMs = 200; o.durationMs = 220; o.priority = PRIO_ACTION;
+      break;
+    case OverlayEvent::WIFI_LOST:
+      pat = Pattern::FLASH_ONCE;
+      o.color = RGB_OVR_WIFI_LOST;
+      o.onMs = 200; o.periodMs = 260; o.durationMs = 320; o.priority = PRIO_ALERT;
+      break;
+    case OverlayEvent::WEB_ADMIN_ACTIVE:
+      pat = Pattern::FLASH_ONCE;
+      o.color = RGB_OVR_WEB_ADMIN;
+      o.onMs = 200; o.periodMs = 260; o.durationMs = 320; o.priority = PRIO_ACTION;
+      break;
+    case OverlayEvent::WEB_USER_ACTIVE:
+      pat = Pattern::FLASH_ONCE;
+      o.color = RGB_OVR_WEB_USER;
+      o.onMs = 200; o.periodMs = 260; o.durationMs = 320; o.priority = PRIO_ACTION;
+      break;
+
+    // Fan / Relay
+    case OverlayEvent::FAN_ON:
+      pat = Pattern::FLASH_ONCE;
+      o.color = RGB_OVR_FAN_ON;
+      o.onMs = 160; o.periodMs = 220; o.durationMs = 260; o.priority = PRIO_ACTION;
+      break;
+    case OverlayEvent::FAN_OFF:
+      pat = Pattern::FLASH_ONCE;
+      o.color = RGB_OVR_FAN_OFF;
+      o.onMs = 160; o.periodMs = 220; o.durationMs = 260; o.priority = PRIO_ACTION;
+      break;
+    case OverlayEvent::RELAY_ON:
+      pat = Pattern::FLASH_ONCE;
+      o.color = RGB_OVR_RELAY_ON;
+      o.onMs = 160; o.periodMs = 220; o.durationMs = 260; o.priority = PRIO_ACTION;
+      break;
+    case OverlayEvent::RELAY_OFF:
+      pat = Pattern::FLASH_ONCE;
+      o.color = RGB_OVR_RELAY_OFF;
+      o.onMs = 160; o.periodMs = 220; o.durationMs = 260; o.priority = PRIO_ACTION;
+      break;
+
+    // Temperature / Current
+    case OverlayEvent::TEMP_WARN:
+      pat = Pattern::BLINK;
+      o.color = RGB_OVR_TEMP_WARN;
+      o.periodMs = 700; o.onMs = 250; o.durationMs = 1400; o.priority = PRIO_ALERT;
+      break;
+    case OverlayEvent::TEMP_CRIT:
+      pat = Pattern::STROBE;
+      o.color = RGB_OVR_TEMP_CRIT;
+      o.onMs = 70; o.periodMs = 140; o.durationMs = 1200; o.priority = PRIO_CRITICAL;
+      break;
+    case OverlayEvent::CURR_WARN:
+      pat = Pattern::BLINK;
+      o.color = RGB_OVR_CURR_WARN;
+      o.periodMs = 700; o.onMs = 250; o.durationMs = 1400; o.priority = PRIO_ALERT;
+      break;
+    case OverlayEvent::CURR_TRIP:
+      pat = Pattern::STROBE;
+      o.color = RGB_OVR_CURR_TRIP;
+      o.onMs = 70; o.periodMs = 140; o.durationMs = 1000; o.priority = PRIO_CRITICAL;
+      break;
+
+    // Output feedback (generic handling uses indexed helper)
+    case OverlayEvent::OUTPUT_TOGGLED_ON:
+      pat = Pattern::FLASH_ONCE;
+      o.color = RGB_OVR_OUTPUT_ON;
+      o.onMs = 120; o.periodMs = 200; o.durationMs = 200; o.priority = PRIO_ACTION;
+      break;
+    case OverlayEvent::OUTPUT_TOGGLED_OFF:
+      pat = Pattern::FLASH_ONCE;
+      o.color = RGB_OVR_OUTPUT_OFF;
+      o.onMs = 120; o.periodMs = 200; o.durationMs = 200; o.priority = PRIO_ACTION;
+      break;
+
+    // Power-up sequence
+    case OverlayEvent::PWR_WAIT_12V:
+      pat = Pattern::BREATHE;
+      o.color = RGB_OVR_PWR_WAIT_12V;
+      o.periodMs = 1600; o.durationMs = 0; o.priority = PRIO_ACTION;
+      break;
+    case OverlayEvent::PWR_CHARGING:
+      pat = Pattern::BREATHE;
+      o.color = RGB_OVR_PWR_CHARGING;
+      o.periodMs = 1400; o.durationMs = 0; o.priority = PRIO_ACTION;
+      break;
+    case OverlayEvent::PWR_THRESH_OK:
+      pat = Pattern::FLASH_ONCE;
+      o.color = RGB_OVR_PWR_THRESH_OK;
+      o.onMs = 180; o.periodMs = 240; o.durationMs = 320; o.priority = PRIO_ACTION;
+      break;
+    case OverlayEvent::PWR_BYPASS_ON:
+      pat = Pattern::FLASH_ONCE;
+      o.color = RGB_OVR_PWR_BYPASS_ON;
+      o.onMs = 200; o.periodMs = 260; o.durationMs = 320; o.priority = PRIO_ACTION;
+      break;
+    case OverlayEvent::PWR_WAIT_BUTTON:
+      pat = Pattern::HEARTBEAT2;
+      o.color = RGB_OVR_PWR_WAIT_BUTTON;
+      o.periodMs = 1400; o.onMs = 120; o.durationMs = 0; o.priority = PRIO_ACTION;
+      break;
+    case OverlayEvent::PWR_START:
+      pat = Pattern::FLASH_ONCE;
+      o.color = RGB_OVR_PWR_START;
+      o.onMs = 200; o.periodMs = 260; o.durationMs = 320; o.priority = PRIO_ALERT;
+      break;
+
+    // Power & protection detail
+    case OverlayEvent::PWR_12V_LOST:
+      pat = Pattern::STROBE;
+      o.color = RGB_OVR_12V_LOST;
+      o.onMs = 80; o.periodMs = 160; o.durationMs = 1200; o.priority = PRIO_CRITICAL;
+      break;
+    case OverlayEvent::PWR_DC_LOW:
+      pat = Pattern::BLINK;
+      o.color = RGB_OVR_DC_LOW;
+      o.periodMs = 800; o.onMs = 300; o.durationMs = 1600; o.priority = PRIO_ALERT;
+      break;
+    case OverlayEvent::FAULT_OVERCURRENT:
+      pat = Pattern::STROBE;
+      o.color = RGB_OVR_OVERCURRENT;
+      o.onMs = 70; o.periodMs = 140; o.durationMs = 1200; o.priority = PRIO_CRITICAL;
+      break;
+    case OverlayEvent::FAULT_THERMAL_GLOBAL:
+      pat = Pattern::STROBE;
+      o.color = RGB_OVR_THERMAL_GLOBAL;
+      o.onMs = 90; o.periodMs = 160; o.durationMs = 1400; o.priority = PRIO_CRITICAL;
+      break;
+    case OverlayEvent::FAULT_THERMAL_CH_LOCK:
+      pat = Pattern::BLINK;
+      o.color = RGB_OVR_THERMAL_CH_LOCK;
+      o.periodMs = 700; o.onMs = 250; o.durationMs = 1600; o.priority = PRIO_ALERT;
+      break;
+    case OverlayEvent::FAULT_SENSOR_MISSING:
+      pat = Pattern::BLINK;
+      o.color = RGB_OVR_SENSOR_MISSING;
+      o.periodMs = 800; o.onMs = 280; o.durationMs = 2000; o.priority = PRIO_ALERT;
+      break;
+    case OverlayEvent::FAULT_CFG_ERROR:
+      pat = Pattern::STROBE;
+      o.color = RGB_OVR_CFG_ERROR;
+      o.onMs = 90; o.periodMs = 170; o.durationMs = 1400; o.priority = PRIO_CRITICAL;
+      break;
+    case OverlayEvent::DISCHG_ACTIVE:
+      pat = Pattern::BREATHE;
+      o.color = RGB_OVR_DISCHG_ACTIVE;
+      o.periodMs = 1200; o.durationMs = 0; o.priority = PRIO_ACTION;
+      break;
+    case OverlayEvent::DISCHG_DONE:
+      pat = Pattern::FLASH_ONCE;
+      o.color = RGB_OVR_DISCHG_DONE;
+      o.onMs = 200; o.periodMs = 260; o.durationMs = 320; o.priority = PRIO_ACTION;
+      break;
+    case OverlayEvent::BYPASS_FORCED_OFF:
+      pat = Pattern::FLASH_ONCE;
+      o.color = RGB_OVR_BYPASS_FORCED_OFF;
+      o.onMs = 200; o.periodMs = 260; o.durationMs = 320; o.priority = PRIO_ALERT;
+      break;
+  }
+
+  playPattern(pat, o);
+}
+
+void RGBLed::postOutputEvent(uint8_t /*channelIndex*/, bool on, uint8_t priority) {
+  PatternOpts o{};
+  o.color    = on ? RGB_OVR_OUTPUT_ON : RGB_OVR_OUTPUT_OFF;
+  o.onMs     = 120;
+  o.periodMs = 200;
+  o.durationMs = 200;
+  o.priority = priority;
+  playPattern(Pattern::FLASH_ONCE, o);
 }
 
 bool RGBLed::sendCmd(const Cmd& c, TickType_t to) {
   if (!_queue) return false;
   if (xQueueSend(_queue, &c, to) == pdTRUE) return true;
-  if (c.type == CmdType::PLAY && c.opts.priority >= PRIO_ALERT) {
-    Cmd dump{}; xQueueReceive(_queue, &dump, 0);
-    return xQueueSend(_queue, &c, to) == pdTRUE;
-  }
-  return false;
+  Cmd dump{};
+  xQueueReceive(_queue, &dump, 0);      // drop oldest
+  return xQueueSend(_queue, &c, to) == pdTRUE;
 }
 
-void RGBLed::taskLoop() {
-  TickType_t last = xTaskGetTickCount();
-  bool running = true;
+void RGBLed::applyBackground() {
+  applyBackground(_bgState);
+}
 
-  while (running) {
-    Cmd cmd{};
-    if (_haveCurrent) {
-      if (xQueueReceive(_queue, &cmd, 0) == pdTRUE) {
-        if (cmd.type == CmdType::SHUTDOWN) { running = false; break; }
-        else if (cmd.type == CmdType::SET_BACKGROUND) {
-          _bgState = cmd.bgState;
-        } else if (cmd.type == CmdType::PLAY) {
-          if (cmd.opts.preempt && cmd.opts.priority >= _currentPrio) {
-            _currentPat   = cmd.pattern;
-            _currentOpts  = cmd.opts;
-            _currentPrio  = cmd.opts.priority;
-            _haveCurrent  = true;
-            last = xTaskGetTickCount();
-          }
-        } else if (cmd.type == CmdType::STOP) {
-          _haveCurrent = false;
-          writeColor(0,0,0);
-        }
-      }
+void RGBLed::applyBackground(DevState s) {
+  _bgState = s;
 
-      // step current pattern
-      switch (_currentPat) {
-        case Pattern::OFF:
-          writeColor(0,0,0);
-          vTaskDelay(pdMS_TO_TICKS(15));
-          break;
-        case Pattern::SOLID:
-          writeColor(RGB_R(_currentOpts.color), RGB_G(_currentOpts.color), RGB_B(_currentOpts.color));
-          vTaskDelay(pdMS_TO_TICKS(25));
-          break;
-        case Pattern::BLINK:
-          stepBlink(_currentOpts.color, _currentOpts.periodMs);
-          break;
-        case Pattern::BREATHE:
-          stepBreathe(_currentOpts.color, _currentOpts.periodMs);
-          break;
-        case Pattern::RAINBOW:
-          stepRainbow(_currentOpts.periodMs ? _currentOpts.periodMs : 20);
-          break;
-        case Pattern::HEARTBEAT2:
-          doHeartbeat2(_currentOpts.color, _currentOpts.periodMs ? _currentOpts.periodMs : 1400);
-          break;
-        case Pattern::FLASH_ONCE:
-          doFlashOnce(_currentOpts.color, _currentOpts.onMs ? _currentOpts.onMs : 120);
-          _haveCurrent = false;
-          break;
-      }
-
-      // duration expiry?
-      if (_haveCurrent && _currentOpts.durationMs > 0) {
-        uint32_t elapsedMs = (xTaskGetTickCount() - last) * portTICK_PERIOD_MS;
-        if (elapsedMs >= _currentOpts.durationMs) _haveCurrent = false;
-      }
-
-      if (!_haveCurrent) applyBackground(_bgState);
-
-    } else {
-      // idle: maintain background, but remain responsive
-      applyBackground(_bgState);
-      if (xQueueReceive(_queue, &cmd, pdMS_TO_TICKS(20)) == pdTRUE) {
-        if (cmd.type == CmdType::SHUTDOWN) { running = false; break; }
-        else if (cmd.type == CmdType::SET_BACKGROUND) {
-          _bgState = cmd.bgState;
-        } else if (cmd.type == CmdType::PLAY) {
-          _currentPat   = cmd.pattern;
-          _currentOpts  = cmd.opts;
-          _currentPrio  = cmd.opts.priority;
-          _haveCurrent  = true;
-          last = xTaskGetTickCount();
-        }
-      }
-    }
+  if (_haveCurrent && _currentPrio > PRIO_BACKGROUND) {
+    // Overlay running; keep it.
+    return;
   }
 
-  // shutdown
-  writeColor(0,0,0);
+  PatternOpts o{};
+  Pattern pat = Pattern::OFF;
+  o.priority = PRIO_BACKGROUND;
+  o.preempt  = true;
+
+  switch (s) {
+    case DevState::BOOT:
+    case DevState::INIT:
+    case DevState::PAIRING:
+      pat = Pattern::BREATHE;
+      o.color = RGB_BG_BOOT_COLOR;
+      o.periodMs = 1400;
+      break;
+    case DevState::READY_ONLINE:
+    case DevState::READY_OFFLINE:
+    case DevState::IDLE:
+      pat = Pattern::HEARTBEAT2;
+      o.color = RGB_BG_IDLE_COLOR;
+      o.periodMs = 1400;
+      o.onMs = 120;
+      break;
+    case DevState::START:
+      pat = Pattern::HEARTBEAT2;
+      o.color = RGB_BG_START_COLOR;
+      o.periodMs = 900;
+      o.onMs = 120;
+      break;
+    case DevState::RUN:
+      pat = Pattern::HEARTBEAT2;
+      o.color = RGB_BG_RUN_COLOR;
+      o.periodMs = 900;
+      o.onMs = 140;
+      break;
+    case DevState::WAIT:
+      pat = Pattern::HEARTBEAT2;
+      o.color = RGB_BG_WAIT_COLOR;
+      o.periodMs = 1500;
+      o.onMs = 120;
+      break;
+    case DevState::MAINT:
+      pat = Pattern::BREATHE;
+      o.color = RGB_BG_MAINT_COLOR;
+      o.periodMs = 1800;
+      break;
+    case DevState::SLEEP:
+    case DevState::OFF:
+      pat = Pattern::OFF;
+      o.color = RGB_BG_OFF_COLOR;
+      break;
+    case DevState::FAULT:
+      pat = Pattern::STROBE;
+      o.color = RGB_BG_FAULT_COLOR;
+      o.onMs = RGB_FAULT_STROBE_ON_MS;
+      o.periodMs = RGB_FAULT_STROBE_ON_MS + RGB_FAULT_STROBE_OFF_MS;
+      o.priority = PRIO_BACKGROUND;
+      break;
+  }
+
+  setActivePattern(pat, o);
+}
+
+void RGBLed::setActivePattern(Pattern pat, const PatternOpts& opts) {
+  _currentPat     = pat;
+  _currentOpts    = opts;
+  _currentPrio    = opts.priority;
+  _currentStartMs = millis();
+  _haveCurrent    = true;
+}
+
+void RGBLed::taskThunk(void* arg) {
+  static_cast<RGBLed*>(arg)->taskLoop();
   vTaskDelete(nullptr);
 }
 
-// ---------------- Background mapping ----------------
-void RGBLed::applyBackground(DevState s) {
-  switch (s) {
-    // legacy compatibility
-    case DevState::BOOT:
-    case DevState::INIT:
-      writeColor(RGB_R(RG_WHT_DARK), RGB_G(RG_WHT_DARK), 0);
-      vTaskDelay(pdMS_TO_TICKS(20));
-      break;
+void RGBLed::taskLoop() {
+  bool running = true;
 
-    case DevState::PAIRING:
-      // amber heartbeat instead of rainbow (RG only)
-      doHeartbeat2(RG_AMB, 1500);
-      break;
+  while (running) {
+    Cmd c{};
+    if (_queue && xQueueReceive(_queue, &c, pdMS_TO_TICKS(10)) == pdTRUE) {
+      switch (c.type) {
+        case CmdType::SET_BACKGROUND:
+          applyBackground(c.bgState);
+          break;
+        case CmdType::PLAY: {
+          bool expired = (_haveCurrent && _currentOpts.durationMs > 0 &&
+                          (millis() - _currentStartMs) >= _currentOpts.durationMs);
+          bool higherPriority = c.opts.priority > _currentPrio;
+          bool equalAndPreempt = (c.opts.priority == _currentPrio) && c.opts.preempt;
+          bool accept = !_haveCurrent || expired || higherPriority || equalAndPreempt;
+          if (accept) setActivePattern(c.pattern, c.opts);
+          break;
+        }
+        case CmdType::STOP:
+          _haveCurrent = false;
+          applyBackground();
+          break;
+        case CmdType::SHUTDOWN:
+          running = false;
+          break;
+      }
+    }
 
-    case DevState::READY_ONLINE:
-      doHeartbeat2(RGB_HEX(0,180,0), 1500);
-      break;
+    if (!running) break;
 
-    case DevState::READY_OFFLINE:
-      stepBlink(RG_AMB, 1000);
-      break;
+    // Expire overlays with finite duration
+    if (_haveCurrent && _currentOpts.durationMs > 0) {
+      uint32_t elapsed = millis() - _currentStartMs;
+      if (elapsed >= _currentOpts.durationMs) {
+        _haveCurrent = false;
+        applyBackground();
+        continue;
+      }
+    }
 
-    case DevState::SLEEP:
-      writeColor(0,0,0);
-      vTaskDelay(pdMS_TO_TICKS(60));
-      break;
+    if (!_haveCurrent) {
+      applyBackground();
+      continue;
+    }
 
-    // Power Manager set
-    case DevState::START:
-      doHeartbeat2(RGB_BG_START_COLOR, 900);   // quick double pulse
-      break;
-
-    case DevState::IDLE:
-      doHeartbeat2(RGB_BG_IDLE_COLOR, 2000);   // slow soft pulse (was 1600)
-      break;
-
-    case DevState::RUN:
-      doHeartbeat2(RGB_BG_RUN_COLOR, 1400);    // brighter double heartbeat (was 1200)
-      break;
-
-    case DevState::OFF:
-      writeColor(0,0,0);
-      vTaskDelay(pdMS_TO_TICKS(60));
-      break;
-
-    case DevState::FAULT:
-      // very fast red strobe (~8 Hz): 50 ms on / 75 ms off
-      doStrobe(RGB_BG_FAULT_COLOR, RGB_FAULT_STROBE_ON_MS, RGB_FAULT_STROBE_OFF_MS);
-      break;
-
-    case DevState::MAINT:
-      stepBlink(RGB_BG_MAINT_COLOR, 900);
-      break;
-
-    case DevState::WAIT:
-      // Smooth, visible “getting ready” cue
-      stepBreathe(RGB_BG_WAIT_COLOR, 1200);
-      break;
+    switch (_currentPat) {
+      case Pattern::OFF:
+        writeColor(0, 0, 0);
+        vTaskDelay(pdMS_TO_TICKS(25));
+        break;
+      case Pattern::SOLID:
+        writeColor(RGB_R(_currentOpts.color), RGB_G(_currentOpts.color), RGB_B(_currentOpts.color));
+        vTaskDelay(pdMS_TO_TICKS(30));
+        break;
+      case Pattern::BLINK:
+        stepBlink(_currentOpts.color, _currentOpts.periodMs);
+        break;
+      case Pattern::BREATHE:
+        stepBreathe(_currentOpts.color, _currentOpts.periodMs);
+        break;
+      case Pattern::HEARTBEAT2:
+        doHeartbeat2(_currentOpts.color, _currentOpts.periodMs);
+        break;
+      case Pattern::FLASH_ONCE:
+        doFlashOnce(_currentOpts.color, _currentOpts.onMs);
+        break;
+      case Pattern::STROBE:
+        doStrobe(_currentOpts.color, _currentOpts.onMs ? _currentOpts.onMs : 60,
+                 _currentOpts.periodMs > _currentOpts.onMs
+                   ? (_currentOpts.periodMs - _currentOpts.onMs)
+                   : 60);
+        break;
+    }
   }
+
+  writeColor(0, 0, 0);
 }
 
-// ---------------- Pattern primitives ----------------
 void RGBLed::writeColor(uint8_t r, uint8_t g, uint8_t b) {
-#if RGB_FORCE_RG_ONLY
-  b = 0;
-#endif
-  if (_activeLow) { r = 255 - r; g = 255 - g; b = 255 - b; }
-  analogWrite(_pinR, r);
-  analogWrite(_pinG, g);
-  if (_pinB >= 0) analogWrite(_pinB, b);
-}
+  const uint32_t maxDuty = (1u << RGB_PWM_RESOLUTION) - 1u;
+  auto scale = [&](uint8_t v) -> uint32_t {
+    uint32_t duty = (static_cast<uint32_t>(v) * maxDuty) / 255u;
+    return _activeLow ? (maxDuty - duty) : duty;
+  };
 
-void RGBLed::stepRainbow(uint16_t stepMs) {
-#if RGB_FORCE_RG_ONLY
-  static uint8_t a = 0; static int8_t dir = 8;
-  uint8_t g = a, r = 255 - a;  // sweep between red <-> green
-  writeColor(r, g, 0);
-  a = (uint8_t)std::min(255, std::max(0, a + dir));
-  if (a == 0 || a == 255) dir = -dir;
-  vTaskDelay(pdMS_TO_TICKS(stepMs));
-#else
-  // HSV rainbow (unused in RG-only)
-  static float hue = 0.0f;
-  const float stepDeg = RGB_RAINBOW_STEP_DEG;
-  if (hue >= 360.0f) hue -= 360.0f;
-  // ... (omitted for brevity)
-  vTaskDelay(pdMS_TO_TICKS(stepMs));
-#endif
+  ledcWrite(RGB_R_PWM_CHANNEL, scale(r));
+  ledcWrite(RGB_G_PWM_CHANNEL, scale(g));
+  ledcWrite(RGB_B_PWM_CHANNEL, scale(b));
 }
 
 void RGBLed::stepBlink(uint32_t color, uint16_t periodMs) {
-  uint32_t c = rgOnly(color);
-  uint16_t half = periodMs / 2;
-  writeColor(RGB_R(c), RGB_G(c), 0);
-  vTaskDelay(pdMS_TO_TICKS(half));
-  writeColor(0,0,0);
-  vTaskDelay(pdMS_TO_TICKS(half));
+  uint16_t on  = _currentOpts.onMs ? _currentOpts.onMs : (periodMs / 2);
+  if (on > periodMs) on = periodMs;
+  uint16_t off = periodMs > on ? (periodMs - on) : 10;
+
+  writeColor(RGB_R(color), RGB_G(color), RGB_B(color));
+  vTaskDelay(pdMS_TO_TICKS(on));
+  writeColor(0, 0, 0);
+  vTaskDelay(pdMS_TO_TICKS(off));
 }
 
 void RGBLed::stepBreathe(uint32_t color, uint16_t periodMs) {
-  static int16_t a = 0, dir = 1;
-  uint32_t c = rgOnly(color);
-  uint8_t r = RGB_R(c), g = RGB_G(c);
-  uint8_t rr = (uint8_t)((r * a) / 255);
-  uint8_t gg = (uint8_t)((g * a) / 255);
-  writeColor(rr, gg, 0);
+  static int16_t level = 0;
+  static int8_t dir    = 1;
 
-  int step = 255 / 25; // ~50 steps per cycle
-  a += dir * step;
-  if (a >= 255) { a = 255; dir = -1; }
-  if (a <= 0)   { a = 0;   dir =  1; }
-  vTaskDelay(pdMS_TO_TICKS(periodMs / 50));
+  if (periodMs < 400) periodMs = 400;
+  const uint8_t r = RGB_R(color);
+  const uint8_t g = RGB_G(color);
+  const uint8_t b = RGB_B(color);
+
+  uint8_t rr = (uint8_t)((r * level) / 255);
+  uint8_t gg = (uint8_t)((g * level) / 255);
+  uint8_t bb = (uint8_t)((b * level) / 255);
+  writeColor(rr, gg, bb);
+
+  int step = 255 / 40; // ~40 steps per breathe
+  level += dir * step;
+  if (level >= 255) { level = 255; dir = -1; }
+  if (level <= 0)   { level = 0;   dir =  1; }
+
+  vTaskDelay(pdMS_TO_TICKS(periodMs / 40));
 }
 
 void RGBLed::doHeartbeat2(uint32_t color, uint16_t periodMs) {
-  uint32_t c = rgOnly(color);
-  uint16_t beat = periodMs / 8;
-  uint16_t gap  = periodMs / 8;
-  uint16_t rest = periodMs - (beat*2 + gap);
+  uint16_t beat = _currentOpts.onMs ? _currentOpts.onMs : 120;
+  uint16_t gap  = beat / 2;
+  uint16_t rest = (periodMs > (beat * 2 + gap)) ? (periodMs - (beat * 2 + gap)) : 120;
 
-  writeColor(RGB_R(c), RGB_G(c), 0);
+  writeColor(RGB_R(color), RGB_G(color), RGB_B(color));
   vTaskDelay(pdMS_TO_TICKS(beat));
-  writeColor(0,0,0);
+  writeColor(0, 0, 0);
   vTaskDelay(pdMS_TO_TICKS(gap));
-  writeColor(RGB_R(c), RGB_G(c), 0);
+  writeColor(RGB_R(color), RGB_G(color), RGB_B(color));
   vTaskDelay(pdMS_TO_TICKS(beat));
-  writeColor(0,0,0);
+  writeColor(0, 0, 0);
   vTaskDelay(pdMS_TO_TICKS(rest));
 }
 
 void RGBLed::doFlashOnce(uint32_t color, uint16_t onMs) {
-  uint32_t c = rgOnly(color);
-  writeColor(RGB_R(c), RGB_G(c), 0);
+  uint16_t rest = (onMs * 2 > 40) ? (onMs) : 40;
+  writeColor(RGB_R(color), RGB_G(color), RGB_B(color));
   vTaskDelay(pdMS_TO_TICKS(onMs));
-  writeColor(0,0,0);
+  writeColor(0, 0, 0);
+  vTaskDelay(pdMS_TO_TICKS(rest));
 }
 
-// NEW: asymmetric strobe (used for FAULT background)
 void RGBLed::doStrobe(uint32_t color, uint16_t onMs, uint16_t offMs) {
-  uint32_t c = rgOnly(color);
-  writeColor(RGB_R(c), RGB_G(c), 0);
+  if (onMs == 0) onMs = 60;
+  if (offMs == 0) offMs = 60;
+
+  writeColor(RGB_R(color), RGB_G(color), RGB_B(color));
   vTaskDelay(pdMS_TO_TICKS(onMs));
-  writeColor(0,0,0);
+  writeColor(0, 0, 0);
   vTaskDelay(pdMS_TO_TICKS(offMs));
 }

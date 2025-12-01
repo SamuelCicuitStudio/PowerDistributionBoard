@@ -240,5 +240,5 @@
  .pio/libdeps/esp32-s3-devkitc1-n16r8/OneWire/util/OneWire_direct_regtype.h \
  src/Utils.h src/WiFiManager.h src/Device.h src/HeaterManager.h \
  src/CurrentSensor.h src/FanManager.h src/TempSensor.h src/Relay.h \
- src/BypassMosfet.h src/CpDischg.h src/Indicator.h src/utils.h \
- src/Buzzer.h src/PowerTracker.h src/RGBLed.h src/RGBConfig.h
+ src/CpDischg.h src/Indicator.h src/utils.h src/Buzzer.h \
+ src/PowerTracker.h src/RGBLed.h src/RGBConfig.h

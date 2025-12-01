@@ -246,7 +246,6 @@ void Device::loopTask() {
 
     // Hard baseline: no power path, no heaters, no LEDs.
     relayControl->turnOff();
-    bypassFET->disable();
     stopTemperatureMonitor();
     if (WIRE)      WIRE->disableAll();
     if (indicator) indicator->clearAll();
@@ -302,7 +301,6 @@ void Device::loopTask() {
         }
 
         DEBUG_PRINTLN("[Device] Threshold met → bypass inrush");
-        bypassFET->enable();
         RGB->postOverlay(OverlayEvent::PWR_BYPASS_ON);
 
         // Ensure NO heaters during idle calibration.
@@ -349,7 +347,6 @@ void Device::loopTask() {
                     DEBUG_PRINTLN("[Device] STOP in IDLE → full OFF");
                     RGB->postOverlay(OverlayEvent::RELAY_OFF);
                     relayControl->turnOff();
-                    bypassFET->disable();
                     if (WIRE)      WIRE->disableAll();
                     if (indicator) indicator->clearAll();
                     RGB->setOff();
@@ -373,7 +370,6 @@ void Device::loopTask() {
 
         RGB->postOverlay(OverlayEvent::RELAY_OFF);
         relayControl->turnOff();
-        bypassFET->disable();
 
         if (WIRE)      WIRE->disableAll();
         if (indicator) indicator->clearAll();
@@ -471,7 +467,6 @@ void Device::StartLoop() {
 
     // 4) Ensure power path is ready for active operation.
     relayControl->turnOn();
-    bypassFET->enable();
 
     // 5) Initial allowed outputs (cfg + thermal + presence).
     checkAllowedOutputs();

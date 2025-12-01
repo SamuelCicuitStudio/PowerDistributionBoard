@@ -335,7 +335,7 @@ function disconnectDevice() {
   })
     .then((response) => {
       if (response.redirected) {
-        window.location.href = response.url;
+        window.location.href = "http://powerboard.local/login";
       } else {
         return response.json().then((data) => {
           alert(data.error || "Unexpected response");
@@ -344,7 +344,7 @@ function disconnectDevice() {
     })
     .catch((err) => {
       console.error("Disconnect failed:", err);
-      window.location.href = "/login.html";
+      window.location.href = "http://powerboard.local/login";
     });
 }
 
@@ -353,7 +353,7 @@ function disconnectDevice() {
 // ───────────────────────────────────────────────────────────────
 window.addEventListener("DOMContentLoaded", () => {
   loadControls();
-  startHeartbeat(); // Uncomment if needed
+  //startHeartbeat(); // Uncomment if needed
   startMonitorPolling();
 
   const disconnectBtn = document.getElementById("disconnectBtn");
