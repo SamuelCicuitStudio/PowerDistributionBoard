@@ -57,6 +57,12 @@ bool Buzzer::begin() {
   if (_pin >= 0) {
     pinMode(_pin, OUTPUT);
     idleOff();
+
+    // Reserve a dedicated LEDC channel for the buzzer so it never
+    // collides with fan or RGB PWM channels (see Config.h).
+    ledcSetup(BUZZER_PWM_CHANNEL, 4000, 8);   // base setup; freq overridden by ledcWriteTone
+    ledcAttachPin(_pin, BUZZER_PWM_CHANNEL);
+    ledcWriteTone(BUZZER_PWM_CHANNEL, 0);    // ensure silent
   }
 
   if (!_mtx)   _mtx   = xSemaphoreCreateMutex();
@@ -178,14 +184,16 @@ void Buzzer::playTone(int freqHz, int durationMs) {
     return;
   }
 
-  tone(_pin, freqHz);
+  // Use dedicated LEDC channel (see begin()) so we never share
+  // PWM resources with RGB or fans.
+  ledcWriteTone(BUZZER_PWM_CHANNEL, freqHz);
 
   int remaining      = durationMs;
   const int sliceMs  = 10;
 
   while (remaining > 0) {
     if (_muted) {
-      noTone(_pin);
+      ledcWriteTone(BUZZER_PWM_CHANNEL, 0);
       idleOff();
       return;
     }
@@ -194,7 +202,7 @@ void Buzzer::playTone(int freqHz, int durationMs) {
     remaining -= step;
   }
 
-  noTone(_pin);
+  ledcWriteTone(BUZZER_PWM_CHANNEL, 0);
   idleOff();
 }
 
