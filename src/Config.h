@@ -71,7 +71,25 @@
 #define AC_VOLTAGE_KEY                 "ACVLT"     // AC line voltage key
 #define DC_VOLTAGE_KEY                 "DCVLT"     // Target DC output voltage key
 #define DESIRED_OUTPUT_VOLTAGE_KEY     "DOUTV"     // User-defined target output voltage
-#define TEMP_SENSOR_COUNT_KEY          "TMPCNT"    // Number of temperature sensors detected
+#define TEMP_SENSOR_COUNT_KEY          "TMNT"    // Number of temperature sensors detected
+#define RTC_CURRENT_EPOCH_KEY          "RCUR"    // Last known epoch persisted
+#define RTC_PRESLEEP_EPOCH_KEY         "RSLP"   // Epoch saved before deep sleep
+#define RTC_DEFAULT_EPOCH              0ULL
+
+// ---------- Device Identity & Versions (NVS keys, <= 6 chars) ----------
+#define DEV_ID_KEY                     "DEVID"     // Human-readable device id
+#define DEV_SW_KEY                     "DVSWV"     // Software version
+#define DEV_HW_KEY                     "DVHWV"     // Hardware version
+
+// Version values (update as you rev firmware / hardware)
+#define DEVICE_SW_VERSION              "1.7.0"
+#define DEVICE_HW_VERSION              "2.2.5"
+
+// Compile-time guard: enforce max length for new NVS keys (<= 6 chars)
+#define ASSERT_NVS_KEY_LEN(k) static_assert(sizeof(k) - 1 <= 6, "NVS key must be <= 6 chars")
+ASSERT_NVS_KEY_LEN(DEV_ID_KEY);
+ASSERT_NVS_KEY_LEN(DEV_SW_KEY);
+ASSERT_NVS_KEY_LEN(DEV_HW_KEY);
 
 // ---------- Output Access Flags ----------
 #define OUT01_ACCESS_KEY               "OUT1F"

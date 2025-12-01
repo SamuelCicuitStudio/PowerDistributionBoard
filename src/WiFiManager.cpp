@@ -1,9 +1,12 @@
 #include "WiFiManager.h"
 #include "Utils.h"
 #include "DeviceTransport.h"
+#include "RTCManager.h"
 #include <SPIFFS.h>
 #include <ArduinoJson.h>
 #include <ESPmDNS.h>
+#include <WiFiUdp.h>
+#include <NTPClient.h>
 
 // ===== Singleton storage & accessors =====
 
@@ -206,7 +209,7 @@ bool WiFiManager::StartWifiSTA() {
     }
 
     IPAddress ip = WiFi.localIP();
-    DEBUG_PRINTF("✅ STA Connected. SSID=%s, IP=%s\n",
+    DEBUG_PRINTF("[WiFi] STA Connected. SSID=%s, IP=%s\n",
                  ssid.c_str(),
                  ip.toString().c_str());
 
@@ -243,6 +246,19 @@ void WiFiManager::registerRoutes_() {
         if (lock()) { lastActivityMillis = millis(); unlock(); }
         handleRoot(request);
     });
+
+    // ---- Device info for login ----
+    server.on("/device_info", HTTP_GET,
+        [](AsyncWebServerRequest* request) {
+            StaticJsonDocument<256> doc;
+            doc["deviceId"] = CONF->GetString(DEV_ID_KEY, "");
+            doc["sw"]       = CONF->GetString(DEV_SW_KEY, DEVICE_SW_VERSION);
+            doc["hw"]       = CONF->GetString(DEV_HW_KEY, DEVICE_HW_VERSION);
+            String json;
+            serializeJson(doc, json);
+            request->send(200, "application/json", json);
+        }
+    );
 
     // ---- Heartbeat ----
     server.on("/heartbeat", HTTP_GET, [this](AsyncWebServerRequest* request) {
@@ -428,6 +444,7 @@ void WiFiManager::registerRoutes_() {
 
             StaticJsonDocument<768> doc;
 
+            const Device::StateSnapshot snap = DEVTRAN->getStateSnapshot();
             doc["capVoltage"] = s.capVoltage;
             doc["current"]    = s.current;
 
@@ -442,8 +459,8 @@ void WiFiManager::registerRoutes_() {
                 wireTemps.add(isfinite(t) ? (int)lroundf(t) : -127);
             }
 
-            doc["ready"] = digitalRead(READY_LED_PIN);
-            doc["off"]   = digitalRead(POWER_OFF_LED_PIN);
+            doc["ready"] = (snap.state == DeviceState::Idle);
+            doc["off"]   = (snap.state == DeviceState::Shutdown);
             doc["ac"]    = s.acPresent;
             doc["relay"] = s.relayOn;
 
@@ -593,6 +610,7 @@ void WiFiManager::registerRoutes_() {
             }
 
             StaticJsonDocument<1024> doc;
+            const Device::StateSnapshot snap = DEVTRAN->getStateSnapshot();
 
             // Preferences (config only)
             doc["ledFeedback"]    = CONF->GetBool(LED_FEEDBACK_KEY, false);
@@ -608,8 +626,8 @@ void WiFiManager::registerRoutes_() {
 
             // Fast bits via snapshot
             doc["relay"] = s.relayOn;
-            doc["ready"] = digitalRead(READY_LED_PIN);
-            doc["off"]   = digitalRead(POWER_OFF_LED_PIN);
+            doc["ready"] = (snap.state == DeviceState::Idle);
+            doc["off"]   = (snap.state == DeviceState::Shutdown);
 
             JsonObject outputs = doc.createNestedObject("outputs");
             for (int i = 0; i < HeaterManager::kWireCount; ++i) {
@@ -783,6 +801,15 @@ bool WiFiManager::isAuthenticated(AsyncWebServerRequest* request) {
         return false;
     }
     return true;
+}
+
+bool WiFiManager::isWifiOn() const {
+    if (_mutex && xSemaphoreTake(_mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
+        bool on = WifiState;
+        xSemaphoreGive(_mutex);
+        return on;
+    }
+    return WifiState;
 }
 
 void WiFiManager::heartbeat() {
@@ -998,9 +1025,11 @@ bool WiFiManager::handleControl(const ControlCmd& c) {
 
         case CTRL_FAN_SPEED: {
             int pct = constrain(c.i1, 0, 100);
-            FAN->setSpeedPercent(pct);
-            if (pct <= 0) RGB->postOverlay(OverlayEvent::FAN_OFF);
-            else          RGB->postOverlay(OverlayEvent::FAN_ON);
+            ok = DEVTRAN->setFanSpeedPercent(pct);
+            if (ok) {
+                if (pct <= 0) RGB->postOverlay(OverlayEvent::FAN_OFF);
+                else          RGB->postOverlay(OverlayEvent::FAN_ON);
+            }
             break;
         }
 
@@ -1192,3 +1221,4 @@ bool WiFiManager::getSnapshot(StatusSnapshot& out) {
     xSemaphoreGive(_snapMtx);
     return true;
 }
+

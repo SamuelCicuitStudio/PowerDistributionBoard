@@ -27,6 +27,7 @@ public:
   // Output / relay helpers for UI control paths
   bool setRelay(bool on);
   bool setOutput(uint8_t idx, bool on, bool allowUser);
+  bool setFanSpeedPercent(int pct);
 
   // Config/NVS setters (centralized)
   bool setLedFeedback(bool on);

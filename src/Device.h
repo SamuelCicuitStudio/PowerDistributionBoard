@@ -142,7 +142,6 @@ static inline void StateUnlock() { xSemaphoreGive(gStateMtx); }
  * @brief Operating recharge strategies for the device.
  */
 enum class RechargeMode : uint8_t {
-    BatchRecharge = 0,  ///< Relay off during pulses, then on until voltage threshold is reached.
     KeepRecharge  = 1   ///< Maintain a restricted recharge path during pulses.
 };
 
@@ -193,6 +192,7 @@ public:
         SET_BUZZER_MUTE,
         SET_RELAY,
         SET_OUTPUT,
+        SET_FAN_SPEED,
         REQUEST_RESET
     };
 
@@ -292,6 +292,7 @@ public:
     bool             waitForStateEvent(StateSnapshot& out, TickType_t toTicks);
     bool             submitCommand(DevCommand& cmd);
     bool             waitForCommandAck(DevCommandAck& ack, TickType_t toTicks);
+    void             prepareForDeepSleep();
 
     // -------------------------------------------------------------------------
     // Thermal Model Interface (history-based)
@@ -391,7 +392,7 @@ private:
 
     // State and Configuration
     volatile DeviceState  currentState   = DeviceState::Idle;
-    volatile RechargeMode rechargeMode   = RechargeMode::BatchRecharge;
+    volatile RechargeMode rechargeMode   = RechargeMode::KeepRecharge;
     uint32_t              stateSeq       = 0;
     uint32_t              stateSinceMs   = 0;
     uint32_t              cmdSeq         = 0;

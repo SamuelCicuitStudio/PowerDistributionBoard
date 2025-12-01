@@ -242,6 +242,6 @@
  src/NVSManager.h src/CurrentSensor.h src/FanManager.h src/TempSensor.h \
  src/Relay.h src/CpDischg.h src/Indicator.h src/utils.h src/Buzzer.h \
  src/PowerTracker.h src/RGBLed.h src/RGBConfig.h src/StatusSnapshot.h \
- src/DeviceTransport.h \
+ src/DeviceTransport.h src/RTCManager.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/libraries/ESPmDNS/src/ESPmDNS.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/mdns/include/mdns.h

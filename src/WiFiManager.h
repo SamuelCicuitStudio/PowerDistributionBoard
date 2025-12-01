@@ -64,6 +64,7 @@ public:
     bool isUserConnected() const;
     bool isAdminConnected() const;
     bool isAuthenticated(AsyncWebServerRequest* request);
+    bool isWifiOn() const;
 
     void handleRoot(AsyncWebServerRequest* request);
 

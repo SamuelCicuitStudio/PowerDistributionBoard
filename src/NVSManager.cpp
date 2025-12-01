@@ -21,7 +21,53 @@ NVS* NVS::Get() {
     return s_instance;
 }
 
+// Prefer a custom burned MAC if present, else the default eFuse MAC.
+static void get_efuse_mac(uint8_t mac[6]) {
+    if (esp_efuse_mac_get_custom(mac) == ESP_OK) return;
+    // fall back to default base MAC; this lives in eFuse BLK0
+    ESP_ERROR_CHECK(esp_efuse_mac_get_default(mac));
+}
 
+// Crockford Base32 (no I, L, O, U) – compact & human-friendly.
+// 48 bits (6 bytes) -> 10 characters.
+static String base32_crockford(const uint8_t* data, size_t len) {
+    static const char* ALPH = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+    uint32_t buffer = 0;
+    int bits = 0;
+    String out;
+    out.reserve((len * 8 + 4) / 5);
+
+    for (size_t i = 0; i < len; ++i) {
+        buffer = (buffer << 8) | data[i];
+        bits += 8;
+        while (bits >= 5) {
+            int idx = (buffer >> (bits - 5)) & 0x1F;
+            out += ALPH[idx];
+            bits -= 5;
+        }
+    }
+    if (bits > 0) {
+        int idx = (buffer << (5 - bits)) & 0x1F;
+        out += ALPH[idx];
+    }
+    return out;
+}
+
+// Format last 3 bytes as HEX for SSID suffix (e.g. "1A2B3C")
+static String hex_suffix_last3(const uint8_t mac[6]) {
+    char sfx[7];
+    snprintf(sfx, sizeof(sfx), "%02X%02X%02X", mac[3], mac[4], mac[5]);
+    return String(sfx);
+}
+
+// Build a deterministic Device ID: e.g. "PDB-9R2KJ-8TF3Z"
+static String make_device_id_from_efuse() {
+    uint8_t mac[6];
+    get_efuse_mac(mac);
+    String b32 = base32_crockford(mac, 6); // 10 chars
+    // group as 5-5 for readability
+    return String("PDB-") + b32.substring(0,5) + "-" + b32.substring(5,10);
+}
 // ======================================================
 // ctor / dtor
 // ======================================================
@@ -168,21 +214,20 @@ void NVS::initializeDefaults() {
 // - runtime state
 // - lock config (electromagnet vs screw, timeout)
 // - hardware presence map
-void NVS::initializeVariables() { 
+void NVS::initializeVariables() {
   // Reset flag
   PutBool(RESET_FLAG, false);
 
-  // Generate unique SSID using last 3 bytes of MAC address
-  String mac = WiFi.macAddress();        // Example: "24:6F:28:1A:2B:3C"
-  mac.replace(":", "");                  // Remove colons → "246F281A2B3C"
-  String suffix = mac.substring(6);      // Take last 6 hex characters → "1A2B3C"
-  String ssid = String(DEVICE_WIFI_HOTSPOT_NAME) + suffix;  // "PDis_1A2B3C"
+  // Read eFuse MAC once (works before WiFi is started)
+  uint8_t mac[6];
+  get_efuse_mac(mac);
 
-  // Wi-Fi credentials
+  // Deterministic SSID using last 3 bytes of eFuse MAC (e.g., "PDis_1A2B3C")
+  String ssid = String(DEVICE_WIFI_HOTSPOT_NAME) + hex_suffix_last3(mac);
   PutString(DEVICE_WIFI_HOTSPOT_NAME_KEY, ssid);
   PutString(DEVICE_AP_AUTH_PASS_KEY, DEVICE_AP_AUTH_PASS_DEFAULT);
 
-  // New: Station mode credentials
+  // Station mode credentials
   PutString(STA_SSID_KEY, DEFAULT_STA_SSID);
   PutString(STA_PASS_KEY, DEFAULT_STA_PASS);
 
@@ -191,6 +236,13 @@ void NVS::initializeVariables() {
   PutString(ADMIN_PASS_KEY, DEFAULT_ADMIN_PASS);
   PutString(USER_ID_KEY, DEFAULT_USER_ID);
   PutString(USER_PASS_KEY, DEFAULT_USER_PASS);
+
+  // Device identity & versions (persist once)
+  // Deterministic, human-friendly ID derived from eFuse MAC
+  String devId = make_device_id_from_efuse();   // e.g. "PDB-9R2KJ-8TF3Z"
+  PutString(DEV_ID_KEY, devId);
+  PutString(DEV_SW_KEY, DEVICE_SW_VERSION);
+  PutString(DEV_HW_KEY, DEVICE_HW_VERSION);
 
   // Timing and behavior
   PutInt(ON_TIME_KEY, DEFAULT_ON_TIME);
@@ -218,13 +270,13 @@ void NVS::initializeVariables() {
   // Desired voltage setting
   PutFloat(DESIRED_OUTPUT_VOLTAGE_KEY, DEFAULT_DESIRED_OUTPUT_VOLTAGE);
 
-  // Temperature sensor count
+  // Temperature sensor count & idle current
   PutInt(TEMP_SENSOR_COUNT_KEY, DEFAULT_TEMP_SENSOR_COUNT);
-  PutFloat(IDLE_CURR_KEY, DEFAULT_IDLE_CURR); 
+  PutFloat(IDLE_CURR_KEY, DEFAULT_IDLE_CURR);
 
   // --- Buzzer configuration ---
-  PutBool(BUZLOW_KEY, BUZLOW_DEFAULT);   // Active-low logic
-  PutBool(BUZMUT_KEY, BUZMUT_DEFAULT);   // Muted state
+  PutBool(BUZLOW_KEY, BUZLOW_DEFAULT);
+  PutBool(BUZMUT_KEY, BUZMUT_DEFAULT);
 
   // --- Nichrome wire resistances (Ohms, default) ---
   PutFloat(R01OHM_KEY, DEFAULT_WIRE_RES_OHMS);
@@ -239,16 +291,14 @@ void NVS::initializeVariables() {
   PutFloat(R10OHM_KEY, DEFAULT_WIRE_RES_OHMS);
 
   // --- Target resistance + wire ohm/m ---
-  PutFloat(R0XTGT_KEY,        DEFAULT_TARG_RES_OHMS);
+  PutFloat(R0XTGT_KEY,         DEFAULT_TARG_RES_OHMS);
   PutFloat(WIRE_OHM_PER_M_KEY, DEFAULT_WIRE_OHM_PER_M);
 
-  // --- Power tracker persistent statistics (all <= 6 chars) ---
-  // Totals
+  // --- Power tracker persistent statistics ---
   PutFloat(PT_KEY_TOTAL_ENERGY_WH,     PT_DEF_TOTAL_ENERGY_WH);
   PutInt  (PT_KEY_TOTAL_SESSIONS,      PT_DEF_TOTAL_SESSIONS);
   PutInt  (PT_KEY_TOTAL_SESSIONS_OK,   PT_DEF_TOTAL_SESSIONS_OK);
 
-  // Last session snapshot
   PutFloat(PT_KEY_LAST_SESS_ENERGY_WH, PT_DEF_LAST_SESS_ENERGY_WH);
   PutInt  (PT_KEY_LAST_SESS_DURATION_S,PT_DEF_LAST_SESS_DURATION_S);
   PutFloat(PT_KEY_LAST_SESS_PEAK_W,    PT_DEF_LAST_SESS_PEAK_W);
@@ -257,11 +307,8 @@ void NVS::initializeVariables() {
   PutString(TSB0ID_KEY, "");
   PutString(TSB1ID_KEY, "");
   PutString(TSHSID_KEY, "");
-  // Optional flag:
-  PutBool(TSMAP_KEY, false);
-
+  PutBool  (TSMAP_KEY, false);
 }
-
 
 // ======================================================
 // Reads (auto-open RO)

@@ -8,6 +8,7 @@
 #include "WiFiManager.h"
 #include "SwitchManager.h"
 #include "Device.h"
+#include "SleepTimer.h"
 
 // OneWire bus instance
 OneWire oneWire(ONE_WIRE_BUS);
@@ -79,6 +80,10 @@ void setup() {
   NVS::Init();
   CONF->begin();
   DEBUG_PRINTLN("[Setup] NVS + Config initialized.");
+
+  // Sleep timer singleton (used for deep sleep entry)
+  SleepTimer::Init();
+  SLEEP->reset();
 
   // --------------------------------------------------
   // 3. Status / Indicators (so we can signal states & faults)

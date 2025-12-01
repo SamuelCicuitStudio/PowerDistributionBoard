@@ -53,11 +53,8 @@ bool DeviceTransport::ensureLoopTask() {
 }
 
 bool DeviceTransport::requestIdle() {
-  if (!DEVICE) return false;
-  DEVICE->setState(DeviceState::Idle);
-  if (DEVICE->indicator) DEVICE->indicator->clearAll();
-  if (WIRE) WIRE->disableAll();
-  RGB->setIdle();
+  if (!DEVICE || !gEvt) return false;
+  xEventGroupSetBits(gEvt, EVT_STOP_REQ);
   return true;
 }
 
@@ -99,6 +96,11 @@ bool DeviceTransport::setOutput(uint8_t idx, bool on, bool allowUser) {
   if (idx < 1 || idx > HeaterManager::kWireCount) return false;
   // allowUser currently unused; Device decides safety
   return sendCommandAndWait(Device::DevCmdType::SET_OUTPUT, idx, 0.0f, on);
+}
+
+bool DeviceTransport::setFanSpeedPercent(int pct) {
+  pct = constrain(pct, 0, 100);
+  return sendCommandAndWait(Device::DevCmdType::SET_FAN_SPEED, pct);
 }
 
 // -------------------- Config setters --------------------

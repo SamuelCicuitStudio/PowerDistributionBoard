@@ -43,29 +43,38 @@
       }
       /* Make the single box fill available width and fit the frame height */
       .user-modal-content.device-settings-box {
-        width: 100%; /* override any base 300px width */
-        max-width: 620px; /* fits in 820px frame with sidebar/padding */
-        max-height: 460px; /* stays inside content area */
+        width: 100%;
+        max-width: 720px;
+        max-height: 480px;
+        margin: 0 auto;
         display: flex;
         flex-direction: column; /* grid + actions stacked */
-        gap: 14px;
+        gap: 16px;
       }
       /* Two-column grid inside the box */
       .device-settings-box .device-grid {
         display: grid;
-        grid-template-columns: 1fr 1fr; /* left: device fields | right: nichrome */
-        gap: 16px 24px; /* row gap | column gap */
-        align-items: start;
+        grid-template-columns: 1.05fr 1.15fr; /* left: device fields | right: nichrome */
+        gap: 18px 28px; /* row gap | column gap */
+        align-items: flex-start;
         min-width: 0;
       }
       .device-settings-box .device-col {
         display: flex;
         flex-direction: column;
-        gap: 8px;
+        gap: 10px;
         min-width: 0;
       }
-      .device-settings-box h3 {
-        margin: 0 0 8px;
+      /* Left column (Device Settings) as a compact 2-column grid */
+      .device-settings-box .device-grid > .device-col:first-child {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px 16px;
+      }
+      .device-settings-box .device-grid > .device-col:first-child h3 {
+        grid-column: 1 / -1;
+        margin: 0 0 10px;
+        font-size: 15px;
       }
       /* Inputs with right-side unit tag */
       .input-with-unit {

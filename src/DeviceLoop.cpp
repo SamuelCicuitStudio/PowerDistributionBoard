@@ -2,6 +2,7 @@
 #include "Utils.h"
 #include "RGBLed.h"
 #include "Buzzer.h"
+#include "SleepTimer.h"
 #include <vector>
 #include <math.h>
 #include <string.h>
@@ -254,6 +255,16 @@ void Device::loopTask() {
     for (;;) {
         // ========================= OFF STATE =========================
         setState(DeviceState::Shutdown);
+
+        // If WiFi is disabled and we're idle, enter deep sleep until button wake.
+        bool wifiOn = (WIFI && WIFI->isWifiOn());
+        if (!wifiOn) {
+            prepareForDeepSleep();
+            SLEEP->goToSleep();
+            // esp_deep_sleep_start() does not return, but guard just in case.
+            vTaskDelay(pdMS_TO_TICKS(100));
+            continue;
+        }
 
         // Legacy remote start → request WAKE+RUN
         if (StartFromremote) {
@@ -710,40 +721,6 @@ void Device::StartLoop() {
             session.tick();
         }
 
-        // Optional recharge between supercycles.
-        if (rechargeMode == RechargeMode::BatchRecharge &&
-            getState() == DeviceState::Running)
-        {
-            TickType_t lastChargePost = 0;
-            while (discharger->readCapVoltage() < GO_THRESHOLD_RATIO &&
-                   getState() == DeviceState::Running)
-            {
-                if (!is12VPresent()) {
-                    handle12VDrop();
-                    break;
-                }
-
-                TickType_t now = xTaskGetTickCount();
-                if ((now - lastChargePost) * portTICK_PERIOD_MS >= 1000) {
-                    RGB->postOverlay(OverlayEvent::PWR_CHARGING);
-                    lastChargePost = now;
-                }
-
-                DEBUG_PRINTF("[Device] [ADV] Recharging… Cap=%.2fV Target=%.2fV\n",
-                             discharger->readCapVoltage(), GO_THRESHOLD_RATIO);
-
-                if (!delayWithPowerWatch(200)) {
-                    if (!is12VPresent()) handle12VDrop();
-                    else {
-                        xEventGroupClearBits(gEvt, EVT_STOP_REQ);
-                        setState(DeviceState::Idle);
-                    }
-                    break;
-                }
-
-                session.tick();
-            }
-        }
     }
 
 #endif // DEVICE_LOOP_MODE

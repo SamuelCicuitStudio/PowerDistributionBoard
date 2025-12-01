@@ -133,6 +133,7 @@ void Device::handleCommand(const DevCommand& cmd) {
             case DevCmdType::SET_BUZZER_MUTE:
             case DevCmdType::SET_RELAY:
             case DevCmdType::SET_OUTPUT:
+            case DevCmdType::SET_FAN_SPEED:
                 return false;
             default:
                 return true;
@@ -145,28 +146,46 @@ void Device::handleCommand(const DevCommand& cmd) {
         }
     }
 
+    auto floatEq = [](float a, float b) {
+        return fabsf(a - b) <= 1e-3f;
+    };
+
     bool ok = true;
     switch (cmd.type) {
         case DevCmdType::SET_LED_FEEDBACK:
-            CONF->PutBool(LED_FEEDBACK_KEY, cmd.b1);
+            if (CONF->GetBool(LED_FEEDBACK_KEY, false) != cmd.b1) {
+                CONF->PutBool(LED_FEEDBACK_KEY, cmd.b1);
+            }
             break;
         case DevCmdType::SET_ON_TIME_MS:
-            CONF->PutInt(ON_TIME_KEY, cmd.i1);
+            if (CONF->GetInt(ON_TIME_KEY, 500) != cmd.i1) {
+                CONF->PutInt(ON_TIME_KEY, cmd.i1);
+            }
             break;
         case DevCmdType::SET_OFF_TIME_MS:
-            CONF->PutInt(OFF_TIME_KEY, cmd.i1);
+            if (CONF->GetInt(OFF_TIME_KEY, 500) != cmd.i1) {
+                CONF->PutInt(OFF_TIME_KEY, cmd.i1);
+            }
             break;
         case DevCmdType::SET_DESIRED_VOLTAGE:
-            CONF->PutFloat(DESIRED_OUTPUT_VOLTAGE_KEY, cmd.f1);
+            if (!floatEq(CONF->GetFloat(DESIRED_OUTPUT_VOLTAGE_KEY, 0), cmd.f1)) {
+                CONF->PutFloat(DESIRED_OUTPUT_VOLTAGE_KEY, cmd.f1);
+            }
             break;
         case DevCmdType::SET_AC_FREQ:
-            CONF->PutInt(AC_FREQUENCY_KEY, cmd.i1);
+            if (CONF->GetInt(AC_FREQUENCY_KEY, 50) != cmd.i1) {
+                CONF->PutInt(AC_FREQUENCY_KEY, cmd.i1);
+            }
             break;
         case DevCmdType::SET_CHARGE_RES:
-            CONF->PutFloat(CHARGE_RESISTOR_KEY, cmd.f1);
+            if (!floatEq(CONF->GetFloat(CHARGE_RESISTOR_KEY, 0.0f), cmd.f1)) {
+                CONF->PutFloat(CHARGE_RESISTOR_KEY, cmd.f1);
+            }
             break;
         case DevCmdType::SET_DC_VOLT:
-            CONF->PutFloat(DC_VOLTAGE_KEY, cmd.f1);
+            if (!floatEq(CONF->GetFloat(DC_VOLTAGE_KEY, 0.0f), cmd.f1)) {
+                CONF->PutFloat(DC_VOLTAGE_KEY, cmd.f1);
+            }
             break;
         case DevCmdType::SET_ACCESS_FLAG: {
             const char* accessKeys[10] = {
@@ -176,7 +195,9 @@ void Device::handleCommand(const DevCommand& cmd) {
                 OUT10_ACCESS_KEY
             };
             if (cmd.i1 >= 1 && cmd.i1 <= 10) {
-                CONF->PutBool(accessKeys[cmd.i1 - 1], cmd.b1);
+                if (CONF->GetBool(accessKeys[cmd.i1 - 1], false) != cmd.b1) {
+                    CONF->PutBool(accessKeys[cmd.i1 - 1], cmd.b1);
+                }
             } else {
                 ok = false;
             }
@@ -188,21 +209,32 @@ void Device::handleCommand(const DevCommand& cmd) {
                 R06OHM_KEY, R07OHM_KEY, R08OHM_KEY, R09OHM_KEY, R10OHM_KEY
             };
             if (cmd.i1 >= 1 && cmd.i1 <= 10) {
-                CONF->PutFloat(rkeys[cmd.i1 - 1], cmd.f1);
+                if (!floatEq(CONF->GetFloat(rkeys[cmd.i1 - 1], DEFAULT_WIRE_RES_OHMS), cmd.f1)) {
+                    CONF->PutFloat(rkeys[cmd.i1 - 1], cmd.f1);
+                }
             } else {
                 ok = false;
             }
             break;
         }
         case DevCmdType::SET_TARGET_RES:
-            CONF->PutFloat(R0XTGT_KEY, cmd.f1);
+            if (!floatEq(CONF->GetFloat(R0XTGT_KEY, DEFAULT_TARG_RES_OHMS), cmd.f1)) {
+                CONF->PutFloat(R0XTGT_KEY, cmd.f1);
+            }
             break;
         case DevCmdType::SET_WIRE_OHM_PER_M:
-            CONF->PutFloat(WIRE_OHM_PER_M_KEY, cmd.f1);
+            if (!floatEq(CONF->GetFloat(WIRE_OHM_PER_M_KEY, DEFAULT_WIRE_OHM_PER_M), cmd.f1)) {
+                CONF->PutFloat(WIRE_OHM_PER_M_KEY, cmd.f1);
+            }
             break;
         case DevCmdType::SET_BUZZER_MUTE:
             BUZZ->setMuted(cmd.b1);
             break;
+        case DevCmdType::SET_FAN_SPEED: {
+            int pct = constrain(cmd.i1, 0, 100);
+            FAN->setSpeedPercent(pct);
+            break;
+        }
         case DevCmdType::SET_RELAY:
             if (relayControl) {
                 if (cmd.b1) relayControl->turnOn();
@@ -270,6 +302,23 @@ void Device::onStateChanged(DeviceState prev, DeviceState next) {
     DEBUG_PRINTF("[Device] State changed: %s -> %s\n",
                  deviceStateName(prev),
                  deviceStateName(next));
+}
+
+void Device::prepareForDeepSleep() {
+    DEBUG_PRINTLN("[Device] Preparing for deep sleep (power down paths)");
+    stopTemperatureMonitor();
+    stopFanControlTask();
+    if (FAN) {
+        FAN->stopCap();
+        FAN->stopHeatsink();
+        FAN->setSpeedPercent(0);
+    }
+    if (WIRE) WIRE->disableAll();
+    if (indicator) indicator->clearAll();
+    if (relayControl) relayControl->turnOff();
+    if (discharger) discharger->setBypassRelayGate(false);
+    RGB->setOff();
+    setState(DeviceState::Shutdown);
 }
 
 bool Device::pushStateEvent(const StateSnapshot& snap) {

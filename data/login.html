@@ -74,6 +74,17 @@
         Login
       </button>
 
+      <button type="button" class="info-btn" onclick="toggleDeviceInfo()">
+        i
+      </button>
+
+      <div id="deviceInfoPanel" class="device-info-panel" style="display: none">
+        <h4>Device Information</h4>
+        <p id="infoDeviceId">Device ID: ...</p>
+        <p id="infoSwVer">SW Version: ...</p>
+        <p id="infoHwVer">HW Version: ...</p>
+      </div>
+
       <div class="footer">&copy; 2025 Power Distribution Interface</div>
     </div>
 
@@ -155,6 +166,42 @@
           if (document.visibilityState !== "visible") up();
         });
       })();
+
+      function toggleDeviceInfo() {
+        const panel = document.getElementById("deviceInfoPanel");
+        if (!panel) return;
+        panel.style.display = panel.style.display === "none" ? "block" : "none";
+      }
+
+      async function populateDeviceInfo() {
+        try {
+          const res = await fetch("/device_info", { cache: "no-store" });
+          if (!res.ok) return;
+          const data = await res.json();
+          const idEl = document.getElementById("infoDeviceId");
+          const swEl = document.getElementById("infoSwVer");
+          const hwEl = document.getElementById("infoHwVer");
+          if (idEl && data.deviceId !== undefined)
+            idEl.textContent = "Device ID: " + data.deviceId;
+          if (swEl && data.sw !== undefined)
+            swEl.textContent = "SW Version: " + data.sw;
+          if (hwEl && data.hw !== undefined)
+            hwEl.textContent = "HW Version: " + data.hw;
+        } catch (e) {
+          console.warn("device_info fetch failed", e);
+        }
+      }
+
+      populateDeviceInfo();
+
+      // Close info panel when clicking outside
+      document.addEventListener("click", (e) => {
+        const panel = document.getElementById("deviceInfoPanel");
+        const btn = document.querySelector(".info-btn");
+        if (!panel || panel.style.display === "none") return;
+        if (panel.contains(e.target) || (btn && btn.contains(e.target))) return;
+        panel.style.display = "none";
+      });
     </script>
   </body>
 </html>

@@ -693,31 +693,52 @@
   async function saveDeviceAndNichrome() {
     const cmds = [];
     const expected = { wireRes: {}, targetRes: null };
+    const cur = lastLoadedControls || {};
 
     // Core device settings
     const desiredV = getFloat("desiredVoltage");
-    if (desiredV !== undefined) cmds.push(["set", "desiredVoltage", desiredV]);
+    if (
+      desiredV !== undefined &&
+      !approxEqual(desiredV, cur.desiredVoltage, 0.05)
+    ) {
+      cmds.push(["set", "desiredVoltage", desiredV]);
+    }
 
     const acFreq = getInt("acFrequency");
-    if (acFreq !== undefined) cmds.push(["set", "acFrequency", acFreq]);
+    if (acFreq !== undefined && acFreq !== cur.acFrequency) {
+      cmds.push(["set", "acFrequency", acFreq]);
+    }
 
     const chargeR = getFloat("chargeResistor");
-    if (chargeR !== undefined) cmds.push(["set", "chargeResistor", chargeR]);
+    if (
+      chargeR !== undefined &&
+      !approxEqual(chargeR, cur.chargeResistor, 0.05)
+    ) {
+      cmds.push(["set", "chargeResistor", chargeR]);
+    }
 
     const dcV = getFloat("dcVoltage");
-    if (dcV !== undefined) cmds.push(["set", "dcVoltage", dcV]);
+    if (dcV !== undefined && !approxEqual(dcV, cur.dcVoltage, 0.05)) {
+      cmds.push(["set", "dcVoltage", dcV]);
+    }
 
     const onTime = getInt("onTime");
-    if (onTime !== undefined) cmds.push(["set", "onTime", onTime]);
+    if (onTime !== undefined && onTime !== cur.onTime) {
+      cmds.push(["set", "onTime", onTime]);
+    }
 
     const offTime = getInt("offTime");
-    if (offTime !== undefined) cmds.push(["set", "offTime", offTime]);
+    if (offTime !== undefined && offTime !== cur.offTime) {
+      cmds.push(["set", "offTime", offTime]);
+    }
 
     // Wire resistances R01..R10 -> wireRes1..wireRes10
+    const curWr = cur.wireRes || {};
     for (let i = 1; i <= 10; i++) {
       const id = "r" + String(i).padStart(2, "0") + "ohm";
       const val = getFloat(id);
-      if (val !== undefined) {
+      const curVal = curWr[String(i)];
+      if (val !== undefined && !approxEqual(val, curVal, 0.05)) {
         cmds.push(["set", "wireRes" + i, val]);
         expected.wireRes[String(i)] = val;
       }
@@ -725,14 +746,21 @@
 
     // Target resistance
     const tgt = getFloat("rTarget");
-    if (tgt !== undefined) {
+    if (tgt !== undefined && !approxEqual(tgt, cur.targetRes, 0.05)) {
       cmds.push(["set", "targetRes", tgt]);
       expected.targetRes = tgt;
     }
 
     const wireOhmPerM = getFloat("wireOhmPerM");
-    if (wireOhmPerM !== undefined) {
+    if (
+      wireOhmPerM !== undefined &&
+      !approxEqual(wireOhmPerM, cur.wireOhmPerM, 0.001)
+    ) {
       cmds.push(["set", "wireOhmPerM", wireOhmPerM]);
+    }
+
+    if (!cmds.length) {
+      return;
     }
 
     // Send sequentially to preserve ordering
@@ -1716,5 +1744,3 @@
   window.closeSessionHistory = closeSessionHistory;
   window.updateSessionStatsUI = updateSessionStatsUI; // for backend to call later
 })();
-
-
