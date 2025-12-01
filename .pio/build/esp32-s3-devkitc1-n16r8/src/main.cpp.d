@@ -179,7 +179,7 @@
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/esp_hw_support/include/soc/esp32/spiram.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/cores/esp32/io_pin_remap.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/cores/esp32/Arduino.h \
- src/config.h \
+ src/system/Config.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/esp_wifi/include/esp_now.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/esp_wifi/include/esp_wifi_types.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/esp_wifi/include/esp_wifi.h \
@@ -237,9 +237,12 @@
  .pio/libdeps/esp32-s3-devkitc1-n16r8/ArduinoJson/src/ArduinoJson/Configuration.hpp \
  .pio/libdeps/esp32-s3-devkitc1-n16r8/OneWire/OneWire.h \
  .pio/libdeps/esp32-s3-devkitc1-n16r8/OneWire/util/OneWire_direct_regtype.h \
- src/Utils.h src/Config.h src/NVSManager.h src/WiFiManager.h src/Device.h \
- src/HeaterManager.h src/CurrentSensor.h src/FanManager.h \
- src/TempSensor.h src/Relay.h src/CpDischg.h src/Indicator.h src/utils.h \
- src/Buzzer.h src/PowerTracker.h src/RGBLed.h src/RGBConfig.h \
- src/StatusSnapshot.h src/SwitchManager.h src/DeviceTransport.h \
- src/SleepTimer.h
+ src/system/Utils.h src/system/Config.h src/services/NVSManager.h \
+ src/comms/WiFiManager.h src/system/Device.h src/control/HeaterManager.h \
+ src/services/NVSManager.h src/sensing/CurrentSensor.h \
+ src/control/FanManager.h src/sensing/TempSensor.h src/io/Relay.h \
+ src/control/CpDischg.h src/control/Indicator.h src/comms/WiFiManager.h \
+ src/control/Buzzer.h src/services/PowerTracker.h src/control/RGBLed.h \
+ src/control/RGBConfig.h src/system/StatusSnapshot.h \
+ src/comms/SwitchManager.h src/system/DeviceTransport.h \
+ src/system/Device.h src/services/SleepTimer.h
