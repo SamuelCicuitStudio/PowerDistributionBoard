@@ -11,6 +11,7 @@ SwitchManager::SwitchManager() {
     DEBUG_PRINTLN("###########################################################");
     DEBUGGSTOP();
     pinMode(POWER_ON_SWITCH_PIN, INPUT_PULLUP);
+    pinMode(SW_USER_BOOT_PIN, INPUT_PULLUP);
     instance = this;
 }
 
@@ -20,6 +21,22 @@ void SwitchManager::detectTapOrHold() {
     unsigned long lastTapTime = 0;
 
     while (true) {
+        // BOOT pin hold -> full reset
+        if (digitalRead(SW_USER_BOOT_PIN) == LOW) {
+            pressStart = millis();
+            while (digitalRead(SW_USER_BOOT_PIN) == LOW) {
+                vTaskDelay(pdMS_TO_TICKS(10));
+            }
+            unsigned long pressDuration = millis() - pressStart;
+            if (pressDuration >= HOLD_THRESHOLD_MS) {
+                RGB->postOverlay(OverlayEvent::RESET_TRIGGER);
+                DEBUG_PRINTLN("[Switch] BOOT hold detected -> reset");
+                DEVTRAN->requestResetFlagAndRestart();
+                tapCount = 0;
+                continue;
+            }
+        }
+
         if (digitalRead(POWER_ON_SWITCH_PIN) == LOW) {
             pressStart = millis();
 
@@ -53,7 +70,7 @@ void SwitchManager::detectTapOrHold() {
                 if ((millis() - lastTapTime) <= TAP_WINDOW_MS) {
                     RGB->postOverlay(OverlayEvent::WIFI_AP_);
                     DEBUG_PRINTLN("[Switch] Triple tap detected");
-                    WIFI->begin();
+                    WIFI->restartWiFiAP();
                     tapCount = 0;
                 } else {
                     tapCount = 0;
