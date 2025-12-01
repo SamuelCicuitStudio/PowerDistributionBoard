@@ -1,5 +1,6 @@
 #include "WiFiManager.h"
 #include "Utils.h"
+#include "DeviceTransport.h"
 #include <SPIFFS.h>
 #include <ArduinoJson.h>
 #include <ESPmDNS.h>
@@ -16,6 +17,16 @@ void WiFiManager::Init() {
 
 WiFiManager* WiFiManager::Get() {
     return instance;
+}
+
+const char* WiFiManager::stateName(DeviceState s) {
+    switch (s) {
+        case DeviceState::Idle:     return "Idle";
+        case DeviceState::Running:  return "Running";
+        case DeviceState::Error:    return "Error";
+        case DeviceState::Shutdown: return "Shutdown";
+        default:                    return "Unknown";
+    }
 }
 
 // ===== Constructor: keep lightweight; real setup in begin() =====
@@ -75,6 +86,7 @@ void WiFiManager::begin() {
 
     // Start snapshot updater (after routes/server started in AP/STA functions)
     startSnapshotTask(250); // ~4Hz; safe & cheap
+    startStateStreamTask(); // SSE push for device state
 
     BUZZ->bipWiFiConnected();
 }
@@ -223,6 +235,9 @@ bool WiFiManager::StartWifiSTA() {
 // ======================= Route registration =======================
 
 void WiFiManager::registerRoutes_() {
+    // ---- State stream (SSE) ----
+    server.addHandler(&stateSse);
+
     // ---- Login page ----
     server.on("/login", HTTP_GET, [this](AsyncWebServerRequest* request) {
         if (lock()) { lastActivityMillis = millis(); unlock(); }
@@ -543,7 +558,7 @@ void WiFiManager::registerRoutes_() {
                               "{\"status\":\"queued\"}");
             } else if (action == "get" && target == "status") {
                 String statusStr;
-                switch (DEVICE->currentState) {
+                switch (DEVICE->getState()) {
                     case DeviceState::Idle:     statusStr = "Idle"; break;
                     case DeviceState::Running:  statusStr = "Running"; break;
                     case DeviceState::Error:    statusStr = "Error"; break;
@@ -970,7 +985,7 @@ void WiFiManager::handleControl(const ControlCmd& c) {
 
         case CTRL_MODE_IDLE:
             BUZZ->bip();
-            DEVICE->currentState = DeviceState::Idle;
+            DEVICE->setState(DeviceState::Idle);
             DEVICE->indicator->clearAll();
             WIRE->disableAll();
             RGB->setIdle();
@@ -1032,6 +1047,59 @@ void WiFiManager::handleControl(const ControlCmd& c) {
             DEBUG_PRINTF("[WiFi] Unknown control type: %d\n",
                          static_cast<int>(c.type));
             break;
+    }
+}
+
+// ===================== State streaming (SSE) =====================
+
+void WiFiManager::startStateStreamTask() {
+    if (stateStreamTaskHandle) return;
+
+    // Send current snapshot on connect
+    stateSse.onConnect([this](AsyncEventSourceClient* client) {
+        Device::StateSnapshot snap = DEVTRAN->getStateSnapshot();
+        String json = "{\"state\":\"";
+        json += stateName(snap.state);
+        json += "\",\"seq\":";
+        json += snap.seq;
+        json += ",\"sinceMs\":";
+        json += snap.sinceMs;
+        json += "}";
+        client->send(json.c_str(), "state", snap.seq);
+    });
+
+    BaseType_t ok = xTaskCreatePinnedToCore(
+        WiFiManager::stateStreamTask,
+        "StateStreamTask",
+        3072,
+        this,
+        1,
+        &stateStreamTaskHandle,
+        APP_CPU_NUM
+    );
+    if (ok != pdPASS) {
+        stateStreamTaskHandle = nullptr;
+        DEBUG_PRINTLN("[WiFi] Failed to start StateStreamTask");
+    }
+}
+
+void WiFiManager::stateStreamTask(void* pv) {
+    WiFiManager* self = static_cast<WiFiManager*>(pv);
+    DeviceTransport* dt = DEVTRAN;
+
+    for (;;) {
+        Device::StateSnapshot snap{};
+        if (!dt->waitForStateEvent(snap, portMAX_DELAY)) continue;
+
+        String json = "{\"state\":\"";
+        json += stateName(snap.state);
+        json += "\",\"seq\":";
+        json += snap.seq;
+        json += ",\"sinceMs\":";
+        json += snap.sinceMs;
+        json += "}";
+
+        self->stateSse.send(json.c_str(), "state", snap.seq);
     }
 }
 

@@ -8,6 +8,7 @@
 #include "Config.h"
 #include "RGBLed.h"
 #include "HeaterManager.h"
+#include "DeviceTransport.h"
 
 // ================= Build-time Wi-Fi mode selection =================
 // If 1 → start in Station (STA) mode using creds/macros below.
@@ -130,6 +131,10 @@ private:
     SemaphoreHandle_t _snapMtx           = nullptr;
     StatusSnapshot    _snap; // guarded by _snapMtx
 
+    // ===== State streaming (SSE) =====
+    AsyncEventSource stateSse{"/state_stream"};
+    TaskHandle_t     stateStreamTaskHandle = nullptr;
+
     static void snapshotTask(void* param);
     void startSnapshotTask(uint32_t periodMs = 250);
     bool getSnapshot(StatusSnapshot& out);
@@ -174,6 +179,10 @@ private:
     void handleControl(const ControlCmd& c);
     void sendCmd(const ControlCmd& c); // non-blocking enqueue
 
+    // State stream task
+    void startStateStreamTask();
+    static void stateStreamTask(void* pv);
+    static const char* stateName(DeviceState s);
     // Routes registration shared by AP/STA
     void registerRoutes_();
 };

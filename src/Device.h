@@ -169,6 +169,13 @@ enum class RechargeMode : uint8_t {
  */
 class Device {
 public:
+    // Snapshot used by other modules to observe state changes.
+    struct StateSnapshot {
+        DeviceState state;
+        uint32_t    sinceMs;
+        uint32_t    seq;
+    };
+
     // -------------------------------------------------------------------------
     // Singleton Interface
     // -------------------------------------------------------------------------
@@ -242,6 +249,15 @@ public:
     bool delayWithPowerWatch(uint32_t ms);
 
     // -------------------------------------------------------------------------
+    // State access helpers
+    // -------------------------------------------------------------------------
+
+    DeviceState      getState() const;
+    StateSnapshot    getStateSnapshot() const;
+    void             setState(DeviceState next);
+    bool             waitForStateEvent(StateSnapshot& out, TickType_t toTicks);
+
+    // -------------------------------------------------------------------------
     // Thermal Model Interface (history-based)
 // -------------------------------------------------------------------------
 
@@ -285,14 +301,12 @@ public:
     CpDischg*      discharger         = nullptr;
     Indicator*     indicator          = nullptr;
 
-    // -------------------------------------------------------------------------
-    // State and Configuration
-    // -------------------------------------------------------------------------
+private:
+    // Centralized hook for state transitions.
+    void onStateChanged(DeviceState prev, DeviceState next);
+    bool pushStateEvent(const StateSnapshot& snap);
 
-    volatile DeviceState  currentState   = DeviceState::Idle;
-    volatile RechargeMode rechargeMode   = RechargeMode::BatchRecharge;
-    bool                  allowedOutputs[10] = { false };
-
+    // -------------------------------------------------------------------------
     // -------------------------------------------------------------------------
     // RTOS Task Handles
     // -------------------------------------------------------------------------
@@ -302,8 +316,6 @@ public:
     TaskHandle_t ledTaskHandle          = nullptr;
     TaskHandle_t thermalTaskHandle      = nullptr;
     TaskHandle_t fanTaskHandle          = nullptr;
-
-private:
     // ---------------------------------------------------------------------
     // Virtual Wire Thermal Model
     // ---------------------------------------------------------------------
@@ -337,6 +349,14 @@ private:
     // History cursors for incremental integration.
     uint32_t currentHistorySeq   = 0;   ///< Last consumed CurrentSensor seq.
     uint32_t outputHistorySeq    = 0;   ///< Last consumed HeaterManager seq.
+
+    // State and Configuration
+    volatile DeviceState  currentState   = DeviceState::Idle;
+    volatile RechargeMode rechargeMode   = RechargeMode::BatchRecharge;
+    uint32_t              stateSeq       = 0;
+    uint32_t              stateSinceMs   = 0;
+    bool                  allowedOutputs[10] = { false };
+    QueueHandle_t         stateEvtQueue  = nullptr;
 
     // Last known heater mask (for continuity between thermal updates).
     uint16_t lastHeaterMask      = 0;

@@ -265,7 +265,7 @@ bool HeaterManager::getOutputState(uint8_t index) const {
 
 void HeaterManager::setOutputMask(uint16_t mask) {
     // Hard gate: never allow mask if device not running
-    if (!DEVICE || DEVICE->currentState != DeviceState::Running) {
+    if (!DEVICE || DEVICE->getState() != DeviceState::Running) {
         mask = 0;
     }
     // Only 10 bits are meaningful

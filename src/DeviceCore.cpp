@@ -31,6 +31,86 @@ Device* Device::Get() {
     return instance; // nullptr until Init(), or set in begin() below if constructed manually
 }
 
+Device::StateSnapshot Device::getStateSnapshot() const {
+    StateSnapshot snap{};
+    if (gStateMtx && xSemaphoreTake(gStateMtx, portMAX_DELAY) == pdTRUE) {
+        snap.state    = currentState;
+        snap.sinceMs  = stateSinceMs;
+        snap.seq      = stateSeq;
+        xSemaphoreGive(gStateMtx);
+    } else {
+        snap.state   = currentState;
+        snap.sinceMs = stateSinceMs;
+        snap.seq     = stateSeq;
+    }
+    return snap;
+}
+
+DeviceState Device::getState() const {
+    return currentState;
+}
+
+bool Device::waitForStateEvent(StateSnapshot& out, TickType_t toTicks) {
+    if (!stateEvtQueue) return false;
+    return xQueueReceive(stateEvtQueue, &out, toTicks) == pdTRUE;
+}
+
+static const char* deviceStateName(DeviceState s) {
+    switch (s) {
+        case DeviceState::Idle:     return "Idle";
+        case DeviceState::Running:  return "Running";
+        case DeviceState::Error:    return "Error";
+        case DeviceState::Shutdown: return "Shutdown";
+        default:                    return "?";
+    }
+}
+
+void Device::setState(DeviceState next) {
+    DeviceState prev;
+
+    if (gStateMtx &&
+        xSemaphoreTake(gStateMtx, portMAX_DELAY) == pdTRUE)
+    {
+        prev = currentState;
+        if (prev == next) {
+            xSemaphoreGive(gStateMtx);
+            return;
+        }
+        currentState  = next;
+        stateSeq++;
+        stateSinceMs  = millis();
+        xSemaphoreGive(gStateMtx);
+    } else {
+        prev = currentState;
+        if (prev == next) return;
+        currentState  = next;
+        stateSeq++;
+        stateSinceMs  = millis();
+    }
+
+    StateSnapshot snap{};
+    snap.state   = next;
+    snap.sinceMs = stateSinceMs;
+    snap.seq     = stateSeq;
+    pushStateEvent(snap);
+
+    onStateChanged(prev, next);
+}
+
+void Device::onStateChanged(DeviceState prev, DeviceState next) {
+    DEBUG_PRINTF("[Device] State changed: %s -> %s\n",
+                 deviceStateName(prev),
+                 deviceStateName(next));
+}
+
+bool Device::pushStateEvent(const StateSnapshot& snap) {
+    if (!stateEvtQueue) return false;
+    if (xQueueSendToBack(stateEvtQueue, &snap, 0) == pdTRUE) return true;
+    StateSnapshot dump{};
+    xQueueReceive(stateEvtQueue, &dump, 0); // drop oldest
+    return xQueueSendToBack(stateEvtQueue, &snap, 0) == pdTRUE;
+}
+
 Device::Device(TempSensor* temp,
                CurrentSensor* current,
                Relay* relay,
@@ -48,8 +128,9 @@ void Device::begin() {
 
     if (!gStateMtx) gStateMtx = xSemaphoreCreateMutex();
     if (!gEvt)      gEvt      = xEventGroupCreate();
+    if (!stateEvtQueue) stateEvtQueue = xQueueCreate(8, sizeof(StateSnapshot));
 
-    currentState = DeviceState::Shutdown;   // OFF at boot
+    setState(DeviceState::Shutdown);        // OFF at boot
     wifiStatus   = WiFiStatus::NotConnected;
     RGB->setOff();                          // LEDs off at boot
 
@@ -186,7 +267,7 @@ void Device::monitorTemperatureTask(void* param) {
                 RGB->postOverlay(OverlayEvent::TEMP_CRIT);
                 RGB->setFault();
 
-                self->currentState = DeviceState::Error;
+                self->setState(DeviceState::Error);
                 WIRE->disableAll();
                 self->indicator->clearAll();
                 vTaskDelete(nullptr);
@@ -264,11 +345,8 @@ void Device::handle12VDrop() {
     indicator->clearAll();
     relayControl->turnOff();
 
-    // Flip state under lock so StartLoop() will unwind
-    if (StateLock()) {
-        currentState = DeviceState::Error;
-        StateUnlock();
-    }
+    // Flip state so StartLoop() will unwind
+    setState(DeviceState::Error);
 }
 
 /**
@@ -296,7 +374,7 @@ bool Device::delayWithPowerWatch(uint32_t ms)
             if (bits & EVT_STOP_REQ) {
                 DEBUG_PRINTLN("[Device] STOP requested during wait → abort");
                 xEventGroupClearBits(gEvt, EVT_STOP_REQ);
-                currentState = DeviceState::Idle;
+                setState(DeviceState::Idle);
                 return false;
             }
         }
@@ -353,10 +431,7 @@ void Device::handleOverCurrentFault()
     DEBUG_PRINTLN("[Device] ⚡ Over-current detected → EMERGENCY SHUTDOWN");
 
     // 1) Latch global state to FAULT
-    if (StateLock()) {
-        currentState = DeviceState::Error;
-        StateUnlock();
-    }
+    setState(DeviceState::Error);
 
     // 2) Immediately disable all loads and power paths
     if (WIRE)       WIRE->disableAll();

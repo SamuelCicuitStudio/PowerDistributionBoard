@@ -34,6 +34,8 @@
   let pendingConfirm = null; // For confirm modal
   let lastLoadedControls = null; // Snapshot from /load_controls
   let isMuted = false; // Buzzer mute cached state
+  let stateStream = null; // EventSource for zero-lag state
+  let statePollTimer = null; // Fallback polling timer
 
   function isManualMode() {
     const t = document.getElementById("modeToggle");
@@ -299,14 +301,57 @@
     }
   }
 
+  function startStatePolling() {
+    if (statePollTimer) return;
+    pollDeviceState();
+    statePollTimer = setInterval(pollDeviceState, 2000);
+  }
+
+  function stopStatePolling() {
+    if (statePollTimer) {
+      clearInterval(statePollTimer);
+      statePollTimer = null;
+    }
+  }
+
+  function startStateStream() {
+    if (stateStream) return;
+    try {
+      stateStream = new EventSource("/state_stream");
+      stateStream.onopen = () => {
+        stopStatePolling();
+      };
+      stateStream.onmessage = (ev) => {
+        try {
+          const data = JSON.parse(ev.data || "{}");
+          if (data.state) {
+            setPowerUI(data.state);
+          }
+        } catch (e) {
+          console.warn("State stream parse error:", e);
+        }
+      };
+      stateStream.onerror = () => {
+        if (stateStream) {
+          stateStream.close();
+          stateStream = null;
+        }
+        startStatePolling();
+      };
+    } catch (err) {
+      console.warn("State stream failed to start:", err);
+      startStatePolling();
+    }
+  }
+
   function initPowerButton() {
     const btn = powerEl();
     if (btn) {
       btn.addEventListener("click", onPowerClick);
     }
-    // Initial state + periodic refresh
-    pollDeviceState();
-    setInterval(pollDeviceState, 1000);
+    // Initial state via SSE (with polling fallback)
+    startStateStream();
+    startStatePolling(); // will be stopped when SSE opens
   }
 
   // ========================================================

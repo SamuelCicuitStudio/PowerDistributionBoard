@@ -3,6 +3,9 @@
 // ───────────────────────────────────────────────────────────────
 const tabs = document.querySelectorAll(".tab");
 const contents = document.querySelectorAll(".content");
+let lastState = "Shutdown";
+let stateStream = null;
+let statePollTimer = null;
 
 // Hide Manual tab by default (index 1)
 document.querySelector(".sidebar .tab:nth-child(2)").style.display = "none";
@@ -298,6 +301,66 @@ function startHeartbeat(intervalMs = 1500) {
   }, intervalMs);
 }
 
+async function pollDeviceState() {
+  try {
+    const res = await fetch("/control", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "get", target: "status" }),
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data && data.state) {
+      lastState = data.state;
+    }
+  } catch (err) {
+    console.warn("User status poll failed:", err);
+  }
+}
+
+function startStatePolling() {
+  if (statePollTimer) return;
+  pollDeviceState();
+  statePollTimer = setInterval(pollDeviceState, 2000);
+}
+
+function stopStatePolling() {
+  if (statePollTimer) {
+    clearInterval(statePollTimer);
+    statePollTimer = null;
+  }
+}
+
+function startStateStream() {
+  if (stateStream) return;
+  try {
+    stateStream = new EventSource("/state_stream");
+    stateStream.onopen = () => {
+      stopStatePolling();
+    };
+    stateStream.onmessage = (ev) => {
+      try {
+        const data = JSON.parse(ev.data || "{}");
+        if (data.state) {
+          lastState = data.state;
+        }
+      } catch (e) {
+        console.warn("User state stream parse error:", e);
+      }
+    };
+    stateStream.onerror = () => {
+      if (stateStream) {
+        stateStream.close();
+        stateStream = null;
+      }
+      startStatePolling();
+    };
+  } catch (err) {
+    console.warn("User state stream failed to start:", err);
+    startStatePolling();
+  }
+}
+
 // ───────────────────────────────────────────────────────────────
 // 🛠️ UNIFIED CONTROL — Sends control commands to the backend
 // ───────────────────────────────────────────────────────────────
@@ -355,6 +418,8 @@ window.addEventListener("DOMContentLoaded", () => {
   loadControls();
   //startHeartbeat(); // Uncomment if needed
   startMonitorPolling();
+  startStateStream();
+  startStatePolling();
 
   const disconnectBtn = document.getElementById("disconnectBtn");
   if (disconnectBtn) {

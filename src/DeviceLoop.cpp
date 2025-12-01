@@ -174,7 +174,7 @@ static bool _runMaskedPulse(Device* self,
 {
     if (!self || !WIRE)              return true;
     if (mask == 0 || onTimeMs == 0)  return true;
-    if (self->currentState != DeviceState::Running) {
+    if (self->getState() != DeviceState::Running) {
         // Do not energize if not in RUN
         return false;
     }
@@ -253,7 +253,7 @@ void Device::loopTask() {
 
     for (;;) {
         // ========================= OFF STATE =========================
-        if (StateLock()) { currentState = DeviceState::Shutdown; StateUnlock(); }
+        setState(DeviceState::Shutdown);
 
         // Legacy remote start → request WAKE+RUN
         if (StartFromremote) {
@@ -330,7 +330,7 @@ void Device::loopTask() {
         }
 
         if (!runRequested) {
-            if (StateLock()) { currentState = DeviceState::Idle; StateUnlock(); }
+            setState(DeviceState::Idle);
             DEBUG_PRINTLN("[Device] State=IDLE. Waiting for RUN or STOP");
             RGB->setIdle();
 
@@ -356,7 +356,7 @@ void Device::loopTask() {
         }
 
         // ======================== RUN STATE =========================
-        if (StateLock()) { currentState = DeviceState::Running; StateUnlock(); }
+        setState(DeviceState::Running);
         DEBUG_PRINTLN("[Device] State=RUN. Entering StartLoop()");
         BUZZ->successSound();
         RGB->postOverlay(OverlayEvent::PWR_START);
@@ -423,7 +423,7 @@ struct RunSessionGuard {
 // ============================================================================
 
 void Device::StartLoop() {
-    if (currentState != DeviceState::Running) {
+    if (getState() != DeviceState::Running) {
         return;
     }
 
@@ -513,7 +513,7 @@ void Device::StartLoop() {
 
     DEBUG_PRINTLN("[Device] Mode: SEQUENTIAL");
 
-    while (currentState == DeviceState::Running) {
+    while (getState() == DeviceState::Running) {
         // Abort conditions
         if (!is12VPresent()) {
             handle12VDrop();
@@ -524,7 +524,7 @@ void Device::StartLoop() {
             if (bits & EVT_STOP_REQ) {
                 DEBUG_PRINTLN("[Device] STOP → exit SEQ loop");
                 xEventGroupClearBits(gEvt, EVT_STOP_REQ);
-                currentState = DeviceState::Idle;
+                setState(DeviceState::Idle);
                 break;
             }
         }
@@ -541,7 +541,7 @@ void Device::StartLoop() {
             }
             if (BUZZ) BUZZ->bipFault();
             if (StateLock()) {
-                currentState = DeviceState::Error;
+                setState(DeviceState::Error);
                 StateUnlock();
             }
             break;
@@ -569,7 +569,7 @@ void Device::StartLoop() {
                 if (!is12VPresent()) handle12VDrop();
                 else {
                     xEventGroupClearBits(gEvt, EVT_STOP_REQ);
-                    currentState = DeviceState::Idle;
+                    setState(DeviceState::Idle);
                 }
                 break;
             }
@@ -583,7 +583,7 @@ void Device::StartLoop() {
         if (!_runMaskedPulse(this, mask, onTime, ledFeedback)) {
             // Aborted by STOP/12V/OC.
             if (!is12VPresent()) handle12VDrop();
-            else currentState = DeviceState::Idle;
+            else setState(DeviceState::Idle);
             break;
         }
 
@@ -594,7 +594,7 @@ void Device::StartLoop() {
             if (!is12VPresent()) handle12VDrop();
             else {
                 xEventGroupClearBits(gEvt, EVT_STOP_REQ);
-                currentState = DeviceState::Idle;
+                setState(DeviceState::Idle);
             }
             break;
         }
@@ -608,7 +608,7 @@ void Device::StartLoop() {
 
     DEBUG_PRINTLN("[Device] Mode: ADVANCED");
 
-    while (currentState == DeviceState::Running) {
+    while (getState() == DeviceState::Running) {
         if (!is12VPresent()) {
             handle12VDrop();
             break;
@@ -618,7 +618,7 @@ void Device::StartLoop() {
             if (bits & EVT_STOP_REQ) {
                 DEBUG_PRINTLN("[Device] STOP → exit ADV loop");
                 xEventGroupClearBits(gEvt, EVT_STOP_REQ);
-                currentState = DeviceState::Idle;
+                setState(DeviceState::Idle);
                 break;
             }
         }
@@ -633,7 +633,7 @@ void Device::StartLoop() {
             }
             if (BUZZ) BUZZ->bipFault();
             if (StateLock()) {
-                currentState = DeviceState::Error;
+                setState(DeviceState::Error);
                 StateUnlock();
             }
             break;
@@ -645,7 +645,7 @@ void Device::StartLoop() {
                 if (!is12VPresent()) handle12VDrop();
                 else {
                     xEventGroupClearBits(gEvt, EVT_STOP_REQ);
-                    currentState = DeviceState::Idle;
+                    setState(DeviceState::Idle);
                 }
                 break;
             }
@@ -679,7 +679,7 @@ void Device::StartLoop() {
                 if (!is12VPresent()) handle12VDrop();
                 else {
                     xEventGroupClearBits(gEvt, EVT_STOP_REQ);
-                    currentState = DeviceState::Idle;
+                    setState(DeviceState::Idle);
                 }
                 break;
             }
@@ -688,11 +688,11 @@ void Device::StartLoop() {
         }
 
         for (uint16_t mask : plan) {
-            if (currentState != DeviceState::Running) break;
+            if (getState() != DeviceState::Running) break;
 
             if (!_runMaskedPulse(this, mask, onTime, ledFeedback)) {
                 if (!is12VPresent()) handle12VDrop();
-                else currentState = DeviceState::Idle;
+                else setState(DeviceState::Idle);
                 break;
             }
 
@@ -702,7 +702,7 @@ void Device::StartLoop() {
                 if (!is12VPresent()) handle12VDrop();
                 else {
                     xEventGroupClearBits(gEvt, EVT_STOP_REQ);
-                    currentState = DeviceState::Idle;
+                    setState(DeviceState::Idle);
                 }
                 break;
             }
@@ -712,11 +712,11 @@ void Device::StartLoop() {
 
         // Optional recharge between supercycles.
         if (rechargeMode == RechargeMode::BatchRecharge &&
-            currentState == DeviceState::Running)
+            getState() == DeviceState::Running)
         {
             TickType_t lastChargePost = 0;
             while (discharger->readCapVoltage() < GO_THRESHOLD_RATIO &&
-                   currentState == DeviceState::Running)
+                   getState() == DeviceState::Running)
             {
                 if (!is12VPresent()) {
                     handle12VDrop();
@@ -736,7 +736,7 @@ void Device::StartLoop() {
                     if (!is12VPresent()) handle12VDrop();
                     else {
                         xEventGroupClearBits(gEvt, EVT_STOP_REQ);
-                        currentState = DeviceState::Idle;
+                        setState(DeviceState::Idle);
                     }
                     break;
                 }
@@ -749,7 +749,7 @@ void Device::StartLoop() {
 #endif // DEVICE_LOOP_MODE
 
     // --- Session finalize & hard-off ---
-    const bool success = (currentState != DeviceState::Error);
+    const bool success = (getState() != DeviceState::Error);
     session.end(success);
 
     if (WIRE)      WIRE->disableAll();

@@ -74,17 +74,17 @@ void SwitchManager::detectTapOrHold() {
                 DEVICE->startLoopTask(); // idempotent: ensures the Device task is running
 
                 // OFF (= Shutdown) → Tap#1 requests WAKE
-                if (DEVICE->currentState == DeviceState::Shutdown) {
+                if (DEVICE->getState() == DeviceState::Shutdown) {
                 xEventGroupSetBits(gEvt, EVT_WAKE_REQ);
                 RGB->postOverlay(OverlayEvent::WAKE_FLASH);
                 }
                 // IDLE → Tap#1 requests RUN
-                else if (DEVICE->currentState == DeviceState::Idle) {
+                else if (DEVICE->getState() == DeviceState::Idle) {
                 xEventGroupSetBits(gEvt, EVT_RUN_REQ);
                 RGB->postOverlay(OverlayEvent::PWR_START);
                 }
                 // RUN → Tap#1 requests STOP
-                else if (DEVICE->currentState == DeviceState::Running) {
+                else if (DEVICE->getState() == DeviceState::Running) {
                 xEventGroupSetBits(gEvt, EVT_STOP_REQ);
                 RGB->postOverlay(OverlayEvent::RELAY_OFF);
                 }
