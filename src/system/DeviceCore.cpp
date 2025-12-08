@@ -2,6 +2,7 @@
 #include "system/Utils.h"
 #include "control/RGBLed.h"    // keep
 #include "control/Buzzer.h"    // BUZZ macro
+#include <math.h>
 
 // Single, shared instances (linked once)
 SemaphoreHandle_t gStateMtx = nullptr;
@@ -198,6 +199,7 @@ void Device::handleCommand(const DevCommand& cmd) {
                 if (CONF->GetBool(accessKeys[cmd.i1 - 1], false) != cmd.b1) {
                     CONF->PutBool(accessKeys[cmd.i1 - 1], cmd.b1);
                 }
+                wireConfigStore.setAccessFlag(cmd.i1, cmd.b1);
             } else {
                 ok = false;
             }
@@ -212,6 +214,10 @@ void Device::handleCommand(const DevCommand& cmd) {
                 if (!floatEq(CONF->GetFloat(rkeys[cmd.i1 - 1], DEFAULT_WIRE_RES_OHMS), cmd.f1)) {
                     CONF->PutFloat(rkeys[cmd.i1 - 1], cmd.f1);
                 }
+                wireConfigStore.setWireResistance(cmd.i1, cmd.f1);
+                if (WIRE) {
+                    WIRE->setWireResistance(cmd.i1, cmd.f1);
+                }
             } else {
                 ok = false;
             }
@@ -221,11 +227,16 @@ void Device::handleCommand(const DevCommand& cmd) {
             if (!floatEq(CONF->GetFloat(R0XTGT_KEY, DEFAULT_TARG_RES_OHMS), cmd.f1)) {
                 CONF->PutFloat(R0XTGT_KEY, cmd.f1);
             }
+            wireConfigStore.setTargetResOhm(cmd.f1);
+            if (WIRE) {
+                WIRE->setTargetResistanceAll(cmd.f1);
+            }
             break;
         case DevCmdType::SET_WIRE_OHM_PER_M:
             if (!floatEq(CONF->GetFloat(WIRE_OHM_PER_M_KEY, DEFAULT_WIRE_OHM_PER_M), cmd.f1)) {
                 CONF->PutFloat(WIRE_OHM_PER_M_KEY, cmd.f1);
             }
+            wireConfigStore.setWireOhmPerM(cmd.f1);
             break;
         case DevCmdType::SET_BUZZER_MUTE:
             BUZZ->setMuted(cmd.b1);
@@ -365,6 +376,7 @@ void Device::begin() {
     BUZZ->bipStartupSequence();
     RGB->postOverlay(OverlayEvent::WAKE_FLASH);
 
+    wireConfigStore.loadFromNvs();
     checkAllowedOutputs();
 
 
@@ -389,34 +401,52 @@ void Device::begin() {
     DEBUG_PRINTLN("[Device] Configuring system I/O pins ðŸ§°");
 }
 
-void Device::checkAllowedOutputs() {
-    DEBUG_PRINTLN("[Device] Checking allowed outputs from preferences ðŸ”");
-    for (uint8_t i = 0; i < 10; ++i) {
-        const bool cfgAllowed   = CONF->GetBool(outputKeys[i], false);
-        const bool thermLocked  = thermalInitDone && wireThermal[i].locked;
+void Device::syncWireRuntimeFromHeater() {
+    const uint32_t nowMs = millis();
 
-        bool presenceOk = true;
+    for (uint8_t i = 1; i <= HeaterManager::kWireCount; ++i) {
+        WireRuntimeState& ws = wireStateModel.wire(i);
+        ws.allowedByAccess = wireConfigStore.getAccessFlag(i);
+
         if (WIRE) {
-            WireInfo wi = WIRE->getWireInfo(i + 1);
-            // Only enforce if we've actually probed (we treat default=true)
-            if (!wi.connected) {
-                presenceOk = false;
-            }
+            WireInfo wi = WIRE->getWireInfo(i);
+            ws.tempC        = wi.temperatureC;
+            ws.present      = wi.connected;
+            ws.lastUpdateMs = nowMs;
         }
+
+        ws.overTemp = isfinite(ws.tempC) && ws.tempC >= WIRE_T_MAX_C;
+    }
+
+    if (WIRE) {
+        wireStateModel.setLastMask(WIRE->getOutputMask());
+    }
+}
+
+void Device::checkAllowedOutputs() {
+    DEBUG_PRINTLN("[Device] Checking allowed outputs from preferences");
+    syncWireRuntimeFromHeater();
+
+    for (uint8_t i = 0; i < 10; ++i) {
+        WireRuntimeState& ws = wireStateModel.wire(i + 1);
+        const bool cfgAllowed  = ws.allowedByAccess;
+        const bool thermLocked = ws.locked ||
+                                 ws.overTemp ||
+                                 (isfinite(ws.tempC) && ws.tempC >= WIRE_T_MAX_C);
+        const bool presenceOk  = (!WIRE) ? true : ws.present;
 
         allowedOutputs[i] = cfgAllowed && !thermLocked && presenceOk;
 
         DEBUG_PRINTF(
             "[Device] OUT%02u => %s (cfg=%s, thermal=%s, presence=%s)\n",
             i + 1,
-            allowedOutputs[i] ? "ENABLED âœ…" : "DISABLED â›”",
+            allowedOutputs[i] ? "ENABLED" : "DISABLED",
             cfgAllowed  ? "ON" : "OFF",
             thermLocked ? "LOCKED" : "OK",
             presenceOk  ? "OK" : "NO-WIRE"
         );
     }
 }
-
 
 void Device::shutdown() {
     DEBUGGSTART();

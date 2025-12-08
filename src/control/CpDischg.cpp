@@ -1,5 +1,6 @@
 ﻿#include "control/CpDischg.h"
 #include <float.h>
+#include <math.h>
 
 // ---------------------------------------
 
@@ -190,7 +191,17 @@ float CpDischg::adcCodeToBusVolts(uint16_t raw) const {
     // Convert to ADC pin voltage
     const float v_adc = (static_cast<float>(correctedRaw) / ADC_MAX) * ADC_REF_VOLTAGE;
 
-    // Scale up to bus voltage using divider and op-amp gain:
-    // Vbus = Vadc * VOLTAGE_SCALE  (see CpDischg.h)
-    return v_adc * VOLTAGE_SCALE;
+    // Resolve ground-tie (charge) resistor from config; fall back to default.
+    float rgnd = DEFAULT_CHARGE_RESISTOR_OHMS;
+    if (CONF) {
+        rgnd = CONF->GetFloat(CHARGE_RESISTOR_KEY, DEFAULT_CHARGE_RESISTOR_OHMS);
+    }
+    if (!isfinite(rgnd) || rgnd <= 0.0f) {
+        rgnd = DEFAULT_CHARGE_RESISTOR_OHMS;
+    }
+
+    // Scale up to bus voltage using the effective series path:
+    // Vadc = Vbus * Rbot / (Rtop + Rbot + Rgnd)
+    const float scale = ((DIVIDER_TOP_OHMS + DIVIDER_BOTTOM_OHMS + rgnd) / DIVIDER_BOTTOM_OHMS) / OPAMP_GAIN;
+    return v_adc * scale;
 }

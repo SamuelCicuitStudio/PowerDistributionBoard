@@ -3,145 +3,7 @@
 #include "control/RGBLed.h"
 #include "control/Buzzer.h"
 #include "services/SleepTimer.h"
-#include <vector>
 #include <math.h>
-#include <string.h>
-
-// ============================================================================
-// Helper: tiny popcount for 10-bit masks (planner only, no HW side effects)
-// ============================================================================
-
-static inline uint8_t _pop10(uint16_t m) {
-#if defined(__GNUC__)
-    return (uint8_t)__builtin_popcount(m);
-#else
-    uint8_t c = 0;
-    while (m) { c += (m & 1); m >>= 1; }
-    return c;
-#endif
-}
-
-// ============================================================================
-// Helper: parallel Req for subset mask (planner only)
-// ============================================================================
-
-static inline float _req(uint16_t mask, const float R[10]) {
-    float g = 0.0f;
-    for (uint8_t i = 0; i < 10; ++i) {
-        if (mask & (1u << i)) {
-            const float Ri = R[i];
-            if (Ri > 0.01f && isfinite(Ri)) {
-                g += 1.0f / Ri;
-            }
-        }
-    }
-    if (g <= 0.0f) return INFINITY;
-    return 1.0f / g;
-}
-
-// ============================================================================
-// Helper: choose best subset vs target Req (planner only)
-// ============================================================================
-
-static uint16_t _chooseBest(uint16_t allowedMask,
-                            const float R[10],
-                            float target,
-                            uint8_t maxActive,
-                            bool preferAboveOrEqual,
-                            uint16_t recentMask)
-{
-    float    bestScore  = INFINITY;
-    uint16_t best       = 0;
-    bool     foundAbove = false;
-    const uint16_t FULL = (1u << 10);
-
-    for (uint16_t m = 1; m < FULL; ++m) {
-        if ((m & ~allowedMask) != 0) continue;      // must be subset
-
-        const uint8_t k = _pop10(m);
-        if (k == 0 || k > maxActive) continue;
-
-        const float Req = _req(m, R);
-        if (!isfinite(Req)) continue;
-
-        const bool  above = (Req >= target);
-        const float err   = fabsf(Req - target);
-
-        if (preferAboveOrEqual) {
-            if (above && !foundAbove) {
-                foundAbove = true;
-                bestScore  = INFINITY;
-                best       = 0;
-            }
-            if (!above && foundAbove) {
-                continue; // once we have â‰¥target, ignore undershoots
-            }
-        }
-
-        float score = err;
-        if (m == recentMask) {
-            score += 0.0001f; // tiny bias to avoid repeating same mask
-        }
-
-        if (score < bestScore ||
-            (score == bestScore && k < _pop10(best)) ||
-            (score == bestScore && k == _pop10(best) && Req > _req(best, R)))
-        {
-            bestScore = score;
-            best      = m;
-        }
-    }
-
-    // Fallback if "â‰¥target" constraint was too strict
-    if (preferAboveOrEqual && best == 0) {
-        return _chooseBest(allowedMask, R, target,
-                           maxActive, /*preferAboveOrEqual=*/false, recentMask);
-    }
-
-    return best;
-}
-
-// ============================================================================
-// Helper: build one planner "supercycle" (planner only; no HW)
-// ============================================================================
-
-static void _buildPlan(std::vector<uint16_t>& plan,
-                       uint16_t allowedMask,
-                       const float R[10],
-                       float target,
-                       uint8_t maxActive,
-                       bool preferAboveOrEqual)
-{
-    plan.clear();
-    uint16_t remaining = allowedMask;
-    uint16_t last      = 0;
-
-    while (remaining) {
-        uint16_t pick = _chooseBest(remaining, R, target,
-                                    maxActive, preferAboveOrEqual, last);
-        if (pick == 0) {
-            // Fallback: pick best single to cover remaining
-            float    bestErr = INFINITY;
-            uint16_t solo    = 0;
-            for (uint8_t i = 0; i < 10; ++i) {
-                if (remaining & (1u << i)) {
-                    const float Req = _req((1u << i), R);
-                    const float err = fabsf(Req - target);
-                    if (err < bestErr) {
-                        bestErr = err;
-                        solo    = (1u << i);
-                    }
-                }
-            }
-            pick = solo;
-            if (pick == 0) break;
-        }
-
-        plan.push_back(pick);
-        remaining &= ~pick;
-        last = pick;
-    }
-}
 
 // ============================================================================
 // Helper: allowed[] -> bitmask
@@ -544,7 +406,7 @@ void Device::StartLoop() {
         checkAllowedOutputs();
 
         // If no connected wires â†’ fault & exit.
-        if (WIRE && !WIRE->hasAnyConnected()) {
+        if (!wirePresenceManager.hasAnyConnected(wireStateModel)) {
             DEBUG_PRINTLN("[Device] No connected wires â†’ abort SEQ loop");
             if (RGB) {
                 RGB->setFault();
@@ -627,7 +489,7 @@ void Device::StartLoop() {
         if (gEvt) {
             EventBits_t bits = xEventGroupGetBits(gEvt);
             if (bits & EVT_STOP_REQ) {
-                DEBUG_PRINTLN("[Device] STOP â†’ exit ADV loop");
+                DEBUG_PRINTLN("[Device] STOP -> exit ADV loop");
                 xEventGroupClearBits(gEvt, EVT_STOP_REQ);
                 setState(DeviceState::Idle);
                 break;
@@ -636,8 +498,8 @@ void Device::StartLoop() {
 
         checkAllowedOutputs();
 
-        if (WIRE && !WIRE->hasAnyConnected()) {
-            DEBUG_PRINTLN("[Device] No connected wires â†’ abort ADV loop");
+        if (!wirePresenceManager.hasAnyConnected(wireStateModel)) {
+            DEBUG_PRINTLN("[Device] No connected wires -> abort ADV loop");
             if (RGB) {
                 RGB->setFault();
                 RGB->postOverlay(OverlayEvent::FAULT_SENSOR_MISSING);
@@ -664,29 +526,19 @@ void Device::StartLoop() {
             continue;
         }
 
-        float R[10] = {
-            CONF->GetFloat(R01OHM_KEY, DEFAULT_WIRE_RES_OHMS),
-            CONF->GetFloat(R02OHM_KEY, DEFAULT_WIRE_RES_OHMS),
-            CONF->GetFloat(R03OHM_KEY, DEFAULT_WIRE_RES_OHMS),
-            CONF->GetFloat(R04OHM_KEY, DEFAULT_WIRE_RES_OHMS),
-            CONF->GetFloat(R05OHM_KEY, DEFAULT_WIRE_RES_OHMS),
-            CONF->GetFloat(R06OHM_KEY, DEFAULT_WIRE_RES_OHMS),
-            CONF->GetFloat(R07OHM_KEY, DEFAULT_WIRE_RES_OHMS),
-            CONF->GetFloat(R08OHM_KEY, DEFAULT_WIRE_RES_OHMS),
-            CONF->GetFloat(R09OHM_KEY, DEFAULT_WIRE_RES_OHMS),
-            CONF->GetFloat(R10OHM_KEY, DEFAULT_WIRE_RES_OHMS),
-        };
+        const float targetRes = wireConfigStore.getTargetResOhm();
+        const uint16_t requestedMask =
+            wirePlanner.chooseMask(wireConfigStore, wireStateModel, targetRes);
 
-        const float   targetRes     = CONF->GetFloat(R0XTGT_KEY, DEFAULT_TARG_RES_OHMS);
-        const uint8_t maxActive     = MAX_ACTIVE;
-        const bool    preferAboveEq = PREF_ABOVE;
+        WireActuator actuator;
+        const uint16_t appliedMask = actuator.applyRequestedMask(
+            requestedMask,
+            wireConfigStore,
+            wireStateModel,
+            getState());
 
-        std::vector<uint16_t> plan;
-        _buildPlan(plan, allowedMask, R, targetRes, maxActive, preferAboveEq);
-
-        if (plan.empty()) {
-            DEBUG_PRINTLN("[Device] [ADV] Planner empty; wait & retry");
-            if (!delayWithPowerWatch(200)) {
+        if (appliedMask == 0) {
+            if (!delayWithPowerWatch(100)) {
                 if (!is12VPresent()) handle12VDrop();
                 else {
                     xEventGroupClearBits(gEvt, EVT_STOP_REQ);
@@ -698,31 +550,25 @@ void Device::StartLoop() {
             continue;
         }
 
-        for (uint16_t mask : plan) {
-            if (getState() != DeviceState::Running) break;
-
-            if (!_runMaskedPulse(this, mask, onTime, ledFeedback)) {
-                if (!is12VPresent()) handle12VDrop();
-                else setState(DeviceState::Idle);
-                break;
-            }
-
-            session.tick();
-
-            if (!delayWithPowerWatch(offTime)) {
-                if (!is12VPresent()) handle12VDrop();
-                else {
-                    xEventGroupClearBits(gEvt, EVT_STOP_REQ);
-                    setState(DeviceState::Idle);
-                }
-                break;
-            }
-
-            session.tick();
+        if (!_runMaskedPulse(this, appliedMask, onTime, ledFeedback)) {
+            if (!is12VPresent()) handle12VDrop();
+            else setState(DeviceState::Idle);
+            break;
         }
 
-    }
+        session.tick();
 
+        if (!delayWithPowerWatch(offTime)) {
+            if (!is12VPresent()) handle12VDrop();
+            else {
+                xEventGroupClearBits(gEvt, EVT_STOP_REQ);
+                setState(DeviceState::Idle);
+            }
+            break;
+        }
+
+        session.tick();
+    }
 #endif // DEVICE_LOOP_MODE
 
     // --- Session finalize & hard-off ---

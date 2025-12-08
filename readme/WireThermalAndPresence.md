@@ -1,6 +1,7 @@
 # Wire Thermal & Presence Model (Design)
 
 This document describes a modular design for:
+
 - Detecting whether each nichrome wire is physically present when its output is ON.
 - Simulating per‑wire temperature from electrical power.
 - Exposing that information to the main `Device` state machine and to the web UI.
@@ -14,11 +15,13 @@ The goal is to keep the heavy math and detection logic in **focused helper class
 ## High‑Level Goals
 
 - **Wire presence detection**
+
   - Decide for each output (1..10) whether a real wire/load is connected.
   - Use measured current vs expected current (from bus voltage and wire resistance).
   - Re‑evaluate presence both at startup (probe) and continuously while running.
 
 - **Virtual temperature model**
+
   - Maintain a virtual temperature `T[i]` for each wire, based on:
     - Electrical power dissipated in the wire.
     - Its thermal capacity (mass, specific heat).
@@ -81,12 +84,14 @@ public:
 ```
 
 **Inputs**
+
 - Per‑wire cold resistance `R0`, mass, and derived thermal capacity from `HeaterManager`.
 - Continuous current samples from `CurrentSensor` (timestamp + currentA).
 - Output mask history from `HeaterManager` (which wires were ON at what time).
 - Ambient temperature (from DS18B20 sensors).
 
 **Core logic**
+
 - For each wire:
   - Maintain a state `{ R0, C_th, tau, T, lastUpdateMs, locked, cooldownReleaseMs }`.
   - Between timestamps, apply cooling towards ambient:
@@ -104,6 +109,7 @@ public:
   - Publish `T` back to `HeaterManager::setWireEstimatedTemp(i, T)` for telemetry.
 
 **Outputs**
+
 - Per‑wire virtual temperatures available via:
   - `WIRE->getWireEstimatedTemp(i)` for telemetry and safety decisions.
   - Optional: per‑wire instantaneous power if you want explicit power telemetry.
@@ -155,10 +161,11 @@ Whenever a **mask** of outputs is active and there is measured total current `I_
      - Whose virtual temperature is below a presence cutoff (e.g., `< 150°C`) so hot wires are not treated as missing.
 2. Compute expected total current `Iexp = Vbus * G`.
 3. Compare `ratio = I_total / Iexp` to a minimum valid ratio:
-   - If ratio is too low, mark *cool* wires in the mask as `connected = false`.
+   - If ratio is too low, mark _cool_ wires in the mask as `connected = false`.
    - Do not touch wires already considered missing or very hot.
 
 This gives a **smart, temperature‑aware presence detection** that:
+
 - Uses the thermal model to avoid false “missing” flags when wires are hot.
 - Updates presence whenever the load combination and measured current disagree significantly with expectations.
 
@@ -184,21 +191,24 @@ public:
 ```
 
 Responsibilities:
+
 - Map logical wire indices 1..10 to physical pins.
 - Ensure all outputs start in a safe OFF state.
 - Provide a simple bit‑mask interface to higher‑level logic (`HeaterManager` / `WireActuator`).
 
 It does **not**:
+
 - Know about resistance, temperature, presence, or access flags.
-- Decide which wires *should* be on; it only executes the mask it is given.
+- Decide which wires _should_ be on; it only executes the mask it is given.
 
 ---
 
 ### 5. WireConfigStore (NVS‑backed configuration)
 
-**Role**: Owns all *persistent* configuration for wires and related parameters. No GPIO, no runtime state.
+**Role**: Owns all _persistent_ configuration for wires and related parameters. No GPIO, no runtime state.
 
 Typical contents:
+
 - Per‑wire resistance `R[i]` (R01..R10 NVS keys).
 - Global target resistance `targetRes`.
 - Global `wireOhmPerM` (geometry parameter).
@@ -227,11 +237,13 @@ public:
 ```
 
 Responsibilities:
+
 - Abstract all NVS access for wire parameters.
 - Validate and clamp configuration values (e.g. minimum R, positive ohms).
 - Provide a clean API for higher layers (planners, safety) to query config.
 
 It does **not**:
+
 - Track temperatures, presence, or masks (that is runtime state).
 - Drive GPIOs or make enable/disable decisions.
 
@@ -266,6 +278,7 @@ public:
 ```
 
 Responsibilities:
+
 - Hold everything that can change at runtime for wires:
   - Presence flags (`present`).
   - Thermal state (`tempC`, `overTemp`, `locked`).
@@ -274,6 +287,7 @@ Responsibilities:
 - Be the **single source of truth** for wire status used by planners, safety, and telemetry.
 
 It does **not**:
+
 - Touch hardware or NVS.
 - Implement any algorithms; it just stores and exposes data.
 
@@ -281,7 +295,7 @@ It does **not**:
 
 ### 7. WirePlanner (resistance / strategy planner)
 
-**Role**: Decide *which* wires should be active to meet a target resistance or strategy, given config + current wire state.
+**Role**: Decide _which_ wires should be active to meet a target resistance or strategy, given config + current wire state.
 
 The planner is pure logic: no GPIO, no NVS writes, no temperature updates.
 
@@ -297,13 +311,15 @@ public:
 ```
 
 Responsibilities:
+
 - Explore combinations of available wires (1..10) to approximate `targetRes`.
 - Respect availability from `WireStateModel` (present, not locked, etc.).
 - Prefer solutions with fewer active wires when possible (less heat / loss).
 
 It does **not**:
+
 - Apply the mask to hardware (that is the actuator’s job).
-- Decide whether the mask is safe in the current device state; it assumes it is choosing from *potentially* safe wires and defers final gating to the safety layer.
+- Decide whether the mask is safe in the current device state; it assumes it is choosing from _potentially_ safe wires and defers final gating to the safety layer.
 
 ---
 
@@ -322,6 +338,7 @@ public:
 ```
 
 Responsibilities:
+
 - Enforce:
   - Device‑level state (e.g. only allow heating in `Running`, maybe in Manual mode).
   - Access flags (user‑disabled outputs).
@@ -331,6 +348,7 @@ Responsibilities:
 - Return the **effective** mask actually allowed to reach the hardware.
 
 It does **not**:
+
 - Talk to GPIOs or NVS.
 - Choose an “optimal” combination; it only restricts what was requested.
 
@@ -355,12 +373,14 @@ public:
 ```
 
 Responsibilities:
+
 - Receive a requested mask (from `WirePlanner`, manual control, or Device logic).
 - Ask `WireSafetyPolicy` to filter it down to a safe effective mask.
 - Call `WireGpioDriver::applyMask(effectiveMask)`.
 - Update `WireStateModel`’s `lastMask` and output history (if not delegated to `HeaterManager`).
 
 It does **not**:
+
 - Calculate target resistance or combinations (planner’s job).
 - Maintain temperatures or presence; it just applies the decision safely.
 
@@ -386,6 +406,7 @@ public:
 ```
 
 Responsibilities:
+
 - Map internal wire state onto external telemetry:
   - `wireTemps[i]` from `WireStateModel` / `WireThermalModel`.
   - `outputs[i]` from `WireStateModel` / actuator.
@@ -393,6 +414,7 @@ Responsibilities:
 - Keep `StatusSnapshot` small but expressive for the UI.
 
 It does **not**:
+
 - Perform any control decisions or hardware access.
 - Own the source of truth; it only reads from other models and formats data.
 
@@ -403,6 +425,7 @@ It does **not**:
 `Device` remains the orchestrator and real safety owner. It wires the helpers together like this:
 
 - At initialization / RUN entry:
+
   - Ask `HeaterManager` for wire geometry and resistances.
   - Initialize `WireThermalModel` with those parameters and ambient.
   - Start continuous current sampling (`CurrentSensor::startContinuous(...)`).
@@ -412,6 +435,7 @@ It does **not**:
   - Run an initial presence probe at a safe time (relay on, known bus voltage).
 
 - In the state machine:
+
   - `checkAllowedOutputs()` considers:
     - Config access flags (user/admin permissions).
     - Thermal lockout from the thermal model (hot wires).
@@ -449,16 +473,19 @@ This means when you manually switch outputs ON/OFF from the admin page, the ther
 ## Benefits of This Modular Design
 
 - **Clear separation of concerns**
+
   - `HeaterManager`: GPIO + static wire config.
   - `WireThermalModel`: math and thermal integration, no hardware.
   - `WirePresenceManager`: presence decisions, no GPIO.
   - `Device`: safety state machine and high‑level behavior.
 
 - **Easier testing**
+
   - Thermal and presence classes can be unit‑tested with synthetic histories (no real hardware).
   - You can replay captured current + mask logs to validate behavior.
 
 - **Smarter, safer behavior**
+
   - Presence detection that adapts to temperature and configuration, not just a fixed threshold.
   - Per‑wire virtual temperatures for both safety and UI insight.
 

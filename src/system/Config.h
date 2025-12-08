@@ -176,7 +176,7 @@ ASSERT_NVS_KEY_LEN(DEV_HW_KEY);
 #define DEFAULT_INRUSH_DELAY           100              // ms
 #define DEFAULT_LED_FEEDBACK           true             // true = LED feedback enabled
 #define DEFAULT_TEMP_THRESHOLD         75.0f            // Â°C
-#define DEFAULT_CHARGE_RESISTOR_OHMS   10000.0f         // Ohms
+#define DEFAULT_CHARGE_RESISTOR_OHMS   35.0f            // Ohms (VBUS- to System_GND tie / charge resistor)
 #define DEFAULT_AC_FREQUENCY           50               // Hz
 #define DEFAULT_AC_VOLTAGE             230.0f           // Volts
 #define DEFAULT_DC_VOLTAGE             325.0f           // Volts

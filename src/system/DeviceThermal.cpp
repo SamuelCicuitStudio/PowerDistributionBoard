@@ -338,204 +338,21 @@ void Device::updateWireThermalFromHistory() {
         return false;
     };
 
-    // Case 1: no new samples, no new events -> pure cooling to "now"
-    if (nCur == 0 && nOut == 0) {
-        const uint32_t now = millis();
-        for (uint8_t w = 0; w < HeaterManager::kWireCount; ++w) {
-            WireThermalState& ws = wireThermal[w];
-            if (!ws.lastUpdateMs) {
-                ws.lastUpdateMs = now;
-                continue;
-            }
+    // Delegate integration to WireThermalModel for all non-empty windows.
+    if (nCur > 0 || nOut > 0) {
+        wireThermalModel.integrate(curBuf, nCur,
+                                   outBuf, nOut,
+                                   idleCurrentA,
+                                   ambientC,
+                                   wireStateModel,
+                                   *WIRE);
 
-            float dt = (now - ws.lastUpdateMs) * 0.001f;
-            if (dt <= 0.0f) continue;
-
-            // Cooling towards ambient.
-            const float Tinf   = ambientC;
-            const float factor = expf(-dt / ws.tau);
-            ws.T = Tinf + (ws.T - Tinf) * factor;
-            ws.lastUpdateMs = now;
-
-            // Unlock logic.
-            if (ws.locked && ws.T <= WIRE_T_REENABLE_C &&
-                now >= ws.cooldownReleaseMs)
-            {
-                ws.locked = false;
-            }
-
-            WIRE->setWireEstimatedTemp(w + 1, ws.T);
-        }
-
-        if (checkCurrentWatchdog(lastHeaterMask)) {
-            return;
-        }
-        return;
-    }
-
-    // Case 2: only mask events, no current samples.
-    // We cannot compute new heating without I, but we can:
-    //  - apply cooling up to last event timestamp,
-    //  - update lastHeaterMask for continuity.
-    if (nCur == 0 && nOut > 0) {
-        const uint32_t lastTs = outBuf[nOut - 1].timestampMs;
-
-        for (uint8_t w = 0; w < HeaterManager::kWireCount; ++w) {
-            WireThermalState& ws = wireThermal[w];
-            if (!ws.lastUpdateMs) {
-                ws.lastUpdateMs = lastTs;
-                continue;
-            }
-
-            float dt = (lastTs - ws.lastUpdateMs) * 0.001f;
-            if (dt > 0.0f) {
-                const float Tinf   = ambientC;
-                const float factor = expf(-dt / ws.tau);
-                ws.T = Tinf + (ws.T - Tinf) * factor;
-            }
-
-            // Lock/unlock as usual.
-            if (ws.T > WIRE_T_MAX_C) {
-                ws.T = WIRE_T_MAX_C;
-            }
-
-            if (ws.locked &&
-                ws.T <= WIRE_T_REENABLE_C &&
-                lastTs >= ws.cooldownReleaseMs)
-            {
-                ws.locked = false;
-            }
-
-            ws.lastUpdateMs = lastTs;
-            WIRE->setWireEstimatedTemp(w + 1, ws.T);
-        }
-
-        // Advance cursors & remember final mask.
         currentHistorySeq = newCurSeq;
         outputHistorySeq  = newOutSeq;
-        lastHeaterMask    = outBuf[nOut - 1].mask;
+        lastHeaterMask    = wireStateModel.getLastMask();
 
         if (checkCurrentWatchdog(lastHeaterMask)) {
             return;
         }
-        return;
     }
-
-    // Case 3: we have current samples (nCur > 0).
-    // Merge mask events with samples and integrate segment-by-segment.
-
-    uint16_t currentMask = lastHeaterMask;
-    size_t   outIndex    = 0;
-
-    for (size_t i = 0; i < nCur; ++i) {
-        const uint32_t ts    = curBuf[i].timestampMs;
-        const float    Imeas = curBuf[i].currentA;
-
-        // Apply all mask changes up to this sample timestamp.
-        while (outIndex < nOut && outBuf[outIndex].timestampMs <= ts) {
-            currentMask = outBuf[outIndex].mask;
-            ++outIndex;
-        }
-
-        // Per-wire cooling over dt = (ts - lastUpdateMs) for each wire.
-        for (uint8_t w = 0; w < HeaterManager::kWireCount; ++w) {
-            WireThermalState& ws = wireThermal[w];
-
-            if (!ws.lastUpdateMs) {
-                ws.lastUpdateMs = ts;
-                continue;
-            }
-
-            float dt = (ts - ws.lastUpdateMs) * 0.001f;
-            if (dt > 0.0f) {
-                const float Tinf   = ambientC;
-                const float factor = expf(-dt / ws.tau);
-                ws.T = Tinf + (ws.T - Tinf) * factor;
-            }
-        }
-
-        // Net heater current (cannot be negative).
-        float I_net = Imeas - idleCurrentA;
-        if (I_net < 0.0f) I_net = 0.0f;
-
-        // Heating only if some wires are active and there is net heater current.
-        if (currentMask != 0 && I_net > 0.0f) {
-            float Gtot = 0.0f;
-
-            // Compute total conductance with current temperatures.
-            for (uint8_t w = 0; w < HeaterManager::kWireCount; ++w) {
-                if (currentMask & (1u << w)) {
-                    WireThermalState& ws = wireThermal[w];
-                    if (ws.locked) continue;
-                    float R = wireResistanceAtTemp(w, ws.T);
-                    if (R > 0.01f && isfinite(R)) {
-                        Gtot += 1.0f / R;
-                    }
-                }
-            }
-
-            if (Gtot > 0.0f) {
-                const float V = I_net / Gtot;
-
-                // Apply Joule heating over the same dt used for cooling per wire.
-                for (uint8_t w = 0; w < HeaterManager::kWireCount; ++w) {
-                    if (!(currentMask & (1u << w))) continue;
-
-                    WireThermalState& ws = wireThermal[w];
-                    if (ws.locked) continue;
-
-                    float R = wireResistanceAtTemp(w, ws.T);
-                    if (!(R > 0.01f && isfinite(R))) continue;
-
-                    float dt = (ts - ws.lastUpdateMs) * 0.001f;
-                    if (dt <= 0.0f) continue;
-
-                    const float P    = (V * V) / R;
-                    const float dT_h = (P * dt) / ws.C_th;
-
-                    ws.T += dT_h;
-                }
-            }
-        }
-
-        // Clamp, lock/unlock, publish temps, and set lastUpdateMs = ts.
-        for (uint8_t w = 0; w < HeaterManager::kWireCount; ++w) {
-            WireThermalState& ws = wireThermal[w];
-
-            if (ws.T > WIRE_T_MAX_C) {
-                ws.T = WIRE_T_MAX_C;
-            }
-            if (ws.T < ambientC - 10.0f) {
-                ws.T = ambientC - 10.0f; // avoid unrealistic negative drift
-            }
-
-            // Lock if over max.
-            if (!ws.locked && ws.T >= WIRE_T_MAX_C) {
-                ws.locked = true;
-                ws.cooldownReleaseMs = ts + LOCK_MIN_COOLDOWN_MS;
-            }
-
-            // Unlock if cooled and cooldown elapsed.
-            if (ws.locked &&
-                ws.T <= WIRE_T_REENABLE_C &&
-                ts >= ws.cooldownReleaseMs)
-            {
-                ws.locked = false;
-            }
-
-            ws.lastUpdateMs = ts;
-            WIRE->setWireEstimatedTemp(w + 1, ws.T);
-        }
-    }
-
-    // Consume all events in this window to update final mask for next call.
-    while (outIndex < nOut) {
-        currentMask = outBuf[outIndex].mask;
-        ++outIndex;
-    }
-
-    // Update cursors + remember mask for continuity.
-    currentHistorySeq = newCurSeq;
-    outputHistorySeq  = newOutSeq;
-    lastHeaterMask    = currentMask;
 }

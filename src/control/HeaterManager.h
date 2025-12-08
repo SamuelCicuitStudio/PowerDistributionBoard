@@ -280,6 +280,10 @@ public:
 
     /// @return true if at least one wire is still marked connected.
     bool hasAnyConnected() const;
+    /**
+     * @brief Update cached presence info for a single wire.
+     */
+    void setWirePresence(uint8_t index, bool connected, float presenceCurrentA);
 
 private:
     // ---------------------------------------------------------------------

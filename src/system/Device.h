@@ -47,10 +47,10 @@
  *          - Picks the coolest eligible wire (virtual temperature),
  *            drives it alone for onTime, idles for offTime.
  *      - In ADVANCED mode:
- *          - Uses the existing planner to build a sequence of group masks
- *            approximating a target R_eq, respecting MAX_ACTIVE and
- *            allowedOutputs[].
- *          - Applies each mask for onTime / offTime via HeaterManager.
+ *          - Syncs WireStateModel with HeaterManager + WireConfigStore.
+ *          - Chooses a mask via WirePlanner (target resistance) and applies it
+ *            through WireActuator/WireSafetyPolicy.
+ *          - Pulses the applied mask for onTime / offTime.
  *      - All timings use delayWithPowerWatch() to react immediately to:
  *          - 12V supply loss (handle12VDrop()),
  *          - STOP requests (event group).
@@ -80,6 +80,7 @@
 #include "system/Utils.h"
 #include "control/Buzzer.h"
 #include "services/PowerTracker.h"
+#include "system/WireSubsystem.h"
 // -----------------------------------------------------------------------------
 // Constants and Macros
 // -----------------------------------------------------------------------------
@@ -124,11 +125,6 @@ extern EventGroupHandle_t gEvt;
 static inline bool StateLock()   { return xSemaphoreTake(gStateMtx, portMAX_DELAY) == pdTRUE; }
 static inline void StateUnlock() { xSemaphoreGive(gStateMtx); }
 
-/// Maximum number of simultaneously active heater outputs in advanced mode.
-#define MAX_ACTIVE 4
-
-/// Planner preference: favor equivalent resistances >= target when possible.
-#define PREF_ABOVE true
 // ===== Fan control thresholds (Â°C) and timing =====
 #define HS_FAN_ON_C         45.0f   // start ramp for heatsink
 #define HS_FAN_FULL_C       75.0f   // full speed by this temp
@@ -346,6 +342,16 @@ public:
     CpDischg*      discharger         = nullptr;
     Indicator*     indicator          = nullptr;
 
+    // ---------------------------------------------------------------------
+    // Wire subsystem public accessors (for HeaterManager / Transport / WiFi)
+    // ---------------------------------------------------------------------
+    WireConfigStore&      getWireConfigStore()      { return wireConfigStore; }
+    WireStateModel&       getWireStateModel()       { return wireStateModel; }
+    WireThermalModel&     getWireThermalModel()     { return wireThermalModel; }
+    WirePresenceManager&  getWirePresenceManager()  { return wirePresenceManager; }
+    WirePlanner&          getWirePlanner()          { return wirePlanner; }
+    WireTelemetryAdapter& getWireTelemetryAdapter() { return wireTelemetryAdapter; }
+
 private:
     // Centralized hook for state transitions.
     void onStateChanged(DeviceState prev, DeviceState next);
@@ -419,7 +425,18 @@ private:
     uint16_t lastHeaterMask      = 0;
     uint8_t lastCapFanPct = 0;
     uint8_t lastHsFanPct  = 0;
+
+    // ---------------------------------------------------------------------
+    // Wire subsystem helpers (config + runtime + planner + telemetry)
+    // ---------------------------------------------------------------------
+    WireConfigStore      wireConfigStore;
+    WireStateModel       wireStateModel;
+    WireThermalModel     wireThermalModel;
+    WirePresenceManager  wirePresenceManager;
+    WirePlanner          wirePlanner;
+    WireTelemetryAdapter wireTelemetryAdapter;
     // Internal helpers
+    void syncWireRuntimeFromHeater();
     void updateAmbientFromSensors(bool force = false);
     void waitForWiresNearAmbient(float tolC, uint32_t maxWaitMs = 0);
 };

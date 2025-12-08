@@ -75,12 +75,26 @@ bool DeviceTransport::getTelemetry(StatusSnapshot& out) const {
     out.temps[i] = -127.0f;
   }
 
+  // Wire-level telemetry: sync WireStateModel from HeaterManager + config,
+  // then use WireTelemetryAdapter to fill the snapshot.
+  WireConfigStore& cfg  = DEVICE->getWireConfigStore();
+  WireStateModel&  wst  = DEVICE->getWireStateModel();
+
   for (uint8_t i = 1; i <= HeaterManager::kWireCount; ++i) {
-    out.wireTemps[i - 1] =
-        (WIRE ? WIRE->getWireEstimatedTemp(i) : -127.0f);
-    out.outputs[i - 1] =
-        (WIRE ? WIRE->getOutputState(i) : false);
+    WireRuntimeState& ws = wst.wire(i);
+    if (WIRE) {
+      WireInfo wi = WIRE->getWireInfo(i);
+      ws.tempC           = wi.temperatureC;
+      ws.present         = wi.connected;
+      ws.lastUpdateMs    = millis();
+    }
+    ws.allowedByAccess = cfg.getAccessFlag(i);
   }
+  if (WIRE) {
+    wst.setLastMask(WIRE->getOutputMask());
+  }
+
+  DEVICE->getWireTelemetryAdapter().fillSnapshot(out, cfg, wst);
 
   out.acPresent = (digitalRead(DETECT_12V_PIN) == HIGH);
   out.relayOn   = (DEVICE->relayControl ? DEVICE->relayControl->isOn() : false);
