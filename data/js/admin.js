@@ -1593,16 +1593,13 @@
         const ac = data.ac === true;
         setDot("ac", ac);
 
-        // Voltage gauge (cap voltage or fallback)
-        const fallback =
-          typeof (lastLoadedControls && lastLoadedControls.dcVoltage) ===
-          "number"
-            ? lastLoadedControls.dcVoltage
-            : 220;
-        let shownV = fallback;
+        // Voltage gauge – show 0 when AC (12V detect) is not present
+        let shownV = 0;
         if (ac) {
           const v = parseFloat(data.capVoltage);
-          if (Number.isFinite(v)) shownV = v;
+          if (Number.isFinite(v)) {
+            shownV = v;
+          }
         }
         updateGauge("voltageValue", shownV, "V", 400);
 
