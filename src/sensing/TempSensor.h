@@ -34,9 +34,9 @@
 #define TEMP_SENSOR_TASK_CORE 1
 #endif
 
-// Default update period: 5 seconds
+// Default update period: faster cadence for transients
 #ifndef TEMP_SENSOR_UPDATE_INTERVAL_MS
-#define TEMP_SENSOR_UPDATE_INTERVAL_MS 5000UL
+#define TEMP_SENSOR_UPDATE_INTERVAL_MS 1000UL
 #endif
 
 enum class TempRole : uint8_t { Unknown=0, Board0, Board1, Heatsink };

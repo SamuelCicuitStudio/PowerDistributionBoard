@@ -433,7 +433,7 @@ void WiFiManager::registerRoutes_() {
     server.on("/monitor", HTTP_GET,
         [this](AsyncWebServerRequest* request) {
             if (!isAuthenticated(request)) return;
-            if (lock()) { lastActivityMillis = millis(); unlock(); }
+            if (lock()) { lastActivityMillis = millis(); keepAlive = true; unlock(); }
 
             StatusSnapshot s;
             if (!getSnapshot(s)) {

@@ -535,20 +535,7 @@
   // ========================================================
 
   function startHeartbeat(intervalMs = 1500) {
-    setInterval(() => {
-      fetch("/heartbeat")
-        .then((res) => res.text())
-        .then((text) => {
-          if (text !== "alive") {
-            console.warn("Unexpected heartbeat:", text);
-            window.location.href = "http://powerboard.local/login";
-          }
-        })
-        .catch((err) => {
-          console.error("Heartbeat error:", err);
-          window.location.href = "http://powerboard.local/login";
-        });
-    }, intervalMs);
+    // Heartbeat disabled: session stays active while page is open.
   }
 
   function disconnectDevice() {
@@ -1580,6 +1567,10 @@
     window.__MONITOR_INTERVAL__ = setInterval(async () => {
       try {
         const res = await fetch("/monitor", { cache: "no-store" });
+        if (res.status === 403) {
+          window.location.href = "http://powerboard.local/login";
+          return;
+        }
         if (!res.ok) return;
         const data = await res.json();
 
@@ -1593,13 +1584,16 @@
         const ac = data.ac === true;
         setDot("ac", ac);
 
-        // Voltage gauge – show 0 when AC (12V detect) is not present
-        let shownV = 0;
+        // Voltage gauge (cap voltage or fallback)
+        const fallback =
+          typeof (lastLoadedControls && lastLoadedControls.dcVoltage) ===
+          "number"
+            ? lastLoadedControls.dcVoltage
+            : 220;
+        let shownV = fallback;
         if (ac) {
           const v = parseFloat(data.capVoltage);
-          if (Number.isFinite(v)) {
-            shownV = v;
-          }
+          if (Number.isFinite(v)) shownV = v;
         }
         updateGauge("voltageValue", shownV, "V", 400);
 
@@ -1655,6 +1649,11 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "disconnect" }),
       });
+    }
+    try {
+      window.location.href = "http://powerboard.local/login";
+    } catch (e) {
+      // ignore navigation errors
     }
   }
 

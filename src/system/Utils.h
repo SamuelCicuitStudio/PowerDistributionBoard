@@ -29,7 +29,7 @@
 #endif
 
 #ifndef SERIAL_BAUD_RATE
-#define SERIAL_BAUD_RATE 921600 ///< Default Serial baud rate for Debug::begin()
+#define SERIAL_BAUD_RATE 250000 ///< Default Serial baud rate for Debug::begin()
 #endif
 
 // ===================== Thread-safe debug API =====================

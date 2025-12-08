@@ -26,20 +26,20 @@ void Relay::begin() {
 void Relay::turnOn() {
     if (!lock()) return;
 
-    // Original behavior: LOW = ON (energize relay). :contentReference[oaicite:2]{index=2}
-    digitalWrite(RELAY_CONTROL_PIN, LOW);
+    // Original behavior: LOW = OFF (energize relay). :contentReference[oaicite:2]{index=2}
+    digitalWrite(RELAY_CONTROL_PIN, HIGH);
     state = true;
 
     unlock();
 
-    DEBUG_PRINTLN("[Relay] Turned ON âš¡");
+    DEBUG_PRINTLN("[Relay] Turned ON");
 }
 
 void Relay::turnOff() {
     if (!lock()) return;
 
-    // Original behavior: HIGH = OFF. :contentReference[oaicite:3]{index=3}
-    digitalWrite(RELAY_CONTROL_PIN, HIGH);
+    // Original behavior: HIGH = OFF :contentReference[oaicite:3]{index=3}
+    digitalWrite(RELAY_CONTROL_PIN, LOW);
     state = false;
 
     unlock();

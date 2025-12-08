@@ -384,6 +384,10 @@ private:
     static constexpr float   NICHROME_ALPHA        = 0.00017f;
     static constexpr float   DEFAULT_TAU_SEC       = 1.5f;
     static constexpr uint32_t LOCK_MIN_COOLDOWN_MS = 500;
+    static constexpr float   PHYSICAL_HARD_MAX_C   = 90.0f;   ///< Hard cutoff from real sensors
+    static constexpr uint32_t AMBIENT_UPDATE_INTERVAL_MS = 1000; ///< Faster ambient tracking
+    static constexpr float   AMBIENT_MAX_STEP_C    = 15.0f;   ///< Clamp ambient jumps
+    static constexpr uint32_t NO_CURRENT_SAMPLE_TIMEOUT_MS = 750; ///< Watchdog for stalled current sampling
 
     WireThermalState wireThermal[HeaterManager::kWireCount];
 
@@ -397,6 +401,7 @@ private:
     // History cursors for incremental integration.
     uint32_t currentHistorySeq   = 0;   ///< Last consumed CurrentSensor seq.
     uint32_t outputHistorySeq    = 0;   ///< Last consumed HeaterManager seq.
+    uint32_t lastCurrentSampleMs = 0;   ///< Timestamp of last current sample seen
 
     // State and Configuration
     volatile DeviceState  currentState   = DeviceState::Idle;

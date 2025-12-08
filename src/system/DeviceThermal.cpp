@@ -133,8 +133,6 @@ void Device::updateAmbientFromSensors(bool force) {
     if (!tempSensor) return;
 
     const uint32_t now = millis();
-    const uint32_t AMBIENT_UPDATE_INTERVAL_MS = 2000; // update every 2s
-
     if (!force && (now - lastAmbientUpdateMs) < AMBIENT_UPDATE_INTERVAL_MS) {
         return; // not yet
     }
@@ -163,9 +161,13 @@ void Device::updateAmbientFromSensors(bool force) {
     if (!thermalInitDone) {
         ambientC = newAmb;
     } else {
-        // Low-pass filter to avoid jumps
+        // Clamp unrealistic jumps, then low-pass filter to avoid chatter.
+        float delta = newAmb - ambientC;
+        const float maxStep = AMBIENT_MAX_STEP_C;
+        if (delta > maxStep) delta = maxStep;
+        if (delta < -maxStep) delta = -maxStep;
         const float alpha = 0.15f;
-        ambientC = ambientC + alpha * (newAmb - ambientC);
+        ambientC = ambientC + alpha * delta;
     }
 }
 
@@ -286,6 +288,23 @@ void Device::updateWireThermalFromHistory() {
     // Refresh ambient slowly.
     updateAmbientFromSensors(false);
 
+    // Hard physical over-temp guard (real sensors, not just virtual model).
+    if (tempSensor) {
+        auto overPhysical = [&](float t) {
+            return isfinite(t) && t >= PHYSICAL_HARD_MAX_C;
+        };
+        float t0 = tempSensor->getBoardTemp(0);
+        float t1 = tempSensor->getBoardTemp(1);
+        float th = tempSensor->getHeatsinkTemp();
+        if (overPhysical(t0) || overPhysical(t1) || overPhysical(th)) {
+            DEBUG_PRINTLN("[Thermal] Physical sensor over-temp detected -> forcing Error");
+            WIRE->disableAll();
+            setState(DeviceState::Error);
+            if (BUZZ) BUZZ->bipFault();
+            return;
+        }
+    }
+
     // Buffers for incremental reads.
     CurrentSensor::Sample       curBuf[64];
     HeaterManager::OutputEvent  outBuf[32];
@@ -298,6 +317,26 @@ void Device::updateWireThermalFromHistory() {
 
     const size_t nOut = WIRE->getOutputHistorySince(
         outputHistorySeq, outBuf, (size_t)32, newOutSeq);
+
+    // Update last-sample watchdog when we have fresh current.
+    if (nCur > 0) {
+        lastCurrentSampleMs = curBuf[nCur - 1].timestampMs;
+    }
+
+    auto checkCurrentWatchdog = [&](uint16_t activeMask) -> bool {
+        const uint32_t nowMs = millis();
+        if (currentState != DeviceState::Running) return false;
+        if (activeMask == 0) return false; // nothing heating
+        if (lastCurrentSampleMs == 0) return false; // not yet primed
+        if ((nowMs - lastCurrentSampleMs) > NO_CURRENT_SAMPLE_TIMEOUT_MS) {
+            DEBUG_PRINTLN("[Thermal] Current sampling stalled -> forcing Error");
+            WIRE->disableAll();
+            setState(DeviceState::Error);
+            if (BUZZ) BUZZ->bipFault();
+            return true;
+        }
+        return false;
+    };
 
     // Case 1: no new samples, no new events -> pure cooling to "now"
     if (nCur == 0 && nOut == 0) {
@@ -326,6 +365,10 @@ void Device::updateWireThermalFromHistory() {
             }
 
             WIRE->setWireEstimatedTemp(w + 1, ws.T);
+        }
+
+        if (checkCurrentWatchdog(lastHeaterMask)) {
+            return;
         }
         return;
     }
@@ -371,6 +414,10 @@ void Device::updateWireThermalFromHistory() {
         currentHistorySeq = newCurSeq;
         outputHistorySeq  = newOutSeq;
         lastHeaterMask    = outBuf[nOut - 1].mask;
+
+        if (checkCurrentWatchdog(lastHeaterMask)) {
+            return;
+        }
         return;
     }
 

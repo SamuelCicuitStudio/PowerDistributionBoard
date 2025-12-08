@@ -234,7 +234,13 @@ function updateGauge(id, value, unit, maxValue) {
 function startMonitorPolling(intervalMs = 1000) {
   setInterval(() => {
     fetch("/monitor")
-      .then((res) => res.json())
+      .then((res) => {
+        if (res.status === 403) {
+          window.location.href = "http://powerboard.local/login";
+          throw new Error("Not authenticated");
+        }
+        return res.json();
+      })
       .then((data) => {
         const voltage = parseFloat(data.capVoltage).toFixed(2);
         updateGauge("voltageValue", voltage, "V", 400);
@@ -289,20 +295,7 @@ function startMonitorPolling(intervalMs = 1000) {
 // ❤️ HEARTBEAT PINGER — Ensures server connection is alive
 // ───────────────────────────────────────────────────────────────
 function startHeartbeat(intervalMs = 1500) {
-  setInterval(() => {
-    fetch("/heartbeat")
-      .then((res) => res.text())
-      .then((text) => {
-        if (text !== "alive") {
-          console.warn("Unexpected heartbeat:", text);
-          window.location.href = "http://powerboard.local/login";
-        }
-      })
-      .catch((err) => {
-        console.error("Heartbeat error:", err);
-        window.location.href = "http://powerboard.local/login";
-      });
-  }, intervalMs);
+  // Heartbeat disabled: session stays active while page is open.
 }
 
 async function pollDeviceState() {
@@ -486,6 +479,11 @@ function sendInstantLogout() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "disconnect" }),
     });
+  }
+  try {
+    window.location.href = "http://powerboard.local/login";
+  } catch (e) {
+    // ignore navigation errors
   }
 }
 
