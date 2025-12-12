@@ -674,7 +674,7 @@ void WiFiManager::registerRoutes_() {
             doc["onTime"]         = CONF->GetInt(ON_TIME_KEY, 500);
             doc["offTime"]        = CONF->GetInt(OFF_TIME_KEY, 500);
             doc["desiredVoltage"] = CONF->GetFloat(DESIRED_OUTPUT_VOLTAGE_KEY, 0);
-            doc["acFrequency"]    = CONF->GetInt(AC_FREQUENCY_KEY, 50);
+            doc["acFrequency"]    = CONF->GetInt(AC_FREQUENCY_KEY, DEFAULT_AC_FREQUENCY);
             doc["chargeResistor"] = CONF->GetFloat(CHARGE_RESISTOR_KEY, 0.0f);
             doc["dcVoltage"]      = CONF->GetFloat(DC_VOLTAGE_KEY, 0.0f);
             doc["wireOhmPerM"]    = CONF->GetFloat(WIRE_OHM_PER_M_KEY,
