@@ -15,15 +15,15 @@ static constexpr float WIRE_T_MAX_C          = 150.0f;
 // Cooling gains (1/s): natural convection, boosted when hot
 // Cooling gains (1/s). Reduce to slow down temperature drop to a more
 // realistic rate for free convection.
-static constexpr float COOL_K_COLD           = 0.02f;  // around ambient
-static constexpr float COOL_K_HOT            = 0.08f;  // near 120C
+static constexpr float COOL_K_COLD           = 0.01f;  // around ambient (slower cooling)
+static constexpr float COOL_K_HOT            = 0.04f;  // near 120C (slower cooling)
 static constexpr float COOL_HOT_THRESHOLD_C  = 80.0f;  // start blending up
 // Integration clamps to avoid sudden jumps when samples are sparse.
 static constexpr float MAX_THERMAL_DT_S      = 0.30f;  // cap per-step dt
-static constexpr float MAX_COOL_DROP_C       = 1.0f;   // max drop per step
-static constexpr float MAX_HEAT_RISE_C       = 5.0f;   // max rise per step
+static constexpr float MAX_COOL_DROP_C       = 0.5f;   // max drop per step (slower cooldown)
+static constexpr float MAX_HEAT_RISE_C       = 0.5f;   // max rise per step (slower spikes)
 // Additional inertia factor to slow down modeled heating (dimensionless < 1).
-static constexpr float THERMAL_INERTIA_SCALE = 0.35f;
+static constexpr float THERMAL_INERTIA_SCALE = 0.0875f; // ~half previous for slower heating
 
 // Helper: resolve ground-tie/charge resistor and sense-leak current
 static float _getGroundTieOhms() {
@@ -51,9 +51,11 @@ static float _senseLeakCurrent(float busVoltage) {
 void WireConfigStore::loadFromNvs() {
     _wireOhmPerM  = CONF->GetFloat(WIRE_OHM_PER_M_KEY,  DEFAULT_WIRE_OHM_PER_M);
     _targetResOhm = CONF->GetFloat(R0XTGT_KEY,          DEFAULT_TARG_RES_OHMS);
+    _wireGaugeAwg = CONF->GetInt(WIRE_GAUGE_KEY,        DEFAULT_WIRE_GAUGE);
 
     if (!isfinite(_wireOhmPerM)  || _wireOhmPerM  <= 0.0f) _wireOhmPerM  = DEFAULT_WIRE_OHM_PER_M;
     if (!isfinite(_targetResOhm) || _targetResOhm <= 0.0f) _targetResOhm = DEFAULT_TARG_RES_OHMS;
+    if (_wireGaugeAwg <= 0 || _wireGaugeAwg > 60) _wireGaugeAwg = DEFAULT_WIRE_GAUGE;
 
     static const char* WIRE_RES_KEYS[HeaterManager::kWireCount] = {
         R01OHM_KEY, R02OHM_KEY, R03OHM_KEY, R04OHM_KEY, R05OHM_KEY,
@@ -85,6 +87,7 @@ void WireConfigStore::saveToNvs() const {
 
     CONF->PutFloat(WIRE_OHM_PER_M_KEY, _wireOhmPerM);
     CONF->PutFloat(R0XTGT_KEY,         _targetResOhm);
+    CONF->PutInt  (WIRE_GAUGE_KEY,     _wireGaugeAwg);
 
     for (uint8_t i = 0; i < HeaterManager::kWireCount; ++i) {
         CONF->PutFloat(WIRE_RES_KEYS[i], _wireR[i]);
@@ -127,6 +130,14 @@ float WireConfigStore::getWireOhmPerM() const {
 
 void WireConfigStore::setWireOhmPerM(float v) {
     if (isfinite(v) && v > 0.0f) _wireOhmPerM = v;
+}
+
+int WireConfigStore::getWireGaugeAwg() const {
+    return _wireGaugeAwg;
+}
+
+void WireConfigStore::setWireGaugeAwg(int awg) {
+    if (awg > 0 && awg <= 60) _wireGaugeAwg = awg;
 }
 
 // ======================================================================
@@ -201,6 +212,12 @@ void WireThermalModel::integrateCurrentOnly(const CurrentSensor::Sample* curBuf,
     }
     _ambientC = ambientC;
 
+    float seriesR = DEFAULT_CHARGE_RESISTOR_OHMS;
+    if (CONF) {
+        float rc = CONF->GetFloat(CHARGE_RESISTOR_KEY, DEFAULT_CHARGE_RESISTOR_OHMS);
+        if (isfinite(rc) && rc >= 0.0f) seriesR = rc;
+    }
+
     uint16_t currentMask = runtime.getLastMask();
     size_t   outIndex    = 0;
 
@@ -208,7 +225,7 @@ void WireThermalModel::integrateCurrentOnly(const CurrentSensor::Sample* curBuf,
         float blend = ws.T / COOL_HOT_THRESHOLD_C;
         if (blend < 0.0f) blend = 0.0f;
         if (blend > 1.0f) blend = 1.0f;
-        float k = COOL_K_COLD + (COOL_K_HOT - COOL_K_COLD) * blend;
+        float k = _coolKCold + (_coolKHot - _coolKCold) * blend;
         return k * _coolingScale;
     };
 
@@ -229,7 +246,7 @@ void WireThermalModel::integrateCurrentOnly(const CurrentSensor::Sample* curBuf,
             if (dt > MAX_THERMAL_DT_S) dt = MAX_THERMAL_DT_S;
             if (dt > 0.0f) {
                 float dTcool = -(ws.T - _ambientC) * coolingK(ws) * dt;
-                if (dTcool < -MAX_COOL_DROP_C) dTcool = -MAX_COOL_DROP_C;
+                if (dTcool < -_maxCoolDropC) dTcool = -_maxCoolDropC;
                 ws.T += dTcool;
             }
 
@@ -253,9 +270,10 @@ void WireThermalModel::integrateCurrentOnly(const CurrentSensor::Sample* curBuf,
             }
 
             if (Gtot > 0.0f) {
-                // Estimated bus voltage from total current and equivalent conductance (debug only).
-                const float V_est = I_net / Gtot;
-                (void)V_est;
+                const float Rpar = 1.0f / Gtot;
+                // Total supply estimate includes the series bleed/charge resistor.
+                const float V_branch = I_net * Rpar; // voltage across the parallel bundle
+                (void)seriesR; // series resistor already reflected in measured I_net
 
                 for (uint8_t w = 0; w < HeaterManager::kWireCount; ++w) {
                     if (!(currentMask & (1u << w))) continue;
@@ -271,7 +289,7 @@ void WireThermalModel::integrateCurrentOnly(const CurrentSensor::Sample* curBuf,
 
                     // Split measured total current across parallel branches based on conductance.
                     const float Gw = 1.0f / R;
-                    const float Iw = I_net * (Gw / Gtot);
+                    const float Iw = (V_branch * Gw); // Iw = V/R
                     const float P  = Iw * Iw * R;
                     float dT = (P * dtHeat * THERMAL_INERTIA_SCALE) / ws.C_th;
                     if (dT > MAX_HEAT_RISE_C) dT = MAX_HEAT_RISE_C;
@@ -321,7 +339,7 @@ void WireThermalModel::integrate(const CurrentSensor::Sample* curBuf, size_t nCu
         float blend = ws.T / COOL_HOT_THRESHOLD_C;
         if (blend < 0.0f) blend = 0.0f;
         if (blend > 1.0f) blend = 1.0f;
-        float k = COOL_K_COLD + (COOL_K_HOT - COOL_K_COLD) * blend;
+        float k = _coolKCold + (_coolKHot - _coolKCold) * blend;
         return k * _coolingScale;
     };
 
@@ -360,7 +378,7 @@ void WireThermalModel::integrate(const CurrentSensor::Sample* curBuf, size_t nCu
             if (dt > MAX_THERMAL_DT_S) dt = MAX_THERMAL_DT_S;
             if (dt > 0.0f) {
                 float dTcool = -(ws.T - _ambientC) * coolingK(ws) * dt;
-                if (dTcool < -MAX_COOL_DROP_C) dTcool = -MAX_COOL_DROP_C;
+                if (dTcool < -_maxCoolDropC) dTcool = -_maxCoolDropC;
                 ws.T += dTcool;
             }
             WireRuntimeState& rt = runtime.wire(w + 1);
@@ -440,6 +458,22 @@ void WireThermalModel::setCoolingScale(float scale) {
     if (!isfinite(scale) || scale <= 0.0f) {
         scale = 1.0f;
     }
+    _coolingScale = scale;
+}
+
+void WireThermalModel::setCoolingParams(float kCold, float maxDropC, float scale) {
+    if (!isfinite(kCold) || kCold <= 0.0f) {
+        kCold = COOL_K_COLD;
+    }
+    if (!isfinite(maxDropC) || maxDropC <= 0.0f) {
+        maxDropC = MAX_COOL_DROP_C;
+    }
+    if (!isfinite(scale) || scale <= 0.0f) {
+        scale = 1.0f;
+    }
+    _coolKCold    = kCold;
+    _coolKHot     = kCold * (COOL_K_HOT / COOL_K_COLD);
+    _maxCoolDropC = maxDropC;
     _coolingScale = scale;
 }
 

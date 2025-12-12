@@ -295,6 +295,7 @@ void NVS::initializeVariables() {
   // --- Target resistance + wire ohm/m ---
   PutFloat(R0XTGT_KEY,         DEFAULT_TARG_RES_OHMS);
   PutFloat(WIRE_OHM_PER_M_KEY, DEFAULT_WIRE_OHM_PER_M);
+  PutInt  (WIRE_GAUGE_KEY,     DEFAULT_WIRE_GAUGE);
 
   // --- Power tracker persistent statistics ---
   PutFloat(PT_KEY_TOTAL_ENERGY_WH,     PT_DEF_TOTAL_ENERGY_WH);
@@ -310,6 +311,11 @@ void NVS::initializeVariables() {
   PutString(TSB1ID_KEY, "");
   PutString(TSHSID_KEY, "");
   PutBool  (TSMAP_KEY, false);
+
+  // Cooling profile tuning
+  PutFloat(COOL_BURIED_SCALE_KEY, DEFAULT_COOLING_SCALE_BURIED);
+  PutFloat(COOL_KCOLD_KEY,        DEFAULT_COOL_K_COLD);
+  PutFloat(COOL_DROP_MAX_KEY,     DEFAULT_MAX_COOL_DROP_C);
 }
 
 // ======================================================

@@ -134,6 +134,10 @@ bool DeviceTransport::setWireRes(uint8_t idx, float ohms) {
 }
 bool DeviceTransport::setTargetRes(float ohms)          { return sendCommandAndWait(Device::DevCmdType::SET_TARGET_RES, 0, ohms); }
 bool DeviceTransport::setWireOhmPerM(float ohmsPerM)    { return sendCommandAndWait(Device::DevCmdType::SET_WIRE_OHM_PER_M, 0, ohmsPerM); }
+bool DeviceTransport::setWireGaugeAwg(int awg) {
+  awg = constrain(awg, 1, 60);
+  return sendCommandAndWait(Device::DevCmdType::SET_WIRE_GAUGE, awg);
+}
 bool DeviceTransport::setBuzzerMute(bool on)            { return sendCommandAndWait(Device::DevCmdType::SET_BUZZER_MUTE, 0, 0.0f, on); }
 bool DeviceTransport::setManualMode(bool manual)        { return sendCommandAndWait(Device::DevCmdType::SET_MANUAL_MODE, 0, 0.0f, manual); }
 bool DeviceTransport::setCoolingProfile(bool fast)      { return sendCommandAndWait(Device::DevCmdType::SET_COOLING_PROFILE, 0, 0.0f, fast); }

@@ -1,4 +1,4 @@
-﻿/**************************************************************
+/**************************************************************
  *  Author      : Tshibangu Samuel
  *  Role        : Freelance Embedded Systems Engineer
  *  Expertise   : Secure IoT Systems, Embedded C++, RTOS, Control Logic
@@ -30,9 +30,9 @@
 // ---------------------------------------------------------------------
 // Material constants (nichrome, approximate)
 // ---------------------------------------------------------------------
-#define NICHROME_RESISTIVITY    1.10e-6f // Î©Â·m
-#define NICHROME_DENSITY        8400.0f  // kg/mÂ³
-#define NICHROME_SPECIFIC_HEAT  450.0f   // J/(kgÂ·K) (reserved)
+#define NICHROME_RESISTIVITY    1.10e-6f // Ω·m
+#define NICHROME_DENSITY        8400.0f  // kg/m³
+#define NICHROME_SPECIFIC_HEAT  450.0f   // J/(kg·K) (reserved)
 
 class Device;
 /**
@@ -40,12 +40,12 @@ class Device;
  */
 struct WireInfo {
     uint8_t index;               ///< 1..10 channel index
-    float   resistanceOhm;       ///< Calibrated cold resistance [Î©]
+    float   resistanceOhm;       ///< Calibrated cold resistance [Ω]
     float   lengthM;             ///< Estimated length [m]
-    float   crossSectionAreaM2;  ///< Estimated cross-section area [mÂ²]
-    float   volumeM3;            ///< Volume [mÂ³]
+    float   crossSectionAreaM2;  ///< Estimated cross-section area [m²]
+    float   volumeM3;            ///< Volume [m³]
     float   massKg;              ///< Mass [kg]
-    float   temperatureC;        ///< Last estimated wire temperature [Â°C]
+    float   temperatureC;        ///< Last estimated wire temperature [°C]
     bool    connected;           ///< true if last probe saw a plausible load
     float   presenceCurrentA;    ///< last measured current during probe [A]
     uint32_t lastOnMs;           ///< millis() when this wire was last turned ON
@@ -55,6 +55,7 @@ struct WireInfo {
 class HeaterManager {
 public:
     static constexpr uint8_t kWireCount = 10;
+    static constexpr uint8_t kMaxAwg    = 60;
 
     // ---------------------------------------------------------------------
     // Output history (for RTOS/thermal integration)
@@ -105,7 +106,7 @@ public:
      * - Create mutex
      * - Configure ENAxx pins as outputs (all OFF)
      * - Load:
-     *      - global Î©/m (WIRE_OHM_PER_M_KEY)
+     *      - global Ω/m (WIRE_OHM_PER_M_KEY)
      *      - per-wire resistance R01..R10
      *      - target resistance (R0XTGT_KEY)
      * - Precompute geometry for each wire
@@ -187,20 +188,24 @@ public:
     // Wire resistance / target configuration
     // ---------------------------------------------------------------------
 
-    /** Cache + persist a single wire resistance (Î©) for channel 1..10. Thread-safe. */
+    /** Cache + persist a single wire resistance (Ω) for channel 1..10. Thread-safe. */
     void setWireResistance(uint8_t index, float ohms);
 
-    /** Get cached wire resistance (Î©); returns 0.0f if index is invalid. */
+    /** Get cached wire resistance (Ω); returns 0.0f if index is invalid. */
     float getWireResistance(uint8_t index) const;
 
-    /** Set global target resistance (Î©) for all outputs. Thread-safe. */
+    /** Set global target resistance (Ω) for all outputs. Thread-safe. */
     void setTargetResistanceAll(float ohms);
 
-    /** Get current global target resistance (Î©). */
+    /** Get current global target resistance (Ω). */
     float getTargetResistance() const { return targetResOhms; }
 
-    /** Get current global wire resistivity in Î©/m. */
+    /** Get current global wire resistivity in Ω/m. */
     float getWireOhmPerM() const { return wireOhmPerM; }
+
+    /** Set and apply global wire gauge (AWG); recomputes geometry. */
+    void setWireGaugeAwg(int awg);
+    int  getWireGaugeAwg() const { return wireGaugeAwg; }
 
     // ---------------------------------------------------------------------
     // Wire info / temperature
@@ -213,20 +218,20 @@ public:
     WireInfo getWireInfo(uint8_t index) const;
 
     /**
-     * @brief Set last estimated temperature for a given wire (Â°C).
+     * @brief Set last estimated temperature for a given wire (°C).
      *
      * Typically called by the thermal model / safety logic.
      */
     void setWireEstimatedTemp(uint8_t index, float tempC);
 
     /**
-     * @brief Get last estimated temperature (Â°C) for a wire,
+     * @brief Get last estimated temperature (°C) for a wire,
      *        or NAN if invalid / never set.
      */
     float getWireEstimatedTemp(uint8_t index) const;
 
     /**
-     * @brief Reset all cached temperatures to a given ambient (e.g. 25Â°C).
+     * @brief Reset all cached temperatures to a given ambient (e.g. 25°C).
      */
     void resetAllEstimatedTemps(float ambientC);
 
@@ -308,7 +313,8 @@ private:
     // State
     // ---------------------------------------------------------------------
     WireInfo          wires[kWireCount];   ///< Per-channel wire info.
-    float             wireOhmPerM;         ///< Î©/m from NVS.
+    float             wireOhmPerM;         ///< Ω/m from NVS.
+    int               wireGaugeAwg;        ///< AWG gauge from NVS (global)
     float             targetResOhms;       ///< Global target resistance.
     bool              _initialized;        ///< begin() completed.
     SemaphoreHandle_t _mutex;              ///< Protects ENA pins + caches.
@@ -327,7 +333,7 @@ private:
     bool lock() const;
     void unlock() const;
 
-    void loadWireConfig();                 ///< Load Î©/m, Rxx, targetR, recompute geometry.
+    void loadWireConfig();                 ///< Load Ω/m, Rxx, targetR, recompute geometry.
     void computeWireGeometry(WireInfo& w); ///< Compute length/area/volume/mass for one wire.
 
     /**
@@ -349,4 +355,3 @@ private:
 #define WIRE HeaterManager::Get()
 
 #endif // HEATER_MANAGER_H
-

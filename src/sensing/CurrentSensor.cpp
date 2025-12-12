@@ -136,7 +136,7 @@ float CurrentSensor::readCurrent() {
     _updateOverCurrentStateLocked(current, millis());
 
     unlock();
-    return 4;
+    return 4.0;
     return current;
 }
 

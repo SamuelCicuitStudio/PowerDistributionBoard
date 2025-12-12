@@ -22,6 +22,8 @@
     acFrequency: 50, // Hz
     chargeResistor: 47, // ohm
     dcVoltage: 325, // V
+    wireOhmPerM: 2, // ohm/m
+    wireGauge: 20, // AWG
     onTime: 800, // ms
     offTime: 600, // ms
     temps: new Array(12).fill(26),
@@ -154,6 +156,8 @@
         acFrequency: S.acFrequency,
         chargeResistor: S.chargeResistor,
         dcVoltage: S.dcVoltage,
+        wireOhmPerM: S.wireOhmPerM,
+        wireGauge: S.wireGauge,
         onTime: S.onTime,
         offTime: S.offTime,
         outputs: outputsMap(),
@@ -226,9 +230,13 @@
           case "acFrequency":
           case "chargeResistor":
           case "dcVoltage":
+          case "wireOhmPerM":
           case "onTime":
           case "offTime":
             S[target] = +value;
+            break;
+          case "wireGauge":
+            S.wireGauge = parseInt(value, 10) || S.wireGauge;
             break;
 
           // Per-output & access

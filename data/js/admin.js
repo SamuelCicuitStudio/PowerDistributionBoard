@@ -36,6 +36,10 @@
   let isMuted = false; // Buzzer mute cached state
   let stateStream = null; // EventSource for zero-lag state
   let statePollTimer = null; // Fallback polling timer
+  let liveStream = null; // EventSource for live batched updates
+  let liveQueue = []; // queued live samples
+  let liveTimer = null; // playback timer
+  let liveLastSeq = 0; // last seq applied
 
   function isManualMode() {
     const t = document.getElementById("modeToggle");
@@ -736,12 +740,38 @@
       }
     }
 
+    const coolBuried = getFloat("coolBuriedScale");
+    if (
+      coolBuried !== undefined &&
+      !approxEqual(coolBuried, cur.coolBuriedScale, 0.001)
+    ) {
+      cmds.push(["set", "coolBuriedScale", coolBuried]);
+    }
+
+    const coolK = getFloat("coolKCold");
+    if (coolK !== undefined && !approxEqual(coolK, cur.coolKCold, 0.0001)) {
+      cmds.push(["set", "coolKCold", coolK]);
+    }
+
+    const coolDrop = getFloat("coolDropMaxC");
+    if (
+      coolDrop !== undefined &&
+      !approxEqual(coolDrop, cur.coolDropMaxC, 0.001)
+    ) {
+      cmds.push(["set", "coolDropMaxC", coolDrop]);
+    }
+
     const loopModeSelect = document.getElementById("loopModeSelect");
     if (loopModeSelect) {
       const modeVal = loopModeSelect.value || "advanced";
       if (modeVal !== cur.loopMode) {
         cmds.push(["set", "loopMode", modeVal]);
       }
+    }
+
+    const wireGauge = getInt("wireGauge");
+    if (wireGauge !== undefined && wireGauge !== cur.wireGauge) {
+      cmds.push(["set", "wireGauge", wireGauge]);
     }
 
     // Wire resistances R01..R10 -> wireRes1..wireRes10
@@ -802,6 +832,18 @@
     const loopModeSelect = document.getElementById("loopModeSelect");
     if (loopModeSelect && data.loopMode) {
       loopModeSelect.value = data.loopMode;
+    }
+    if (data.wireGauge !== undefined) {
+      setField("wireGauge", data.wireGauge);
+    }
+    if (data.coolBuriedScale !== undefined) {
+      setField("coolBuriedScale", data.coolBuriedScale);
+    }
+    if (data.coolKCold !== undefined) {
+      setField("coolKCold", data.coolKCold);
+    }
+    if (data.coolDropMaxC !== undefined) {
+      setField("coolDropMaxC", data.coolDropMaxC);
     }
     if (data.wireOhmPerM !== undefined) {
       setField("wireOhmPerM", data.wireOhmPerM);
@@ -870,6 +912,18 @@
       const loopModeSelect = document.getElementById("loopModeSelect");
       if (loopModeSelect && data.loopMode) {
         loopModeSelect.value = data.loopMode;
+      }
+      if (data.wireGauge !== undefined) {
+        setField("wireGauge", data.wireGauge);
+      }
+      if (data.coolBuriedScale !== undefined) {
+        setField("coolBuriedScale", data.coolBuriedScale);
+      }
+      if (data.coolKCold !== undefined) {
+        setField("coolKCold", data.coolKCold);
+      }
+      if (data.coolDropMaxC !== undefined) {
+        setField("coolDropMaxC", data.coolDropMaxC);
       }
       if (data.wireOhmPerM !== undefined) {
         setField("wireOhmPerM", data.wireOhmPerM);
@@ -1294,6 +1348,136 @@
       if (relayToggle) relayToggle.checked = mon.relay === true;
     } catch (err) {
       console.warn("live poll failed:", err);
+    }
+  }
+
+  // -------------------- Live SSE playback (constant speed) --------------------
+  function applyLiveSample(sample) {
+    if (!sample) return;
+
+    // Outputs mask -> dots
+    if (typeof sample.mask === "number") {
+      for (let i = 0; i < 10; i++) {
+        const on = !!(sample.mask & (1 << i));
+        setDot("o" + (i + 1), on);
+      }
+    }
+
+    // Wire temps -> badges
+    const wireTemps = sample.wireTemps || [];
+    if (LIVE.svg) {
+      for (const cfg of LIVE.tempMarkers) {
+        const badge = LIVE.svg.querySelector(
+          'g.temp-badge[data-wire="' + cfg.wire + '"]'
+        );
+        if (!badge) continue;
+
+        const label = badge.querySelector("text.temp-label");
+        if (!label) continue;
+
+        const t = wireTemps[cfg.wire - 1];
+        let txt = "--";
+
+        badge.classList.remove("warn", "hot");
+
+        if (typeof t === "number" && t > -100) {
+          const rounded = Math.round(t);
+          txt = String(rounded);
+
+          if (t >= 400) badge.classList.add("hot");
+          else if (t >= 250) badge.classList.add("warn");
+
+          badge.setAttribute(
+            "title",
+            "Wire " + cfg.wire + ": " + Number(t).toFixed(1) + "°C"
+          );
+        } else {
+          badge.removeAttribute("title");
+        }
+
+        label.textContent = txt;
+      }
+    }
+
+    setDot("relay", sample.relay === true);
+    setDot("ac", sample.ac === true);
+
+    const relayToggle = document.getElementById("relayToggle");
+    if (relayToggle) relayToggle.checked = sample.relay === true;
+  }
+
+  function startLivePlayback() {
+    if (liveTimer) clearInterval(liveTimer);
+    liveTimer = setInterval(() => {
+      if (!liveQueue.length) return;
+      const sample = liveQueue.shift();
+      liveLastSeq = sample.seq || liveLastSeq;
+      applyLiveSample(sample);
+    }, 120); // steady playback cadence
+  }
+
+  function startLiveStream() {
+    if (liveStream) return;
+    try {
+      liveStream = new EventSource("/monitor_stream");
+      liveStream.onopen = () => {
+        // On (re)connect, try to fetch any missed items
+        if (liveLastSeq > 0) {
+          fetchLiveSince(liveLastSeq);
+        }
+      };
+      liveStream.onmessage = (ev) => {
+        if (!ev.data) return;
+        try {
+          const payload = JSON.parse(ev.data);
+          const items = payload.items || [];
+          // Cap queue to avoid long catch-up
+          const cap = 80;
+          for (const sm of items) {
+            liveQueue.push(sm);
+          }
+          if (liveQueue.length > cap) {
+            // drop oldest, keep tail
+            liveQueue = liveQueue.slice(liveQueue.length - cap);
+            // update lastSeq to tail's last seq
+            const tail = liveQueue[liveQueue.length - 1];
+            if (tail && tail.seq) liveLastSeq = tail.seq;
+          }
+        } catch (e) {
+          console.warn("live SSE parse error", e);
+        }
+      };
+      liveStream.onerror = () => {
+        console.warn("live SSE error; retrying soon");
+        if (liveStream) {
+          liveStream.close();
+          liveStream = null;
+        }
+        setTimeout(startLiveStream, 2000);
+      };
+      startLivePlayback();
+    } catch (e) {
+      console.warn("live SSE init failed", e);
+    }
+  }
+
+  async function fetchLiveSince(seq) {
+    try {
+      const res = await fetch("/monitor_since?seq=" + (seq || 0), {
+        cache: "no-store",
+      });
+      if (!res.ok) return;
+      const payload = await res.json();
+      const items = payload.items || [];
+      const cap = 80;
+      for (const sm of items) {
+        liveQueue.push(sm);
+      }
+      if (liveQueue.length > cap) {
+        liveQueue = liveQueue.slice(liveQueue.length - cap);
+      }
+    } catch (e) {
+      console.warn("fetchLiveSince failed", e);
     }
   }
   function computeCoreBox(svg) {
@@ -1725,6 +1909,7 @@
 
     initPowerButton();
     liveRender();
+    startLiveStream(); // batched live playback
     scheduleLiveInterval();
 
     // Keep session alive with backend heartbeat

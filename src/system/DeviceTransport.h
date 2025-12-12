@@ -49,6 +49,7 @@ public:
   bool setWireRes(uint8_t idx, float ohms);
   bool setTargetRes(float ohms);
   bool setWireOhmPerM(float ohmsPerM);
+  bool setWireGaugeAwg(int awg);
   bool setBuzzerMute(bool on);
   bool setManualMode(bool manual);
   bool setCoolingProfile(bool fast);

@@ -289,8 +289,6 @@ void Device::updateWireThermalFromHistory() {
         initWireThermalModelOnce();
     }
 
-    wireThermalModel.setCoolingScale(coolingScale);
-
     // Refresh ambient slowly.
     updateAmbientFromSensors(false);
 

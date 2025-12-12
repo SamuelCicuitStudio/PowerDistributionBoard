@@ -23,6 +23,7 @@
 #include "sensing/CurrentSensor.h"
 #include "control/CpDischg.h"
 #include "system/StatusSnapshot.h"
+#include "system/Config.h"
 
 // ======================================================================
 // WireRuntimeState: per-wire runtime fields
@@ -61,11 +62,15 @@ public:
     float getWireOhmPerM() const;
     void  setWireOhmPerM(float v);
 
+    int   getWireGaugeAwg() const;
+    void  setWireGaugeAwg(int awg);
+
 private:
     float _wireR[HeaterManager::kWireCount]  = { DEFAULT_WIRE_RES_OHMS };
     bool  _access[HeaterManager::kWireCount] = { false };
     float _wireOhmPerM  = DEFAULT_WIRE_OHM_PER_M;
     float _targetResOhm = DEFAULT_TARG_RES_OHMS;
+    int   _wireGaugeAwg = DEFAULT_WIRE_GAUGE;
 };
 
 // ======================================================================
@@ -108,6 +113,7 @@ public:
 
     float getWireTemp(uint8_t index) const;
     void  setCoolingScale(float scale);
+    void  setCoolingParams(float kCold, float maxDropC, float scale);
 
 private:
     struct WireThermalState {
@@ -123,9 +129,12 @@ private:
     float wireResistanceAtTemp(uint8_t idx) const;
 
     WireThermalState _state[HeaterManager::kWireCount];
-    float            _ambientC    = 25.0f;
-    bool             _initialized = false;
-    float            _coolingScale = 1.0f;
+    float            _ambientC      = 25.0f;
+    bool             _initialized   = false;
+    float            _coolingScale  = 1.0f;
+    float            _coolKCold     = DEFAULT_COOL_K_COLD;
+    float            _coolKHot      = 0.04f; // default hot-side cooling gain (slower cooling)
+    float            _maxCoolDropC  = DEFAULT_MAX_COOL_DROP_C;
 };
 
 // ======================================================================

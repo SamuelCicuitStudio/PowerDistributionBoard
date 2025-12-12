@@ -183,6 +183,7 @@ public:
         SET_WIRE_RES,
         SET_TARGET_RES,
         SET_WIRE_OHM_PER_M,
+        SET_WIRE_GAUGE,
         SET_BUZZER_MUTE,
         SET_MANUAL_MODE,
         SET_COOLING_PROFILE,
@@ -389,7 +390,7 @@ private:
     static constexpr uint32_t NO_CURRENT_SAMPLE_TIMEOUT_MS = 750; ///< Watchdog for stalled current sampling
 
     static constexpr float   COOLING_SCALE_AIR      = 1.0f;   ///< Natural convection/radiation in free air
-    static constexpr float   COOLING_SCALE_BURIED   = 0.35f;  ///< Slower cooling when embedded (floor)
+    static constexpr float   COOLING_SCALE_BURIED   = DEFAULT_COOLING_SCALE_BURIED;  ///< Slower cooling when embedded (floor)
 
     WireThermalState wireThermal[HeaterManager::kWireCount];
 
@@ -427,6 +428,9 @@ private:
     LoopMode loopModeSetting     = LoopMode::Advanced;
     bool     coolingFastProfile  = DEFAULT_COOLING_PROFILE_FAST;
     float    coolingScale        = COOLING_SCALE_AIR;
+    float    coolingKCold        = DEFAULT_COOL_K_COLD;
+    float    coolingMaxDropC     = DEFAULT_MAX_COOL_DROP_C;
+    float    coolingBuriedScale  = DEFAULT_COOLING_SCALE_BURIED;
 
     // ---------------------------------------------------------------------
     // Wire subsystem helpers (config + runtime + planner + telemetry)

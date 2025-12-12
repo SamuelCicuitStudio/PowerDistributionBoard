@@ -126,6 +126,31 @@ private:
     AsyncEventSource stateSse{"/state_stream"};
     TaskHandle_t     stateStreamTaskHandle = nullptr;
 
+    // ===== Live monitor streaming (batched) =====
+    struct LiveSample {
+        uint32_t seq      = 0;
+        uint32_t tsMs     = 0;
+        float    capV     = 0.0f;
+        float    currentA = 0.0f;
+        int16_t  wireTemps[HeaterManager::kWireCount]{};
+        uint16_t outputsMask = 0;
+        bool     relay    = false;
+        bool     ac       = false;
+        uint8_t  fanPct   = 0;
+    };
+    static constexpr size_t kLiveBufSize = 64;
+    LiveSample   _liveBuf[kLiveBufSize]{};
+    size_t       _liveCount   = 0;
+    size_t       _liveHead    = 0; // next write
+    uint32_t     _liveSeqCtr  = 0;
+    uint32_t     _liveSentSeq = 0;
+    AsyncEventSource liveSse{"/monitor_stream"};
+    TaskHandle_t     liveStreamTaskHandle = nullptr;
+    void pushLiveSample(const StatusSnapshot& s);
+    void startLiveStreamTask(uint32_t emitPeriodMs = 150);
+    static void liveStreamTask(void* pv);
+    bool buildLiveBatch(JsonArray& items, uint32_t sinceSeq, uint32_t& seqStart, uint32_t& seqEnd);
+
     static void snapshotTask(void* param);
     void startSnapshotTask(uint32_t periodMs = 250);
     bool getSnapshot(StatusSnapshot& out);
@@ -152,6 +177,7 @@ private:
         CTRL_TARGET_RES,        // f1
         CTRL_WIRE_RES,          // i1=index(1..10), f1=ohms
         CTRL_WIRE_OHM_PER_M,    // f1
+        CTRL_WIRE_GAUGE,        // i1=awg gauge
         CTRL_COOL_PROFILE,      // b1: true=air/fast, false=buried/slow
         CTRL_LOOP_MODE,         // i1: 0=advanced, 1=sequential
     };

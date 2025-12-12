@@ -238,6 +238,20 @@ void Device::handleCommand(const DevCommand& cmd) {
             }
             wireConfigStore.setWireOhmPerM(cmd.f1);
             break;
+        case DevCmdType::SET_WIRE_GAUGE: {
+            int gauge = cmd.i1;
+            if (gauge <= 0 || gauge > 60) {
+                gauge = DEFAULT_WIRE_GAUGE;
+            }
+            if (CONF->GetInt(WIRE_GAUGE_KEY, DEFAULT_WIRE_GAUGE) != gauge) {
+                CONF->PutInt(WIRE_GAUGE_KEY, gauge);
+            }
+            wireConfigStore.setWireGaugeAwg(gauge);
+            if (WIRE) {
+                WIRE->setWireGaugeAwg(gauge);
+            }
+            break;
+        }
         case DevCmdType::SET_MANUAL_MODE:
             manualMode = cmd.b1;
             if (manualMode && gEvt) {
@@ -847,7 +861,7 @@ void Device::fanControlTask(void* param) {
 
 void Device::applyCoolingProfile(bool fastProfile) {
     coolingFastProfile = fastProfile;
-    coolingScale = fastProfile ? COOLING_SCALE_AIR : COOLING_SCALE_BURIED;
+    coolingScale = fastProfile ? COOLING_SCALE_AIR : coolingBuriedScale;
     wireThermalModel.setCoolingScale(coolingScale);
 }
 
@@ -858,9 +872,23 @@ void Device::loadRuntimeSettings() {
     if (CONF) {
         fast = CONF->GetBool(COOLING_PROFILE_KEY, DEFAULT_COOLING_PROFILE_FAST);
         mode = CONF->GetInt(LOOP_MODE_KEY, DEFAULT_LOOP_MODE);
+        coolingBuriedScale = CONF->GetFloat(COOL_BURIED_SCALE_KEY, DEFAULT_COOLING_SCALE_BURIED);
+        coolingKCold       = CONF->GetFloat(COOL_KCOLD_KEY,        DEFAULT_COOL_K_COLD);
+        coolingMaxDropC    = CONF->GetFloat(COOL_DROP_MAX_KEY,     DEFAULT_MAX_COOL_DROP_C);
+
+        if (!isfinite(coolingBuriedScale) || coolingBuriedScale <= 0.0f) {
+            coolingBuriedScale = DEFAULT_COOLING_SCALE_BURIED;
+        }
+        if (!isfinite(coolingKCold) || coolingKCold <= 0.0f) {
+            coolingKCold = DEFAULT_COOL_K_COLD;
+        }
+        if (!isfinite(coolingMaxDropC) || coolingMaxDropC <= 0.0f) {
+            coolingMaxDropC = DEFAULT_MAX_COOL_DROP_C;
+        }
     }
 
     applyCoolingProfile(fast);
+    wireThermalModel.setCoolingParams(coolingKCold, coolingMaxDropC, coolingScale);
 
     if (mode != 0 && mode != 1) {
         mode = DEFAULT_LOOP_MODE;

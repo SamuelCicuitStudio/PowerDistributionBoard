@@ -1,9 +1,10 @@
-﻿/**************************************************************
+/**************************************************************
  *  HeaterManager.cpp
  **************************************************************/
 
 #include "control/HeaterManager.h"
 #include "system/Device.h"
+#include <math.h>
 // Static singleton pointer
 HeaterManager* HeaterManager::s_instance = nullptr;
 
@@ -37,6 +38,7 @@ HeaterManager* HeaterManager::Get() {
 HeaterManager::HeaterManager()
     : wireOhmPerM(0.0f),
       targetResOhms(0.0f),
+      wireGaugeAwg(DEFAULT_WIRE_GAUGE),
       _initialized(false),
       _mutex(nullptr),
       _currentMask(0),
@@ -108,7 +110,7 @@ void HeaterManager::unlock() const {
 
 void HeaterManager::loadWireConfig() {
     if (CONF) {
-        // Global Î©/m
+        // Global Ω/m
         wireOhmPerM = CONF->GetFloat(WIRE_OHM_PER_M_KEY, DEFAULT_WIRE_OHM_PER_M);
         if (!isfinite(wireOhmPerM) || wireOhmPerM <= 0.0f) {
             wireOhmPerM = DEFAULT_WIRE_OHM_PER_M;
@@ -118,6 +120,12 @@ void HeaterManager::loadWireConfig() {
         targetResOhms = CONF->GetFloat(R0XTGT_KEY, DEFAULT_TARG_RES_OHMS);
         if (!isfinite(targetResOhms) || targetResOhms <= 0.0f) {
             targetResOhms = DEFAULT_TARG_RES_OHMS;
+        }
+
+        // Global wire gauge (AWG)
+        wireGaugeAwg = CONF->GetInt(WIRE_GAUGE_KEY, DEFAULT_WIRE_GAUGE);
+        if (wireGaugeAwg <= 0 || wireGaugeAwg > kMaxAwg) {
+            wireGaugeAwg = DEFAULT_WIRE_GAUGE;
         }
 
         // Per-wire resistance
@@ -132,6 +140,7 @@ void HeaterManager::loadWireConfig() {
         // Fallback if NVS not ready
         wireOhmPerM   = DEFAULT_WIRE_OHM_PER_M;
         targetResOhms = DEFAULT_TARG_RES_OHMS;
+        wireGaugeAwg  = DEFAULT_WIRE_GAUGE;
         for (uint8_t i = 0; i < kWireCount; ++i) {
             wires[i].resistanceOhm = DEFAULT_WIRE_RES_OHMS;
         }
@@ -142,20 +151,20 @@ void HeaterManager::loadWireConfig() {
         computeWireGeometry(wires[i]);
     }
 
-    DEBUG_PRINTF("[HeaterManager] Ω/m = %.4f | TargetR = %.3f Ω\n",
+    DEBUG_PRINTF("[HeaterManager] O/m = %.4f | TargetR = %.3f O\n",
                  wireOhmPerM, targetResOhms);
 
     DEBUGGSTART();
     for (uint8_t i = 0; i < kWireCount; ++i) {
         const WireInfo& w = wires[i];
 
-        const float areaMm2  = w.crossSectionAreaM2 * 1.0e6f;  // mÂ² â†’ mmÂ²
-        const float volumeCm3 = w.volumeM3 * 1.0e6f;           // mÂ³ â†’ cmÂ³
-        const float massG    = w.massKg * 1000.0f;             // kg â†’ g
+        const float areaMm2  = w.crossSectionAreaM2 * 1.0e6f;  // m² → mm²
+        const float volumeCm3 = w.volumeM3 * 1.0e6f;           // m³ → cm³
+        const float massG    = w.massKg * 1000.0f;             // kg → g
 
         DEBUG_PRINTF(
-            "[HeaterManager] Wire %u: R=%.2f Ω | L=%.3f m | A=%.3f mmÂ² | "
-            "V=%.3f cmÂ³ | m=%.3f g\n",
+            "[HeaterManager] Wire %u: R=%.2f O | L=%.3f m | A=%.3f mm² | "
+            "V=%.3f cm³ | m=%.3f g\n",
             w.index,
             w.resistanceOhm,
             w.lengthM,
@@ -172,9 +181,15 @@ void HeaterManager::loadWireConfig() {
 void HeaterManager::computeWireGeometry(WireInfo& w) {
     const float R = w.resistanceOhm;
 
-    if (!isfinite(R) || R <= 0.0f ||
-        !isfinite(wireOhmPerM) || wireOhmPerM <= 0.0f)
-    {
+    auto awgToDiameterMeters = [](int awg) -> float {
+        // Standard AWG formula: d_inch = 0.005 * 92^((36-AWG)/39)
+        // Convert to meters.
+        if (awg <= 0 || awg > kMaxAwg) return NAN;
+        const float d_inch = 0.005f * powf(92.0f, (36.0f - static_cast<float>(awg)) / 39.0f);
+        return d_inch * 0.0254f; // inch -> m
+    };
+
+    if (!isfinite(R) || R <= 0.0f) {
         w.lengthM            = 0.0f;
         w.crossSectionAreaM2 = 0.0f;
         w.volumeM3           = 0.0f;
@@ -182,13 +197,35 @@ void HeaterManager::computeWireGeometry(WireInfo& w) {
         return;
     }
 
-    const float A = NICHROME_RESISTIVITY / wireOhmPerM; // mÂ²
-    const float L = R / wireOhmPerM;                    // m
-    const float V = A * L;                              // mÂ³
-    const float m = NICHROME_DENSITY * V;               // kg
+    // Prefer AWG-derived cross-section if gauge is valid; fall back to Ω/m.
+    float areaM2 = NAN;
+    const float dM = awgToDiameterMeters(wireGaugeAwg);
+    if (isfinite(dM) && dM > 0.0f) {
+        const float pi = 3.14159265359f;
+        areaM2 = pi * 0.25f * dM * dM;
+    }
+    if (!isfinite(areaM2) || areaM2 <= 0.0f) {
+        if (isfinite(wireOhmPerM) && wireOhmPerM > 0.0f) {
+            areaM2 = NICHROME_RESISTIVITY / wireOhmPerM;
+        }
+    }
+    if (!isfinite(areaM2) || areaM2 <= 0.0f) {
+        w.lengthM            = 0.0f;
+        w.crossSectionAreaM2 = 0.0f;
+        w.volumeM3           = 0.0f;
+        w.massKg             = 0.0f;
+        return;
+    }
+
+    // Use resistivity + cross-section to derive length from measured R.
+    const float L = (isfinite(R) && R > 0.0f)
+                        ? (R * areaM2 / NICHROME_RESISTIVITY)
+                        : 0.0f;               // m
+    const float V = areaM2 * L;               // m³
+    const float m = NICHROME_DENSITY * V;     // kg
 
     w.lengthM            = (isfinite(L) && L > 0.0f) ? L : 0.0f;
-    w.crossSectionAreaM2 = (isfinite(A) && A > 0.0f) ? A : 0.0f;
+    w.crossSectionAreaM2 = (isfinite(areaM2) && areaM2 > 0.0f) ? areaM2 : 0.0f;
     w.volumeM3           = (isfinite(V) && V > 0.0f) ? V : 0.0f;
     w.massKg             = (isfinite(m) && m > 0.0f) ? m : 0.0f;
 }
@@ -442,6 +479,17 @@ void HeaterManager::setTargetResistanceAll(float ohms) {
         CONF->PutFloat(R0XTGT_KEY, ohms);
     }
 
+    unlock();
+}
+
+void HeaterManager::setWireGaugeAwg(int awg) {
+    if (awg <= 0 || awg > kMaxAwg) return;
+    if (!lock()) return;
+    wireGaugeAwg = awg;
+    // Recompute geometry with the new cross-section.
+    for (uint8_t i = 0; i < kWireCount; ++i) {
+        computeWireGeometry(wires[i]);
+    }
     unlock();
 }
 

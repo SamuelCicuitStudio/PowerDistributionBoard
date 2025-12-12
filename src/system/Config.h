@@ -1,4 +1,4 @@
-﻿/**************************************************************
+/**************************************************************
  *  Author      : Tshibangu Samuel
  *  Role        : Freelance Embedded Systems Engineer
  *  Expertise   : Secure IoT Systems, Embedded C++, RTOS, Control Logic
@@ -135,8 +135,9 @@ ASSERT_NVS_KEY_LEN(DEV_HW_KEY);
 #define DEFAULT_TARG_RES_OHMS  14.0f  // default target for all outputs
 // 6-char NVS keys (one per output)
 #define R0XTGT_KEY  "R0XTGT"  // OUTXX target resistance
-#define WIRE_OHM_PER_M_KEY               "WOPERM"    // float: Î© per meter for installed nichrome
-#define DEFAULT_WIRE_OHM_PER_M           2.0f        // 2 Î©/m nichrome (your current wire)
+#define WIRE_OHM_PER_M_KEY               "WOPERM"    // float: Ω per meter for installed nichrome
+#define DEFAULT_WIRE_OHM_PER_M           2.0f        // 2 Ω/m nichrome (your current wire)
+#define WIRE_GAUGE_KEY                   "WIREG"     // int: AWG gauge for installed nichrome
 // NVS keys for persistent statistics (<= 6 chars each)
 
 // Totals (lifetime)
@@ -164,6 +165,11 @@ ASSERT_NVS_KEY_LEN(DEV_HW_KEY);
 #define PT_DEF_LAST_SESS_PEAK_W         0.0f
 #define PT_DEF_LAST_SESS_PEAK_A         0.0f
 
+// Cooling profile tuning keys (<= 6 chars)
+#define COOL_BURIED_SCALE_KEY           "CBURI"   // float: buried cooling scale
+#define COOL_KCOLD_KEY                  "CKCLD"   // float: base cooling gain
+#define COOL_DROP_MAX_KEY               "CDROP"   // float: max drop per step [degC]
+
 // ==================================================
 // Default Values for Preferences
 // ==================================================
@@ -179,7 +185,7 @@ ASSERT_NVS_KEY_LEN(DEV_HW_KEY);
 #define DEFAULT_OFF_TIME               9                // ms
 #define DEFAULT_INRUSH_DELAY           100              // ms
 #define DEFAULT_LED_FEEDBACK           true             // true = LED feedback enabled
-#define DEFAULT_TEMP_THRESHOLD         75.0f            // Â°C
+#define DEFAULT_TEMP_THRESHOLD         75.0f            // °C
 #define DEFAULT_CHARGE_RESISTOR_OHMS   35.0f            // Ohms (VBUS- to System_GND tie / charge resistor)
 #define DEFAULT_AC_FREQUENCY           50               // Hz
 #define DEFAULT_AC_VOLTAGE             230.0f           // Volts
@@ -188,6 +194,11 @@ ASSERT_NVS_KEY_LEN(DEV_HW_KEY);
 #define DEFAULT_TEMP_SENSOR_COUNT      12               // Default to 12 sensors unless discovered otherwise
 #define DEFAULT_COOLING_PROFILE_FAST   true             // true=air/fast cooling, false=buried/slow
 #define DEFAULT_LOOP_MODE              0                // 0=advanced, 1=sequential
+#define DEFAULT_WIRE_GAUGE             20               // AWG number for installed nichrome
+// Cooling defaults (used when NVS unset)
+#define DEFAULT_COOLING_SCALE_BURIED   0.35f            // default scale for buried cooling
+#define DEFAULT_COOL_K_COLD            0.01f            // default cold-side cooling gain (slower cooling)
+#define DEFAULT_MAX_COOL_DROP_C        0.5f             // default max drop per integration step [degC]
 
 // ---------- Output Access Defaults ----------
 #define DEFAULT_OUT01_ACCESS           true
@@ -343,7 +354,7 @@ static_assert(RGB_B_PWM_CHANNEL != FAN1_PWM_CHANNEL &&
 #define CAP_VOLTAGE_TASK_CORE             APP_CPU_NUM
 #define SWITCH_TASK_CORE                  PRO_CPU_NUM
 #define TEMP_SENSOR_TASK_CORE             APP_CPU_NUM
-// (Blink task runs on any core â€” no fixed core needed)
+// (Blink task runs on any core — no fixed core needed)
 
 // ==================================================
 //  RTOS CONFIGURATION: Stack Sizes (in words = 4 bytes)
