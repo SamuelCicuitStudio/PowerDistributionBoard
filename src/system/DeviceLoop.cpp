@@ -55,20 +55,30 @@ static bool _runMaskedPulse(Device* self,
     // Keep ON with protection-aware delay.
     bool ok = self->delayWithPowerWatch(onTimeMs);
 
-    // If pulse completed (no fault/STOP), log last V and per-wire currents.
+    // If pulse completed (no fault/STOP), log estimated V (from measured I) and per-wire currents.
     if (ok) {
-        float V = (self->discharger ? self->discharger->readCapVoltage() : NAN);
-        DEBUG_PRINTF("[Pulse] end: mask=0x%03X V=%.2fV\n",
+        float Itot = (self->currentSensor ? self->currentSensor->readCurrent() : NAN);
+        float Gtot = 0.0f;
+        for (uint8_t i = 0; i < HeaterManager::kWireCount; ++i) {
+            if (!(mask & (1u << i))) continue;
+            float R = WIRE->getWireInfo(i + 1).resistanceOhm;
+            if (R > 0.01f && isfinite(R)) {
+                Gtot += 1.0f / R;
+            }
+        }
+        float V_est = (isfinite(Itot) && Gtot > 0.0f) ? (Itot / Gtot) : NAN;
+        DEBUG_PRINTF("[Pulse] end: mask=0x%03X Vest=%.2fV I=%.3fA\n",
                      (unsigned)mask,
-                     (double)V);
-        if (isfinite(V) && V > 0.0f) {
+                     (double)V_est,
+                     (double)Itot);
+        if (isfinite(V_est) && V_est > 0.0f) {
             for (uint8_t i = 0; i < HeaterManager::kWireCount; ++i) {
                 uint16_t bit = (1u << i);
                 if (!(mask & bit)) continue;
                 WireInfo wi = WIRE->getWireInfo(i + 1);
                 float R = wi.resistanceOhm;
                 if (!(R > 0.01f && isfinite(R))) continue;
-                float Iw = V / R;
+                float Iw = V_est / R;
                 DEBUG_PRINTF("  [Pulse] OUT%u: R=%.2fΩ I=%.3fA\n",
                              (unsigned)(i + 1),
                              (double)R,
