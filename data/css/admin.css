@@ -903,18 +903,16 @@ button.danger:hover {
 
 /* Device Settings layout */
 
-#deviceSettingsTab .user-modal-content.device-settings-box {
-  padding: 12px 14px;
+#deviceSettingsTab .device-settings-box {
+  display: flex;
+  flex-direction: column;
   gap: 12px;
-  width: 130%;
-  max-width: 650px;
-  max-height: 460px;
 }
 
 #deviceSettingsTab .device-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px 16px;
+  grid-template-columns: 1.05fr 1.15fr; /* left: device fields | right: cooling + nichrome */
+  gap: 18px 24px;
   align-items: start;
   min-width: 0;
 }
@@ -930,6 +928,29 @@ button.danger:hover {
   margin: 0 0 6px;
   font-size: 14px;
   line-height: 1.2;
+}
+
+#deviceSettingsTab .cooling-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px 12px;
+}
+
+#deviceSettingsTab .cooling-grid .field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+#deviceSettingsTab .cooling-grid .field label {
+  font-size: 11px;
+  opacity: 0.85;
+}
+
+#deviceSettingsTab .cooling-grid .field input {
+  height: 32px;
+  padding: 6px 10px;
+  font-size: 13px;
 }
 
 #deviceSettingsTab .input-with-unit {
@@ -982,7 +1003,7 @@ button.danger:hover {
 #deviceSettingsTab .user-modal-actions.round-actions {
   margin-top: 6px;
   gap: 14px;
-  justify-content: center;
+  justify-content: flex-end;
 }
 
 #deviceSettingsTab .user-modal-actions.round-actions .round-button {
