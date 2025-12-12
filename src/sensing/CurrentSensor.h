@@ -1,4 +1,4 @@
-﻿/**************************************************************
+/**************************************************************
  *  Author      : Tshibangu Samuel
  *  Role        : Freelance Embedded Systems Engineer
  *  Expertise   : Secure IoT Systems, Embedded C++, RTOS, Control Logic
@@ -56,10 +56,10 @@
 
 // ---------------------- History configuration -------------------------------
 //
-// 10 seconds at 200 Hz â†’ 2000 samples (~16 kB).
+// 10 seconds at 500 Hz -> 5000 samples (~40 kB).
 //
 #define HISTORY_SECONDS                    10
-#define HISTORY_HZ                         200      // 200 Hz â†’ 5 ms
+#define HISTORY_HZ                         500      // 500 Hz -> 2 ms
 #define HISTORY_SAMPLES                    (HISTORY_SECONDS * HISTORY_HZ)
 
 // ---------------------- Over-current defaults -------------------------------
@@ -133,7 +133,7 @@ public:
     // ---------------------------------------------------------------------
 
     void setCalibration(float zeroCurrentMv, float sensitivityMvPerA);
-    // Manually set the zero‑current "middle point" from a raw ADC code.
+    // Manually set the zero-current "middle point" from a raw ADC code.
     // Call this only when you are sure that the load current is 0 A.
     void setMiddlePoint(int adcValue);
 
@@ -193,4 +193,3 @@ private:
 };
 
 #endif // CURRENT_SENSOR_H
-

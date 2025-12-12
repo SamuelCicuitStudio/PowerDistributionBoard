@@ -75,7 +75,7 @@
 #define LED_FEEDBACK_KEY               "LEDFB"     // LED feedback toggle key
 #define TEMP_THRESHOLD_KEY             "TMPTH"     // Over-temperature shutdown key
 #define CHARGE_RESISTOR_KEY            "CHRES"     // Charge resistor value key
-#define AC_FREQUENCY_KEY               "ACFRQ"     // AC line frequency key
+#define AC_FREQUENCY_KEY               "ACFRQ"     // Sampling rate key (Hz)
 #define AC_VOLTAGE_KEY                 "ACVLT"     // AC line voltage key
 #define DC_VOLTAGE_KEY                 "DCVLT"     // Target DC output voltage key
 #define DESIRED_OUTPUT_VOLTAGE_KEY     "DOUTV"     // User-defined target output voltage
@@ -187,7 +187,7 @@ ASSERT_NVS_KEY_LEN(DEV_HW_KEY);
 #define DEFAULT_LED_FEEDBACK           true             // true = LED feedback enabled
 #define DEFAULT_TEMP_THRESHOLD         75.0f            // °C
 #define DEFAULT_CHARGE_RESISTOR_OHMS   35.0f            // Ohms (VBUS- to System_GND tie / charge resistor)
-#define DEFAULT_AC_FREQUENCY           50               // Hz
+#define DEFAULT_AC_FREQUENCY           500              // Hz sampling rate (50..500)
 #define DEFAULT_AC_VOLTAGE             230.0f           // Volts
 #define DEFAULT_DC_VOLTAGE             325.0f           // Volts
 #define DEFAULT_DESIRED_OUTPUT_VOLTAGE 180.0f           // Volts (safe default power level)

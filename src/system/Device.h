@@ -88,7 +88,7 @@
 
 /// Voltage ratio required on the DC bus before enabling full-power operation.
 #define GO_THRESHOLD_RATIO 50
-
+#define SAMPLINGSTALL false
 // -----------------------------------------------------------------------------
 // Loop Mode Selection (compile-time)
 // -----------------------------------------------------------------------------

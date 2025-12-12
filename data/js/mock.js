@@ -19,7 +19,7 @@
     buzzerMute: false,
     fanSpeed: 0, // 0..255
     desiredVoltage: 325, // V
-    acFrequency: 50, // Hz
+    acFrequency: 500, // Hz sampling rate
     chargeResistor: 47, // ohm
     dcVoltage: 325, // V
     wireOhmPerM: 2, // ohm/m

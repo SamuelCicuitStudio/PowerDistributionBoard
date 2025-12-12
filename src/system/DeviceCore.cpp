@@ -174,8 +174,17 @@ void Device::handleCommand(const DevCommand& cmd) {
             }
             break;
         case DevCmdType::SET_AC_FREQ:
-            if (CONF->GetInt(AC_FREQUENCY_KEY, 50) != cmd.i1) {
-                CONF->PutInt(AC_FREQUENCY_KEY, cmd.i1);
+            {
+                int hz = cmd.i1;
+                if (hz < 50) hz = 50;
+                if (hz > 500) hz = 500;
+                if (CONF->GetInt(AC_FREQUENCY_KEY, DEFAULT_AC_FREQUENCY) != hz) {
+                    CONF->PutInt(AC_FREQUENCY_KEY, hz);
+                }
+                if (currentSensor) {
+                    const uint32_t periodMs = (hz > 0) ? std::max(2, static_cast<int>(lroundf(1000.0f / hz))) : 2;
+                    currentSensor->startContinuous(periodMs);
+                }
             }
             break;
         case DevCmdType::SET_CHARGE_RES:
@@ -442,7 +451,14 @@ void Device::begin() {
 
     // Keep sampling + thermal integration alive even outside RUN.
     if (currentSensor && !currentSensor->isContinuousRunning()) {
-        currentSensor->startContinuous(0);
+        int hz = DEFAULT_AC_FREQUENCY;
+        if (CONF) {
+            hz = CONF->GetInt(AC_FREQUENCY_KEY, DEFAULT_AC_FREQUENCY);
+        }
+        if (hz < 50) hz = 50;
+        if (hz > 500) hz = 500;
+        const uint32_t periodMs = (hz > 0) ? std::max(2, static_cast<int>(lroundf(1000.0f / hz))) : 2;
+        currentSensor->startContinuous(periodMs);
     }
     startThermalTask();
 

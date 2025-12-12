@@ -351,6 +351,7 @@ void Device::updateWireThermalFromHistory() {
         if (currentState != DeviceState::Running) return false;
         if (activeMask == 0) return false; // nothing heating
         if (lastCurrentSampleMs == 0) return false; // not yet primed
+        #if   SAMPLINGSTALL
         if ((nowMs - lastCurrentSampleMs) > NO_CURRENT_SAMPLE_TIMEOUT_MS) {
             DEBUG_PRINTLN("[Thermal] Current sampling stalled -> forcing Error");
             WIRE->disableAll();
@@ -358,6 +359,7 @@ void Device::updateWireThermalFromHistory() {
             if (BUZZ) BUZZ->bipFault();
             return true;
         }
+        #endif
         return false;
     };
 

@@ -345,7 +345,14 @@ void Device::StartLoop() {
 
     // 3) Start continuous current & thermal integration (observers only).
     if (currentSensor && !currentSensor->isContinuousRunning()) {
-        currentSensor->startContinuous(0);
+        int hz = DEFAULT_AC_FREQUENCY;
+        if (CONF) {
+            hz = CONF->GetInt(AC_FREQUENCY_KEY, DEFAULT_AC_FREQUENCY);
+        }
+        if (hz < 50) hz = 50;
+        if (hz > 500) hz = 500;
+        const uint32_t periodMs = (hz > 0) ? std::max(2, static_cast<int>(lroundf(1000.0f / hz))) : 2;
+        currentSensor->startContinuous(periodMs);
     }
     if (thermalTaskHandle == nullptr) {
         startThermalTask();
