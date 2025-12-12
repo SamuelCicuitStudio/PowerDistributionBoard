@@ -81,33 +81,23 @@
 #include "control/Buzzer.h"
 #include "services/PowerTracker.h"
 #include "system/WireSubsystem.h"
+#include "sensing/BusSampler.h"
 // -----------------------------------------------------------------------------
 // Constants and Macros
 // -----------------------------------------------------------------------------
 
 /// Voltage ratio required on the DC bus before enabling full-power operation.
-#define GO_THRESHOLD_RATIO (0.78f * CONF->GetFloat(DC_VOLTAGE_KEY, DEFAULT_DC_VOLTAGE))
+#define GO_THRESHOLD_RATIO 50
 
 // -----------------------------------------------------------------------------
 // Loop Mode Selection (compile-time)
 // -----------------------------------------------------------------------------
 
-/**
- * @brief Selects the behavior of Device::StartLoop().
- *
- *  - DEVICE_LOOP_MODE_ADVANCED:
- *        Multi-output / grouped drive using the resistance planner and
- *        batch-style recharge behavior.
- *
- *  - DEVICE_LOOP_MODE_SEQUENTIAL:
- *        Simple mode: drives one allowed output at a time based on virtual
- *        temperature (coolest-first), using ON_TIME / OFF_TIME.
- */
-#define DEVICE_LOOP_MODE_ADVANCED   0
-#define DEVICE_LOOP_MODE_SEQUENTIAL 1
-
-/// Default mode (preserves advanced grouped behavior).
-#define DEVICE_LOOP_MODE DEVICE_LOOP_MODE_ADVANCED
+// Runtime-selectable loop mode (persisted in NVS; see LOOP_MODE_KEY)
+enum class LoopMode : uint8_t {
+    Advanced  = 0,
+    Sequential = 1
+};
 
 // -----------------------------------------------------------------------------
 // Global Synchronization Objects
@@ -194,6 +184,9 @@ public:
         SET_TARGET_RES,
         SET_WIRE_OHM_PER_M,
         SET_BUZZER_MUTE,
+        SET_MANUAL_MODE,
+        SET_COOLING_PROFILE,
+        SET_LOOP_MODE,
         SET_RELAY,
         SET_OUTPUT,
         SET_FAN_SPEED,
@@ -395,6 +388,9 @@ private:
     static constexpr float   AMBIENT_MAX_STEP_C    = 15.0f;   ///< Clamp ambient jumps
     static constexpr uint32_t NO_CURRENT_SAMPLE_TIMEOUT_MS = 750; ///< Watchdog for stalled current sampling
 
+    static constexpr float   COOLING_SCALE_AIR      = 1.0f;   ///< Natural convection/radiation in free air
+    static constexpr float   COOLING_SCALE_BURIED   = 0.35f;  ///< Slower cooling when embedded (floor)
+
     WireThermalState wireThermal[HeaterManager::kWireCount];
 
     float    ambientC            = 25.0f;
@@ -406,6 +402,8 @@ private:
 
     // History cursors for incremental integration.
     uint32_t currentHistorySeq   = 0;   ///< Last consumed CurrentSensor seq.
+    uint32_t voltageHistorySeq   = 0;   ///< Last consumed voltage seq (legacy/fallback).
+    uint32_t busHistorySeq       = 0;   ///< Last consumed BusSampler seq.
     uint32_t outputHistorySeq    = 0;   ///< Last consumed HeaterManager seq.
     uint32_t lastCurrentSampleMs = 0;   ///< Timestamp of last current sample seen
 
@@ -420,11 +418,15 @@ private:
     QueueHandle_t         cmdQueue       = nullptr;
     QueueHandle_t         ackQueue       = nullptr;
     TaskHandle_t          cmdTaskHandle  = nullptr;
+    bool                  manualMode     = false;
 
     // Last known heater mask (for continuity between thermal updates).
     uint16_t lastHeaterMask      = 0;
     uint8_t lastCapFanPct = 0;
     uint8_t lastHsFanPct  = 0;
+    LoopMode loopModeSetting     = LoopMode::Advanced;
+    bool     coolingFastProfile  = DEFAULT_COOLING_PROFILE_FAST;
+    float    coolingScale        = COOLING_SCALE_AIR;
 
     // ---------------------------------------------------------------------
     // Wire subsystem helpers (config + runtime + planner + telemetry)
@@ -435,10 +437,13 @@ private:
     WirePresenceManager  wirePresenceManager;
     WirePlanner          wirePlanner;
     WireTelemetryAdapter wireTelemetryAdapter;
+    BusSampler*          busSampler = nullptr;
     // Internal helpers
     void syncWireRuntimeFromHeater();
     void updateAmbientFromSensors(bool force = false);
     void waitForWiresNearAmbient(float tolC, uint32_t maxWaitMs = 0);
+    void loadRuntimeSettings();
+    void applyCoolingProfile(bool fastProfile);
 };
 
 // -----------------------------------------------------------------------------
@@ -448,5 +453,3 @@ private:
 #define DEVICE Device::Get()
 
 #endif // DEVICE_H
-
-

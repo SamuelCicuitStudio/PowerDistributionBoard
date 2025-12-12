@@ -269,6 +269,9 @@
                 </svg>
               </div>
               <div class="gauge-label">Voltage</div>
+              <div class="gauge-label" style="font-size: 12px">
+                ADC raw (/100): <span id="adcRawValue">--</span>
+              </div>
             </div>
 
             <!-- Current -->
@@ -837,6 +840,22 @@
                 <div class="input-with-unit">
                   <input type="number" id="offTime" placeholder="OFF Time" />
                   <span class="unit-label">ms</span>
+                </div>
+
+                <div class="field" style="display: flex; align-items: center; gap: 10px;">
+                  <label style="flex: 1;">Air Cooling (fast)</label>
+                  <label class="switch">
+                    <input type="checkbox" id="coolingAirToggle" />
+                    <span class="slider"></span>
+                  </label>
+                </div>
+
+                <div class="field" style="display: flex; flex-direction: column; gap: 6px;">
+                  <label for="loopModeSelect">Loop Mode</label>
+                  <select id="loopModeSelect">
+                    <option value="advanced">Advanced (grouped)</option>
+                    <option value="sequential">Sequential (coolest-first)</option>
+                  </select>
                 </div>
               </section>
 

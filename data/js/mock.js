@@ -26,6 +26,7 @@
     offTime: 600, // ms
     temps: new Array(12).fill(26),
     capVoltage: 0,
+    capAdcRaw: 0,
     current: 0,
     t: 0, // "seconds" counter (sim time)
     tick: null,
@@ -53,6 +54,7 @@
       // Cap voltage swings between ~0.5..1.0 of desired
       const v = S.desiredVoltage;
       S.capVoltage = +(v * (0.55 + 0.45 * Math.sin(S.t / 2))).toFixed(2);
+      S.capAdcRaw = +(S.capVoltage / 10).toFixed(2);
 
       // Current has a soft ripple
       S.current = +(5 + 3 * Math.sin(S.t * 1.8)).toFixed(2);
@@ -69,6 +71,7 @@
     } else if (S.deviceState === "Idle" || S.manualMode) {
       // Hold-ish state, slight bleed
       S.capVoltage = Math.max(0, +(S.capVoltage - 2).toFixed(2));
+      S.capAdcRaw = +(S.capVoltage / 10).toFixed(2);
       S.current = +(0.2 + 0.1 * Math.sin(S.t)).toFixed(2);
       S.fanSpeed = Math.floor(S.capVoltage / 3);
       // No auto output toggling in manual/idle
@@ -76,6 +79,7 @@
       // Shutdown
       S.relay = false;
       S.capVoltage = Math.max(0, +(S.capVoltage - 5).toFixed(2));
+      S.capAdcRaw = +(S.capVoltage / 10).toFixed(2);
       S.current = 0;
       S.fanSpeed = 0;
       S.outputs = Array(10).fill(false);
@@ -128,6 +132,7 @@
     if (url.endsWith("/monitor") && method === "GET") {
       return J({
         capVoltage: S.capVoltage,
+        capAdcRaw: S.capAdcRaw,
         current: S.current,
         temperatures: S.temps,
         relay: S.relay,

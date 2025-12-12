@@ -244,6 +244,6 @@
  src/control/CpDischg.h src/control/Indicator.h src/comms/WiFiManager.h \
  src/control/Buzzer.h src/services/PowerTracker.h \
  src/system/WireSubsystem.h src/system/StatusSnapshot.h \
- src/control/RGBLed.h src/control/RGBConfig.h src/comms/SwitchManager.h \
- src/system/DeviceTransport.h src/system/Device.h \
- src/services/SleepTimer.h
+ src/sensing/BusSampler.h src/control/RGBLed.h src/control/RGBConfig.h \
+ src/comms/SwitchManager.h src/system/DeviceTransport.h \
+ src/system/Device.h src/services/SleepTimer.h

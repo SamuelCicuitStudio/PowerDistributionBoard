@@ -55,6 +55,21 @@
     ( ((DIVIDER_TOP_OHMS + DIVIDER_BOTTOM_OHMS) / DIVIDER_BOTTOM_OHMS) / (OPAMP_GAIN) )
 #endif
 
+/*** Empirical ADC→Bus calibration (bypasses divider math) ***/
+// Enable this to force: Vbus = EMP_GAIN * Vadc + EMP_OFFSET
+#ifndef CAP_USE_EMPIRICAL_CAL
+#define CAP_USE_EMPIRICAL_CAL   1   // 1 = use empirical mapping; 0 = use resistor math
+#endif
+
+// Default: 319 V at 2.00 V on ADC pin  →  gain = 159.5 V/V
+#ifndef CAP_EMP_GAIN
+#define CAP_EMP_GAIN  (321.0f / 1.90f)   //
+#endif
+
+#ifndef CAP_EMP_OFFSET
+#define CAP_EMP_OFFSET          2.0f      // Vbus offset in volts
+#endif
+
 class CpDischg {
 public:
     explicit CpDischg(Relay* relay)
@@ -75,6 +90,22 @@ public:
     // Returns last background-computed minimum capacitor/bus voltage.
     // Does NOT read ADC, does NOT change any hardware state.
     float readCapVoltage();
+    // Returns last raw ADC code as a scaled float (e.g., 4095 -> 40.95).
+    float readCapAdcScaled();
+
+    struct Sample {
+        uint32_t timestampMs;
+        float    voltageV;
+    };
+
+    // Voltage history (like CurrentSensor): timestamped samples since lastSeq.
+    size_t getHistorySince(uint32_t lastSeq,
+                           Sample* out,
+                           size_t maxOut,
+                           uint32_t& newSeq) const;
+
+    // Single-shot voltage sample (immediate ADC read, scaled).
+    float sampleVoltageNow();
 
 private:
     // Convert raw ADC code -> bus voltage (no HW side-effects).
@@ -99,12 +130,17 @@ private:
 
     // Shared state protected by voltageMutex
     float        lastMinBusVoltage = 0.0f;
+    uint16_t     lastRawAdc        = 0;
     TickType_t   lastSampleTick    = 0;
+
+    // Rolling history
+    static constexpr size_t VOLT_HISTORY_SAMPLES = 256;
+    Sample        _history[VOLT_HISTORY_SAMPLES]{};
+    uint32_t      _historyHead = 0;
+    uint32_t      _historySeq  = 0;
 
     SemaphoreHandle_t voltageMutex   = nullptr;
     TaskHandle_t      monitorTaskHandle = nullptr;
 };
 
 #endif // CPDISCHG_H
-
-

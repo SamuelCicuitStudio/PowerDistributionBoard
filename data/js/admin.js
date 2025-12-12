@@ -318,19 +318,28 @@
     if (stateStream) return;
     try {
       stateStream = new EventSource("/state_stream");
-      stateStream.onopen = () => {
-        stopStatePolling();
-      };
-      stateStream.onmessage = (ev) => {
+      let gotStateEvent = false;
+
+      const handleStateEvent = (ev) => {
         try {
           const data = JSON.parse(ev.data || "{}");
           if (data.state) {
             setPowerUI(data.state);
+            if (!gotStateEvent) {
+              stopStatePolling();
+              gotStateEvent = true;
+            }
           }
         } catch (e) {
           console.warn("State stream parse error:", e);
         }
       };
+
+      // Server emits event name "state"
+      stateStream.addEventListener("state", handleStateEvent);
+      // Fallback if server ever sends unnamed messages
+      stateStream.onmessage = handleStateEvent;
+
       stateStream.onerror = () => {
         if (stateStream) {
           stateStream.close();
@@ -719,6 +728,22 @@
       cmds.push(["set", "offTime", offTime]);
     }
 
+    const coolingToggle = document.getElementById("coolingAirToggle");
+    if (coolingToggle) {
+      const val = !!coolingToggle.checked;
+      if (val !== cur.coolingAir) {
+        cmds.push(["set", "coolingAir", val]);
+      }
+    }
+
+    const loopModeSelect = document.getElementById("loopModeSelect");
+    if (loopModeSelect) {
+      const modeVal = loopModeSelect.value || "advanced";
+      if (modeVal !== cur.loopMode) {
+        cmds.push(["set", "loopMode", modeVal]);
+      }
+    }
+
     // Wire resistances R01..R10 -> wireRes1..wireRes10
     const curWr = cur.wireRes || {};
     for (let i = 1; i <= 10; i++) {
@@ -772,6 +797,12 @@
     setField("dcVoltage", data.dcVoltage);
     setField("onTime", data.onTime);
     setField("offTime", data.offTime);
+    const coolingToggle = document.getElementById("coolingAirToggle");
+    if (coolingToggle) coolingToggle.checked = !!data.coolingAir;
+    const loopModeSelect = document.getElementById("loopModeSelect");
+    if (loopModeSelect && data.loopMode) {
+      loopModeSelect.value = data.loopMode;
+    }
     if (data.wireOhmPerM !== undefined) {
       setField("wireOhmPerM", data.wireOhmPerM);
     }
@@ -834,6 +865,12 @@
       setField("dcVoltage", data.dcVoltage);
       setField("onTime", data.onTime);
       setField("offTime", data.offTime);
+      const coolingToggle = document.getElementById("coolingAirToggle");
+      if (coolingToggle) coolingToggle.checked = !!data.coolingAir;
+      const loopModeSelect = document.getElementById("loopModeSelect");
+      if (loopModeSelect && data.loopMode) {
+        loopModeSelect.value = data.loopMode;
+      }
       if (data.wireOhmPerM !== undefined) {
         setField("wireOhmPerM", data.wireOhmPerM);
       }
@@ -1596,6 +1633,15 @@
           if (Number.isFinite(v)) shownV = v;
         }
         updateGauge("voltageValue", shownV, "V", 400);
+
+        // Raw ADC display (scaled /100, e.g., 4095 -> 40.95)
+        const adcEl = document.getElementById("adcRawValue");
+        if (adcEl) {
+          const rawScaled = parseFloat(data.capAdcRaw);
+          adcEl.textContent = Number.isFinite(rawScaled)
+            ? rawScaled.toFixed(2)
+            : "--";
+        }
 
         // Current gauge
         let rawCurrent = parseFloat(data.current);

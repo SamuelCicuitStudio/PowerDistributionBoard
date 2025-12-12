@@ -1,4 +1,4 @@
-﻿#include "system/Device.h"
+#include "system/Device.h"
 #include "system/Utils.h"
 #include "control/RGBLed.h"
 #include "control/Buzzer.h"
@@ -55,11 +55,26 @@ static bool _runMaskedPulse(Device* self,
     // Keep ON with protection-aware delay.
     bool ok = self->delayWithPowerWatch(onTimeMs);
 
-    // If pulse completed (no fault/STOP), update presence from that pulse.
-    if (ok && self->currentSensor) {
-        const float I = self->currentSensor->readCurrent();
-        // Implementation on HeaterManager side must be non-heating logic only.
-        WIRE->updatePresenceFromMask(mask, I);
+    // If pulse completed (no fault/STOP), log last V and per-wire currents.
+    if (ok) {
+        float V = (self->discharger ? self->discharger->readCapVoltage() : NAN);
+        DEBUG_PRINTF("[Pulse] end: mask=0x%03X V=%.2fV\n",
+                     (unsigned)mask,
+                     (double)V);
+        if (isfinite(V) && V > 0.0f) {
+            for (uint8_t i = 0; i < HeaterManager::kWireCount; ++i) {
+                uint16_t bit = (1u << i);
+                if (!(mask & bit)) continue;
+                WireInfo wi = WIRE->getWireInfo(i + 1);
+                float R = wi.resistanceOhm;
+                if (!(R > 0.01f && isfinite(R))) continue;
+                float Iw = V / R;
+                DEBUG_PRINTF("  [Pulse] OUT%u: R=%.2fΩ I=%.3fA\n",
+                             (unsigned)(i + 1),
+                             (double)R,
+                             (double)Iw);
+            }
+        }
     }
 
     // ALWAYS ensure outputs are OFF (success or abort).
@@ -104,7 +119,7 @@ void Device::loopTaskWrapper(void* param) {
 }
 
 void Device::loopTask() {
-    DEBUG_PRINTLN("[Device] ðŸ” Device loop task started");
+    DEBUG_PRINTLN("[Device] Device loop task started");
     BUZZ->bip();
 
     // Hard baseline: no power path, no heaters, no LEDs.
@@ -128,13 +143,13 @@ void Device::loopTask() {
             continue;
         }
 
-        // Legacy remote start â†’ request WAKE+RUN
+        // Legacy remote start -> request WAKE+RUN
         if (StartFromremote) {
             StartFromremote = false;
             if (gEvt) xEventGroupSetBits(gEvt, EVT_WAKE_REQ | EVT_RUN_REQ);
         }
 
-        DEBUG_PRINTLN("[Device] State=OFF. Waiting for WAKE â€¦");
+        DEBUG_PRINTLN("[Device] State=OFF. Waiting for WAKE ...");
 
         if (gEvt) {
             xEventGroupWaitBits(
@@ -149,13 +164,13 @@ void Device::loopTask() {
         // ===================== POWER-UP SEQUENCE =====================
         RGB->setWait();
         BUZZ->bip();
-        DEBUG_PRINTLN("[Device] Waiting for 12V inputâ€¦");
+        DEBUG_PRINTLN("[Device] Waiting for 12V input...");
 
         while (!digitalRead(DETECT_12V_PIN)) {
             vTaskDelay(pdMS_TO_TICKS(100));
         }
 
-        DEBUG_PRINTLN("[Device] 12V detected â†’ enabling relay");
+        DEBUG_PRINTLN("[Device] 12V detected -> enabling relay");
         relayControl->turnOn();
         RGB->postOverlay(OverlayEvent::RELAY_ON);
         vTaskDelay(pdMS_TO_TICKS(150));
@@ -168,12 +183,12 @@ void Device::loopTask() {
                 RGB->postOverlay(OverlayEvent::PWR_CHARGING);
                 lastChargePost = now;
             }
-            DEBUG_PRINTF("[Device] Chargingâ€¦ Cap=%.2fV Target=%.2fV\n",
+            DEBUG_PRINTF("[Device] Charging... Cap=%.2fV Target=%.2fV\n",
                          discharger->readCapVoltage(), GO_THRESHOLD_RATIO);
             vTaskDelay(pdMS_TO_TICKS(200));
         }
 
-        DEBUG_PRINTLN("[Device] Threshold met â†’ bypass inrush");
+        DEBUG_PRINTLN("[Device] Threshold met -> bypass inrush");
         RGB->postOverlay(OverlayEvent::PWR_BYPASS_ON);
 
         // Ensure NO heaters during idle calibration.
@@ -217,7 +232,7 @@ void Device::loopTask() {
                 );
 
                 if (got & EVT_STOP_REQ) {
-                    DEBUG_PRINTLN("[Device] STOP in IDLE â†’ full OFF");
+                    DEBUG_PRINTLN("[Device] STOP in IDLE -> full OFF");
                     RGB->postOverlay(OverlayEvent::RELAY_OFF);
                     relayControl->turnOff();
                     if (WIRE)      WIRE->disableAll();
@@ -237,8 +252,8 @@ void Device::loopTask() {
 
         StartLoop(); // will block until STOP/FAULT/NO-WIRE
 
-        // =================== CLEAN SHUTDOWN â†’ OFF ===================
-        DEBUG_PRINTLN("[Device] StartLoop finished â†’ clean shutdown");
+        // =================== CLEAN SHUTDOWN -> OFF ===================
+        DEBUG_PRINTLN("[Device] StartLoop finished -> clean shutdown");
         BUZZ->bipSystemShutdown();
 
         RGB->postOverlay(OverlayEvent::RELAY_OFF);
@@ -304,30 +319,19 @@ void Device::StartLoop() {
     DEBUG_PRINTLN("[Device] StartLoop: entering main heating loop");
     DEBUG_PRINTLN("-----------------------------------------------------------");
 
+    manualMode = false; // auto loop enforces model updates
+
+    // Re-calibrate current sensor offset (middle point) at start of each run,
+    // while no heaters are active.
+    if (currentSensor) {
+        currentSensor->calibrateZeroCurrent();
+    }
+
     // 1) Thermal model ready & wires cooled.
     initWireThermalModelOnce();
     waitForWiresNearAmbient(5.0f, 0);
 
-    // 2) Auto wire-detect ONLY here, ONLY if all wires are < 150Â°C.
-    if (WIRE && currentSensor) {
-        const float maxProbeTempC = 150.0f;
-        bool anyTooHot = false;
-
-        for (uint8_t i = 1; i <= HeaterManager::kWireCount; ++i) {
-            const float t = WIRE->getWireEstimatedTemp(i);
-            if (isfinite(t) && t >= maxProbeTempC) {
-                anyTooHot = true;
-                break;
-            }
-        }
-
-        if (!anyTooHot) {
-            DEBUG_PRINTLN("[Device] Auto wire-detect (RUN, <150Â°C) âœ…");
-            WIRE->probeWirePresence(*currentSensor);
-        } else {
-            DEBUG_PRINTLN("[Device] Skip auto wire-detect (hot wire â‰¥150Â°C) ðŸš«");
-        }
-    }
+    // 2) Presence check disabled.
 
     // 3) Start continuous current & thermal integration (observers only).
     if (currentSensor && !currentSensor->isContinuousRunning()) {
@@ -366,6 +370,8 @@ void Device::StartLoop() {
     RunSessionGuard session(this);
     session.begin(busV, idleA);
 
+    loadRuntimeSettings();
+
     const uint16_t onTime      = CONF->GetInt(ON_TIME_KEY,  DEFAULT_ON_TIME);
     const uint16_t offTime     = CONF->GetInt(OFF_TIME_KEY, DEFAULT_OFF_TIME);
     const bool     ledFeedback = CONF->GetBool(LED_FEEDBACK_KEY, DEFAULT_LED_FEEDBACK);
@@ -373,14 +379,13 @@ void Device::StartLoop() {
     DEBUG_PRINTF("[Device] Loop config: on=%ums off=%ums mode=%s\n",
                  (unsigned)onTime,
                  (unsigned)offTime,
-#if (DEVICE_LOOP_MODE == DEVICE_LOOP_MODE_SEQUENTIAL)
-                 "SEQUENTIAL"
-#else
-                 "ADVANCED"
-#endif
+                 (loopModeSetting == LoopMode::Sequential ? "SEQUENTIAL"
+                                                          : "ADVANCED")
     );
 
-#if (DEVICE_LOOP_MODE == DEVICE_LOOP_MODE_SEQUENTIAL)
+    const bool sequentialMode = (loopModeSetting == LoopMode::Sequential);
+
+    if (sequentialMode) {
 
     // ====================== SEQUENTIAL MODE ======================
 
@@ -395,7 +400,7 @@ void Device::StartLoop() {
         if (gEvt) {
             EventBits_t bits = xEventGroupGetBits(gEvt);
             if (bits & EVT_STOP_REQ) {
-                DEBUG_PRINTLN("[Device] STOP â†’ exit SEQ loop");
+                DEBUG_PRINTLN("[Device] STOP -> exit SEQ loop");
                 xEventGroupClearBits(gEvt, EVT_STOP_REQ);
                 setState(DeviceState::Idle);
                 break;
@@ -404,21 +409,6 @@ void Device::StartLoop() {
 
         // Refresh allowed.
         checkAllowedOutputs();
-
-        // If no connected wires â†’ fault & exit.
-        if (!wirePresenceManager.hasAnyConnected(wireStateModel)) {
-            DEBUG_PRINTLN("[Device] No connected wires â†’ abort SEQ loop");
-            if (RGB) {
-                RGB->setFault();
-                RGB->postOverlay(OverlayEvent::FAULT_SENSOR_MISSING);
-            }
-            if (BUZZ) BUZZ->bipFault();
-            if (StateLock()) {
-                setState(DeviceState::Error);
-                StateUnlock();
-            }
-            break;
-        }
 
         // Choose coolest allowed wire.
         bool    found    = false;
@@ -475,7 +465,7 @@ void Device::StartLoop() {
         session.tick();
     }
 
-#else  // DEVICE_LOOP_MODE == DEVICE_LOOP_MODE_ADVANCED
+    } else {
 
     // ====================== ADVANCED MODE ======================
 
@@ -497,6 +487,21 @@ void Device::StartLoop() {
         }
 
         checkAllowedOutputs();
+        // Log allowed outputs with their configured resistance.
+        DEBUG_PRINT("[Device] Allowed outputs:");
+        for (uint8_t i = 0; i < HeaterManager::kWireCount; ++i) {
+            if (!allowedOutputs[i]) continue;
+            float r = wireConfigStore.getWireResistance(i + 1);
+            DEBUG_PRINTF(" OUT%u(%.2f)", (unsigned)(i + 1), (double)r);
+        }
+        DEBUG_PRINTLN("");
+
+        // Decay usage scores each loop to create a moving window.
+        for (uint8_t i = 0; i < HeaterManager::kWireCount; ++i) {
+            WireRuntimeState& ws = wireStateModel.wire(i + 1);
+            ws.usageScore *= 0.9f; // decay factor
+            if (ws.usageScore < 0.0f) ws.usageScore = 0.0f;
+        }
 
         if (!wirePresenceManager.hasAnyConnected(wireStateModel)) {
             DEBUG_PRINTLN("[Device] No connected wires -> abort ADV loop");
@@ -537,6 +542,18 @@ void Device::StartLoop() {
             wireStateModel,
             getState());
 
+        // Debug: log planner decision each loop.
+        DEBUG_PRINTF("[Planner] target=%.2f req=0x%03X applied=0x%03X outs:",
+                     (double)targetRes,
+                     (unsigned)requestedMask,
+                     (unsigned)appliedMask);
+        for (uint8_t i = 0; i < HeaterManager::kWireCount; ++i) {
+            if (appliedMask & (1u << i)) {
+                DEBUG_PRINTF(" %u", (unsigned)(i + 1));
+            }
+        }
+        DEBUG_PRINTLN("");
+
         if (appliedMask == 0) {
             if (!delayWithPowerWatch(100)) {
                 if (!is12VPresent()) handle12VDrop();
@@ -556,6 +573,14 @@ void Device::StartLoop() {
             break;
         }
 
+        // Update usage scores for wires that were just driven.
+        for (uint8_t i = 0; i < HeaterManager::kWireCount; ++i) {
+            if (appliedMask & (1u << i)) {
+                WireRuntimeState& ws = wireStateModel.wire(i + 1);
+                ws.usageScore += 1.0f;
+            }
+        }
+
         session.tick();
 
         if (!delayWithPowerWatch(offTime)) {
@@ -569,7 +594,8 @@ void Device::StartLoop() {
 
         session.tick();
     }
-#endif // DEVICE_LOOP_MODE
+
+    }
 
     // --- Session finalize & hard-off ---
     const bool success = (getState() != DeviceState::Error);

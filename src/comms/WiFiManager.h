@@ -144,7 +144,7 @@ private:
         CTRL_CHARGE_RES,        // f1
         CTRL_DC_VOLT,           // f1
         CTRL_ACCESS_BOOL,       // i1=index(1..10), b1=flag
-        CTRL_MODE_IDLE,
+        CTRL_SET_MODE,          // b1: true=manual, false=auto
         CTRL_SYSTEM_START,
         CTRL_SYSTEM_SHUTDOWN,
         CTRL_FAN_SPEED,         // i1=0..100
@@ -152,6 +152,8 @@ private:
         CTRL_TARGET_RES,        // f1
         CTRL_WIRE_RES,          // i1=index(1..10), f1=ohms
         CTRL_WIRE_OHM_PER_M,    // f1
+        CTRL_COOL_PROFILE,      // b1: true=air/fast, false=buried/slow
+        CTRL_LOOP_MODE,         // i1: 0=advanced, 1=sequential
     };
 
     struct ControlCmd {
@@ -182,5 +184,3 @@ private:
 #define WIFI WiFiManager::Get()
 
 #endif // WIFI_MANAGER_H
-
-

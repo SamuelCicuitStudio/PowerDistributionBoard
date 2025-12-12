@@ -15,8 +15,9 @@
 
 // Lightweight, periodic snapshot of fast-changing signals.
 struct StatusSnapshot {
-    float capVoltage = 0.0f;
-    float current    = 0.0f;
+    float capVoltage   = 0.0f;
+    float capAdcScaled = 0.0f;  // raw ADC code / 100.0 (e.g., 4095 -> 40.95)
+    float current      = 0.0f;
 
     float temps[MAX_TEMP_SENSORS] = {0};                    // DS18B20s (cached)
     float wireTemps[HeaterManager::kWireCount] = {0};       // virtual wire temps

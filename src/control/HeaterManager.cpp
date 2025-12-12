@@ -53,6 +53,7 @@ HeaterManager::HeaterManager()
         wires[i].temperatureC       = NAN;
         wires[i].connected          = true;   // default: unknown / not confirmed
         wires[i].presenceCurrentA   = 0.0f;
+        wires[i].lastOnMs           = 0;
     }
 }
 
@@ -141,7 +142,7 @@ void HeaterManager::loadWireConfig() {
         computeWireGeometry(wires[i]);
     }
 
-    DEBUG_PRINTF("[HeaterManager] Î©/m = %.4f | TargetR = %.3f Î©\n",
+    DEBUG_PRINTF("[HeaterManager] Ω/m = %.4f | TargetR = %.3f Ω\n",
                  wireOhmPerM, targetResOhms);
 
     DEBUGGSTART();
@@ -153,7 +154,7 @@ void HeaterManager::loadWireConfig() {
         const float massG    = w.massKg * 1000.0f;             // kg â†’ g
 
         DEBUG_PRINTF(
-            "[HeaterManager] Wire %u: R=%.2f Î© | L=%.3f m | A=%.3f mmÂ² | "
+            "[HeaterManager] Wire %u: R=%.2f Ω | L=%.3f m | A=%.3f mmÂ² | "
             "V=%.3f cmÂ³ | m=%.3f g\n",
             w.index,
             w.resistanceOhm,
@@ -207,10 +208,16 @@ void HeaterManager::setOutput(uint8_t index, bool enable) {
     }
 
     uint16_t newMask = _currentMask;
+    const uint16_t oldMask = _currentMask;
     if (enable) {
         newMask |= (1u << bit);
     } else {
         newMask &= ~(1u << bit);
+    }
+
+    // Record when this wire was turned ON (edge detection).
+    if (enable && !(oldMask & (1u << bit))) {
+        wires[bit].lastOnMs = millis();
     }
 
     // Update hardware pin
@@ -281,6 +288,8 @@ void HeaterManager::setOutputMask(uint16_t mask) {
         return;
     }
 
+    const uint16_t oldMask = _currentMask;
+
     // Update only changed pins to minimize glitches
     uint16_t diff = mask ^ _currentMask;
     for (uint8_t i = 0; i < kWireCount; ++i) {
@@ -288,6 +297,9 @@ void HeaterManager::setOutputMask(uint16_t mask) {
         if (diff & bit) {
             bool on = (mask & bit) != 0;
             digitalWrite(enaPins[i], on ? HIGH : LOW);
+            if (on && !(oldMask & bit)) {
+                wires[i].lastOnMs = millis();
+            }
         }
     }
 

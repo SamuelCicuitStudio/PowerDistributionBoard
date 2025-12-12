@@ -175,7 +175,7 @@ void NVS::end() {
 void NVS::begin() {
     DEBUGGSTART() ;
     DEBUG_PRINTLN("###########################################################");
-    DEBUG_PRINTLN("#                 Starting NVS Manager âš™ï¸                 #");
+    DEBUG_PRINTLN("#                 Starting NVS Manager                  #");
     DEBUG_PRINTLN("###########################################################");
     DEBUGGSTOP();
     lock_();
@@ -184,11 +184,11 @@ void NVS::begin() {
     unlock_();
 
     if (resetFlag) {
-        DEBUG_PRINTLN("[NVS] Initializing the device... ðŸ”„");
+        DEBUG_PRINTLN("[NVS] Initializing the device... ");
         initializeDefaults();
         RestartSysDelay(10000);
     } else {
-        DEBUG_PRINTLN("[NVS] Using existing configuration... âœ…");
+        DEBUG_PRINTLN("[NVS] Using existing configuration...");
     }
 }
 
@@ -254,6 +254,8 @@ void NVS::initializeVariables() {
   PutInt(AC_FREQUENCY_KEY, DEFAULT_AC_FREQUENCY);
   PutFloat(AC_VOLTAGE_KEY, DEFAULT_AC_VOLTAGE);
   PutFloat(DC_VOLTAGE_KEY, DEFAULT_DC_VOLTAGE);
+  PutBool (COOLING_PROFILE_KEY, DEFAULT_COOLING_PROFILE_FAST);
+  PutInt  (LOOP_MODE_KEY, DEFAULT_LOOP_MODE);
 
   // Output access (admin-controlled)
   PutBool(OUT01_ACCESS_KEY, DEFAULT_OUT01_ACCESS);
@@ -453,7 +455,7 @@ void NVS::RestartSysDelayDown(unsigned long delayTime) {
     DEBUG_PRINTLN("###########################################################");
     DEBUGGSTOP() ;
     for (int i = 0; i < 30; i++) {
-        DEBUG_PRINT("ðŸ”µ");
+        DEBUG_PRINT("#");
         sleepMs_(interval);
         esp_task_wdt_reset();
     }
@@ -471,7 +473,7 @@ void NVS::RestartSysDelay(unsigned long delayTime) {
     DEBUG_PRINTLN("###########################################################");
     DEBUGGSTOP() ;
     for (int i = 0; i < 30; i++) {
-        DEBUG_PRINT("ðŸ”µ");
+        DEBUG_PRINT("#");
         sleepMs_(interval);
         esp_task_wdt_reset();
     }

@@ -79,6 +79,8 @@
 #define AC_VOLTAGE_KEY                 "ACVLT"     // AC line voltage key
 #define DC_VOLTAGE_KEY                 "DCVLT"     // Target DC output voltage key
 #define DESIRED_OUTPUT_VOLTAGE_KEY     "DOUTV"     // User-defined target output voltage
+#define COOLING_PROFILE_KEY            "CLPRF"     // bool: true=fast (air), false=buried/slow
+#define LOOP_MODE_KEY                  "LPMODE"    // int: 0=advanced, 1=sequential
 #define TEMP_SENSOR_COUNT_KEY          "TMNT"    // Number of temperature sensors detected
 #define RTC_CURRENT_EPOCH_KEY          "RCUR"    // Last known epoch persisted
 #define RTC_PRESLEEP_EPOCH_KEY         "RSLP"   // Epoch saved before deep sleep
@@ -110,6 +112,8 @@ ASSERT_NVS_KEY_LEN(DEV_HW_KEY);
 #define OUT08_ACCESS_KEY               "OUT8F"
 #define OUT09_ACCESS_KEY               "OUT9F"
 #define OUT10_ACCESS_KEY               "OUT10F"
+// Presence override (test aid): set to 1 to force all wires present
+#define FORCE_ALL_WIRES_PRESENT        1
 // ---------- Nichrome Wire Resistance (Ohms) ----------
 #define DEFAULT_WIRE_RES_OHMS  44.0f   // default for all 10 wires
 
@@ -182,6 +186,8 @@ ASSERT_NVS_KEY_LEN(DEV_HW_KEY);
 #define DEFAULT_DC_VOLTAGE             325.0f           // Volts
 #define DEFAULT_DESIRED_OUTPUT_VOLTAGE 180.0f           // Volts (safe default power level)
 #define DEFAULT_TEMP_SENSOR_COUNT      12               // Default to 12 sensors unless discovered otherwise
+#define DEFAULT_COOLING_PROFILE_FAST   true             // true=air/fast cooling, false=buried/slow
+#define DEFAULT_LOOP_MODE              0                // 0=advanced, 1=sequential
 
 // ---------- Output Access Defaults ----------
 #define DEFAULT_OUT01_ACCESS           true
@@ -392,5 +398,3 @@ extern volatile WiFiStatus wifiStatus;
 extern volatile bool StartFromremote;
 
 #endif // CONFIG_H
-
-

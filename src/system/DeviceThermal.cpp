@@ -1,8 +1,9 @@
 ﻿#include "system/Device.h"
 #include "system/Utils.h"
+#include "control/CpDischg.h"
 #include <math.h>
 #ifndef THERMAL_TASK_STACK_SIZE
-#define THERMAL_TASK_STACK_SIZE 4096
+#define THERMAL_TASK_STACK_SIZE 6144
 #endif
 
 #ifndef THERMAL_TASK_PRIORITY
@@ -247,10 +248,10 @@ void Device::startThermalTask() {
     );
 
     if (ok != pdPASS) {
-        DEBUG_PRINTLN("[Thermal] Failed to create ThermalTask âŒ");
+        DEBUG_PRINTLN("[Thermal] Failed to create ThermalTask ");
         thermalTaskHandle = nullptr;
     } else {
-        DEBUG_PRINTLN("[Thermal] ThermalTask started âœ…");
+        DEBUG_PRINTLN("[Thermal] ThermalTask started ");
     }
 }
 
@@ -281,9 +282,14 @@ void Device::updateWireThermalFromHistory() {
     if (!currentSensor || !WIRE) {
         return;
     }
+    if (manualMode) {
+        return; // skip thermal integration in manual mode
+    }
     if (!thermalInitDone) {
         initWireThermalModelOnce();
     }
+
+    wireThermalModel.setCoolingScale(coolingScale);
 
     // Refresh ambient slowly.
     updateAmbientFromSensors(false);
@@ -305,15 +311,34 @@ void Device::updateWireThermalFromHistory() {
         }
     }
 
-    // Buffers for incremental reads.
-    CurrentSensor::Sample       curBuf[64];
+    // Buffers for incremental reads (keep small to limit stack use).
+    CurrentSensor::Sample       curBuf[32];
+    BusSampler::Sample          busBuf[32];
     HeaterManager::OutputEvent  outBuf[32];
 
     uint32_t newCurSeq = currentHistorySeq;
+    uint32_t newBusSeq = busHistorySeq;
     uint32_t newOutSeq = outputHistorySeq;
 
-    const size_t nCur = currentSensor->getHistorySince(
-        currentHistorySeq, curBuf, (size_t)64, newCurSeq);
+    size_t nCur = 0;
+
+    // Prefer synchronized bus sampler if available
+    if (busSampler) {
+        size_t nBus = busSampler->getHistorySince(
+            busHistorySeq, busBuf, (size_t)32, newBusSeq);
+        if (nBus > 0) {
+            nCur = nBus;
+            for (size_t i = 0; i < nBus; ++i) {
+                curBuf[i].timestampMs = busBuf[i].timestampMs;
+                curBuf[i].currentA    = busBuf[i].currentA;
+            }
+        }
+    }
+
+    if (nCur == 0 && currentSensor) {
+        nCur = currentSensor->getHistorySince(
+            currentHistorySeq, curBuf, (size_t)32, newCurSeq);
+    }
 
     const size_t nOut = WIRE->getOutputHistorySince(
         outputHistorySeq, outBuf, (size_t)32, newOutSeq);
@@ -338,16 +363,16 @@ void Device::updateWireThermalFromHistory() {
         return false;
     };
 
-    // Delegate integration to WireThermalModel for all non-empty windows.
+    // Delegate integration to WireThermalModel (current-only variant).
     if (nCur > 0 || nOut > 0) {
-        wireThermalModel.integrate(curBuf, nCur,
-                                   outBuf, nOut,
-                                   idleCurrentA,
-                                   ambientC,
-                                   wireStateModel,
-                                   *WIRE);
+        wireThermalModel.integrateCurrentOnly(curBuf, nCur,
+                                              outBuf, nOut,
+                                              ambientC,
+                                              wireStateModel,
+                                              *WIRE);
 
-        currentHistorySeq = newCurSeq;
+        if (nCur)  currentHistorySeq = newCurSeq;
+        if (busSampler) busHistorySeq = newBusSeq;
         outputHistorySeq  = newOutSeq;
         lastHeaterMask    = wireStateModel.getLastMask();
 

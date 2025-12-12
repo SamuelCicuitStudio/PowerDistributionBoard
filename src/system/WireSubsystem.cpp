@@ -2,6 +2,7 @@
 #include "system/Config.h"
 #include "control/CpDischg.h"
 #include <math.h>
+#include <vector>
 
 // Forward DeviceState definition to avoid circular include here.
 #include "system/Device.h"
@@ -11,6 +12,18 @@ static constexpr float NICHROME_CP_J_PER_KG  = 450.0f;
 static constexpr float NICHROME_ALPHA        = 0.00017f;
 static constexpr float DEFAULT_TAU_SEC       = 1.5f;
 static constexpr float WIRE_T_MAX_C          = 150.0f;
+// Cooling gains (1/s): natural convection, boosted when hot
+// Cooling gains (1/s). Reduce to slow down temperature drop to a more
+// realistic rate for free convection.
+static constexpr float COOL_K_COLD           = 0.02f;  // around ambient
+static constexpr float COOL_K_HOT            = 0.08f;  // near 120C
+static constexpr float COOL_HOT_THRESHOLD_C  = 80.0f;  // start blending up
+// Integration clamps to avoid sudden jumps when samples are sparse.
+static constexpr float MAX_THERMAL_DT_S      = 0.30f;  // cap per-step dt
+static constexpr float MAX_COOL_DROP_C       = 1.0f;   // max drop per step
+static constexpr float MAX_HEAT_RISE_C       = 5.0f;   // max rise per step
+// Additional inertia factor to slow down modeled heating (dimensionless < 1).
+static constexpr float THERMAL_INERTIA_SCALE = 0.35f;
 
 // Helper: resolve ground-tie/charge resistor and sense-leak current
 static float _getGroundTieOhms() {
@@ -175,17 +188,14 @@ void WireThermalModel::init(const HeaterManager& heater, float ambientC) {
 float WireThermalModel::wireResistanceAtTemp(uint8_t idx) const {
     if (idx >= HeaterManager::kWireCount) return 1e6f;
     const WireThermalState& ws = _state[idx];
-    const float dT = ws.T - _ambientC;
-    float scale = 1.0f + NICHROME_ALPHA * dT;
-    if (scale < 0.2f) scale = 0.2f;
-    if (scale > 3.0f) scale = 3.0f;
-    return ws.R0 * scale;
+    // Simplified: keep resistance fixed at the cold value.
+    return ws.R0;
 }
 
-void WireThermalModel::integrate(const CurrentSensor::Sample* curBuf, size_t nCur,
-                                 const HeaterManager::OutputEvent* outBuf, size_t nOut,
-                                 float idleCurrentA, float ambientC,
-                                 WireStateModel& runtime, HeaterManager& heater) {
+void WireThermalModel::integrateCurrentOnly(const CurrentSensor::Sample* curBuf, size_t nCur,
+                                            const HeaterManager::OutputEvent* outBuf, size_t nOut,
+                                            float ambientC,
+                                            WireStateModel& runtime, HeaterManager& heater) {
     if (!_initialized) {
         init(heater, ambientC);
     }
@@ -193,6 +203,14 @@ void WireThermalModel::integrate(const CurrentSensor::Sample* curBuf, size_t nCu
 
     uint16_t currentMask = runtime.getLastMask();
     size_t   outIndex    = 0;
+
+    auto coolingK = [&](const WireThermalState& ws) -> float {
+        float blend = ws.T / COOL_HOT_THRESHOLD_C;
+        if (blend < 0.0f) blend = 0.0f;
+        if (blend > 1.0f) blend = 1.0f;
+        float k = COOL_K_COLD + (COOL_K_HOT - COOL_K_COLD) * blend;
+        return k * _coolingScale;
+    };
 
     for (size_t i = 0; i < nCur; ++i) {
         const uint32_t ts    = curBuf[i].timestampMs;
@@ -204,25 +222,27 @@ void WireThermalModel::integrate(const CurrentSensor::Sample* curBuf, size_t nCu
             ++outIndex;
         }
 
-        // Cooling step for each wire.
+        // Natural cooling step for all wires (even when no heating).
         for (uint8_t w = 0; w < HeaterManager::kWireCount; ++w) {
             WireThermalState& ws = _state[w];
-            if (!ws.lastUpdateMs) ws.lastUpdateMs = ts;
-            float dt = (ts - ws.lastUpdateMs) * 0.001f;
+            float dt = (ws.lastUpdateMs == 0) ? 0.0f : (ts - ws.lastUpdateMs) * 0.001f;
+            if (dt > MAX_THERMAL_DT_S) dt = MAX_THERMAL_DT_S;
             if (dt > 0.0f) {
-                const float Tinf   = _ambientC;
-                const float factor = expf(-dt / ws.tau);
-                ws.T = Tinf + (ws.T - Tinf) * factor;
-                ws.lastUpdateMs = ts;
+                float dTcool = -(ws.T - _ambientC) * coolingK(ws) * dt;
+                if (dTcool < -MAX_COOL_DROP_C) dTcool = -MAX_COOL_DROP_C;
+                ws.T += dTcool;
+            }
+
+            WireRuntimeState& rt = runtime.wire(w + 1);
+            if (!(currentMask & (1u << w))) {
+                rt.lastPowerW = 0.0f;
             }
         }
 
-        // Heating if wires are on and net current > 0.
-        float I_net = Imeas - idleCurrentA;
-        if (I_net < 0.0f) I_net = 0.0f;
+        if (currentMask != 0 && isfinite(Imeas) && Imeas > 0.0f) {
+            float I_net = Imeas;
+            float Gtot  = 0.0f;
 
-        if (currentMask != 0 && I_net > 0.0f) {
-            float Gtot = 0.0f;
             for (uint8_t w = 0; w < HeaterManager::kWireCount; ++w) {
                 if (currentMask & (1u << w)) {
                     float R = wireResistanceAtTemp(w);
@@ -231,25 +251,165 @@ void WireThermalModel::integrate(const CurrentSensor::Sample* curBuf, size_t nCu
                     }
                 }
             }
+
             if (Gtot > 0.0f) {
-                const float V = I_net / Gtot;
+                // Estimated bus voltage from total current and equivalent conductance (debug only).
+                const float V_est = I_net / Gtot;
+                (void)V_est;
+
                 for (uint8_t w = 0; w < HeaterManager::kWireCount; ++w) {
                     if (!(currentMask & (1u << w))) continue;
 
                     WireThermalState& ws = _state[w];
                     float R = wireResistanceAtTemp(w);
                     if (!(R > 0.01f && isfinite(R))) continue;
-                    float dt = (ts - ws.lastUpdateMs) * 0.001f;
-                    if (dt <= 0.0f) continue;
 
-                    const float P    = (V * V) / R;
-                    const float dT_h = (P * dt) / ws.C_th;
-                    ws.T += dT_h;
+                    float dtHeat = (ws.lastUpdateMs == 0)
+                                   ? 0.0f
+                                   : (ts - ws.lastUpdateMs) * 0.001f;
+                    if (dtHeat > MAX_THERMAL_DT_S) dtHeat = MAX_THERMAL_DT_S;
+
+                    // Split measured total current across parallel branches based on conductance.
+                    const float Gw = 1.0f / R;
+                    const float Iw = I_net * (Gw / Gtot);
+                    const float P  = Iw * Iw * R;
+                    float dT = (P * dtHeat * THERMAL_INERTIA_SCALE) / ws.C_th;
+                    if (dT > MAX_HEAT_RISE_C) dT = MAX_HEAT_RISE_C;
+
+                    ws.T += dT;
 
                     WireRuntimeState& rt = runtime.wire(w + 1);
                     rt.lastPowerW   = P;
                     rt.tempC        = ws.T;
                     rt.lastUpdateMs = ts;
+                }
+            }
+        }
+
+        // Clamp and publish temps after each current sample.
+        for (uint8_t w = 0; w < HeaterManager::kWireCount; ++w) {
+            WireThermalState& ws = _state[w];
+            if (ws.T > WIRE_T_MAX_C) ws.T = WIRE_T_MAX_C;
+            if (ws.T < _ambientC - 10.0f) ws.T = _ambientC - 10.0f;
+
+            WireRuntimeState& rt = runtime.wire(w + 1);
+            rt.tempC        = ws.T;
+            rt.lastUpdateMs = ts;
+
+            heater.setWireEstimatedTemp(w + 1, ws.T);
+            ws.lastUpdateMs = ts;
+        }
+    }
+
+    runtime.setLastMask(currentMask);
+}
+
+void WireThermalModel::integrate(const CurrentSensor::Sample* curBuf, size_t nCur,
+                                 const CpDischg::Sample*     voltBuf, size_t nVolt,
+                                 const HeaterManager::OutputEvent* outBuf, size_t nOut,
+                                 float idleCurrentA, float ambientC,
+                                 WireStateModel& runtime, HeaterManager& heater) {
+    if (!_initialized) {
+        init(heater, ambientC);
+    }
+    _ambientC = ambientC;
+
+    uint16_t currentMask = runtime.getLastMask();
+    size_t   outIndex    = 0;
+
+    auto coolingK = [&](const WireThermalState& ws) -> float {
+        float blend = ws.T / COOL_HOT_THRESHOLD_C;
+        if (blend < 0.0f) blend = 0.0f;
+        if (blend > 1.0f) blend = 1.0f;
+        float k = COOL_K_COLD + (COOL_K_HOT - COOL_K_COLD) * blend;
+        return k * _coolingScale;
+    };
+
+    for (size_t i = 0; i < nCur; ++i) {
+        const uint32_t ts    = curBuf[i].timestampMs;
+        const float    Imeas = curBuf[i].currentA;
+        // Find closest voltage sample at/after this timestamp.
+        float Vmeas = NAN;
+        if (voltBuf && nVolt > 0) {
+            // Simple nearest: assume voltBuf is in ascending time.
+            size_t vi = 0;
+            while (vi + 1 < nVolt && voltBuf[vi + 1].timestampMs <= ts) {
+                ++vi;
+            }
+            Vmeas = voltBuf[vi].voltageV;
+            // If next sample is closer in time, pick it.
+            if (vi + 1 < nVolt) {
+                uint32_t dt0 = ts - voltBuf[vi].timestampMs;
+                uint32_t dt1 = voltBuf[vi + 1].timestampMs - ts;
+                if (dt1 < dt0) {
+                    Vmeas = voltBuf[vi + 1].voltageV;
+                }
+            }
+        }
+
+        // Apply all mask changes up to this sample timestamp.
+        while (outIndex < nOut && outBuf[outIndex].timestampMs <= ts) {
+            currentMask = outBuf[outIndex].mask;
+            ++outIndex;
+        }
+
+        // Passive cooling regardless of heating state.
+        for (uint8_t w = 0; w < HeaterManager::kWireCount; ++w) {
+            WireThermalState& ws = _state[w];
+            float dt = (ws.lastUpdateMs == 0) ? 0.0f : (ts - ws.lastUpdateMs) * 0.001f;
+            if (dt > MAX_THERMAL_DT_S) dt = MAX_THERMAL_DT_S;
+            if (dt > 0.0f) {
+                float dTcool = -(ws.T - _ambientC) * coolingK(ws) * dt;
+                if (dTcool < -MAX_COOL_DROP_C) dTcool = -MAX_COOL_DROP_C;
+                ws.T += dTcool;
+            }
+            WireRuntimeState& rt = runtime.wire(w + 1);
+            if (!(currentMask & (1u << w))) {
+                rt.lastPowerW = 0.0f;
+            }
+        }
+
+        // Heating component.
+        // Use measured bus voltage and fixed (cold) resistance to estimate per‑wire power.
+        if (currentMask != 0) {
+            float Gtot = 0.0f;
+            for (uint8_t w = 0; w < HeaterManager::kWireCount; ++w) {
+                if (currentMask & (1u << w)) {
+                    float R = wireResistanceAtTemp(w);
+                    if (R > 0.01f && isfinite(R)) Gtot += 1.0f / R;
+                }
+            }
+            if (Gtot > 0.0f && isfinite(Vmeas) && Vmeas > 0.0f) {
+                float V = Vmeas;
+                /*DEBUG_PRINTF("[Thermal] ts=%lu mask=0x%03X V=%.2fV\n",
+                             (unsigned long)ts,
+                             (unsigned)currentMask,
+                             (double)V);*/
+                for (uint8_t w = 0; w < HeaterManager::kWireCount; ++w) {
+                    if (!(currentMask & (1u << w))) continue;
+
+                    WireThermalState& ws = _state[w];
+                    float R = wireResistanceAtTemp(w);
+                    if (!(R > 0.01f && isfinite(R))) continue;
+                    float dtHeat = (ts - ws.lastUpdateMs) * 0.001f;
+                    if (dtHeat <= 0.0f) continue;
+                    if (dtHeat > MAX_THERMAL_DT_S) dtHeat = MAX_THERMAL_DT_S;
+
+                    // Estimate per-wire current from shared V and cold R.
+                    const float Iw = V / R;
+                    const float P  = Iw * Iw * R;
+                    float dT = (P * dtHeat * THERMAL_INERTIA_SCALE) / ws.C_th;
+                    if (dT > MAX_HEAT_RISE_C) dT = MAX_HEAT_RISE_C;
+
+                    ws.T += dT;
+
+                    WireRuntimeState& rt = runtime.wire(w + 1);
+                    rt.lastPowerW   = P;
+                    rt.tempC        = ws.T;
+                    rt.lastUpdateMs = ts;
+
+                    // Advance per-wire timestamp after applying heating.
+                    ws.lastUpdateMs = ts;
                 }
             }
         }
@@ -264,6 +424,7 @@ void WireThermalModel::integrate(const CurrentSensor::Sample* curBuf, size_t nCu
             rt.tempC = ws.T;
 
             heater.setWireEstimatedTemp(w + 1, ws.T);
+            ws.lastUpdateMs = ts;
         }
     }
 
@@ -273,6 +434,13 @@ void WireThermalModel::integrate(const CurrentSensor::Sample* curBuf, size_t nCu
 float WireThermalModel::getWireTemp(uint8_t index) const {
     if (index == 0 || index > HeaterManager::kWireCount) return NAN;
     return _state[index - 1].T;
+}
+
+void WireThermalModel::setCoolingScale(float scale) {
+    if (!isfinite(scale) || scale <= 0.0f) {
+        scale = 1.0f;
+    }
+    _coolingScale = scale;
 }
 
 // ======================================================================
@@ -398,6 +566,7 @@ void WirePresenceManager::updatePresenceFromMask(HeaterManager& heater,
 }
 
 bool WirePresenceManager::hasAnyConnected(const WireStateModel& state) const {
+    if (FORCE_ALL_WIRES_PRESENT != 0) return true;
     for (uint8_t i = 0; i < HeaterManager::kWireCount; ++i) {
         if (state.wire(i + 1).present) return true;
     }
@@ -417,38 +586,91 @@ uint16_t WirePlanner::chooseMask(const WireConfigStore& cfg,
 
     const uint16_t FULL = (1u << HeaterManager::kWireCount);
 
-    float    bestScore = INFINITY;
-    uint16_t bestMask  = 0;
+    // Build allowed mask from access flags only (no temp/presence here).
+    uint16_t allowedMask = 0;
+    for (uint8_t i = 0; i < HeaterManager::kWireCount; ++i) {
+        if (cfg.getAccessFlag(i + 1)) {
+            allowedMask |= (1u << i);
+        }
+    }
+    if (allowedMask == 0) {
+        return 0;
+    }
+
+    uint16_t chosen = 0;
+
+    // Only consider masks reasonably close to the target (cold).
+    const float tol = max(targetResOhm * 0.15f, 1.0f); // 15% or 1 ohm
+
+    // Fairness weight: penalize masks that use recently used wires.
+    const float fairnessK = max(targetResOhm * 0.05f, 0.5f);
+
+    float bestScore = INFINITY;
+    float bestErr   = INFINITY;
 
     for (uint16_t m = 1; m < FULL; ++m) {
+        if ((m & ~allowedMask) != 0) continue; // uses disallowed wire
+
         float Req = equivalentResistance(cfg, state, m);
         if (!isfinite(Req) || Req <= 0.0f) continue;
 
-        float score = fabsf(Req - targetResOhm);
-        if (score < bestScore) {
+        float err = fabsf(Req - targetResOhm);
+
+        // Skip masks far from target; if none meet tolerance we'll fall back later.
+        if (err > tol) continue;
+
+        float usageSum = 0.0f;
+        for (uint8_t i = 0; i < HeaterManager::kWireCount; ++i) {
+            if (m & (1u << i)) {
+                usageSum += state.wire(i + 1).usageScore;
+            }
+        }
+
+        float score = err + fairnessK * usageSum;
+        if (score < bestScore || (fabsf(score - bestScore) <= 1e-6f && err < bestErr)) {
             bestScore = score;
-            bestMask  = m;
+            bestErr   = err;
+            chosen    = m;
         }
     }
-    return bestMask;
+
+    // If no mask satisfied tolerance, fall back to best score across all.
+    if (chosen == 0) {
+        for (uint16_t m = 1; m < FULL; ++m) {
+            if ((m & ~allowedMask) != 0) continue;
+            float Req = equivalentResistance(cfg, state, m);
+            if (!isfinite(Req) || Req <= 0.0f) continue;
+            float err = fabsf(Req - targetResOhm);
+            float usageSum = 0.0f;
+            for (uint8_t i = 0; i < HeaterManager::kWireCount; ++i) {
+                if (m & (1u << i)) {
+                    usageSum += state.wire(i + 1).usageScore;
+                }
+            }
+            float score = err + fairnessK * usageSum;
+            if (score < bestScore || (fabsf(score - bestScore) <= 1e-6f && err < bestErr)) {
+                bestScore = score;
+                bestErr   = err;
+                chosen    = m;
+            }
+        }
+    }
+
+    _lastChosenMask = chosen;
+    return chosen;
 }
 
 float WirePlanner::equivalentResistance(const WireConfigStore& cfg,
-                                        const WireStateModel&  state,
-                                        uint16_t mask) const {
+                                         const WireStateModel&  state,
+                                         uint16_t mask) const {
     float G = 0.0f;
     for (uint8_t i = 0; i < HeaterManager::kWireCount; ++i) {
         if (!(mask & (1u << i))) continue;
-
-        const WireRuntimeState& rt = state.wire(i + 1);
-        if (!rt.present || rt.locked || !rt.allowedByAccess) {
-            return INFINITY;
-        }
-
         float R = cfg.getWireResistance(i + 1);
-        if (R > 0.01f && isfinite(R)) {
-            G += 1.0f / R;
+        if (R <= 0.01f || !isfinite(R)) {
+            continue;
         }
+        G += 1.0f / R;
     }
     if (G <= 0.0f) return INFINITY;
     return 1.0f / G;
@@ -474,8 +696,10 @@ uint16_t WireSafetyPolicy::filterMask(uint16_t requestedMask,
 
         const WireRuntimeState& rt = state.wire(i + 1);
         bool access = cfg.getAccessFlag(i + 1);
+        bool presentOk = (FORCE_ALL_WIRES_PRESENT != 0) ? true : rt.present;
 
-        if (!access || !rt.present || rt.overTemp || rt.locked) {
+        // Presence/thermal gating enforced unless override is on.
+        if (!access || rt.overTemp || rt.locked || !presentOk) {
             mask &= ~bit;
         }
     }

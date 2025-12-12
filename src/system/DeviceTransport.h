@@ -50,6 +50,9 @@ public:
   bool setTargetRes(float ohms);
   bool setWireOhmPerM(float ohmsPerM);
   bool setBuzzerMute(bool on);
+  bool setManualMode(bool manual);
+  bool setCoolingProfile(bool fast);
+  bool setLoopMode(uint8_t mode);
   bool requestResetFlagAndRestart();
 
 private:
@@ -63,5 +66,3 @@ private:
 #define DEVTRAN DeviceTransport::Get()
 
 #endif // DEVICE_TRANSPORT_H
-
-

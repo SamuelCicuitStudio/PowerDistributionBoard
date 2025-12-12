@@ -235,7 +235,13 @@ void PowerTracker::update(CurrentSensor& cs) {
     if (!cs.isContinuousRunning()) {
         uint32_t now = millis();
         float I = fabsf(cs.getLastCurrent());
-        if (_lastSampleTsMs == 0) {
+        // Ignore samples taken before the session start timestamp.
+        if (now < _startMs) {
+            _lastSampleTsMs = 0;
+            return;
+        }
+
+        if (_lastSampleTsMs == 0 || _lastSampleTsMs < _startMs) {
             _lastSampleTsMs = now;
             return;
         }
@@ -270,7 +276,14 @@ void PowerTracker::update(CurrentSensor& cs) {
         const uint32_t ts = buf[i].timestampMs;
         float I = fabsf(buf[i].currentA);
 
-        if (_lastSampleTsMs == 0) {
+        // Skip any samples that occurred before this session started.
+        if (ts < _startMs) {
+            // Reset baseline so we don't integrate across the session boundary.
+            _lastSampleTsMs = 0;
+            continue;
+        }
+
+        if (_lastSampleTsMs == 0 || _lastSampleTsMs < _startMs) {
             _lastSampleTsMs = ts;
             if (I > _sessionPeakCurrent_A) _sessionPeakCurrent_A = I;
             continue;

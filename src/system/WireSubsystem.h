@@ -21,6 +21,7 @@
 #include <Arduino.h>
 #include "control/HeaterManager.h"
 #include "sensing/CurrentSensor.h"
+#include "control/CpDischg.h"
 #include "system/StatusSnapshot.h"
 
 // ======================================================================
@@ -36,6 +37,7 @@ struct WireRuntimeState {
     float     tempC           = NAN;    // latest virtual temperature
     float     lastPowerW      = 0.0f;   // last computed power
     uint32_t  lastUpdateMs    = 0;      // last time temp/power were updated
+    float     usageScore      = 0.0f;   // recent ON usage for fairness rotation
 };
 
 // ======================================================================
@@ -92,11 +94,20 @@ public:
     void init(const HeaterManager& heater, float ambientC);
 
     void integrate(const CurrentSensor::Sample* curBuf, size_t nCur,
+                   const CpDischg::Sample*     voltBuf, size_t nVolt,
                    const HeaterManager::OutputEvent* outBuf, size_t nOut,
                    float idleCurrentA, float ambientC,
                    WireStateModel& runtime, HeaterManager& heater);
 
+    // Variant that uses only current history (no voltage) to estimate
+    // per-wire power and temperature rise.
+    void integrateCurrentOnly(const CurrentSensor::Sample* curBuf, size_t nCur,
+                              const HeaterManager::OutputEvent* outBuf, size_t nOut,
+                              float ambientC,
+                              WireStateModel& runtime, HeaterManager& heater);
+
     float getWireTemp(uint8_t index) const;
+    void  setCoolingScale(float scale);
 
 private:
     struct WireThermalState {
@@ -114,6 +125,7 @@ private:
     WireThermalState _state[HeaterManager::kWireCount];
     float            _ambientC    = 25.0f;
     bool             _initialized = false;
+    float            _coolingScale = 1.0f;
 };
 
 // ======================================================================
@@ -152,6 +164,10 @@ public:
                         float targetResOhm) const;
 
 private:
+    // Remember last chosen mask to enable round‑robin across calls,
+    // independent of the hardware's current output mask.
+    mutable uint16_t _lastChosenMask = 0;
+
     float equivalentResistance(const WireConfigStore& cfg,
                                const WireStateModel&  state,
                                uint16_t mask) const;

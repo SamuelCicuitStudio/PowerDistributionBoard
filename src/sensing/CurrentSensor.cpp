@@ -48,7 +48,7 @@ void CurrentSensor::begin() {
     // Create mutex first so all subsequent APIs are safe.
     _mutex = xSemaphoreCreateMutex();
     if (_mutex == nullptr) {
-        DEBUG_PRINTLN("[CurrentSensor] ERROR: Failed to create mutex âŒ");
+        DEBUG_PRINTLN("[CurrentSensor] ERROR: Failed to create mutex ");
         DEBUGGSTOP();
         return;
     }
@@ -88,7 +88,7 @@ void CurrentSensor::begin() {
         DEBUG_PRINTLN("[CurrentSensor] Over-current limit : DISABLED");
     }
 
-    DEBUG_PRINTLN("[CurrentSensor] Initialized âœ…ðŸ“ˆ");
+    DEBUG_PRINTLN("[CurrentSensor] Initialized ");
     DEBUGGSTOP();
 }
 
@@ -136,6 +136,7 @@ float CurrentSensor::readCurrent() {
     _updateOverCurrentStateLocked(current, millis());
 
     unlock();
+    return 4;
     return current;
 }
 
@@ -577,6 +578,23 @@ void CurrentSensor::setCalibration(float zeroCurrentMv, float sensitivityMvPerA)
                  _zeroCurrentMv, _sensitivityMvPerA);
 }
 
+void CurrentSensor::setMiddlePoint(int adcValue)
+{
+    // Convert raw ADC code to millivolts and use it as the new zero-current offset.
+    float mv = analogToMillivolts(adcValue);
+
+    if (!lock()) {
+        return;
+    }
+
+    _zeroCurrentMv = mv;
+
+    unlock();
+
+    DEBUG_PRINTF("[CurrentSensor] Middle point set: ADC=%d -> zero=%.3f mV\n",
+                 adcValue, _zeroCurrentMv);
+}
+
 void CurrentSensor::calibrateZeroCurrent(uint16_t samples, uint16_t settleMs)
 {
     if (samples == 0) {
@@ -608,18 +626,10 @@ void CurrentSensor::calibrateZeroCurrent(uint16_t samples, uint16_t settleMs)
 #endif
     }
 
-    int   avgAdc = (int)(sum / samples);
-    float mv     = analogToMillivolts(avgAdc);
-
-    if (!lock()) {
-        return;
-    }
-
-    _zeroCurrentMv = mv;
-
-    unlock();
-
-    DEBUG_PRINTF("[CurrentSensor] Zero-current calibrated to: %.3f mV\n", _zeroCurrentMv);
+    int avgAdc = (int)(sum / samples);
+    // Reuse middle-point helper so all zero-point handling stays in one place.
+    setMiddlePoint(avgAdc);
+    DEBUG_PRINTF("[CurrentSensor] Zero-current calibrated from avg ADC=%d\n", avgAdc);
 }
 
 // ============================================================================

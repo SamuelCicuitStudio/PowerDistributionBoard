@@ -42,7 +42,7 @@ WiFiManager::WiFiManager()
 void WiFiManager::begin() {
     DEBUGGSTART();
     DEBUG_PRINTLN("###########################################################");
-    DEBUG_PRINTLN("#                 Starting WIFI Manager ðŸŒ               #");
+    DEBUG_PRINTLN("#                 Starting WIFI Manager                #");
     DEBUG_PRINTLN("###########################################################");
     DEBUGGSTOP();
 
@@ -80,7 +80,7 @@ void WiFiManager::begin() {
 
 #if WIFI_START_IN_STA
     if (!StartWifiSTA()) {
-        DEBUG_PRINTLN("[WiFi] STA connect failed â†’ falling back to AP ðŸ“¡");
+        DEBUG_PRINTLN("[WiFi] STA connect failed â†’ falling back to AP");
         StartWifiAP();
     }
 #else
@@ -104,7 +104,7 @@ void WiFiManager::StartWifiAP() {
         unlock();
     }
 
-    DEBUG_PRINTLN("[WiFi] Starting Access Point âœ…");
+    DEBUG_PRINTLN("[WiFi] Starting Access Point");
 
     // Clean reset WiFi state
     WiFi.softAPdisconnect(true);
@@ -122,7 +122,7 @@ void WiFiManager::StartWifiAP() {
 
     // Configure AP IP (do this BEFORE/for softAP start)
     if (!WiFi.softAPConfig(LOCAL_IP, GATEWAY, SUBNET)) {
-        DEBUG_PRINTLN("[WiFi] Failed to set AP config âŒ");
+        DEBUG_PRINTLN("[WiFi] Failed to set AP config");
         BUZZ->bipFault();
         RGB->postOverlay(OverlayEvent::WIFI_LOST);
         return;
@@ -130,7 +130,7 @@ void WiFiManager::StartWifiAP() {
 
     // Start AP
     if (!WiFi.softAP(ap_ssid.c_str(), ap_pass.c_str())) {
-        DEBUG_PRINTLN("[WiFi] Failed to start AP âŒ");
+        DEBUG_PRINTLN("[WiFi] Failed to start AP");
         BUZZ->bipFault();
         RGB->postOverlay(OverlayEvent::WIFI_LOST);
         return;
@@ -173,7 +173,7 @@ bool WiFiManager::StartWifiSTA() {
         unlock();
     }
 
-    DEBUG_PRINTLN("[WiFi] Starting Station (STA) mode ðŸš");
+    DEBUG_PRINTLN("[WiFi] Starting Station (STA) mode");
 
     String ssid = WIFI_STA_SSID;
     String pass = WIFI_STA_PASS;
@@ -203,7 +203,7 @@ bool WiFiManager::StartWifiSTA() {
     }
 
     if (WiFi.status() != WL_CONNECTED) {
-        DEBUG_PRINTLN("[WiFi] STA connect timeout âŒ");
+        DEBUG_PRINTLN("[WiFi] STA connect timeout");
         RGB->postOverlay(OverlayEvent::WIFI_LOST);
         return false;
     }
@@ -222,7 +222,7 @@ bool WiFiManager::StartWifiSTA() {
                      DEVICE_HOSTNAME,
                      ip.toString().c_str());
     } else {
-        DEBUG_PRINTLN("[mDNS] [WARN] Failed to start mDNS in STA mode âŒ");
+        DEBUG_PRINTLN("[mDNS] [WARN] Failed to start mDNS in STA mode ");
     }
 #endif
 
@@ -446,6 +446,7 @@ void WiFiManager::registerRoutes_() {
 
             const Device::StateSnapshot snap = DEVTRAN->getStateSnapshot();
             doc["capVoltage"] = s.capVoltage;
+            doc["capAdcRaw"]  = s.capAdcScaled;
             doc["current"]    = s.current;
 
             JsonArray temps = doc.createNestedArray("temperatures");
@@ -544,6 +545,11 @@ void WiFiManager::registerRoutes_() {
             JsonVariant value   = doc["value"];
 
             if (action == "set") {
+                String valStr = value.isNull() ? String("null") : value.as<String>();
+                DEBUG_PRINTF("[WiFi] /control set target=%s value=%s\n",
+                             target.c_str(),
+                             valStr.c_str());
+
                 if (target == "reboot")                       c.type = CTRL_REBOOT;
                 else if (target == "systemReset")             c.type = CTRL_SYS_RESET;
                 else if (target == "ledFeedback")             { c.type = CTRL_LED_FEEDBACK_BOOL; c.b1 = value.as<bool>(); }
@@ -556,7 +562,7 @@ void WiFiManager::registerRoutes_() {
                 else if (target == "chargeResistor")          { c.type = CTRL_CHARGE_RES;        c.f1 = value.as<float>(); }
                 else if (target == "dcVoltage")               { c.type = CTRL_DC_VOLT;           c.f1 = value.as<float>(); }
                 else if (target.startsWith("Access"))         { c.type = CTRL_ACCESS_BOOL;       c.i1 = target.substring(6).toInt(); c.b1 = value.as<bool>(); }
-                else if (target == "mode")                    c.type = CTRL_MODE_IDLE;
+                else if (target == "mode")                    { c.type = CTRL_SET_MODE;          c.b1 = value.as<bool>(); }
                 else if (target == "systemStart")             c.type = CTRL_SYSTEM_START;
                 else if (target == "systemShutdown")          c.type = CTRL_SYSTEM_SHUTDOWN;
                 else if (target == "fanSpeed")                { c.type = CTRL_FAN_SPEED;         c.i1 = constrain(value.as<int>(), 0, 100); }
@@ -564,6 +570,15 @@ void WiFiManager::registerRoutes_() {
                 else if (target.startsWith("wireRes"))        { c.type = CTRL_WIRE_RES;          c.i1 = target.substring(7).toInt(); c.f1 = value.as<float>(); }
                 else if (target == "targetRes")               { c.type = CTRL_TARGET_RES;        c.f1 = value.as<float>(); }
                 else if (target == "wireOhmPerM")             { c.type = CTRL_WIRE_OHM_PER_M;    c.f1 = value.as<float>(); }
+                else if (target == "coolingAir")              { c.type = CTRL_COOL_PROFILE;      c.b1 = value.as<bool>(); }
+                else if (target == "loopMode") {
+                    String modeStr = value.as<String>();
+                    modeStr.toLowerCase();
+                    int mode = 0;
+                    if (modeStr == "sequential" || value.as<int>() == 1) mode = 1;
+                    c.type = CTRL_LOOP_MODE;
+                    c.i1   = mode;
+                }
                 else {
                     request->send(400, "application/json",
                                   "{\"error\":\"Unknown target\"}");
@@ -623,6 +638,9 @@ void WiFiManager::registerRoutes_() {
             doc["wireOhmPerM"]    = CONF->GetFloat(WIRE_OHM_PER_M_KEY,
                                                     DEFAULT_WIRE_OHM_PER_M);
             doc["buzzerMute"]     = CONF->GetBool(BUZMUT_KEY, BUZMUT_DEFAULT);
+            doc["coolingAir"]     = CONF->GetBool(COOLING_PROFILE_KEY, DEFAULT_COOLING_PROFILE_FAST);
+            const int loopModeCfg = CONF->GetInt(LOOP_MODE_KEY, DEFAULT_LOOP_MODE);
+            doc["loopMode"]       = (loopModeCfg == 1) ? "sequential" : "advanced";
 
             // Fast bits via snapshot
             doc["relay"] = s.relayOn;
@@ -689,7 +707,7 @@ void WiFiManager::registerRoutes_() {
 // ====================== Common helpers / tasks ======================
 
 void WiFiManager::handleRoot(AsyncWebServerRequest* request) {
-    DEBUG_PRINTLN("[WiFi] Handling root request ðŸŒ");
+    DEBUG_PRINTLN("[WiFi] Handling root request");
     if (lock()) { keepAlive = true; unlock(); }
     request->send(SPIFFS, "/login.html", "text/html");
 }
@@ -708,7 +726,7 @@ void WiFiManager::disableWiFiAP() {
     }
 
     RGB->postOverlay(OverlayEvent::WIFI_LOST);
-    DEBUG_PRINTLN("[WiFi] WiFi disabled âŒ");
+    DEBUG_PRINTLN("[WiFi] WiFi disabled");
 }
 
 void WiFiManager::resetTimer() {
@@ -730,7 +748,7 @@ void WiFiManager::inactivityTask(void* param) {
         }
 
         if (wifiOn && (millis() - last > INACTIVITY_TIMEOUT_MS)) {
-            DEBUG_PRINTLN("[WiFi] Inactivity timeout â³");
+            DEBUG_PRINTLN("[WiFi] Inactivity timeout");
             self->disableWiFiAP();
             vTaskDelete(nullptr);
         }
@@ -751,7 +769,7 @@ void WiFiManager::startInactivityTimer() {
             &inactivityTaskHandle,
             APP_CPU_NUM
         );
-        DEBUG_PRINTLN("[WiFi] Inactivity timer started â±ï¸");
+        DEBUG_PRINTLN("[WiFi] Inactivity timer started ");
     }
 }
 
@@ -763,7 +781,7 @@ void WiFiManager::onUserConnected() {
         unlock();
     }
     heartbeat();
-    DEBUG_PRINTLN("[WiFi] User connected ðŸŒ");
+    DEBUG_PRINTLN("[WiFi] User connected");
     RGB->postOverlay(OverlayEvent::WEB_USER_ACTIVE);
 }
 
@@ -773,7 +791,7 @@ void WiFiManager::onAdminConnected() {
         unlock();
     }
     heartbeat();
-    DEBUG_PRINTLN("[WiFi] Admin connected ðŸ”");
+    DEBUG_PRINTLN("[WiFi] Admin connected ");
     RGB->postOverlay(OverlayEvent::WEB_ADMIN_ACTIVE);
 }
 
@@ -782,7 +800,7 @@ void WiFiManager::onDisconnected() {
         wifiStatus = WiFiStatus::NotConnected;
         unlock();
     }
-    DEBUG_PRINTLN("[WiFi] All clients disconnected âŒ");
+    DEBUG_PRINTLN("[WiFi] All clients disconnected");
     RGB->postOverlay(OverlayEvent::WIFI_LOST);
 }
 
@@ -815,7 +833,7 @@ bool WiFiManager::isWifiOn() const {
 void WiFiManager::heartbeat() {
     if (heartbeatTaskHandle != nullptr) return;
 
-    DEBUG_PRINTLN("[WiFi] Heartbeat Create ðŸŸ¢");
+    DEBUG_PRINTLN("[WiFi] Heartbeat Create ");
     BUZZ->bip();
 
     xTaskCreatePinnedToCore(
@@ -838,7 +856,7 @@ void WiFiManager::heartbeat() {
                 }
 
                 if (!user && !admin) {
-                    DEBUG_PRINTLN("[WiFi] Heartbeat deleted ðŸ”´ (no clients)");
+                    DEBUG_PRINTLN("[WiFi] Heartbeat deleted  (no clients)");
                     BUZZ->bipWiFiOff();
                     RGB->postOverlay(OverlayEvent::WIFI_LOST);
                     self->heartbeatTaskHandle = nullptr;
@@ -846,11 +864,11 @@ void WiFiManager::heartbeat() {
                 }
 
                 if (!ka) {
-                    DEBUG_PRINTLN("[WiFi] âš ï¸ Heartbeat timeout â€“ disconnecting");
+                    DEBUG_PRINTLN("[WiFi] âš ï¸ Heartbeat timeout  disconnecting");
                     self->onDisconnected();
                     BUZZ->bipWiFiOff();
                     RGB->postOverlay(OverlayEvent::WIFI_LOST);
-                    DEBUG_PRINTLN("[WiFi] Heartbeat deleted ðŸ”´");
+                    DEBUG_PRINTLN("[WiFi] Heartbeat deleted");
                     self->heartbeatTaskHandle = nullptr;
                     vTaskDelete(nullptr);
                 }
@@ -1006,9 +1024,12 @@ bool WiFiManager::handleControl(const ControlCmd& c) {
             }
             break;
 
-        case CTRL_MODE_IDLE:
+        case CTRL_SET_MODE:
             BUZZ->bip();
-            ok = DEVTRAN->requestIdle();
+            ok = DEVTRAN->setManualMode(c.b1);
+            if (c.b1) {
+                ok = ok && DEVTRAN->requestIdle();
+            }
             break;
 
         case CTRL_SYSTEM_START:
@@ -1052,6 +1073,16 @@ bool WiFiManager::handleControl(const ControlCmd& c) {
             }
             BUZZ->bip();
             ok = DEVTRAN->setWireOhmPerM(ohmPerM);
+            break;
+        }
+        case CTRL_COOL_PROFILE:
+            BUZZ->bip();
+            ok = DEVTRAN->setCoolingProfile(c.b1);
+            break;
+        case CTRL_LOOP_MODE: {
+            BUZZ->bip();
+            int mode = (c.i1 == 1) ? 1 : 0;
+            ok = DEVTRAN->setLoopMode(static_cast<uint8_t>(mode));
             break;
         }
 
@@ -1156,8 +1187,10 @@ void WiFiManager::snapshotTask(void* param) {
         // Cap voltage & current (these should be cheap / cached)
         if (DEVICE && DEVICE->discharger) {
             local.capVoltage = DEVICE->discharger->readCapVoltage();
+            local.capAdcScaled = DEVICE->discharger->readCapAdcScaled();
         } else {
             local.capVoltage = 0.0f;
+            local.capAdcScaled = 0.0f;
         }
 
         if (DEVICE && DEVICE->currentSensor) {
@@ -1166,18 +1199,17 @@ void WiFiManager::snapshotTask(void* param) {
             local.current = 0.0f;
         }
 
-        // DS18B20 temps (TempSensor already caches via its own task)
+        // Physical sensor temperatures → dashboard gauges.
         uint8_t n = 0;
         if (DEVICE && DEVICE->tempSensor) {
             n = DEVICE->tempSensor->getSensorCount();
-        }
-        if (n > MAX_TEMP_SENSORS) n = MAX_TEMP_SENSORS;
-
-        for (uint8_t i = 0; i < n; ++i) {
-            local.temps[i] = DEVICE->tempSensor->getTemperature(i);
+            if (n > MAX_TEMP_SENSORS) n = MAX_TEMP_SENSORS;
+            for (uint8_t i = 0; i < n; ++i) {
+                local.temps[i] = DEVICE->tempSensor->getTemperature(i);
+            }
         }
         for (uint8_t i = n; i < MAX_TEMP_SENSORS; ++i) {
-            local.temps[i] = -127.0f;
+            local.temps[i] = -127.0f; // show as "off" when absent
         }
 
         // Virtual wire temps + outputs
@@ -1221,4 +1253,3 @@ bool WiFiManager::getSnapshot(StatusSnapshot& out) {
     xSemaphoreGive(_snapMtx);
     return true;
 }
-

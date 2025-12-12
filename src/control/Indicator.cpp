@@ -69,7 +69,7 @@ void Indicator::begin() {
         unlock();
     }
 
-    DEBUG_PRINTLN("[Indicator] LED pins initialized, task running, startup sequence queued ðŸ”§");
+    DEBUG_PRINTLN("[Indicator] LED pins initialized, task running, startup sequence queued");
 }
 
 // -----------------------------------------------------------------------------
@@ -259,7 +259,7 @@ void Indicator::hwClearAll() {
     hwUpdateShiftRegister();
     digitalWrite(FL06_LED_PIN, LOW);
     digitalWrite(FL08_LED_PIN, LOW);
-    DEBUG_PRINTLN("[Indicator]Indicator: All LEDs turned OFF ðŸ“´");
+    //DEBUG_PRINTLN("[Indicator]Indicator: All LEDs turned OFF ðŸ“´");
 }
 
 // Animated startup pattern (runs atomically inside worker)

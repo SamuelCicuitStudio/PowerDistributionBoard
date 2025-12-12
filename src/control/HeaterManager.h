@@ -48,6 +48,7 @@ struct WireInfo {
     float   temperatureC;        ///< Last estimated wire temperature [Â°C]
     bool    connected;           ///< true if last probe saw a plausible load
     float   presenceCurrentA;    ///< last measured current during probe [A]
+    uint32_t lastOnMs;           ///< millis() when this wire was last turned ON
 };
 
 
@@ -348,5 +349,4 @@ private:
 #define WIRE HeaterManager::Get()
 
 #endif // HEATER_MANAGER_H
-
 

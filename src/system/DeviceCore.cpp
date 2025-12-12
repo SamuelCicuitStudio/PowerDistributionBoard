@@ -238,6 +238,27 @@ void Device::handleCommand(const DevCommand& cmd) {
             }
             wireConfigStore.setWireOhmPerM(cmd.f1);
             break;
+        case DevCmdType::SET_MANUAL_MODE:
+            manualMode = cmd.b1;
+            if (manualMode && gEvt) {
+                xEventGroupSetBits(gEvt, EVT_STOP_REQ);
+            }
+            break;
+        case DevCmdType::SET_COOLING_PROFILE: {
+            applyCoolingProfile(cmd.b1);
+            if (CONF && CONF->GetBool(COOLING_PROFILE_KEY, DEFAULT_COOLING_PROFILE_FAST) != cmd.b1) {
+                CONF->PutBool(COOLING_PROFILE_KEY, cmd.b1);
+            }
+            break;
+        }
+        case DevCmdType::SET_LOOP_MODE: {
+            int mode = (cmd.i1 == 1) ? 1 : 0;
+            loopModeSetting = (mode == 1) ? LoopMode::Sequential : LoopMode::Advanced;
+            if (CONF && CONF->GetInt(LOOP_MODE_KEY, DEFAULT_LOOP_MODE) != mode) {
+                CONF->PutInt(LOOP_MODE_KEY, mode);
+            }
+            break;
+        }
         case DevCmdType::SET_BUZZER_MUTE:
             BUZZ->setMuted(cmd.b1);
             break;
@@ -367,7 +388,7 @@ void Device::begin() {
 
     DEBUGGSTART();
     DEBUG_PRINTLN("###########################################################");
-    DEBUG_PRINTLN("#                 Starting Device Manager âš™ï¸              #");
+    DEBUG_PRINTLN("#                 Starting Device Manager               #");
     DEBUG_PRINTLN("###########################################################");
     DEBUGGSTOP();
 
@@ -378,6 +399,7 @@ void Device::begin() {
 
     wireConfigStore.loadFromNvs();
     checkAllowedOutputs();
+    loadRuntimeSettings();
 
 
     // Per-channel LED feedback maintainer
@@ -397,6 +419,18 @@ void Device::begin() {
 
     // Start external command handler
     startCommandTask();
+
+    // Start bus sampler (synchronized voltage+current history)
+    busSampler = BUS_SAMPLER;
+    if (busSampler && currentSensor && discharger) {
+        busSampler->begin(currentSensor, discharger, 5);
+    }
+
+    // Keep sampling + thermal integration alive even outside RUN.
+    if (currentSensor && !currentSensor->isContinuousRunning()) {
+        currentSensor->startContinuous(0);
+    }
+    startThermalTask();
 
     DEBUG_PRINTLN("[Device] Configuring system I/O pins ðŸ§°");
 }
@@ -433,46 +467,44 @@ void Device::checkAllowedOutputs() {
         const bool thermLocked = ws.locked ||
                                  ws.overTemp ||
                                  (isfinite(ws.tempC) && ws.tempC >= WIRE_T_MAX_C);
-        const bool presenceOk  = (!WIRE) ? true : ws.present;
+        const bool presentOk = (FORCE_ALL_WIRES_PRESENT != 0) ? true : ws.present;
+        allowedOutputs[i] = cfgAllowed && presentOk && !thermLocked;
 
-        allowedOutputs[i] = cfgAllowed && !thermLocked && presenceOk;
-
-        DEBUG_PRINTF(
-            "[Device] OUT%02u => %s (cfg=%s, thermal=%s, presence=%s)\n",
+        /*DEBUG_PRINTF(
+            "[Device] OUT%02u => %s (cfg=%s, thermal=%s)\n",
             i + 1,
             allowedOutputs[i] ? "ENABLED" : "DISABLED",
             cfgAllowed  ? "ON" : "OFF",
-            thermLocked ? "LOCKED" : "OK",
-            presenceOk  ? "OK" : "NO-WIRE"
-        );
+            thermLocked ? "LOCKED" : "OK"
+        );*/
     }
 }
 
 void Device::shutdown() {
     DEBUGGSTART();
     DEBUG_PRINTLN("-----------------------------------------------------------");
-    DEBUG_PRINTLN("[Device] Initiating Shutdown Sequence ðŸ”»");
+    DEBUG_PRINTLN("[Device] Initiating Shutdown Sequence ");
     DEBUG_PRINTLN("-----------------------------------------------------------");
-    DEBUG_PRINTLN("[Device] Main loop finished, proceeding to shutdown ðŸ›‘");
+    DEBUG_PRINTLN("[Device] Main loop finished, proceeding to shutdown");
     DEBUGGSTOP();
 
     BUZZ->bipSystemShutdown();
     stopTemperatureMonitor();
 
-    DEBUG_PRINTLN("[Device] Turning OFF Main Relay ðŸ”Œ");
+    DEBUG_PRINTLN("[Device] Turning OFF Main Relay");
     RGB->postOverlay(OverlayEvent::RELAY_OFF);
     relayControl->turnOn(); // original behavior kept
 
-    DEBUG_PRINTLN("[Device] Starting Capacitor Discharge âš¡");
+    DEBUG_PRINTLN("[Device] Starting Capacitor Discharge");
     // discharger->discharge();
 
-    DEBUG_PRINTLN("[Device] Updating Status LEDs ðŸ’¡");
+    DEBUG_PRINTLN("[Device] Updating Status LEDs");
     RGB->setOff();  // final visual
     stopFanControlTask();
     FAN->stopCap();
     FAN->stopHeatsink();
     DEBUGGSTART();
-    DEBUG_PRINTLN("[Device] Shutdown Complete â€“ System is Now OFF âœ…");
+    DEBUG_PRINTLN("[Device] Shutdown Complete â€“ System is Now OFF ");
     DEBUG_PRINTLN("-----------------------------------------------------------");
     DEBUGGSTOP();
 }
@@ -488,7 +520,7 @@ void Device::startTemperatureMonitor() {
             &tempMonitorTaskHandle,
             TEMP_MONITOR_TASK_CORE
         );
-        DEBUG_PRINTLN("[Device] Temperature monitor started ðŸ§ª");
+        DEBUG_PRINTLN("[Device] Temperature monitor started ");
     }
 }
 
@@ -499,21 +531,21 @@ void Device::monitorTemperatureTask(void* param) {
     const uint8_t sensorCount = self->tempSensor->getSensorCount();
 
     if (sensorCount == 0) {
-        DEBUG_PRINTLN("[Device] No temperature sensors found! Skipping monitoring âŒ");
+        DEBUG_PRINTLN("[Device] No temperature sensors found! Skipping monitoring");
         vTaskDelete(nullptr);
         return;
     }
 
     self->tempSensor->startTemperatureTask(2500);
-    DEBUG_PRINTF("[Device] Monitoring %u temperature sensors every 2s âš™ï¸\n", sensorCount);
+    DEBUG_PRINTF("[Device] Monitoring %u temperature sensors every 2s\n", sensorCount);
 
     while (true) {
         for (uint8_t i = 0; i < sensorCount; ++i) {
             const float temp = self->tempSensor->getTemperature(i);
-            DEBUG_PRINTF("[Device] TempSensor[%u] = %.2fÂ°C ðŸŒ¡ï¸\n", i, temp);
+           // DEBUG_PRINTF("[Device] TempSensor[%u] = %.2f°C\n", i, temp);
 
             if (temp >= threshold) {
-                DEBUG_PRINTF("[Device] Overtemperature Detected! Sensor[%u] = %.2fÂ°C âŒ\n", i, temp);
+                DEBUG_PRINTF("[Device] Overtemperature Detected! Sensor[%u] = %.2f°C\n", i, temp);
                 BUZZ->bipOverTemperature();
 
                 // Visual: critical temperature overlay + fault background
@@ -536,7 +568,7 @@ void Device::stopTemperatureMonitor() {
         tempSensor->stopTemperatureTask();
     }
     if (tempMonitorTaskHandle != nullptr) {
-        DEBUG_PRINTLN("[Device] Stopping Temperature Monitor Task ðŸ§ŠâŒ");
+        DEBUG_PRINTLN("[Device] Stopping Temperature Monitor Task ");
         vTaskDelete(tempMonitorTaskHandle);
         tempMonitorTaskHandle = nullptr;
     }
@@ -544,11 +576,11 @@ void Device::stopTemperatureMonitor() {
 
 void Device::stopLoopTask() {
     if (loopTaskHandle != nullptr) {
-        DEBUG_PRINTLN("[Device] Stopping Device Loop Task ðŸ§µâŒ");
+        DEBUG_PRINTLN("[Device] Stopping Device Loop Task ");
         vTaskDelete(loopTaskHandle);
         loopTaskHandle = nullptr;
     } else {
-        DEBUG_PRINTLN("[Device] Loop Task not running â€“ no action taken ðŸ’¤");
+        DEBUG_PRINTLN("[Device] Loop Task not running no action taken ");
     }
 }
 
@@ -587,7 +619,7 @@ bool Device::is12VPresent() const {
 }
 
 void Device::handle12VDrop() {
-    DEBUG_PRINTLN("[Device] 12V lost during RUN â†’ Emergency stop âš ï¸");
+    DEBUG_PRINTLN("[Device] 12V lost during RUN  Emergency stop");
     // Visual + audible
     RGB->postOverlay(OverlayEvent::RELAY_OFF);
     RGB->setFault();
@@ -616,7 +648,7 @@ bool Device::delayWithPowerWatch(uint32_t ms)
 
         // 1) Check 12V presence (existing behavior)
         if (!is12VPresent()) {
-            DEBUG_PRINTLN("[Device] 12V lost during wait â†’ abort");
+            DEBUG_PRINTLN("[Device] 12V lost during wait abort");
             handle12VDrop();
             return false;
         }
@@ -625,7 +657,7 @@ bool Device::delayWithPowerWatch(uint32_t ms)
         if (gEvt) {
             EventBits_t bits = xEventGroupGetBits(gEvt);
             if (bits & EVT_STOP_REQ) {
-                DEBUG_PRINTLN("[Device] STOP requested during wait â†’ abort");
+                DEBUG_PRINTLN("[Device] STOP requested during wait abort");
                 xEventGroupClearBits(gEvt, EVT_STOP_REQ);
                 setState(DeviceState::Idle);
                 return false;
@@ -645,7 +677,7 @@ bool Device::delayWithPowerWatch(uint32_t ms)
 
 void Device::calibrateIdleCurrent() {
     if (!currentSensor) {
-        DEBUG_PRINTLN("[Device] Idle current calibration skipped (no CurrentSensor) âš ï¸");
+        DEBUG_PRINTLN("[Device] Idle current calibration skipped (no CurrentSensor) ");
         return;
     }
 
@@ -681,7 +713,7 @@ void Device::calibrateIdleCurrent() {
 
 void Device::handleOverCurrentFault()
 {
-    DEBUG_PRINTLN("[Device] âš¡ Over-current detected â†’ EMERGENCY SHUTDOWN");
+    DEBUG_PRINTLN("[Device] âš¡ Over-current detected EMERGENCY SHUTDOWN");
 
     // 1) Latch global state to FAULT
     setState(DeviceState::Error);
@@ -741,9 +773,9 @@ void Device::startFanControlTask() {
     );
     if (ok != pdPASS) {
         fanTaskHandle = nullptr;
-        DEBUG_PRINTLN("[Device] Failed to start FanCtrlTask âŒ");
+        DEBUG_PRINTLN("[Device] Failed to start FanCtrlTask ");
     } else {
-        DEBUG_PRINTLN("[Device] FanCtrlTask started âœ…");
+        DEBUG_PRINTLN("[Device] FanCtrlTask started ");
     }
 }
 
@@ -751,7 +783,7 @@ void Device::stopFanControlTask() {
     if (fanTaskHandle) {
         vTaskDelete(fanTaskHandle);
         fanTaskHandle = nullptr;
-        DEBUG_PRINTLN("[Device] FanCtrlTask stopped ðŸ“´");
+        DEBUG_PRINTLN("[Device] FanCtrlTask stopped ");
     }
 }
 
@@ -811,4 +843,27 @@ void Device::fanControlTask(void* param) {
 
         vTaskDelay(period);
     }
+}
+
+void Device::applyCoolingProfile(bool fastProfile) {
+    coolingFastProfile = fastProfile;
+    coolingScale = fastProfile ? COOLING_SCALE_AIR : COOLING_SCALE_BURIED;
+    wireThermalModel.setCoolingScale(coolingScale);
+}
+
+void Device::loadRuntimeSettings() {
+    bool fast = DEFAULT_COOLING_PROFILE_FAST;
+    int mode = DEFAULT_LOOP_MODE;
+
+    if (CONF) {
+        fast = CONF->GetBool(COOLING_PROFILE_KEY, DEFAULT_COOLING_PROFILE_FAST);
+        mode = CONF->GetInt(LOOP_MODE_KEY, DEFAULT_LOOP_MODE);
+    }
+
+    applyCoolingProfile(fast);
+
+    if (mode != 0 && mode != 1) {
+        mode = DEFAULT_LOOP_MODE;
+    }
+    loopModeSetting = (mode == 1) ? LoopMode::Sequential : LoopMode::Advanced;
 }

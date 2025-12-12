@@ -133,6 +133,10 @@ public:
     // ---------------------------------------------------------------------
 
     void setCalibration(float zeroCurrentMv, float sensitivityMvPerA);
+    // Manually set the zero‑current "middle point" from a raw ADC code.
+    // Call this only when you are sure that the load current is 0 A.
+    void setMiddlePoint(int adcValue);
+
     void calibrateZeroCurrent(uint16_t samples = 500, uint16_t settleMs = 50);
     float getZeroCurrentMv() const      { return _zeroCurrentMv; }
     float getSensitivityMvPerA() const  { return _sensitivityMvPerA; }
@@ -189,5 +193,4 @@ private:
 };
 
 #endif // CURRENT_SENSOR_H
-
 

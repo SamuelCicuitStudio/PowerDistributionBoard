@@ -62,7 +62,7 @@ void setup() {
   DEBUG_PRINTLN("==================================================");
   DEBUG_PRINTLN("[Setup] System boot");
   DEBUG_PRINTLN("==================================================");
-
+  delay(2000);
   // --------------------------------------------------
   // 2. Persistent Storage & Configuration
   //    (Must be ready before any logic that depends on config)
@@ -131,7 +131,7 @@ void setup() {
   //    Now that all paths are OPEN/OFF, we can trust 0 A for auto-zero.
   // --------------------------------------------------
   currentSensor = new CurrentSensor();
-  currentSensor->begin();                // Auto zero-cal at true 0A
+  currentSensor->begin();                // Auto-calibration at true 0A (inside CurrentSensor)
 
   tempSensor = new TempSensor(&oneWire);
   tempSensor->begin();

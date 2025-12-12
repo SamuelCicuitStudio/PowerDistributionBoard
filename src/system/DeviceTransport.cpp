@@ -63,6 +63,7 @@ bool DeviceTransport::getTelemetry(StatusSnapshot& out) const {
 
   // Minimal telemetry used by WiFiManager snapshot task
   out.capVoltage = (DEVICE->discharger ? DEVICE->discharger->readCapVoltage() : 0.0f);
+  out.capAdcScaled = (DEVICE->discharger ? DEVICE->discharger->readCapAdcScaled() : 0.0f);
   out.current    = (DEVICE->currentSensor ? DEVICE->currentSensor->readCurrent() : 0.0f);
 
   uint8_t n = 0;
@@ -134,6 +135,9 @@ bool DeviceTransport::setWireRes(uint8_t idx, float ohms) {
 bool DeviceTransport::setTargetRes(float ohms)          { return sendCommandAndWait(Device::DevCmdType::SET_TARGET_RES, 0, ohms); }
 bool DeviceTransport::setWireOhmPerM(float ohmsPerM)    { return sendCommandAndWait(Device::DevCmdType::SET_WIRE_OHM_PER_M, 0, ohmsPerM); }
 bool DeviceTransport::setBuzzerMute(bool on)            { return sendCommandAndWait(Device::DevCmdType::SET_BUZZER_MUTE, 0, 0.0f, on); }
+bool DeviceTransport::setManualMode(bool manual)        { return sendCommandAndWait(Device::DevCmdType::SET_MANUAL_MODE, 0, 0.0f, manual); }
+bool DeviceTransport::setCoolingProfile(bool fast)      { return sendCommandAndWait(Device::DevCmdType::SET_COOLING_PROFILE, 0, 0.0f, fast); }
+bool DeviceTransport::setLoopMode(uint8_t mode)         { return sendCommandAndWait(Device::DevCmdType::SET_LOOP_MODE, static_cast<int32_t>(mode)); }
 bool DeviceTransport::requestResetFlagAndRestart() {
   return sendCommandAndWait(Device::DevCmdType::REQUEST_RESET);
 }

@@ -11,7 +11,7 @@ void Relay::begin() {
     _mutex = xSemaphoreCreateMutex();
     DEBUGGSTART();
     DEBUG_PRINTLN("###########################################################");
-    DEBUG_PRINTLN("#                  Starting Relay Manager ðŸ”Œ              #");
+    DEBUG_PRINTLN("#                  Starting Relay Manager               #");
     DEBUG_PRINTLN("###########################################################");
     DEBUGGSTOP();
 
@@ -20,7 +20,7 @@ void Relay::begin() {
     // Force known safe state: OFF
     turnOff();
 
-    DEBUG_PRINTLN("[Relay] Initialized OFF â›”");
+    DEBUG_PRINTLN("[Relay] Initialized OFF");
 }
 
 void Relay::turnOn() {
@@ -44,7 +44,7 @@ void Relay::turnOff() {
 
     unlock();
 
-    DEBUG_PRINTLN("[Relay] Turned OFF â›”");
+    DEBUG_PRINTLN("[Relay] Turned OFF");
 }
 
 bool Relay::isOn() const {
