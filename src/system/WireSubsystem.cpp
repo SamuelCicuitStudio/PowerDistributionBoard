@@ -490,6 +490,10 @@ void WirePresenceManager::probeAll(HeaterManager& heater,
                                    uint16_t settleMs,
                                    uint8_t samples) {
     if (busVoltage <= 0.0f) return;
+    (void)maxValidFraction; // detection now hinges on absolute current
+
+    const bool forcePresence = (DEVICE_FORCE_ALL_WIRES_PRESENT != 0);
+    const float minDetectA = (minValidFraction > 0.0f) ? minValidFraction : 0.05f;
 
     bool prevStates[HeaterManager::kWireCount];
     for (uint8_t i = 0; i < HeaterManager::kWireCount; ++i) {
@@ -521,19 +525,13 @@ void WirePresenceManager::probeAll(HeaterManager& heater,
             vTaskDelay(pdMS_TO_TICKS(2));
         }
         float Imeas = sumA / (float)samples;
-        float Iexp  = busVoltage / R;
-        if (Iexp < 0.01f) Iexp = 0.01f;
 
         const float leak = _senseLeakCurrent(busVoltage);
         float ImeasNet = Imeas - leak;
         if (ImeasNet < 0.0f) ImeasNet = 0.0f;
 
-        float ratio = ImeasNet / Iexp;
-
-        bool connected = isfinite(Imeas) &&
-                         Imeas > 0.01f &&
-                         ratio >= minValidFraction &&
-                         ratio <= maxValidFraction;
+        bool connected = forcePresence ||
+                         (isfinite(ImeasNet) && ImeasNet >= minDetectA);
 
         heater.setWirePresence(wireIdx, connected, ImeasNet);
 
@@ -558,49 +556,29 @@ void WirePresenceManager::updatePresenceFromMask(HeaterManager& heater,
                                                  float totalCurrentA,
                                                  float busVoltage,
                                                  float minValidRatio) {
-    if (mask == 0 || busVoltage <= 0.0f) return;
+    if (mask == 0) return;
 
-    float G = 0.0f;
-    for (uint8_t i = 0; i < HeaterManager::kWireCount; ++i) {
-        if (!(mask & (1u << i))) continue;
-        const WireRuntimeState& rt = state.wire(i + 1);
-        if (!rt.present) continue;
-        if (isfinite(rt.tempC) && rt.tempC >= 150.0f) continue;
-
-        WireInfo wi = heater.getWireInfo(i + 1);
-        float R = wi.resistanceOhm;
-        if (R > 0.01f && isfinite(R)) {
-            G += 1.0f / R;
-        }
-    }
-    if (G <= 0.0f) return;
-
-    float Iexp  = busVoltage * G;
-    if (Iexp <= 0.0f) return;
+    const bool forcePresence = (DEVICE_FORCE_ALL_WIRES_PRESENT != 0);
+    const float minDetectA = (minValidRatio > 0.0f) ? minValidRatio : 0.05f;
 
     float netCurrent = totalCurrentA - _senseLeakCurrent(busVoltage);
     if (netCurrent < 0.0f) netCurrent = 0.0f;
-    float ratio = netCurrent / Iexp;
-
-    if (!isfinite(ratio) || ratio >= minValidRatio) {
-        return; // looks fine
-    }
+    const bool connected = forcePresence ||
+                           (isfinite(netCurrent) && netCurrent >= minDetectA);
 
     const uint32_t now = millis();
     for (uint8_t i = 0; i < HeaterManager::kWireCount; ++i) {
         if (!(mask & (1u << i))) continue;
         WireRuntimeState& rt = state.wire(i + 1);
-        if (!rt.present) continue;
-        if (isfinite(rt.tempC) && rt.tempC >= 150.0f) continue;
 
-        rt.present      = false;
+        rt.present      = connected;
         rt.lastUpdateMs = now;
-        heater.setWirePresence(i + 1, false, netCurrent);
+        heater.setWirePresence(i + 1, connected, netCurrent);
     }
 }
 
 bool WirePresenceManager::hasAnyConnected(const WireStateModel& state) const {
-    if (FORCE_ALL_WIRES_PRESENT != 0) return true;
+    if (DEVICE_FORCE_ALL_WIRES_PRESENT != 0) return true;
     for (uint8_t i = 0; i < HeaterManager::kWireCount; ++i) {
         if (state.wire(i + 1).present) return true;
     }
@@ -619,11 +597,13 @@ uint16_t WirePlanner::chooseMask(const WireConfigStore& cfg,
     }
 
     const uint16_t FULL = (1u << HeaterManager::kWireCount);
+    const bool forcePresence = (DEVICE_FORCE_ALL_WIRES_PRESENT != 0);
 
-    // Build allowed mask from access flags only (no temp/presence here).
+    // Build allowed mask from access flags + presence (planner-level gating).
     uint16_t allowedMask = 0;
     for (uint8_t i = 0; i < HeaterManager::kWireCount; ++i) {
-        if (cfg.getAccessFlag(i + 1)) {
+        const WireRuntimeState& rt = state.wire(i + 1);
+        if (cfg.getAccessFlag(i + 1) && (forcePresence || rt.present)) {
             allowedMask |= (1u << i);
         }
     }
@@ -697,9 +677,14 @@ uint16_t WirePlanner::chooseMask(const WireConfigStore& cfg,
 float WirePlanner::equivalentResistance(const WireConfigStore& cfg,
                                          const WireStateModel&  state,
                                          uint16_t mask) const {
+    const bool forcePresence = (DEVICE_FORCE_ALL_WIRES_PRESENT != 0);
     float G = 0.0f;
     for (uint8_t i = 0; i < HeaterManager::kWireCount; ++i) {
         if (!(mask & (1u << i))) continue;
+        const WireRuntimeState& rt = state.wire(i + 1);
+        if (!forcePresence && !rt.present) {
+            return INFINITY; // mask relies on a missing wire
+        }
         float R = cfg.getWireResistance(i + 1);
         if (R <= 0.01f || !isfinite(R)) {
             continue;
@@ -730,7 +715,7 @@ uint16_t WireSafetyPolicy::filterMask(uint16_t requestedMask,
 
         const WireRuntimeState& rt = state.wire(i + 1);
         bool access = cfg.getAccessFlag(i + 1);
-        bool presentOk = (FORCE_ALL_WIRES_PRESENT != 0) ? true : rt.present;
+        bool presentOk = (DEVICE_FORCE_ALL_WIRES_PRESENT != 0) ? true : rt.present;
 
         // Presence/thermal gating enforced unless override is on.
         if (!access || rt.overTemp || rt.locked || !presentOk) {

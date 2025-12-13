@@ -497,7 +497,7 @@ void Device::checkAllowedOutputs() {
         const bool thermLocked = ws.locked ||
                                  ws.overTemp ||
                                  (isfinite(ws.tempC) && ws.tempC >= WIRE_T_MAX_C);
-        const bool presentOk = (FORCE_ALL_WIRES_PRESENT != 0) ? true : ws.present;
+        const bool presentOk = (DEVICE_FORCE_ALL_WIRES_PRESENT != 0) ? true : ws.present;
         allowedOutputs[i] = cfgAllowed && presentOk && !thermLocked;
 
         /*DEBUG_PRINTF(

@@ -9,6 +9,8 @@
 #ifndef DEVICE_H
 #define DEVICE_H
 
+
+
 /**
  * @brief Main heating loop & RTOS-oriented coordination.
  *
@@ -89,6 +91,9 @@
 /// Voltage ratio required on the DC bus before enabling full-power operation.
 #define GO_THRESHOLD_RATIO 50
 #define SAMPLINGSTALL false
+// Set to 1 to bypass presence checks and treat all wires as available.
+#define DEVICE_FORCE_ALL_WIRES_PRESENT 0
+
 // -----------------------------------------------------------------------------
 // Loop Mode Selection (compile-time)
 // -----------------------------------------------------------------------------

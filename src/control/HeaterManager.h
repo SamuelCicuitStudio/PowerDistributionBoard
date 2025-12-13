@@ -247,7 +247,7 @@ public:
      *  - For each channel:
      *      * Enables only that channel for a short pulse.
      *      * Samples current via @p cs.
-     *      * Compares measured current vs expected(V/R).
+     *      * Declares presence if net current is above @p minValidFraction.
      *      * Sets wires[i].connected + presenceCurrentA accordingly.
      *  - Restores the original mask at the end.
      *
@@ -256,8 +256,8 @@ public:
      * @param cs                 CurrentSensor instance (already begin()).
      * @param busVoltage         Supply/bus voltage in volts.
      *                           If <=0, it will try DC_VOLTAGE_KEY / DESIRED_OUTPUT_VOLTAGE_KEY.
-     * @param minValidFraction   Min(measured/expected) to accept as connected (e.g. 0.25).
-     * @param maxValidFraction   Max(measured/expected) before treating as suspicious (e.g. 4.0).
+     * @param minValidFraction   Minimum net current (A) to accept as connected.
+     * @param maxValidFraction   Reserved for future ratio checks (ignored).
      * @param settleMs           Wait after switching before sampling.
      * @param samples            Number of samples to average per channel.
      */
@@ -276,8 +276,9 @@ public:
      * dynamically detect removed / open wires.
      *
      * Logic:
-     *  - Compute expected total current from connected wires in @p mask.
-     *  - If measured/expected < minValidRatio, mark all wires in mask as disconnected.
+     *  - Measure total current while @p mask is active.
+     *  - After subtracting leakage, if net current is below @p minValidRatio,
+     *    mark all wires in @p mask as disconnected; otherwise mark them present.
      */
     void updatePresenceFromMask(uint16_t mask,
                                 float totalCurrentA,
