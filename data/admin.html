@@ -793,72 +793,63 @@
           <div class="user-modal-content zoom-box device-settings-box">
             <div class="device-grid">
               <!-- Left column: existing device fields -->
-              <section class="device-col">
+              <section class="device-col device-col--left">
                 <h3>Device Settings</h3>
 
-                <div class="input-with-unit">
-                  <input
-                    type="number"
-                    id="desiredVoltage"
-                    placeholder="Desired Output Voltage"
-                  />
-                  <span class="unit-label">V</span>
+                <div class="ds-field">
+                  <label for="desiredVoltage">Desired Output Voltage</label>
+                  <div class="input-with-unit">
+                    <input type="number" id="desiredVoltage" />
+                    <span class="unit-label">V</span>
+                  </div>
                 </div>
 
-                <div class="input-with-unit">
-                  <input
-                    type="number"
-                    id="acFrequency"
-                    placeholder="Sampling Rate"
-                    min="50"
-                    max="500"
-                  />
-                  <span class="unit-label">Hz</span>
+                <div class="ds-field">
+                  <label for="dcVoltage">DC Output Voltage</label>
+                  <div class="input-with-unit">
+                    <input type="number" id="dcVoltage" />
+                    <span class="unit-label">V</span>
+                  </div>
                 </div>
 
-                <div class="input-with-unit">
-                  <input
-                    type="number"
-                    id="chargeResistor"
-                    placeholder="Charge Resistor"
-                  />
-                  <span class="unit-label">Ω</span>
+                <div class="ds-field">
+                  <label for="acFrequency">Sampling Rate</label>
+                  <div class="input-with-unit">
+                    <input
+                      type="number"
+                      id="acFrequency"
+                      min="50"
+                      max="500"
+                    />
+                    <span class="unit-label">Hz</span>
+                  </div>
                 </div>
 
-                <div class="input-with-unit">
-                  <input
-                    type="number"
-                    id="dcVoltage"
-                    placeholder="DC Output Voltage"
-                  />
-                  <span class="unit-label">V</span>
+                <div class="ds-field">
+                  <label for="chargeResistor">Charge Resistor</label>
+                  <div class="input-with-unit">
+                    <input type="number" id="chargeResistor" />
+                    <span class="unit-label">Ω</span>
+                  </div>
                 </div>
 
-                <div class="input-with-unit">
-                  <input type="number" id="onTime" placeholder="ON Time" />
-                  <span class="unit-label">ms</span>
+                <div class="ds-field">
+                  <label for="onTime">ON Time</label>
+                  <div class="input-with-unit">
+                    <input type="number" id="onTime" />
+                    <span class="unit-label">ms</span>
+                  </div>
                 </div>
 
-                <div class="input-with-unit">
-                  <input type="number" id="offTime" placeholder="OFF Time" />
-                  <span class="unit-label">ms</span>
+                <div class="ds-field">
+                  <label for="offTime">OFF Time</label>
+                  <div class="input-with-unit">
+                    <input type="number" id="offTime" />
+                    <span class="unit-label">ms</span>
+                  </div>
                 </div>
 
-                <div
-                  class="field"
-                  style="display: flex; align-items: center; gap: 10px"
-                >
-                  <label style="flex: 1">Air Cooling (fast)</label>
-                  <label class="switch">
-                    <input type="checkbox" id="coolingAirToggle" />
-                    <span class="slider"></span>
-                  </label>
-                </div>
-
-                <div
-                  class="field"
-                  style="display: flex; flex-direction: column; gap: 6px"
-                >
+                <div class="ds-field">
                   <label for="loopModeSelect">Loop Mode</label>
                   <select id="loopModeSelect">
                     <option value="advanced">Advanced (grouped)</option>
@@ -868,10 +859,7 @@
                   </select>
                 </div>
 
-                <div
-                  class="field"
-                  style="display: flex; flex-direction: column; gap: 6px"
-                >
+                <div class="ds-field">
                   <label for="wireGauge">Wire Gauge (AWG)</label>
                   <input
                     id="wireGauge"
@@ -882,10 +870,18 @@
                     inputmode="numeric"
                   />
                 </div>
+
+                <div class="ds-field ds-field--toggle ds-span-2">
+                  <label for="coolingAirToggle">Air Cooling (fast)</label>
+                  <label class="switch">
+                    <input type="checkbox" id="coolingAirToggle" />
+                    <span class="slider"></span>
+                  </label>
+                </div>
               </section>
 
               <!-- Right column: Cooling + Nichrome -->
-              <section class="device-col">
+              <section class="device-col device-col--right">
                 <h3>Cooling &amp; Nichrome</h3>
 
                 <div class="cooling-grid">
@@ -917,6 +913,8 @@
                     />
                   </div>
                 </div>
+
+                <div class="ds-section-divider"></div>
 
                 <h3>Nichrome Calibration</h3>
                 <div class="nichrome-grid">

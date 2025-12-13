@@ -35,18 +35,32 @@ void Device::initWireThermalModelOnce() {
         return;
     }
 
-    // Ambient estimate from first two DS18B20 sensors
-    float t0 = tempSensor->getTemperature(0);
-    float t1 = tempSensor->getTemperature(1);
+    // Ambient estimate: always use the average of physical sensors 0 and 1.
+    // Wait briefly for fresh readings instead of falling back to a fixed 25 C.
+    auto sampleAmbient = [&]() -> float {
+        const uint32_t startMs = millis();
+        for (;;) {
+            float t0 = tempSensor->getTemperature(0);
+            float t1 = tempSensor->getTemperature(1);
 
-    if (isnan(t0) && isnan(t1)) {
-        ambientC = 25.0f;  // fallback
-    } else if (isnan(t0)) {
-        ambientC = t1;
-    } else if (isnan(t1)) {
-        ambientC = t0;
-    } else {
-        ambientC = 0.5f * (t0 + t1);
+            int   count = 0;
+            float sum   = 0.0f;
+            if (isfinite(t0)) { sum += t0; ++count; }
+            if (isfinite(t1)) { sum += t1; ++count; }
+            if (count > 0) {
+                return sum / static_cast<float>(count);
+            }
+
+            if ((millis() - startMs) > 1000) {
+                return NAN; // give up after ~1s
+            }
+            vTaskDelay(pdMS_TO_TICKS(50));
+        }
+    };
+
+    const float ambientSample = sampleAmbient();
+    if (isfinite(ambientSample)) {
+        ambientC = ambientSample;
     }
 
     const uint32_t now = millis();

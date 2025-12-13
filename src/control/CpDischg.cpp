@@ -272,7 +272,7 @@ float CpDischg::adcCodeToBusVolts(uint16_t raw) const {
     // --- Empirical calibration: ignore divider/ground-tie math entirely ---
     // Default mapping: 319V bus → 2.00V at ADC → gain = 159.5 V/V
     // Change CAP_EMP_GAIN or CAP_EMP_OFFSET in CpDischg.h if you re-calibrate.
-    return 84.1;
+    //return 84.1;
     return v_adc * CAP_EMP_GAIN + CAP_EMP_OFFSET;
 #else
     // --- Original resistor-based model (kept for fallback) ---

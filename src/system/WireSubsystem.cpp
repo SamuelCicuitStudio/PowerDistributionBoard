@@ -21,9 +21,11 @@ static constexpr float COOL_HOT_THRESHOLD_C  = 80.0f;  // start blending up
 // Integration clamps to avoid sudden jumps when samples are sparse.
 static constexpr float MAX_THERMAL_DT_S      = 0.30f;  // cap per-step dt
 static constexpr float MAX_COOL_DROP_C       = 0.5f;   // max drop per step (slower cooldown)
-static constexpr float MAX_HEAT_RISE_C       = 0.5f;   // max rise per step (slower spikes)
+static constexpr float MAX_HEAT_RISE_C       = 0.35f;  // max rise per step (slower spikes)
 // Additional inertia factor to slow down modeled heating (dimensionless < 1).
-static constexpr float THERMAL_INERTIA_SCALE = 0.0875f; // ~half previous for slower heating
+static constexpr float THERMAL_INERTIA_SCALE = 0.060f; // slower heating ramp
+static constexpr float WIRE_T_REENABLE_C     = 140.0f;
+static constexpr uint32_t WIRE_OVERHEAT_COOLDOWN_MS = 10000; // 10s enforced lockout
 
 // Helper: resolve ground-tie/charge resistor and sense-leak current
 static float _getGroundTieOhms() {
@@ -229,6 +231,37 @@ void WireThermalModel::integrateCurrentOnly(const CurrentSensor::Sample* curBuf,
         return k * _coolingScale;
     };
 
+    auto handleLockout = [&](uint8_t w,
+                             WireThermalState& ws,
+                             WireRuntimeState& rt,
+                             uint32_t ts) {
+        const uint16_t bit = (1u << w);
+        bool wasLocked = ws.locked;
+
+        if (ws.T >= WIRE_T_MAX_C) {
+            ws.locked = true;
+            ws.cooldownReleaseMs = ts + WIRE_OVERHEAT_COOLDOWN_MS;
+        } else if (ws.locked) {
+            bool cooldownElapsed = (ws.cooldownReleaseMs != 0) &&
+                                   ((int32_t)(ts - ws.cooldownReleaseMs) >= 0);
+            if (cooldownElapsed && ws.T <= WIRE_T_REENABLE_C) {
+                ws.locked = false;
+                ws.cooldownReleaseMs = 0;
+            }
+        }
+
+        rt.locked   = ws.locked;
+        rt.overTemp = isfinite(rt.tempC) && rt.tempC >= WIRE_T_MAX_C;
+
+        if (ws.locked) {
+            currentMask &= ~bit;
+            heater.setOutput(w + 1, false); // force-off immediately
+        } else if (wasLocked && !ws.locked) {
+            // On release, leave output off; planner will re-enable when allowed.
+            currentMask &= ~bit;
+        }
+    };
+
     for (size_t i = 0; i < nCur; ++i) {
         const uint32_t ts    = curBuf[i].timestampMs;
         const float    Imeas = curBuf[i].currentA;
@@ -314,6 +347,8 @@ void WireThermalModel::integrateCurrentOnly(const CurrentSensor::Sample* curBuf,
             rt.tempC        = ws.T;
             rt.lastUpdateMs = ts;
 
+            handleLockout(w, ws, rt, ts);
+
             heater.setWireEstimatedTemp(w + 1, ws.T);
             ws.lastUpdateMs = ts;
         }
@@ -341,6 +376,36 @@ void WireThermalModel::integrate(const CurrentSensor::Sample* curBuf, size_t nCu
         if (blend > 1.0f) blend = 1.0f;
         float k = _coolKCold + (_coolKHot - _coolKCold) * blend;
         return k * _coolingScale;
+    };
+
+    auto handleLockout = [&](uint8_t w,
+                             WireThermalState& ws,
+                             WireRuntimeState& rt,
+                             uint32_t ts) {
+        const uint16_t bit = (1u << w);
+        bool wasLocked = ws.locked;
+
+        if (ws.T >= WIRE_T_MAX_C) {
+            ws.locked = true;
+            ws.cooldownReleaseMs = ts + WIRE_OVERHEAT_COOLDOWN_MS;
+        } else if (ws.locked) {
+            bool cooldownElapsed = (ws.cooldownReleaseMs != 0) &&
+                                   ((int32_t)(ts - ws.cooldownReleaseMs) >= 0);
+            if (cooldownElapsed && ws.T <= WIRE_T_REENABLE_C) {
+                ws.locked = false;
+                ws.cooldownReleaseMs = 0;
+            }
+        }
+
+        rt.locked   = ws.locked;
+        rt.overTemp = isfinite(rt.tempC) && rt.tempC >= WIRE_T_MAX_C;
+
+        if (ws.locked) {
+            currentMask &= ~bit;
+            heater.setOutput(w + 1, false);
+        } else if (wasLocked && !ws.locked) {
+            currentMask &= ~bit;
+        }
     };
 
     for (size_t i = 0; i < nCur; ++i) {
@@ -439,7 +504,10 @@ void WireThermalModel::integrate(const CurrentSensor::Sample* curBuf, size_t nCu
             if (ws.T < _ambientC - 10.0f) ws.T = _ambientC - 10.0f;
 
             WireRuntimeState& rt = runtime.wire(w + 1);
-            rt.tempC = ws.T;
+            rt.tempC        = ws.T;
+            rt.lastUpdateMs = ts;
+
+            handleLockout(w, ws, rt, ts);
 
             heater.setWireEstimatedTemp(w + 1, ws.T);
             ws.lastUpdateMs = ts;
