@@ -193,6 +193,7 @@ public:
         SET_MANUAL_MODE,
         SET_COOLING_PROFILE,
         SET_LOOP_MODE,
+        SET_CURR_LIMIT,
         SET_RELAY,
         SET_OUTPUT,
         SET_FAN_SPEED,
@@ -284,6 +285,7 @@ public:
      * @return false if aborted due to power loss or STOP, true otherwise.
      */
     bool delayWithPowerWatch(uint32_t ms);
+    bool dischargeCapBank(float thresholdV = 5.0f, uint8_t maxRounds = 3);
 
     // -------------------------------------------------------------------------
     // State access helpers

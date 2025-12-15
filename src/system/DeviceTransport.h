@@ -54,6 +54,7 @@ public:
   bool setManualMode(bool manual);
   bool setCoolingProfile(bool fast);
   bool setLoopMode(uint8_t mode);
+  bool setCurrentLimitA(float limitA);
   bool requestResetFlagAndRestart();
   bool startCalibrationTask(uint32_t timeoutMs = 10000);
 

@@ -143,6 +143,7 @@ bool DeviceTransport::setBuzzerMute(bool on)            { return sendCommandAndW
 bool DeviceTransport::setManualMode(bool manual)        { return sendCommandAndWait(Device::DevCmdType::SET_MANUAL_MODE, 0, 0.0f, manual); }
 bool DeviceTransport::setCoolingProfile(bool fast)      { return sendCommandAndWait(Device::DevCmdType::SET_COOLING_PROFILE, 0, 0.0f, fast); }
 bool DeviceTransport::setLoopMode(uint8_t mode)         { return sendCommandAndWait(Device::DevCmdType::SET_LOOP_MODE, static_cast<int32_t>(mode)); }
+bool DeviceTransport::setCurrentLimitA(float limitA)    { return sendCommandAndWait(Device::DevCmdType::SET_CURR_LIMIT, 0, limitA); }
 bool DeviceTransport::requestResetFlagAndRestart() {
   return sendCommandAndWait(Device::DevCmdType::REQUEST_RESET);
 }

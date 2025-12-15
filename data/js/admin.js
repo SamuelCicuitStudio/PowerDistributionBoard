@@ -36,10 +36,7 @@
   let isMuted = false; // Buzzer mute cached state
   let stateStream = null; // EventSource for zero-lag state
   let statePollTimer = null; // Fallback polling timer
-  let liveStream = null; // EventSource for live batched updates
-  let liveQueue = []; // queued live samples
-  let liveTimer = null; // playback timer
-  let liveLastSeq = 0; // last seq applied
+  let monitorPollTimer = null; // /monitor polling timer (UI snapshot)
   let calibrationBusy = false; // prevent overlapping manual calibrations
 
   function isManualMode() {
@@ -678,6 +675,150 @@
   // ===============  DEVICE + NICHROME SETTINGS ============
   // ========================================================
 
+  const TIMING_PRESETS = {
+    sequential: {
+      hot: { onMs: 10, offMs: 2 },
+      medium: { onMs: 10, offMs: 15 },
+      gentle: { onMs: 10, offMs: 75 },
+    },
+    advanced: {
+      hot: { onMs: 10, offMs: 15 },
+      medium: { onMs: 10, offMs: 45 },
+      gentle: { onMs: 10, offMs: 120 },
+    },
+  };
+
+  function getLoopMode() {
+    const loopModeSelect = document.getElementById("loopModeSelect");
+    return (loopModeSelect && loopModeSelect.value) || "advanced";
+  }
+
+  function getTimingMode() {
+    const timingModeSelect = document.getElementById("timingModeSelect");
+    return (timingModeSelect && timingModeSelect.value) || "preset";
+  }
+
+  function inferTimingProfile(loopMode, onMs, offMs) {
+    const on = Number(onMs);
+    const off = Number(offMs);
+    if (!Number.isFinite(on) || !Number.isFinite(off)) return null;
+    if (on !== 10) return null;
+
+    if (loopMode === "sequential") {
+      if (off <= 5) return "hot";
+      if (off <= 20) return "medium";
+      return "gentle";
+    }
+
+    // advanced
+    if (off <= 20) return "hot";
+    if (off <= 60) return "medium";
+    return "gentle";
+  }
+
+  function setTimingVisibility() {
+    const mode = getTimingMode();
+    const manual = mode === "manual";
+
+    const onField = document.getElementById("onTimeField");
+    const offField = document.getElementById("offTimeField");
+    const profileField = document.getElementById("timingProfileField");
+    const resolvedField = document.getElementById("timingResolvedField");
+
+    if (onField) onField.style.display = manual ? "" : "none";
+    if (offField) offField.style.display = manual ? "" : "none";
+    if (profileField) profileField.style.display = manual ? "none" : "";
+    if (resolvedField) resolvedField.style.display = manual ? "none" : "";
+  }
+
+  function renderTimingResolved() {
+    const resolved = document.getElementById("timingResolved");
+    if (!resolved) return;
+
+    const onMs = getInt("onTime");
+    const offMs = getInt("offTime");
+    if (onMs === undefined || offMs === undefined) {
+      resolved.value = "--";
+      return;
+    }
+
+    resolved.value = "Ton " + onMs + " ms / Toff " + offMs + " ms";
+  }
+
+  function applyTimingPreset() {
+    const loopMode = getLoopMode();
+    const profileSelect = document.getElementById("timingProfileSelect");
+    const profile = (profileSelect && profileSelect.value) || "medium";
+
+    const preset =
+      (TIMING_PRESETS[loopMode] && TIMING_PRESETS[loopMode][profile]) || null;
+    if (!preset) return;
+
+    setField("onTime", preset.onMs);
+    setField("offTime", preset.offMs);
+    renderTimingResolved();
+  }
+
+  function syncTimingUiFromCurrentFields() {
+    const timingModeSelect = document.getElementById("timingModeSelect");
+    const profileSelect = document.getElementById("timingProfileSelect");
+    if (!timingModeSelect || !profileSelect) return;
+
+    const loopMode = getLoopMode();
+    const onMs = getInt("onTime");
+    const offMs = getInt("offTime");
+    const inferred = inferTimingProfile(loopMode, onMs, offMs);
+
+    if (inferred) {
+      timingModeSelect.value = "preset";
+      profileSelect.value = inferred;
+    } else {
+      timingModeSelect.value = "manual";
+    }
+
+    setTimingVisibility();
+    renderTimingResolved();
+  }
+
+  function bindTimingUi() {
+    const timingModeSelect = document.getElementById("timingModeSelect");
+    const profileSelect = document.getElementById("timingProfileSelect");
+    const loopModeSelect = document.getElementById("loopModeSelect");
+
+    if (timingModeSelect) {
+      timingModeSelect.addEventListener("change", () => {
+        setTimingVisibility();
+        if (getTimingMode() === "preset") {
+          applyTimingPreset();
+        } else {
+          renderTimingResolved();
+        }
+      });
+    }
+
+    if (profileSelect) {
+      profileSelect.addEventListener("change", () => {
+        if (getTimingMode() === "preset") {
+          applyTimingPreset();
+        }
+      });
+    }
+
+    if (loopModeSelect) {
+      loopModeSelect.addEventListener("change", () => {
+        if (getTimingMode() === "preset") {
+          applyTimingPreset();
+        } else {
+          renderTimingResolved();
+        }
+      });
+    }
+
+    // Initial visibility (default: preset)
+    setTimingVisibility();
+    renderTimingResolved();
+  }
+
   async function waitUntilApplied(expected, timeoutMs = 2000, stepMs = 120) {
     const deadline = Date.now() + timeoutMs;
 
@@ -753,6 +894,11 @@
       cmds.push(["set", "dcVoltage", dcV]);
     }
 
+    const currLimit = getFloat("currLimit");
+    if (currLimit !== undefined && !approxEqual(currLimit, cur.currLimit, 0.05)) {
+      cmds.push(["set", "currLimit", currLimit]);
+    }
+
     const onTime = getInt("onTime");
     if (onTime !== undefined && onTime !== cur.onTime) {
       cmds.push(["set", "onTime", onTime]);
@@ -797,6 +943,22 @@
       const modeVal = loopModeSelect.value || "advanced";
       if (modeVal !== cur.loopMode) {
         cmds.push(["set", "loopMode", modeVal]);
+      }
+    }
+
+    const timingModeSelect = document.getElementById("timingModeSelect");
+    if (timingModeSelect) {
+      const val = timingModeSelect.value || "preset";
+      if (val !== cur.timingMode) {
+        cmds.push(["set", "timingMode", val]);
+      }
+    }
+
+    const timingProfileSelect = document.getElementById("timingProfileSelect");
+    if (timingProfileSelect) {
+      const val = timingProfileSelect.value || "medium";
+      if (val !== cur.timingProfile) {
+        cmds.push(["set", "timingProfile", val]);
       }
     }
 
@@ -856,6 +1018,7 @@
     setField("acFrequency", data.acFrequency);
     setField("chargeResistor", data.chargeResistor);
     setField("dcVoltage", data.dcVoltage);
+    setField("currLimit", data.currLimit);
     setField("onTime", data.onTime);
     setField("offTime", data.offTime);
     const coolingToggle = document.getElementById("coolingAirToggle");
@@ -864,6 +1027,21 @@
     if (loopModeSelect && data.loopMode) {
       loopModeSelect.value = data.loopMode;
     }
+    const timingModeSelect = document.getElementById("timingModeSelect");
+    if (timingModeSelect && data.timingMode) {
+      timingModeSelect.value = data.timingMode;
+    }
+    const timingProfileSelect = document.getElementById("timingProfileSelect");
+    if (timingProfileSelect && data.timingProfile) {
+      timingProfileSelect.value = data.timingProfile;
+    }
+    if (getTimingMode() === "preset") {
+      applyTimingPreset();
+    } else {
+      setTimingVisibility();
+      renderTimingResolved();
+    }
+    syncTimingUiFromCurrentFields();
     if (data.wireGauge !== undefined) {
       setField("wireGauge", data.wireGauge);
     }
@@ -936,6 +1114,7 @@
       setField("acFrequency", data.acFrequency);
       setField("chargeResistor", data.chargeResistor);
       setField("dcVoltage", data.dcVoltage);
+      setField("currLimit", data.currLimit);
       setField("onTime", data.onTime);
       setField("offTime", data.offTime);
       const coolingToggle = document.getElementById("coolingAirToggle");
@@ -944,6 +1123,21 @@
       if (loopModeSelect && data.loopMode) {
         loopModeSelect.value = data.loopMode;
       }
+      const timingModeSelect = document.getElementById("timingModeSelect");
+      if (timingModeSelect && data.timingMode) {
+        timingModeSelect.value = data.timingMode;
+      }
+      const timingProfileSelect = document.getElementById("timingProfileSelect");
+      if (timingProfileSelect && data.timingProfile) {
+        timingProfileSelect.value = data.timingProfile;
+      }
+      if (getTimingMode() === "preset") {
+        applyTimingPreset();
+      } else {
+        setTimingVisibility();
+        renderTimingResolved();
+      }
+      syncTimingUiFromCurrentFields();
       if (data.wireGauge !== undefined) {
         setField("wireGauge", data.wireGauge);
       }
@@ -1310,6 +1504,10 @@
   async function pollLiveOnce() {
     try {
       const res = await fetch("/monitor", { cache: "no-store" });
+      if (res.status === 403) {
+        window.location.href = "http://powerboard.local/login";
+        return;
+      }
       if (!res.ok) return;
       const mon = await res.json();
       // --- Session stats (Live tab headline) ---
@@ -1375,11 +1573,68 @@
       }
 
       // Relay + AC
-      setDot("relay", mon.relay === true);
-      setDot("ac", mon.ac === true);
+      const serverRelay = mon.relay === true;
+      const ac = mon.ac === true;
+      setDot("relay", serverRelay);
+      setDot("ac", ac);
 
       const relayToggle = document.getElementById("relayToggle");
-      if (relayToggle) relayToggle.checked = mon.relay === true;
+      if (relayToggle) relayToggle.checked = serverRelay;
+
+      // Voltage gauge (cap voltage or fallback)
+      const fallback =
+        typeof (lastLoadedControls && lastLoadedControls.dcVoltage) === "number"
+          ? lastLoadedControls.dcVoltage
+          : 220;
+      let shownV = fallback;
+      if (ac) {
+        const v = parseFloat(mon.capVoltage);
+        if (Number.isFinite(v)) shownV = v;
+      }
+      updateGauge("voltageValue", shownV, "V", 400);
+
+      // Raw ADC display (scaled /100, e.g., 4095 -> 40.95)
+      const adcEl = document.getElementById("adcRawValue");
+      if (adcEl) {
+        const rawScaled = parseFloat(mon.capAdcRaw);
+        adcEl.textContent = Number.isFinite(rawScaled)
+          ? rawScaled.toFixed(2)
+          : "--";
+      }
+
+      // Current gauge
+      let rawCurrent = parseFloat(mon.current);
+      if (!ac || !Number.isFinite(rawCurrent)) rawCurrent = 0;
+      rawCurrent = Math.max(0, Math.min(100, rawCurrent));
+      updateGauge("currentValue", rawCurrent, "A", 100);
+
+      // Temperatures (up to 12 sensors)
+      const temps = mon.temperatures || [];
+      for (let i = 0; i < 12; i++) {
+        const id = "temp" + (i + 1) + "Value";
+        const t = temps[i];
+        if (t === -127 || t === undefined) {
+          updateGauge(id, "Off", "AøC", 150);
+        } else {
+          updateGauge(id, Number(t), "AøC", 150);
+        }
+      }
+
+      // Capacitance (F -> mF)
+      const capF = parseFloat(mon.capacitanceF);
+      renderCapacitance(capF);
+
+      // Ready / Off LEDs
+      const readyLed = document.getElementById("readyLed");
+      const offLed = document.getElementById("offLed");
+      if (readyLed) readyLed.style.backgroundColor = mon.ready ? "limegreen" : "gray";
+      if (offLed) offLed.style.backgroundColor = mon.off ? "red" : "gray";
+
+      // Fan slider reflect
+      const fanSlider = document.getElementById("fanSlider");
+      if (fanSlider && typeof mon.fanSpeed === "number") {
+        fanSlider.value = mon.fanSpeed;
+      }
     } catch (err) {
       console.warn("live poll failed:", err);
     }
@@ -1440,80 +1695,7 @@
     if (relayToggle) relayToggle.checked = sample.relay === true;
   }
 
-  function startLivePlayback() {
-    if (liveTimer) clearInterval(liveTimer);
-    liveTimer = setInterval(() => {
-      if (!liveQueue.length) return;
-      const sample = liveQueue.shift();
-      liveLastSeq = sample.seq || liveLastSeq;
-      applyLiveSample(sample);
-    }, 120); // steady playback cadence
-  }
-
-  function startLiveStream() {
-    if (liveStream) return;
-    try {
-      liveStream = new EventSource("/monitor_stream");
-      liveStream.onopen = () => {
-        // On (re)connect, try to fetch any missed items
-        if (liveLastSeq > 0) {
-          fetchLiveSince(liveLastSeq);
-        }
-      };
-      liveStream.onmessage = (ev) => {
-        if (!ev.data) return;
-        try {
-          const payload = JSON.parse(ev.data);
-          const items = payload.items || [];
-          // Cap queue to avoid long catch-up
-          const cap = 80;
-          for (const sm of items) {
-            liveQueue.push(sm);
-          }
-          if (liveQueue.length > cap) {
-            // drop oldest, keep tail
-            liveQueue = liveQueue.slice(liveQueue.length - cap);
-            // update lastSeq to tail's last seq
-            const tail = liveQueue[liveQueue.length - 1];
-            if (tail && tail.seq) liveLastSeq = tail.seq;
-          }
-        } catch (e) {
-          console.warn("live SSE parse error", e);
-        }
-      };
-      liveStream.onerror = () => {
-        console.warn("live SSE error; retrying soon");
-        if (liveStream) {
-          liveStream.close();
-          liveStream = null;
-        }
-        setTimeout(startLiveStream, 2000);
-      };
-      startLivePlayback();
-    } catch (e) {
-      console.warn("live SSE init failed", e);
-    }
-  }
-
-  async function fetchLiveSince(seq) {
-    try {
-      const res = await fetch("/monitor_since?seq=" + (seq || 0), {
-        cache: "no-store",
-      });
-      if (!res.ok) return;
-      const payload = await res.json();
-      const items = payload.items || [];
-      const cap = 80;
-      for (const sm of items) {
-        liveQueue.push(sm);
-      }
-      if (liveQueue.length > cap) {
-        liveQueue = liveQueue.slice(liveQueue.length - cap);
-      }
-    } catch (e) {
-      console.warn("fetchLiveSince failed", e);
-    }
-  }
+  // Live snapshots are polled from /monitor (no server push).
   function computeCoreBox(svg) {
     const core = document.querySelector("#liveTab .live-core");
     if (!svg || !core) return null;
@@ -1776,9 +1958,10 @@
   }
 
   function scheduleLiveInterval() {
-    if (LIVE.interval) clearInterval(LIVE.interval);
+    if (monitorPollTimer) clearInterval(monitorPollTimer);
     const ms = lastState === "Running" ? 250 : 1000;
-    LIVE.interval = setInterval(pollLiveOnce, ms);
+    pollLiveOnce();
+    monitorPollTimer = setInterval(pollLiveOnce, ms);
   }
 
   // Hook power UI -> live interval
@@ -1965,13 +2148,12 @@
     enableDragScroll("userAccessGrid");
 
     initPowerButton();
+    bindTimingUi();
     liveRender();
-    startLiveStream(); // batched live playback
     scheduleLiveInterval();
 
     // Keep session alive with backend heartbeat
     startHeartbeat(4000);
-    startMonitorPolling();
     loadControls();
     bindSessionHistoryButton();
     updateSessionStatsUI(null);

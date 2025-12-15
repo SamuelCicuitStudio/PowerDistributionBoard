@@ -83,6 +83,9 @@
 #define CAP_BANK_CAP_F_KEY             "CPCAPF"    // Capacitor bank capacitance [F] key
 #define COOLING_PROFILE_KEY            "CLPRF"     // bool: true=fast (air), false=buried/slow
 #define LOOP_MODE_KEY                  "LPMODE"    // int: 0=advanced, 1=sequential
+#define TIMING_MODE_KEY                "TMMODE"    // int: 0=preset, 1=manual
+#define TIMING_PROFILE_KEY             "TMPROF"    // int: 0=hot, 1=medium, 2=gentle
+#define CURR_LIMIT_KEY                 "CURRLT"   // float: over-current trip threshold [A]
 #define TEMP_SENSOR_COUNT_KEY          "TMNT"    // Number of temperature sensors detected
 #define RTC_CURRENT_EPOCH_KEY          "RCUR"    // Last known epoch persisted
 #define RTC_PRESLEEP_EPOCH_KEY         "RSLP"   // Epoch saved before deep sleep
@@ -102,6 +105,9 @@
 ASSERT_NVS_KEY_LEN(DEV_ID_KEY);
 ASSERT_NVS_KEY_LEN(DEV_SW_KEY);
 ASSERT_NVS_KEY_LEN(DEV_HW_KEY);
+ASSERT_NVS_KEY_LEN(TIMING_MODE_KEY);
+ASSERT_NVS_KEY_LEN(TIMING_PROFILE_KEY);
+ASSERT_NVS_KEY_LEN(CURR_LIMIT_KEY);
 
 // ---------- Output Access Flags ----------
 #define OUT01_ACCESS_KEY               "OUT1F"
@@ -198,6 +204,9 @@ ASSERT_NVS_KEY_LEN(DEV_HW_KEY);
 #define DEFAULT_TEMP_SENSOR_COUNT      12               // Default to 12 sensors unless discovered otherwise
 #define DEFAULT_COOLING_PROFILE_FAST   true             // true=air/fast cooling, false=buried/slow
 #define DEFAULT_LOOP_MODE              0                // 0=advanced, 1=sequential
+#define DEFAULT_TIMING_MODE            0                // 0=preset, 1=manual
+#define DEFAULT_TIMING_PROFILE         1                // 0=hot, 1=medium, 2=gentle
+#define DEFAULT_CURR_LIMIT_A           36.0f            // Default over-current trip [A]
 #define DEFAULT_WIRE_GAUGE             20               // AWG number for installed nichrome
 // Cooling defaults (used when NVS unset)
 #define DEFAULT_COOLING_SCALE_BURIED   0.35f            // default scale for buried cooling
@@ -293,7 +302,6 @@ ASSERT_NVS_KEY_LEN(DEV_HW_KEY);
 #define FAN1_PWM_CHANNEL               4                   // dedicated LEDC channel for FAN1
 #define FAN2_PWM_PIN                   42                   // FAN2 output (IO42)
 #define FAN2_PWM_CHANNEL               5                   // dedicated LEDC channel for FAN2
-
 #define PWM_DUTY_CYCLE                 173                  // Default duty (68%)
 
 // --- LEDC channel allocation (keep unique per peripheral) ---

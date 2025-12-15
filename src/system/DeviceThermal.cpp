@@ -337,7 +337,7 @@ void Device::updateWireThermalFromHistory() {
     size_t nCur = 0;
     size_t nVolt = 0;
 
-    const bool useCapModel = isfinite(capBankCapF) && capBankCapF > 0.0f;
+    const bool capConfigured = isfinite(capBankCapF) && capBankCapF > 0.0f;
 
     // Prefer synchronized bus sampler (V+I) if available
     if (busSampler) {
@@ -360,13 +360,24 @@ void Device::updateWireThermalFromHistory() {
         }
     }
 
-    if (useCapModel && nVolt == 0 && discharger) {
+    if (capConfigured && nVolt == 0 && discharger) {
         // Fallback: use CpDischg history if BusSampler isn't available.
         nVolt = discharger->getHistorySince(
             voltageHistorySeq, voltBuf, (size_t)32, newVoltSeq);
+        // If still no voltage samples, take a single immediate reading so the
+        // capacitor model can proceed with realistic data.
+        if (nVolt == 0) {
+            float v = discharger->readCapVoltage();
+            if (isfinite(v)) {
+                voltBuf[0].timestampMs = millis();
+                voltBuf[0].voltageV    = v;
+                nVolt = 1;
+                newVoltSeq = voltageHistorySeq; // no history advance
+            }
+        }
     }
 
-    if (!useCapModel && nCur == 0 && currentSensor) {
+    if (!capConfigured && nCur == 0 && currentSensor) {
         nCur = currentSensor->getHistorySince(
             currentHistorySeq, curBuf, (size_t)32, newCurSeq);
     }
@@ -396,9 +407,11 @@ void Device::updateWireThermalFromHistory() {
         return false;
     };
 
+    const bool useCapModel = capConfigured;
+
     // Delegate integration to WireThermalModel:
-    //  - If capBankCapF is calibrated: use capacitor+recharge model (pulse-based).
-    //  - Otherwise: fall back to current-only integration.
+    //  - If capBankCapF is calibrated AND we have voltage+output history: use capacitor model.
+    //  - Otherwise: fall back to current-only integration so temps/power still update.
     if (useCapModel) {
         float vSrc = DEFAULT_DC_VOLTAGE;
         float rChg = DEFAULT_CHARGE_RESISTOR_OHMS;
@@ -431,6 +444,12 @@ void Device::updateWireThermalFromHistory() {
             return;
         }
     } else {
+        // Ensure we have current samples when falling back.
+        if (nCur == 0 && currentSensor) {
+            nCur = currentSensor->getHistorySince(
+                currentHistorySeq, curBuf, (size_t)32, newCurSeq);
+        }
+
         if (nCur > 0 || nOut > 0) {
             wireThermalModel.integrateCurrentOnly(curBuf, nCur,
                                                   outBuf, nOut,
@@ -440,6 +459,7 @@ void Device::updateWireThermalFromHistory() {
 
             if (nCur)  currentHistorySeq = newCurSeq;
             if (busSampler) busHistorySeq = newBusSeq;
+            else if (!busSampler && nVolt) voltageHistorySeq = newVoltSeq;
             outputHistorySeq  = newOutSeq;
             lastHeaterMask    = wireStateModel.getLastMask();
 

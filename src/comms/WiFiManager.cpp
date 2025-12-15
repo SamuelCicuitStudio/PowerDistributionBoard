@@ -611,6 +611,31 @@ void WiFiManager::registerRoutes_() {
                 else if (target == "wireOhmPerM")             { c.type = CTRL_WIRE_OHM_PER_M;    c.f1 = value.as<float>(); }
                 else if (target == "wireGauge")               { c.type = CTRL_WIRE_GAUGE;        c.i1 = value.as<int>(); }
                 else if (target == "coolingAir")              { c.type = CTRL_COOL_PROFILE;      c.b1 = value.as<bool>(); }
+                else if (target == "currLimit")               { c.type = CTRL_CURR_LIMIT;        c.f1 = value.as<float>(); }
+                else if (target == "timingMode") {
+                    String modeStr = value.as<String>();
+                    modeStr.toLowerCase();
+                    int mode = (modeStr == "manual" || value.as<int>() == 1) ? 1 : 0;
+                    CONF->PutInt(TIMING_MODE_KEY, mode);
+                    request->send(200, "application/json",
+                                  "{\"status\":\"ok\",\"applied\":true}");
+                    return;
+                }
+                else if (target == "timingProfile") {
+                    String profStr = value.as<String>();
+                    profStr.toLowerCase();
+                    int prof = 1; // medium default
+                    if (profStr.startsWith("hot")) prof = 0;
+                    else if (profStr.startsWith("gent")) prof = 2;
+                    else {
+                        int v = value.as<int>();
+                        if (v == 0 || v == 1 || v == 2) prof = v;
+                    }
+                    CONF->PutInt(TIMING_PROFILE_KEY, prof);
+                    request->send(200, "application/json",
+                                  "{\"status\":\"ok\",\"applied\":true}");
+                    return;
+                }
                 else if (target == "loopMode") {
                     String modeStr = value.as<String>();
                     modeStr.toLowerCase();
@@ -689,6 +714,14 @@ void WiFiManager::registerRoutes_() {
             doc["coolDropMaxC"]    = CONF->GetFloat(COOL_DROP_MAX_KEY,     DEFAULT_MAX_COOL_DROP_C);
             const int loopModeCfg = CONF->GetInt(LOOP_MODE_KEY, DEFAULT_LOOP_MODE);
             doc["loopMode"]       = (loopModeCfg == 1) ? "sequential" : "advanced";
+            const int timingModeCfg = CONF->GetInt(TIMING_MODE_KEY, DEFAULT_TIMING_MODE);
+            doc["timingMode"]     = (timingModeCfg == 1) ? "manual" : "preset";
+            const int timingProfileCfg = CONF->GetInt(TIMING_PROFILE_KEY, DEFAULT_TIMING_PROFILE);
+            const char* profStr =
+                (timingProfileCfg == 0) ? "hot" :
+                (timingProfileCfg == 2) ? "gentle" : "medium";
+            doc["timingProfile"]  = profStr;
+            doc["currLimit"]      = CONF->GetFloat(CURR_LIMIT_KEY, DEFAULT_CURR_LIMIT_A);
             doc["capacitanceF"]   = DEVICE ? DEVICE->getCapBankCapF() : 0.0f;
 
             // Fast bits via snapshot
@@ -1167,6 +1200,16 @@ bool WiFiManager::handleControl(const ControlCmd& c) {
             break;
         }
 
+        case CTRL_CURR_LIMIT: {
+            BUZZ->bip();
+            float limitA = c.f1;
+            if (!isfinite(limitA) || limitA < 0.0f) {
+                limitA = 0.0f;
+            }
+            ok = DEVTRAN->setCurrentLimitA(limitA);
+            break;
+        }
+
         case CTRL_CALIBRATE:
             BUZZ->bip();
             ok = DEVTRAN->startCalibrationTask();
@@ -1343,29 +1386,11 @@ bool WiFiManager::getSnapshot(StatusSnapshot& out) {
 
 // ===================== Live monitor stream (batched SSE) =====================
 void WiFiManager::pushLiveSample(const StatusSnapshot& s) {
-    LiveSample sample;
-    sample.seq      = ++_liveSeqCtr;
-    sample.tsMs     = millis();
-    sample.capV     = s.capVoltage;
-    sample.currentA = s.current;
-    sample.relay    = s.relayOn;
-    sample.ac       = s.acPresent;
-    sample.fanPct   = FAN ? FAN->getSpeedPercent() : 0;
-
-    uint16_t mask   = 0;
-    for (uint8_t i = 0; i < HeaterManager::kWireCount; ++i) {
-        if (s.outputs[i]) mask |= (1u << i);
-        const float wt = s.wireTemps[i];
-        sample.wireTemps[i] = isfinite(wt) ? (int16_t)lroundf(wt) : -127;
-    }
-    sample.outputsMask = mask;
-
-    _liveBuf[_liveHead] = sample;
-    _liveHead = (_liveHead + 1) % kLiveBufSize;
-    if (_liveCount < kLiveBufSize) {
-        ++_liveCount;
-    }
+    // Live push disabled; snapshots are pulled by clients.
+    (void)s;
 }
+
+
 
 bool WiFiManager::buildLiveBatch(JsonArray& items, uint32_t sinceSeq, uint32_t& seqStart, uint32_t& seqEnd) {
     seqStart = 0;
@@ -1403,77 +1428,13 @@ bool WiFiManager::buildLiveBatch(JsonArray& items, uint32_t sinceSeq, uint32_t& 
     return items.size() > 0;
 }
 
-void WiFiManager::startLiveStreamTask(uint32_t emitPeriodMs) {
-    if (liveStreamTaskHandle) return;
-    // Send latest batch on new SSE connection
-    liveSse.onConnect([this](AsyncEventSourceClient* client) {
-        if (_snapMtx &&
-            xSemaphoreTake(_snapMtx, pdMS_TO_TICKS(10)) == pdTRUE)
-        {
-            StaticJsonDocument<3072> doc;
-            JsonArray items = doc.createNestedArray("items");
-            uint32_t seqStart = 0, seqEnd = 0;
-            buildLiveBatch(items, 0, seqStart, seqEnd);
-            if (seqStart != 0) {
-                doc["seqStart"] = seqStart;
-                doc["seqEnd"]   = seqEnd;
-                String json;
-                serializeJson(doc, json);
-                client->send(json.c_str(), "live", seqEnd);
-            }
-            xSemaphoreGive(_snapMtx);
-        }
-    });
-    BaseType_t ok = xTaskCreatePinnedToCore(
-        WiFiManager::liveStreamTask,
-        "LiveStreamTask",
-        4096,
-        reinterpret_cast<void*>(emitPeriodMs),
-        1,
-        &liveStreamTaskHandle,
-        APP_CPU_NUM
-    );
-    if (ok != pdPASS) {
-        liveStreamTaskHandle = nullptr;
-        DEBUG_PRINTLN("[WiFi] Failed to start LiveStreamTask");
-    }
+void WiFiManager::startLiveStreamTask(uint32_t /*emitPeriodMs*/) {
+    // Live streaming disabled; clients poll snapshots instead.
 }
 
-void WiFiManager::liveStreamTask(void* pv) {
-    const uint32_t periodMs =
-        static_cast<uint32_t>(reinterpret_cast<uintptr_t>(pv));
-    const TickType_t periodTicks =
-        pdMS_TO_TICKS(periodMs ? periodMs : 150);
 
-    WiFiManager* self = WiFiManager::Get();
-    if (!self) vTaskDelete(nullptr);
 
-    for (;;) {
-        // delay between emits
-        vTaskDelay(periodTicks);
-
-        if (!self->_snapMtx ||
-            xSemaphoreTake(self->_snapMtx, pdMS_TO_TICKS(10)) != pdTRUE)
-        {
-            continue;
-        }
-
-        StaticJsonDocument<3072> doc;
-        JsonArray items = doc.createNestedArray("items");
-        uint32_t seqStart = 0;
-        uint32_t seqEnd   = 0;
-
-        if (self->buildLiveBatch(items, self->_liveSentSeq, seqStart, seqEnd) &&
-            items.size() > 0) {
-            doc["seqStart"] = seqStart;
-            doc["seqEnd"]   = seqEnd;
-            self->_liveSentSeq = seqEnd;
-
-            String json;
-            serializeJson(doc, json);
-            self->liveSse.send(json.c_str(), "live", seqEnd);
-        }
-
-        xSemaphoreGive(self->_snapMtx);
-    }
+void WiFiManager::liveStreamTask(void* /*pv*/) {
+    // Live streaming task disabled.
+    vTaskDelete(nullptr);
 }

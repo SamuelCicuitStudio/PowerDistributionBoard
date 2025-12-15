@@ -873,6 +873,14 @@
                 </div>
 
                 <div class="ds-field">
+                  <label for="currLimit">Current Trip Limit</label>
+                  <div class="input-with-unit">
+                    <input type="number" id="currLimit" step="0.1" />
+                    <span class="unit-label">A</span>
+                  </div>
+                </div>
+
+                <div class="ds-field" id="onTimeField" style="display: none">
                   <label for="onTime">ON Time</label>
                   <div class="input-with-unit">
                     <input type="number" id="onTime" />
@@ -880,7 +888,7 @@
                   </div>
                 </div>
 
-                <div class="ds-field">
+                <div class="ds-field" id="offTimeField" style="display: none">
                   <label for="offTime">OFF Time</label>
                   <div class="input-with-unit">
                     <input type="number" id="offTime" />
@@ -896,6 +904,28 @@
                       Sequential (coolest-first)
                     </option>
                   </select>
+                </div>
+
+                <div class="ds-field">
+                  <label for="timingModeSelect">Timing Settings</label>
+                  <select id="timingModeSelect">
+                    <option value="preset">Normal (Hot / Medium / Gentle)</option>
+                    <option value="manual">Advanced (manual ON/OFF)</option>
+                  </select>
+                </div>
+
+                <div class="ds-field" id="timingProfileField">
+                  <label for="timingProfileSelect">Heat Profile</label>
+                  <select id="timingProfileSelect">
+                    <option value="hot">Hot / Fast</option>
+                    <option value="medium">Medium</option>
+                    <option value="gentle">Gentle / Cool</option>
+                  </select>
+                </div>
+
+                <div class="ds-field" id="timingResolvedField">
+                  <label for="timingResolved">Resolved Timing</label>
+                  <input id="timingResolved" type="text" readonly />
                 </div>
 
                 <div class="ds-field">
