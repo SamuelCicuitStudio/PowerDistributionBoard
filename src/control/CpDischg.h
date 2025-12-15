@@ -70,6 +70,14 @@
 #define CAP_EMP_OFFSET          2.0f      // Vbus offset in volts
 #endif
 
+#ifndef CAP_EMP_GAIN_MIN
+#define CAP_EMP_GAIN_MIN        50.0f     // sanity lower bound for runtime gain
+#endif
+
+#ifndef CAP_EMP_GAIN_MAX
+#define CAP_EMP_GAIN_MAX        500.0f    // sanity upper bound for runtime gain
+#endif
+
 class CpDischg {
 public:
     explicit CpDischg(Relay* relay)
@@ -106,6 +114,13 @@ public:
 
     // Single-shot voltage sample (immediate ADC read, scaled).
     float sampleVoltageNow();
+    // Raw ADC sample (immediate) without scaling.
+    uint16_t sampleAdcRaw() const;
+    // Convert raw ADC code to ADC pin voltage (after offset).
+    float adcCodeToAdcVolts(uint16_t raw) const;
+    // Runtime adjustment of empirical gain (persist optional).
+    void  setEmpiricalGain(float gain, bool persist = false);
+    float getEmpiricalGain() const { return empiricalGain; }
 
 private:
     // Convert raw ADC code -> bus voltage (no HW side-effects).
@@ -124,6 +139,7 @@ private:
 
     // Ensure the monitor task is running; restart if it died or stalled.
     void ensureMonitorTask();
+    void loadEmpiricalGainFromConfig();
 
     Relay*       relay            = nullptr;
     volatile bool bypassRelayGate = true;
@@ -141,6 +157,9 @@ private:
 
     SemaphoreHandle_t voltageMutex   = nullptr;
     TaskHandle_t      monitorTaskHandle = nullptr;
+
+    // Runtime-tunable empirical calibration.
+    float empiricalGain = CAP_EMP_GAIN;
 };
 
 #endif // CPDISCHG_H

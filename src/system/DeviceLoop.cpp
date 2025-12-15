@@ -337,6 +337,12 @@ void Device::StartLoop() {
         currentSensor->calibrateZeroCurrent();
     }
 
+    // Calibrate empirical capacitor voltage gain using all available wires.
+    calibrateCapVoltageGain();
+    if (getState() != DeviceState::Running) {
+        return;
+    }
+
     // 1) Thermal model ready & wires cooled.
     initWireThermalModelOnce();
     waitForWiresNearAmbient(5.0f, 0);

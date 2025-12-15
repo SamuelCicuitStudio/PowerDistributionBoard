@@ -17,11 +17,7 @@ const char* outputKeys[10] = {
 // ===== Singleton storage & accessors =====
 Device* Device::instance = nullptr;
 
-void Device::Init(TempSensor* temp,
-                  CurrentSensor* current,
-                  Relay* relay,
-                  CpDischg* discharger,
-                  Indicator* ledIndicator)
+void Device::Init(TempSensor* temp,CurrentSensor* current,Relay* relay,CpDischg* discharger,Indicator* ledIndicator)
 {
     if (!instance) {
         instance = new Device(temp, current, relay, discharger, ledIndicator);
@@ -319,7 +315,6 @@ void Device::handleCommand(const DevCommand& cmd) {
 
     sendAck(ok);
 }
-
 
 void Device::setState(DeviceState next) {
     DeviceState prev;
@@ -705,6 +700,156 @@ bool Device::delayWithPowerWatch(uint32_t ms)
     return true;
 }
 
+bool Device::calibrateCapVoltageGain() {
+    if (!discharger || !currentSensor || !relayControl || !WIRE) {
+        DEBUG_PRINTLN("[Device] Cap gain calibration skipped (missing dependency)");
+        return false;
+    }
+
+    // Short pulse and sampling settings to avoid heating yet gather data.
+    static constexpr uint8_t  kSamplesPerWire   = 6;
+    static constexpr uint32_t kSettleMs         = 25;
+    static constexpr uint32_t kBetweenWireMs    = 15;
+    static constexpr uint32_t kSampleDelayMs    = 5;
+    static constexpr float    kMinAdcVolts      = 0.01f;
+    static constexpr float    kMinBusVolts      = 1.0f;
+    static constexpr float    kMinCurrentAbsA   = 0.1f;
+    static constexpr float    kMinPresenceFrac  = 0.05f; // 5% of expected current
+
+    // Make sure path is energized and quiet.
+    relayControl->turnOn();
+    WIRE->disableAll();
+    if (indicator) {
+        indicator->clearAll();
+    }
+    vTaskDelay(pdMS_TO_TICKS(30));
+
+    float cfgBusV = DEFAULT_DC_VOLTAGE;
+    if (CONF) {
+        cfgBusV = CONF->GetFloat(DC_VOLTAGE_KEY, DEFAULT_DC_VOLTAGE);
+        if (cfgBusV <= 0.0f) {
+            cfgBusV = CONF->GetFloat(DESIRED_OUTPUT_VOLTAGE_KEY, DEFAULT_DESIRED_OUTPUT_VOLTAGE);
+        }
+    }
+    if (!isfinite(cfgBusV) || cfgBusV <= 0.0f) {
+        cfgBusV = DEFAULT_DC_VOLTAGE;
+    }
+
+    float   gains[HeaterManager::kWireCount] = {0};
+    uint8_t gainCount = 0;
+
+    for (uint8_t idx = 1; idx <= HeaterManager::kWireCount; ++idx) {
+        if (!wireConfigStore.getAccessFlag(idx)) {
+            continue;
+        }
+
+        WireInfo wi = WIRE->getWireInfo(idx);
+        const float R = wi.resistanceOhm;
+        if (!isfinite(R) || R <= 0.1f) {
+            continue;
+        }
+
+        // Energize a single wire and sample current + ADC voltage.
+        WIRE->setOutput(idx, true);
+        if (!delayWithPowerWatch(kSettleMs)) {
+            WIRE->setOutput(idx, false);
+            return false;
+        }
+
+        float sumI = 0.0f;
+        float sumVadc = 0.0f;
+        uint8_t valid = 0;
+
+        for (uint8_t s = 0; s < kSamplesPerWire; ++s) {
+            float i    = currentSensor->readCurrent();
+            float vadc = discharger->adcCodeToAdcVolts(discharger->sampleAdcRaw());
+
+            if (isfinite(i) && isfinite(vadc)) {
+                sumI   += i;
+                sumVadc += vadc;
+                ++valid;
+            }
+
+            if (!delayWithPowerWatch(kSampleDelayMs)) {
+                WIRE->setOutput(idx, false);
+                return false;
+            }
+        }
+
+        WIRE->setOutput(idx, false);
+        vTaskDelay(pdMS_TO_TICKS(kBetweenWireMs));
+
+        if (valid == 0) {
+            continue;
+        }
+
+        const float iAvg    = sumI / valid;
+        const float vAdcAvg = sumVadc / valid;
+        const float absI    = fabsf(iAvg);
+
+        // Presence check: require either absolute floor or % of expected.
+        float expectedI = 0.0f;
+        if (cfgBusV > 0.0f && R > 0.0f) {
+            expectedI = cfgBusV / R;
+        }
+        float presenceFloor = kMinCurrentAbsA;
+        if (isfinite(expectedI) && expectedI > 0.0f) {
+            const float frac = expectedI * kMinPresenceFrac;
+            if (frac > presenceFloor) {
+                presenceFloor = frac;
+            }
+        }
+        const bool present = absI >= presenceFloor;
+        WIRE->setWirePresence(idx, present, absI);
+        if (!present) {
+            continue;
+        }
+
+        if (vAdcAvg <= kMinAdcVolts) {
+            continue;
+        }
+
+        const float busV = absI * R;
+        if (!isfinite(busV) || busV <= CAP_EMP_OFFSET || busV < kMinBusVolts) {
+            continue;
+        }
+
+        float gain = (busV - CAP_EMP_OFFSET) / vAdcAvg;
+        if (!isfinite(gain)) {
+            continue;
+        }
+        if (gain < CAP_EMP_GAIN_MIN) gain = CAP_EMP_GAIN_MIN;
+        if (gain > CAP_EMP_GAIN_MAX) gain = CAP_EMP_GAIN_MAX;
+
+        gains[gainCount++] = gain;
+
+        DEBUG_PRINTF("[Device] Cap gain cal OUT%u: R=%.2f I=%.3fA Vbus=%.2fV Vadc=%.3fV -> gain=%.2f\n",
+                     (unsigned)idx,
+                     (double)R,
+                     (double)absI,
+                     (double)busV,
+                     (double)vAdcAvg,
+                     (double)gain);
+    }
+
+    if (gainCount == 0) {
+        DEBUG_PRINTLN("[Device] Cap gain calibration skipped (no valid wire samples)");
+        return false;
+    }
+
+    float sumGain = 0.0f;
+    for (uint8_t i = 0; i < gainCount; ++i) {
+        sumGain += gains[i];
+    }
+    const float finalGain = sumGain / static_cast<float>(gainCount);
+    discharger->setEmpiricalGain(finalGain, true);
+
+    DEBUG_PRINTF("[Device] Cap empirical gain calibrated to %.2f using %u wire(s)\n",
+                 (double)finalGain,
+                 (unsigned)gainCount);
+    return true;
+}
+
 void Device::calibrateIdleCurrent() {
     if (!currentSensor) {
         DEBUG_PRINTLN("[Device] Idle current calibration skipped (no CurrentSensor) ");
@@ -764,8 +909,7 @@ void Device::handleOverCurrentFault()
     }
 }
 // ------------------- Fan control helpers -------------------
-static inline uint8_t _mapTempToPct(float T, float Ton, float Tfull,
-                                    float Toff, uint8_t lastPct)
+static inline uint8_t _mapTempToPct(float T, float Ton, float Tfull,float Toff, uint8_t lastPct)
 {
     if (!isfinite(T)) {
         // Sensor missing? Keep previous command; don't slam fans.

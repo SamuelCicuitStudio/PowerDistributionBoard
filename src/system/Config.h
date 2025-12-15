@@ -79,6 +79,7 @@
 #define AC_VOLTAGE_KEY                 "ACVLT"     // AC line voltage key
 #define DC_VOLTAGE_KEY                 "DCVLT"     // Target DC output voltage key
 #define DESIRED_OUTPUT_VOLTAGE_KEY     "DOUTV"     // User-defined target output voltage
+#define CP_EMP_GAIN_KEY                "CPEMGN"    // Empirical capacitor ADC gain key
 #define COOLING_PROFILE_KEY            "CLPRF"     // bool: true=fast (air), false=buried/slow
 #define LOOP_MODE_KEY                  "LPMODE"    // int: 0=advanced, 1=sequential
 #define TEMP_SENSOR_COUNT_KEY          "TMNT"    // Number of temperature sensors detected
@@ -191,6 +192,7 @@ ASSERT_NVS_KEY_LEN(DEV_HW_KEY);
 #define DEFAULT_AC_VOLTAGE             230.0f           // Volts
 #define DEFAULT_DC_VOLTAGE             325.0f           // Volts
 #define DEFAULT_DESIRED_OUTPUT_VOLTAGE 180.0f           // Volts (safe default power level)
+#define DEFAULT_CAP_EMP_GAIN           (321.0f / 1.90f) // Default empirical ADC->bus gain
 #define DEFAULT_TEMP_SENSOR_COUNT      12               // Default to 12 sensors unless discovered otherwise
 #define DEFAULT_COOLING_PROFILE_FAST   true             // true=air/fast cooling, false=buried/slow
 #define DEFAULT_LOOP_MODE              0                // 0=advanced, 1=sequential

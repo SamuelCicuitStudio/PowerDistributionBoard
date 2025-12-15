@@ -21,6 +21,7 @@ void CpDischg::begin() {
     DEBUGGSTOP();
 
     pinMode(CAPACITOR_ADC_PIN, INPUT);
+    loadEmpiricalGainFromConfig();
 
     // Init mutex once
     if (voltageMutex == nullptr) {
@@ -115,6 +116,10 @@ float CpDischg::readCapAdcScaled() {
 float CpDischg::sampleVoltageNow() {
     uint16_t raw = analogRead(CAPACITOR_ADC_PIN);
     return adcCodeToBusVolts(raw);
+}
+
+uint16_t CpDischg::sampleAdcRaw() const {
+    return analogRead(CAPACITOR_ADC_PIN);
 }
 
 size_t CpDischg::getHistorySince(uint32_t lastSeq,
@@ -261,33 +266,49 @@ void CpDischg::monitorTask(uint16_t windowMs,
 // ADC code -> bus volts
 // ============================================================================
 float CpDischg::adcCodeToBusVolts(uint16_t raw) const {
-    // Offset-correct the raw code
+    const float v_adc = adcCodeToAdcVolts(raw);
+
+    // Empirical-only mapping: Vbus = gain * Vadc + offset.
+    float gain = empiricalGain;
+    if (!isfinite(gain)) {
+        gain = CAP_EMP_GAIN;
+    }
+    if (gain < CAP_EMP_GAIN_MIN) gain = CAP_EMP_GAIN_MIN;
+    if (gain > CAP_EMP_GAIN_MAX) gain = CAP_EMP_GAIN_MAX;
+
+    return v_adc * gain + CAP_EMP_OFFSET;
+}
+
+float CpDischg::adcCodeToAdcVolts(uint16_t raw) const {
     int32_t correctedRaw = static_cast<int32_t>(raw) - ADC_OFFSET;
     if (correctedRaw < 0) correctedRaw = 0;
+    return (static_cast<float>(correctedRaw) / ADC_MAX) * ADC_REF_VOLTAGE;
+}
 
-    // Convert to ADC pin voltage (after offset), 12-bit, 3.3V ref by default
-    const float v_adc = (static_cast<float>(correctedRaw) / ADC_MAX) * ADC_REF_VOLTAGE;
+void CpDischg::setEmpiricalGain(float gain, bool persist) {
+    if (!isfinite(gain)) {
+        return;
+    }
+    float g = gain;
+    if (g < CAP_EMP_GAIN_MIN) g = CAP_EMP_GAIN_MIN;
+    if (g > CAP_EMP_GAIN_MAX) g = CAP_EMP_GAIN_MAX;
 
-#if CAP_USE_EMPIRICAL_CAL
-    // --- Empirical calibration: ignore divider/ground-tie math entirely ---
-    // Default mapping: 319V bus → 2.00V at ADC → gain = 159.5 V/V
-    // Change CAP_EMP_GAIN or CAP_EMP_OFFSET in CpDischg.h if you re-calibrate.
-    //return 84.1;
-    return v_adc * CAP_EMP_GAIN + CAP_EMP_OFFSET;
-#else
-    // --- Original resistor-based model (kept for fallback) ---
-    // Resolve ground-tie (charge) resistor from config; fall back to default.
-    float rgnd = DEFAULT_CHARGE_RESISTOR_OHMS;
+    empiricalGain = g;
+
+    if (persist && CONF) {
+        CONF->PutFloat(CP_EMP_GAIN_KEY, g);
+    }
+}
+
+void CpDischg::loadEmpiricalGainFromConfig() {
+    float g = CAP_EMP_GAIN;
     if (CONF) {
-        rgnd = CONF->GetFloat(CHARGE_RESISTOR_KEY, DEFAULT_CHARGE_RESISTOR_OHMS);
-    }
-    if (!isfinite(rgnd) || rgnd <= 0.0f) {
-        rgnd = DEFAULT_CHARGE_RESISTOR_OHMS;
+        g = CONF->GetFloat(CP_EMP_GAIN_KEY, DEFAULT_CAP_EMP_GAIN);
     }
 
-    // Vadc = Vbus * Rbot / (Rtop + Rbot + Rgnd) → Vbus = Vadc * ((Rtop+Rbot+Rgnd)/Rbot)
-    const float scale =
-        ((DIVIDER_TOP_OHMS + DIVIDER_BOTTOM_OHMS + rgnd) / DIVIDER_BOTTOM_OHMS) / OPAMP_GAIN;
-    return v_adc * scale;
-#endif
+    if (!isfinite(g) || g < CAP_EMP_GAIN_MIN || g > CAP_EMP_GAIN_MAX) {
+        g = CAP_EMP_GAIN;
+    }
+
+    empiricalGain = g;
 }

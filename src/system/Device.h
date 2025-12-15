@@ -305,6 +305,7 @@ public:
     float wireResistanceAtTemp(uint8_t idx, float T) const;
     uint16_t getActiveMaskFromHeater() const;   ///< Convenience: read current mask.
     void calibrateIdleCurrent();                ///< Measure & store baseline idle current.
+    bool calibrateCapVoltageGain();             ///< Calibrate empirical cap voltage gain using current sensor.
 
     /**
      * @brief Integrate thermal model using CurrentSensor + HeaterManager history.
