@@ -55,6 +55,7 @@ public:
   bool setCoolingProfile(bool fast);
   bool setLoopMode(uint8_t mode);
   bool requestResetFlagAndRestart();
+  bool startCalibrationTask(uint32_t timeoutMs = 10000);
 
 private:
   bool sendCommandAndWait(Device::DevCmdType t, int32_t i1 = 0, float f1 = 0.0f, bool b1 = false, TickType_t to = pdMS_TO_TICKS(500));

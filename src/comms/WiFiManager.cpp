@@ -486,6 +486,7 @@ void WiFiManager::registerRoutes_() {
             doc["capVoltage"] = s.capVoltage;
             doc["capAdcRaw"]  = s.capAdcScaled;
             doc["current"]    = s.current;
+            doc["capacitanceF"] = DEVICE ? DEVICE->getCapBankCapF() : 0.0f;
 
             JsonArray temps = doc.createNestedArray("temperatures");
             for (uint8_t i = 0; i < MAX_TEMP_SENSORS; ++i) {
@@ -621,6 +622,7 @@ void WiFiManager::registerRoutes_() {
                 else if (target == "coolBuriedScale")        { c.type = CTRL_COOL_PROFILE;      c.f1 = value.as<float>(); }
                 else if (target == "coolKCold")              { c.type = CTRL_COOL_PROFILE;      c.i1 = -1; c.f1 = value.as<float>(); }
                 else if (target == "coolDropMaxC")           { c.type = CTRL_COOL_PROFILE;      c.i1 = -2; c.f1 = value.as<float>(); }
+                else if (target == "calibrate")              { c.type = CTRL_CALIBRATE; }
                 else {
                     request->send(400, "application/json",
                                   "{\"error\":\"Unknown target\"}");
@@ -687,6 +689,7 @@ void WiFiManager::registerRoutes_() {
             doc["coolDropMaxC"]    = CONF->GetFloat(COOL_DROP_MAX_KEY,     DEFAULT_MAX_COOL_DROP_C);
             const int loopModeCfg = CONF->GetInt(LOOP_MODE_KEY, DEFAULT_LOOP_MODE);
             doc["loopMode"]       = (loopModeCfg == 1) ? "sequential" : "advanced";
+            doc["capacitanceF"]   = DEVICE ? DEVICE->getCapBankCapF() : 0.0f;
 
             // Fast bits via snapshot
             doc["relay"] = s.relayOn;
@@ -1163,6 +1166,11 @@ bool WiFiManager::handleControl(const ControlCmd& c) {
             ok = DEVTRAN->setLoopMode(static_cast<uint8_t>(mode));
             break;
         }
+
+        case CTRL_CALIBRATE:
+            BUZZ->bip();
+            ok = DEVTRAN->startCalibrationTask();
+            break;
 
         default:
             DEBUG_PRINTF("[WiFi] Unknown control type: %d\n",

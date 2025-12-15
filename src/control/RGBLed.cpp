@@ -65,6 +65,68 @@ void RGBLed::setDeviceState(DevState s) {
   sendCmd(c, 0);
 }
 
+void RGBLed::clearActivePattern() {
+  Cmd c{};
+  c.type = CmdType::STOP;
+  sendCmd(c, 0);
+}
+
+static uint32_t _errorCategoryColor(ErrorCategory c) {
+  switch (c) {
+    case ErrorCategory::POWER:   return RGB_RED;
+    case ErrorCategory::CALIB:   return RGB_YELLOW;
+    case ErrorCategory::THERMAL: return RGB_OVR_THERMAL_GLOBAL;
+    case ErrorCategory::SENSOR:  return RGB_OVR_SENSOR_MISSING;
+    case ErrorCategory::CONFIG:  return RGB_OVR_CFG_ERROR;
+    case ErrorCategory::COMMS:   return RGB_CYAN;
+    default:                     return RGB_RED;
+  }
+}
+
+void RGBLed::showError(ErrorCategory category,
+                       uint8_t code,
+                       uint8_t priority,
+                       bool preempt,
+                       uint32_t durationMs)
+{
+  showErrorCode(_errorCategoryColor(category),
+                code,
+                120,
+                120,
+                800,
+                priority,
+                preempt,
+                durationMs);
+}
+
+void RGBLed::showErrorCode(uint32_t color,
+                           uint8_t code,
+                           uint16_t onMs,
+                           uint16_t offMs,
+                           uint16_t gapMs,
+                           uint8_t priority,
+                           bool preempt,
+                           uint32_t durationMs)
+{
+  if (code == 0) code = 1;
+  if (code > 20) code = 20;
+
+  if (onMs < 30) onMs = 30;
+  if (offMs < 30) offMs = 30;
+  if (gapMs < 200) gapMs = 200;
+
+  PatternOpts o{};
+  o.color      = color;
+  o.onMs       = onMs;
+  o.periodMs   = onMs + offMs;
+  o.gapMs      = gapMs;
+  o.count      = code;
+  o.durationMs = durationMs;
+  o.priority   = priority;
+  o.preempt    = preempt;
+  playPattern(Pattern::CODE, o);
+}
+
 void RGBLed::off(uint8_t priority, bool preempt) {
   PatternOpts o{};
   o.color    = RGB_OFF;
@@ -527,6 +589,13 @@ void RGBLed::taskLoop() {
                    ? (_currentOpts.periodMs - _currentOpts.onMs)
                    : 60);
         break;
+      case Pattern::CODE:
+        doCode(_currentOpts.color,
+               _currentOpts.count,
+               _currentOpts.onMs,
+               _currentOpts.periodMs,
+               _currentOpts.gapMs);
+        break;
     }
   }
 
@@ -609,4 +678,22 @@ void RGBLed::doStrobe(uint32_t color, uint16_t onMs, uint16_t offMs) {
   vTaskDelay(pdMS_TO_TICKS(onMs));
   writeColor(0, 0, 0);
   vTaskDelay(pdMS_TO_TICKS(offMs));
+}
+
+void RGBLed::doCode(uint32_t color, uint8_t count, uint16_t onMs, uint16_t periodMs, uint16_t gapMs) {
+  if (count == 0) count = 1;
+  if (count > 20) count = 20;
+
+  if (onMs < 30) onMs = 30;
+  if (periodMs < onMs + 30) periodMs = onMs + 120;
+  uint16_t offMs = periodMs > onMs ? (periodMs - onMs) : 120;
+  if (gapMs < 200) gapMs = 200;
+
+  for (uint8_t i = 0; i < count; ++i) {
+    writeColor(RGB_R(color), RGB_G(color), RGB_B(color));
+    vTaskDelay(pdMS_TO_TICKS(onMs));
+    writeColor(0, 0, 0);
+    const uint16_t pauseMs = (i + 1u < count) ? offMs : gapMs;
+    vTaskDelay(pdMS_TO_TICKS(pauseMs));
+  }
 }

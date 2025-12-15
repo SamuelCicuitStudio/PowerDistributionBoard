@@ -40,6 +40,7 @@
   let liveQueue = []; // queued live samples
   let liveTimer = null; // playback timer
   let liveLastSeq = 0; // last seq applied
+  let calibrationBusy = false; // prevent overlapping manual calibrations
 
   function isManualMode() {
     const t = document.getElementById("modeToggle");
@@ -535,6 +536,36 @@
     await sendControlCommand("set", "systemShutdown", true);
   }
 
+  async function forceCalibration() {
+    if (calibrationBusy) {
+      openAlert(
+        "Calibration",
+        "A calibration is already in progress.",
+        "warning"
+      );
+      return;
+    }
+
+    calibrationBusy = true;
+    try {
+      const res = await sendControlCommand("set", "calibrate", true);
+      if (res && !res.error) {
+        openAlert("Calibration", "Calibration started.", "success");
+      } else {
+        openAlert(
+          "Calibration",
+          (res && res.error) || "Failed to start calibration",
+          "danger"
+        );
+      }
+    } catch (err) {
+      console.error("Calibration request failed:", err);
+      openAlert("Calibration", "Request failed.", "danger");
+    } finally {
+      calibrationBusy = false;
+    }
+  }
+
   async function resetSystem() {
     await sendControlCommand("set", "systemReset", true);
   }
@@ -927,6 +958,9 @@
       }
       if (data.wireOhmPerM !== undefined) {
         setField("wireOhmPerM", data.wireOhmPerM);
+      }
+      if (data.capacitanceF !== undefined) {
+        renderCapacitance(parseFloat(data.capacitanceF));
       }
 
       // Nichrome R01..R10 from wireRes{1..10}
@@ -1780,6 +1814,25 @@
     display.textContent = num.toFixed(2) + unit;
   }
 
+  function renderCapacitance(capF) {
+    const display = document.getElementById("capacitanceValue");
+    if (!display) return;
+
+    const svg = display.closest("svg");
+    const stroke = svg ? svg.querySelector("path.gauge-fg") : null;
+
+    if (!Number.isFinite(capF) || capF <= 0) {
+      if (stroke) {
+        stroke.setAttribute("stroke-dasharray", "0, 100");
+      }
+      display.textContent = "--";
+      return;
+    }
+
+    const capMilli = capF * 1000.0;
+    updateGauge("capacitanceValue", capMilli, "mF", 500);
+  }
+
   function startMonitorPolling(intervalMs = 400) {
     if (window.__MONITOR_INTERVAL__) {
       clearInterval(window.__MONITOR_INTERVAL__);
@@ -1844,6 +1897,10 @@
             updateGauge(id, Number(t), "°C", 150);
           }
         }
+
+        // Capacitance (F -> mF)
+        const capF = parseFloat(data.capacitanceF);
+        renderCapacitance(capF);
 
         // Ready / Off LEDs
         const readyLed = document.getElementById("readyLed");
@@ -1964,6 +2021,7 @@
   window.resetDeviceAndNichrome = resetDeviceAndNichrome;
   window.startSystem = startSystem;
   window.shutdownSystem = shutdownSystem;
+  window.forceCalibration = forceCalibration;
   window.resetSystem = resetSystem;
   window.rebootSystem = rebootSystem;
   window.loadControls = loadControls;

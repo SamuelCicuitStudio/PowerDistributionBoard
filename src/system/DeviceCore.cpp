@@ -413,7 +413,7 @@ void Device::begin() {
     pinMode(DETECT_12V_PIN, INPUT);
     // Boot cues (background + overlay + sound)
     BUZZ->bipStartupSequence();
-    RGB->postOverlay(OverlayEvent::WAKE_FLASH);
+    RGB->postOverlay(OverlayEvent::WAKE_FLASH); 
 
     wireConfigStore.loadFromNvs();
     checkAllowedOutputs();
@@ -573,13 +573,14 @@ void Device::monitorTemperatureTask(void* param) {
                 DEBUG_PRINTF("[Device] Overtemperature Detected! Sensor[%u] = %.2f°C\n", i, temp);
                 BUZZ->bipOverTemperature();
 
-                // Visual: critical temperature overlay + fault background
-                RGB->postOverlay(OverlayEvent::TEMP_CRIT);
-                RGB->setFault();
-
-                self->setState(DeviceState::Error);
-                WIRE->disableAll();
-                self->indicator->clearAll();
+                  // Visual: critical temperature overlay + fault background
+                  RGB->postOverlay(OverlayEvent::TEMP_CRIT);
+                  RGB->setFault();
+                  RGB->showError(ErrorCategory::THERMAL, 1);
+  
+                  self->setState(DeviceState::Error);
+                  WIRE->disableAll();
+                  self->indicator->clearAll();
                 vTaskDelete(nullptr);
             }
         }
@@ -648,6 +649,7 @@ void Device::handle12VDrop() {
     // Visual + audible
     RGB->postOverlay(OverlayEvent::RELAY_OFF);
     RGB->setFault();
+    RGB->showError(ErrorCategory::POWER, 3);
     BUZZ->bip();
 
     // Cut power paths & loads immediately
@@ -701,6 +703,12 @@ bool Device::delayWithPowerWatch(uint32_t ms)
 }
 
 bool Device::calibrateCapVoltageGain() {
+    // Do not recalibrate while already in RUN.
+    if (getState() == DeviceState::Running) {
+        DEBUG_PRINTLN("[Device] Cap gain calibration skipped (already running)");
+        return false;
+    }
+
     if (!discharger || !currentSensor || !relayControl || !WIRE) {
         DEBUG_PRINTLN("[Device] Cap gain calibration skipped (missing dependency)");
         return false;
@@ -715,14 +723,16 @@ bool Device::calibrateCapVoltageGain() {
     static constexpr float    kMinBusVolts      = 1.0f;
     static constexpr float    kMinCurrentAbsA   = 0.1f;
     static constexpr float    kMinPresenceFrac  = 0.05f; // 5% of expected current
+    static constexpr uint8_t  kCoarseSamples    = 12;
+    static constexpr float    kCoarseMinAdcV    = 0.02f;
 
-    // Make sure path is energized and quiet.
-    relayControl->turnOn();
+    // Make sure path is quiet; start with relay open for coarse estimate.
+    relayControl->turnOff();
     WIRE->disableAll();
     if (indicator) {
         indicator->clearAll();
     }
-    vTaskDelay(pdMS_TO_TICKS(30));
+    vTaskDelay(pdMS_TO_TICKS(40));
 
     float cfgBusV = DEFAULT_DC_VOLTAGE;
     if (CONF) {
@@ -734,6 +744,41 @@ bool Device::calibrateCapVoltageGain() {
     if (!isfinite(cfgBusV) || cfgBusV <= 0.0f) {
         cfgBusV = DEFAULT_DC_VOLTAGE;
     }
+    // Coarse expected mains-derived DC (full-wave rectified 220–230 VAC).
+    const float coarseTarget = constrain(cfgBusV, 311.0f, 325.0f);
+
+    // --- Coarse gain from open-relay measurement ---
+    float coarseVadcSum = 0.0f;
+    uint8_t coarseCnt   = 0;
+    for (uint8_t i = 0; i < kCoarseSamples; ++i) {
+        float vadc = discharger->adcCodeToAdcVolts(discharger->sampleAdcRaw());
+        if (isfinite(vadc)) {
+            coarseVadcSum += vadc;
+            ++coarseCnt;
+        }
+        vTaskDelay(pdMS_TO_TICKS(5));
+    }
+
+    float coarseGain = NAN;
+    if (coarseCnt > 0) {
+        const float vadc = coarseVadcSum / coarseCnt;
+        if (vadc > kCoarseMinAdcV && coarseTarget > CAP_EMP_OFFSET) {
+            coarseGain = (coarseTarget - CAP_EMP_OFFSET) / vadc;
+            if (isfinite(coarseGain)) {
+                if (coarseGain < CAP_EMP_GAIN_MIN) coarseGain = CAP_EMP_GAIN_MIN;
+                if (coarseGain > CAP_EMP_GAIN_MAX) coarseGain = CAP_EMP_GAIN_MAX;
+                discharger->setEmpiricalGain(coarseGain, false);
+                DEBUG_PRINTF("[Device] Cap coarse gain: target=%.1fV Vadc=%.3fV -> gain=%.2f\n",
+                             (double)coarseTarget,
+                             (double)vadc,
+                             (double)coarseGain);
+            }
+        }
+    }
+
+    // For fine calibration we need relay on.
+    relayControl->turnOn();
+    vTaskDelay(pdMS_TO_TICKS(20));
 
     float   gains[HeaterManager::kWireCount] = {0};
     uint8_t gainCount = 0;
@@ -833,6 +878,11 @@ bool Device::calibrateCapVoltageGain() {
     }
 
     if (gainCount == 0) {
+        if (isfinite(coarseGain)) {
+            discharger->setEmpiricalGain(coarseGain, true);
+            DEBUG_PRINTLN("[Device] Cap gain calibration: fine skipped, coarse applied");
+            return true;
+        }
         DEBUG_PRINTLN("[Device] Cap gain calibration skipped (no valid wire samples)");
         return false;
     }
@@ -844,9 +894,295 @@ bool Device::calibrateCapVoltageGain() {
     const float finalGain = sumGain / static_cast<float>(gainCount);
     discharger->setEmpiricalGain(finalGain, true);
 
-    DEBUG_PRINTF("[Device] Cap empirical gain calibrated to %.2f using %u wire(s)\n",
+    DEBUG_PRINTF("[Device] Cap empirical gain calibrated to %.2f using %u wire(s)%s\n",
                  (double)finalGain,
-                 (unsigned)gainCount);
+                 (unsigned)gainCount,
+                 isfinite(coarseGain) ? " (coarse seed used)" : "");
+    return true;
+}
+
+bool Device::calibrateCapacitance() {
+    if (getState() == DeviceState::Running) {
+        DEBUG_PRINTLN("[Device] Capacitance calibration skipped (already running)");
+        return false;
+    }
+    if (!discharger || !relayControl || !WIRE) {
+        DEBUG_PRINTLN("[Device] Capacitance calibration skipped (missing dependency)");
+        return false;
+    }
+
+    static constexpr float    kMinBusV        = 40.0f;
+    static constexpr float    kMinAdcV        = 0.02f;
+    static constexpr float    kCapMinF        = 1e-6f;   // 1 µF
+    static constexpr float    kCapMaxF        = 0.5f;    // 0.5 F (sanity)
+    static constexpr uint32_t kSettleMs       = 30;
+    static constexpr uint32_t kRechargeMs     = 250;
+    static constexpr uint8_t  kMaxCoarseTries = 3;
+
+    // Choose a valid, present wire with the highest resistance (slowest discharge).
+    uint8_t bestIdx = 0;
+    float   bestR   = 0.0f;
+
+    for (uint8_t idx = 1; idx <= HeaterManager::kWireCount; ++idx) {
+        if (!wireConfigStore.getAccessFlag(idx)) {
+            continue;
+        }
+        WireInfo wi = WIRE->getWireInfo(idx);
+        if (!(DEVICE_FORCE_ALL_WIRES_PRESENT != 0 || wi.connected)) {
+            continue;
+        }
+        const float R = wi.resistanceOhm;
+        if (!isfinite(R) || R <= 0.5f) {
+            continue;
+        }
+        if (R > bestR) {
+            bestR   = R;
+            bestIdx = idx;
+        }
+    }
+
+    if (bestIdx == 0) {
+        DEBUG_PRINTLN("[Device] Capacitance calibration failed (no valid/present wire)");
+        return false;
+    }
+
+    // Ensure quiet state.
+    WIRE->disableAll();
+    if (indicator) {
+        indicator->clearAll();
+    }
+
+    // Ensure the bank is charged enough for a meaningful decay measurement.
+    relayControl->turnOn();
+    vTaskDelay(pdMS_TO_TICKS(kRechargeMs));
+    float busV = discharger->readCapVoltage();
+    if (!isfinite(busV) || busV < kMinBusV) {
+        vTaskDelay(pdMS_TO_TICKS(kRechargeMs));
+        busV = discharger->readCapVoltage();
+    }
+    if (!isfinite(busV) || busV < kMinBusV) {
+        DEBUG_PRINTF("[Device] Capacitance calibration failed (bus too low: %.2fV)\n", (double)busV);
+        return false;
+    }
+
+    // Disconnect input so we measure a true discharge curve.
+    relayControl->turnOff();
+    vTaskDelay(pdMS_TO_TICKS(kSettleMs));
+
+    // --- Coarse estimate (2-point) ---
+    float Ccoarse = NAN;
+    uint32_t tCoarseUs = 5000; // start with 5ms
+
+    for (uint8_t attempt = 0; attempt < kMaxCoarseTries; ++attempt) {
+        const float v0 = discharger->adcCodeToAdcVolts(discharger->sampleAdcRaw());
+        if (!(isfinite(v0) && v0 > kMinAdcV)) {
+            break;
+        }
+
+        WIRE->setOutput(bestIdx, true);
+#ifdef ESP32
+        ets_delay_us(tCoarseUs);
+#else
+        delayMicroseconds(tCoarseUs);
+#endif
+        const float v1 = discharger->adcCodeToAdcVolts(discharger->sampleAdcRaw());
+        WIRE->setOutput(bestIdx, false);
+
+        if (!(isfinite(v1) && v1 > kMinAdcV && v1 < v0)) {
+            tCoarseUs = std::min<uint32_t>(tCoarseUs * 2u, 60000u);
+            vTaskDelay(pdMS_TO_TICKS(5));
+            continue;
+        }
+
+        const float lnRatio = logf(v1 / v0);
+        if (!(isfinite(lnRatio) && lnRatio < -1e-4f)) {
+            tCoarseUs = std::min<uint32_t>(tCoarseUs * 2u, 60000u);
+            vTaskDelay(pdMS_TO_TICKS(5));
+            continue;
+        }
+
+        const float dt = (float)tCoarseUs * 1e-6f;
+        const float C  = -dt / (bestR * lnRatio);
+        if (isfinite(C) && C >= kCapMinF && C <= kCapMaxF) {
+            Ccoarse = C;
+            break;
+        }
+
+        tCoarseUs = std::min<uint32_t>(tCoarseUs * 2u, 60000u);
+        vTaskDelay(pdMS_TO_TICKS(5));
+    }
+
+    if (!isfinite(Ccoarse)) {
+        DEBUG_PRINTLN("[Device] Capacitance calibration failed (coarse estimate invalid)");
+        // Restore relay for normal operation.
+        relayControl->turnOn();
+        return false;
+    }
+
+    // Recharge slightly (coarse probe may have drained the bank).
+    relayControl->turnOn();
+    vTaskDelay(pdMS_TO_TICKS(kRechargeMs));
+    relayControl->turnOff();
+    vTaskDelay(pdMS_TO_TICKS(kSettleMs));
+
+    // --- Fine estimate (linear regression on ln(Vadc) vs time) ---
+    float dtTargetS = 0.7f * bestR * Ccoarse; // ~50% drop target for good SNR
+    if (dtTargetS < 0.005f) dtTargetS = 0.005f;
+    if (dtTargetS > 0.200f) dtTargetS = 0.200f;
+
+    static constexpr uint8_t kSamples = 40;
+    const uint32_t dtTargetUs = (uint32_t)lroundf(dtTargetS * 1e6f);
+    uint32_t sampleStepUs = (kSamples > 1) ? (dtTargetUs / (kSamples - 1u)) : dtTargetUs;
+    if (sampleStepUs < 200u)  sampleStepUs = 200u;
+    if (sampleStepUs > 8000u) sampleStepUs = 8000u;
+
+    float tSum = 0.0f;
+    float lnSum = 0.0f;
+    float t2Sum = 0.0f;
+    float tLnSum = 0.0f;
+    uint8_t n = 0;
+
+    const uint32_t t0Us = micros();
+    WIRE->setOutput(bestIdx, true);
+
+    for (uint8_t i = 0; i < kSamples; ++i) {
+        const uint32_t targetUs = t0Us + i * sampleStepUs;
+        while ((int32_t)(micros() - targetUs) < 0) {
+#ifdef ESP32
+            ets_delay_us(50);
+#else
+            delayMicroseconds(50);
+#endif
+        }
+
+        const float v = discharger->adcCodeToAdcVolts(discharger->sampleAdcRaw());
+        if (isfinite(v) && v > kMinAdcV) {
+            const float t = (float)(targetUs - t0Us) * 1e-6f;
+            const float l = logf(v);
+            if (isfinite(l)) {
+                tSum   += t;
+                lnSum  += l;
+                t2Sum  += t * t;
+                tLnSum += t * l;
+                ++n;
+            }
+        }
+    }
+
+    WIRE->setOutput(bestIdx, false);
+
+    // Restore relay for normal operation.
+    relayControl->turnOn();
+
+    if (n < 8) {
+        DEBUG_PRINTLN("[Device] Capacitance calibration failed (not enough valid samples)");
+        return false;
+    }
+
+    const float denom = (float)n * t2Sum - (tSum * tSum);
+    if (!(isfinite(denom) && fabsf(denom) > 1e-9f)) {
+        DEBUG_PRINTLN("[Device] Capacitance calibration failed (degenerate regression)");
+        return false;
+    }
+
+    const float slope = ((float)n * tLnSum - (tSum * lnSum)) / denom; // ln(V) = b + slope*t
+    if (!(isfinite(slope) && slope < 0.0f)) {
+        DEBUG_PRINTLN("[Device] Capacitance calibration failed (invalid slope)");
+        return false;
+    }
+
+    const float Cfine = -1.0f / (slope * bestR);
+    if (!(isfinite(Cfine) && Cfine >= kCapMinF && Cfine <= kCapMaxF)) {
+        DEBUG_PRINTF("[Device] Capacitance calibration failed (C out of range: %.6f F)\n", (double)Cfine);
+        return false;
+    }
+
+    capBankCapF = Cfine;
+    if (CONF) {
+        CONF->PutFloat(CAP_BANK_CAP_F_KEY, capBankCapF);
+    }
+
+    DEBUG_PRINTF("[Device] Capacitance calibrated: C=%.6f F using OUT%u (R=%.2fΩ)\n",
+                 (double)capBankCapF,
+                 (unsigned)bestIdx,
+                 (double)bestR);
+    return true;
+}
+
+bool Device::runCalibrationsStandalone(uint32_t timeoutMs) {
+    if (getState() == DeviceState::Running) {
+        DEBUG_PRINTLN("[Device] Calibration skipped (already running)");
+        return false;
+    }
+    if (!relayControl || !discharger) {
+        DEBUG_PRINTLN("[Device] Calibration skipped (missing relay/discharger)");
+        return false;
+    }
+
+    const TickType_t start = xTaskGetTickCount();
+    auto timedOut = [&]() -> bool {
+        return (xTaskGetTickCount() - start) * portTICK_PERIOD_MS >= timeoutMs;
+    };
+
+    DEBUG_PRINTLN("[Device] Manual calibration sequence starting");
+
+    if (WIRE) WIRE->disableAll();
+    if (indicator) indicator->clearAll();
+
+    // 0) Zero current calibration (relay off)
+    relayControl->turnOff();
+    vTaskDelay(pdMS_TO_TICKS(40));
+    if (currentSensor) {
+        currentSensor->calibrateZeroCurrent();
+    }
+    if (timedOut()) return false;
+
+    // 1) Charge caps to threshold
+    relayControl->turnOn();
+    TickType_t lastChargePost = 0;
+    while (discharger->readCapVoltage() < GO_THRESHOLD_RATIO) {
+        if (timedOut()) return false;
+        TickType_t now = xTaskGetTickCount();
+        if ((now - lastChargePost) * portTICK_PERIOD_MS >= 1000) {
+            if (RGB) RGB->postOverlay(OverlayEvent::PWR_CHARGING);
+            lastChargePost = now;
+        }
+        if (!delayWithPowerWatch(200)) {
+            return false;
+        }
+    }
+
+    // 2) Idle current calibration (relay on, heaters off)
+    calibrateIdleCurrent();
+    if (timedOut()) return false;
+
+    // 3) Cap voltage gain calibration (presence + empirical gain)
+    if (!calibrateCapVoltageGain()) {
+        return false;
+    }
+    if (timedOut()) return false;
+
+    // 4) Capacitance calibration (relay cycled inside)
+    if (!calibrateCapacitance()) {
+        return false;
+    }
+    if (timedOut()) return false;
+
+    // 5) Recharge after discharge
+    TickType_t lastRechargePost = 0;
+    while (discharger->readCapVoltage() < GO_THRESHOLD_RATIO) {
+        if (timedOut()) return false;
+        TickType_t now = xTaskGetTickCount();
+        if ((now - lastRechargePost) * portTICK_PERIOD_MS >= 1000) {
+            if (RGB) RGB->postOverlay(OverlayEvent::PWR_CHARGING);
+            lastRechargePost = now;
+        }
+        if (!delayWithPowerWatch(200)) {
+            return false;
+        }
+    }
+
+    DEBUG_PRINTLN("[Device] Manual calibration sequence completed");
     return true;
 }
 
@@ -899,10 +1235,11 @@ void Device::handleOverCurrentFault()
     if (relayControl) relayControl->turnOff();
 
     // 3) Feedback: critical current trip
-    if (RGB) {
-        RGB->setDeviceState(DevState::FAULT);          // red strobe background
-        RGB->postOverlay(OverlayEvent::CURR_TRIP);     // short critical burst
-    }
+      if (RGB) {
+          RGB->setDeviceState(DevState::FAULT);          // red strobe background
+          RGB->postOverlay(OverlayEvent::CURR_TRIP);     // short critical burst
+          RGB->showError(ErrorCategory::POWER, 1);
+      }
 
     if (BUZZ) {
         BUZZ->bipFault();  // reuse your existing FAULT pattern
@@ -1032,9 +1369,14 @@ void Device::loadRuntimeSettings() {
     if (CONF) {
         fast = CONF->GetBool(COOLING_PROFILE_KEY, DEFAULT_COOLING_PROFILE_FAST);
         mode = CONF->GetInt(LOOP_MODE_KEY, DEFAULT_LOOP_MODE);
+        capBankCapF = CONF->GetFloat(CAP_BANK_CAP_F_KEY, DEFAULT_CAP_BANK_CAP_F);
         coolingBuriedScale = CONF->GetFloat(COOL_BURIED_SCALE_KEY, DEFAULT_COOLING_SCALE_BURIED);
         coolingKCold       = CONF->GetFloat(COOL_KCOLD_KEY,        DEFAULT_COOL_K_COLD);
         coolingMaxDropC    = CONF->GetFloat(COOL_DROP_MAX_KEY,     DEFAULT_MAX_COOL_DROP_C);
+
+        if (!isfinite(capBankCapF) || capBankCapF < 0.0f) {
+            capBankCapF = DEFAULT_CAP_BANK_CAP_F;
+        }
 
         if (!isfinite(coolingBuriedScale) || coolingBuriedScale <= 0.0f) {
             coolingBuriedScale = DEFAULT_COOLING_SCALE_BURIED;

@@ -89,7 +89,7 @@
 // -----------------------------------------------------------------------------
 
 /// Voltage ratio required on the DC bus before enabling full-power operation.
-#define GO_THRESHOLD_RATIO 50
+#define GO_THRESHOLD_RATIO 80
 #define SAMPLINGSTALL false
 // Set to 1 to bypass presence checks and treat all wires as available.
 #define DEVICE_FORCE_ALL_WIRES_PRESENT 0
@@ -306,6 +306,8 @@ public:
     uint16_t getActiveMaskFromHeater() const;   ///< Convenience: read current mask.
     void calibrateIdleCurrent();                ///< Measure & store baseline idle current.
     bool calibrateCapVoltageGain();             ///< Calibrate empirical cap voltage gain using current sensor.
+    bool calibrateCapacitance();                ///< Calibrate capacitor bank capacitance by timed discharge.
+    bool runCalibrationsStandalone(uint32_t timeoutMs = 10000); ///< Full calibration without starting loop.
 
     /**
      * @brief Integrate thermal model using CurrentSensor + HeaterManager history.
@@ -351,6 +353,7 @@ public:
     WirePresenceManager&  getWirePresenceManager()  { return wirePresenceManager; }
     WirePlanner&          getWirePlanner()          { return wirePlanner; }
     WireTelemetryAdapter& getWireTelemetryAdapter() { return wireTelemetryAdapter; }
+    float                 getCapBankCapF() const    { return capBankCapF; }
 
 private:
     // Centralized hook for state transitions.
@@ -406,6 +409,9 @@ private:
 
     // Baseline current (non-heater loads), set by calibrateIdleCurrent().
     float    idleCurrentA        = 0.0f;
+
+    // Capacitor bank capacitance (Farads), set by calibrateCapacitance().
+    float    capBankCapF         = DEFAULT_CAP_BANK_CAP_F;
 
     // History cursors for incremental integration.
     uint32_t currentHistorySeq   = 0;   ///< Last consumed CurrentSensor seq.

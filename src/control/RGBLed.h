@@ -22,7 +22,7 @@ enum : uint8_t {
 };
 
 // ---------- Patterns (status-focused) ----------
-enum class Pattern : uint8_t { OFF, SOLID, BLINK, BREATHE, HEARTBEAT2, FLASH_ONCE, STROBE };
+enum class Pattern : uint8_t { OFF, SOLID, BLINK, BREATHE, HEARTBEAT2, FLASH_ONCE, STROBE, CODE };
 
 // ---------- Background states ----------
 enum class DevState : uint8_t {
@@ -80,12 +80,24 @@ enum class OverlayEvent : uint8_t {
   BYPASS_FORCED_OFF
 };
 
+// ---------- Error codes (color = category, blink count = code) ----------
+enum class ErrorCategory : uint8_t {
+  POWER,      // red
+  CALIB,      // yellow
+  THERMAL,    // amber
+  SENSOR,     // blue
+  CONFIG,     // magenta
+  COMMS       // cyan
+};
+
 // ---------- Pattern options payload ----------
 struct PatternOpts {
   uint32_t color      = RGB_HEX(255,255,255);
   uint16_t periodMs   = 300;
   uint16_t onMs       = 100;
+  uint16_t gapMs      = 800;   // for Pattern::CODE: pause after the code group
   uint32_t durationMs = 0;     // 0 => indefinite
+  uint8_t  count      = 0;     // for Pattern::CODE: number of blinks
   uint8_t  priority   = PRIO_ACTION;
   bool     preempt    = true;
 };
@@ -129,6 +141,24 @@ public:
   void strobe(uint32_t color, uint16_t onMs = 60, uint16_t offMs = 60, uint8_t priority = PRIO_CRITICAL, bool preempt = true, uint32_t durationMs = 0);
   void playPattern(Pattern pat, const PatternOpts& opts);
 
+  // Clear current overlay/pattern and return to background.
+  void clearActivePattern();
+
+  // Error codes: color encodes category, blink count encodes code.
+  void showError(ErrorCategory category,
+                 uint8_t code,
+                 uint8_t priority = PRIO_CRITICAL,
+                 bool preempt = true,
+                 uint32_t durationMs = 0);
+  void showErrorCode(uint32_t color,
+                     uint8_t code,
+                     uint16_t onMs = 120,
+                     uint16_t offMs = 120,
+                     uint16_t gapMs = 800,
+                     uint8_t priority = PRIO_CRITICAL,
+                     bool preempt = true,
+                     uint32_t durationMs = 0);
+
   // Pins (Blue is expected; pass pinB = -1 only if unwired)
   void attachPins(int pinR, int pinG, int pinB = -1, bool activeLow = true);
 
@@ -159,6 +189,7 @@ private:
   void doHeartbeat2(uint32_t color, uint16_t periodMs);
   void doFlashOnce(uint32_t color, uint16_t onMs);
   void doStrobe(uint32_t color, uint16_t onMs, uint16_t offMs);
+  void doCode(uint32_t color, uint8_t count, uint16_t onMs, uint16_t periodMs, uint16_t gapMs);
 
 private:
   // -------- Singleton storage --------
@@ -190,5 +221,4 @@ private:
 #define RGB RGBLed::Get()  // convenience
 
 #endif // RGBLED_H
-
 

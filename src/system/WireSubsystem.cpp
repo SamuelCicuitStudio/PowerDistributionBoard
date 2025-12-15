@@ -357,6 +357,243 @@ void WireThermalModel::integrateCurrentOnly(const CurrentSensor::Sample* curBuf,
     runtime.setLastMask(currentMask);
 }
 
+void WireThermalModel::integrateCapModel(const CpDischg::Sample* voltBuf, size_t nVolt,
+                                         const HeaterManager::OutputEvent* outBuf, size_t nOut,
+                                         float capF, float vSrc, float rChargeOhm,
+                                         float ambientC,
+                                         WireStateModel& runtime, HeaterManager& heater) {
+    if (!_initialized) {
+        init(heater, ambientC);
+    }
+    _ambientC = ambientC;
+
+    const float C = capF;
+    if (!(isfinite(C) && C > 0.0f)) {
+        // No capacitance known: only apply cooling.
+        const uint32_t nowTs = millis();
+        for (uint8_t w = 0; w < HeaterManager::kWireCount; ++w) {
+            WireThermalState& ws = _state[w];
+            float dt = (ws.lastUpdateMs == 0) ? 0.0f : (nowTs - ws.lastUpdateMs) * 0.001f;
+            if (dt > MAX_THERMAL_DT_S) dt = MAX_THERMAL_DT_S;
+            if (dt > 0.0f) {
+                float blend = ws.T / COOL_HOT_THRESHOLD_C;
+                if (blend < 0.0f) blend = 0.0f;
+                if (blend > 1.0f) blend = 1.0f;
+                float k = (_coolKCold + (_coolKHot - _coolKCold) * blend) * _coolingScale;
+                float dTcool = -(ws.T - _ambientC) * k * dt;
+                if (dTcool < -_maxCoolDropC) dTcool = -_maxCoolDropC;
+                ws.T += dTcool;
+            }
+            ws.lastUpdateMs = nowTs;
+            heater.setWireEstimatedTemp(w + 1, ws.T);
+            WireRuntimeState& rt = runtime.wire(w + 1);
+            rt.tempC        = ws.T;
+            rt.lastUpdateMs = nowTs;
+        }
+        return;
+    }
+
+    float rCharge = rChargeOhm;
+    if (!isfinite(rCharge) || rCharge <= 0.0f) {
+        rCharge = INFINITY; // no source / open relay
+    }
+    float vS = (isfinite(vSrc) && vSrc > 0.0f) ? vSrc : 0.0f;
+
+    uint16_t currentMask = runtime.getLastMask();
+
+    auto coolingK = [&](const WireThermalState& ws) -> float {
+        float blend = ws.T / COOL_HOT_THRESHOLD_C;
+        if (blend < 0.0f) blend = 0.0f;
+        if (blend > 1.0f) blend = 1.0f;
+        float k = _coolKCold + (_coolKHot - _coolKCold) * blend;
+        return k * _coolingScale;
+    };
+
+    auto handleLockout = [&](uint8_t w,
+                             WireThermalState& ws,
+                             WireRuntimeState& rt,
+                             uint32_t ts) {
+        const uint16_t bit = (1u << w);
+        bool wasLocked = ws.locked;
+
+        if (ws.T >= WIRE_T_MAX_C) {
+            ws.locked = true;
+            ws.cooldownReleaseMs = ts + WIRE_OVERHEAT_COOLDOWN_MS;
+        } else if (ws.locked) {
+            bool cooldownElapsed = (ws.cooldownReleaseMs != 0) &&
+                                   ((int32_t)(ts - ws.cooldownReleaseMs) >= 0);
+            if (cooldownElapsed && ws.T <= WIRE_T_REENABLE_C) {
+                ws.locked = false;
+                ws.cooldownReleaseMs = 0;
+            }
+        }
+
+        rt.locked   = ws.locked;
+        rt.overTemp = isfinite(rt.tempC) && rt.tempC >= WIRE_T_MAX_C;
+
+        if (ws.locked) {
+            currentMask &= ~bit;
+            heater.setOutput(w + 1, false);
+        } else if (wasLocked && !ws.locked) {
+            currentMask &= ~bit;
+        }
+    };
+
+    auto applyCoolingTo = [&](uint32_t ts) {
+        for (uint8_t w = 0; w < HeaterManager::kWireCount; ++w) {
+            WireThermalState& ws = _state[w];
+            float dt = (ws.lastUpdateMs == 0) ? 0.0f : (ts - ws.lastUpdateMs) * 0.001f;
+            if (dt > MAX_THERMAL_DT_S) dt = MAX_THERMAL_DT_S;
+            if (dt > 0.0f) {
+                float dTcool = -(ws.T - _ambientC) * coolingK(ws) * dt;
+                if (dTcool < -_maxCoolDropC) dTcool = -_maxCoolDropC;
+                ws.T += dTcool;
+            }
+            ws.lastUpdateMs = ts;
+            WireRuntimeState& rt = runtime.wire(w + 1);
+            if (!(currentMask & (1u << w))) {
+                rt.lastPowerW = 0.0f;
+            }
+        }
+    };
+
+    auto equivalentResistance = [&](uint16_t mask) -> float {
+        float G = 0.0f;
+        for (uint8_t w = 0; w < HeaterManager::kWireCount; ++w) {
+            if (!(mask & (1u << w))) continue;
+            float R = wireResistanceAtTemp(w);
+            if (R > 0.01f && isfinite(R)) {
+                G += 1.0f / R;
+            }
+        }
+        if (!(G > 0.0f)) return INFINITY;
+        return 1.0f / G;
+    };
+
+    auto applyHeatSegment = [&](uint16_t mask,
+                                float v0,
+                                float dtS) -> float {
+        if (!(mask != 0 && isfinite(v0) && v0 > 0.0f && isfinite(dtS) && dtS > 0.0f)) {
+            return v0;
+        }
+
+        const float Rpar = equivalentResistance(mask);
+        if (!isfinite(Rpar) || Rpar <= 0.0f) {
+            return v0;
+        }
+
+        const float Eload = CapModel::energyToLoadJ(v0, dtS, C, Rpar, vS, rCharge);
+        const float v1    = CapModel::predictVoltage(v0, dtS, C, Rpar, vS, rCharge);
+
+        // Distribute load energy across parallel branches by conductance fraction.
+        for (uint8_t w = 0; w < HeaterManager::kWireCount; ++w) {
+            if (!(mask & (1u << w))) continue;
+
+            WireThermalState& ws = _state[w];
+            float R = wireResistanceAtTemp(w);
+            if (!(R > 0.01f && isfinite(R))) continue;
+
+            const float frac = Rpar / R; // (1/R)/Gtot
+            float Ew = Eload * frac;
+            if (!isfinite(Ew) || Ew < 0.0f) Ew = 0.0f;
+
+            float dT = (Ew * THERMAL_INERTIA_SCALE) / ws.C_th;
+            float maxRise = MAX_HEAT_RISE_C;
+            if (dtS > 0.0f) {
+                // Scale the per-step clamp with duration (10ms baseline matches default pulse width).
+                maxRise = MAX_HEAT_RISE_C * (dtS / 0.010f);
+                if (maxRise < MAX_HEAT_RISE_C) maxRise = MAX_HEAT_RISE_C;
+                if (maxRise > 20.0f) maxRise = 20.0f;
+            }
+            if (dT > maxRise) dT = maxRise;
+            if (dT < 0.0f) dT = 0.0f;
+
+            ws.T += dT;
+
+            WireRuntimeState& rt = runtime.wire(w + 1);
+            rt.lastPowerW = (dtS > 0.0f) ? (Ew / dtS) : 0.0f;
+        }
+
+        return v1;
+    };
+
+    // Advance last seen bus voltage from voltBuf.
+    size_t vIndex = 0;
+    auto updateBusVTo = [&](uint32_t ts) {
+        if (!voltBuf || nVolt == 0) return;
+        while (vIndex < nVolt && voltBuf[vIndex].timestampMs <= ts) {
+            float v = voltBuf[vIndex].voltageV;
+            if (isfinite(v)) {
+                _lastBusV = v;
+            }
+            ++vIndex;
+        }
+    };
+
+    // Process mask transitions as pulse segments.
+    for (size_t i = 0; i < nOut; ++i) {
+        const uint32_t ts = outBuf[i].timestampMs;
+        const uint16_t newMask = outBuf[i].mask;
+
+        updateBusVTo(ts);
+        applyCoolingTo(ts);
+
+        if (newMask != currentMask) {
+            // End any active segment (currentMask) at this timestamp.
+            if (_pulseActive && currentMask != 0 && currentMask == _pulseMask && ts > _pulseStartMs) {
+                const float dtS = (ts - _pulseStartMs) * 0.001f;
+                (void)applyHeatSegment(_pulseMask, _pulseStartV, dtS);
+            }
+
+            // Start new segment if newMask is non-zero.
+            if (newMask != 0) {
+                _pulseActive  = true;
+                _pulseMask    = newMask;
+                _pulseStartMs = ts;
+                _pulseStartV  = isfinite(_lastBusV) ? _lastBusV : vS;
+            } else {
+                _pulseActive  = false;
+                _pulseMask    = 0;
+                _pulseStartMs = 0;
+                _pulseStartV  = NAN;
+            }
+
+            currentMask = newMask;
+        }
+    }
+
+    // Apply cooling (and partial heating if a pulse is still active) up to "now".
+    const uint32_t nowTs = millis();
+    updateBusVTo(nowTs);
+    applyCoolingTo(nowTs);
+
+    if (_pulseActive && _pulseMask != 0 && nowTs > _pulseStartMs) {
+        const float dtS = (nowTs - _pulseStartMs) * 0.001f;
+        const float v0  = isfinite(_pulseStartV) ? _pulseStartV : (isfinite(_lastBusV) ? _lastBusV : vS);
+        const float v1  = applyHeatSegment(_pulseMask, v0, dtS);
+        _pulseStartMs = nowTs;
+        _pulseStartV  = v1;
+    }
+
+    // Clamp, publish, and enforce lockouts.
+    for (uint8_t w = 0; w < HeaterManager::kWireCount; ++w) {
+        WireThermalState& ws = _state[w];
+        if (ws.T > WIRE_T_MAX_C) ws.T = WIRE_T_MAX_C;
+        if (ws.T < _ambientC - 10.0f) ws.T = _ambientC - 10.0f;
+
+        WireRuntimeState& rt = runtime.wire(w + 1);
+        rt.tempC        = ws.T;
+        rt.lastUpdateMs = nowTs;
+
+        handleLockout(w, ws, rt, nowTs);
+
+        heater.setWireEstimatedTemp(w + 1, ws.T);
+        ws.lastUpdateMs = nowTs;
+    }
+
+    runtime.setLastMask(currentMask);
+}
+
 void WireThermalModel::integrate(const CurrentSensor::Sample* curBuf, size_t nCur,
                                  const CpDischg::Sample*     voltBuf, size_t nVolt,
                                  const HeaterManager::OutputEvent* outBuf, size_t nOut,

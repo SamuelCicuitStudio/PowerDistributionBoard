@@ -17,6 +17,8 @@ static inline uint16_t _allowedMaskFrom(const bool allowed[10]) {
     return m;
 }
 
+static constexpr uint32_t CAL_TIMEOUT_MS = 10000; // max time for pre-loop charge + calibrations
+
 // ============================================================================
 // Helper: single guarded ON pulse for a mask
 // ============================================================================
@@ -40,6 +42,46 @@ static bool _runMaskedPulse(Device* self,
     if (self->getState() != DeviceState::Running) {
         // Do not energize if not in RUN
         return false;
+    }
+
+    // Predict bus droop/energy using calibrated capacitance (before energizing).
+    if (self->discharger && self->relayControl) {
+        const float capF = self->getCapBankCapF();
+        if (isfinite(capF) && capF > 0.0f) {
+            float Gtot = 0.0f;
+            for (uint8_t i = 0; i < HeaterManager::kWireCount; ++i) {
+                if (!(mask & (1u << i))) continue;
+                float R = WIRE->getWireInfo(i + 1).resistanceOhm;
+                if (R > 0.01f && isfinite(R)) {
+                    Gtot += 1.0f / R;
+                }
+            }
+            const float Rload = (Gtot > 0.0f) ? (1.0f / Gtot) : INFINITY;
+
+            float vSrc = DEFAULT_DC_VOLTAGE;
+            float rChg = DEFAULT_CHARGE_RESISTOR_OHMS;
+            if (CONF) {
+                vSrc = CONF->GetFloat(DC_VOLTAGE_KEY, DEFAULT_DC_VOLTAGE);
+                rChg = CONF->GetFloat(CHARGE_RESISTOR_KEY, DEFAULT_CHARGE_RESISTOR_OHMS);
+            }
+            if (!isfinite(vSrc) || vSrc <= 0.0f) vSrc = DEFAULT_DC_VOLTAGE;
+            if (!isfinite(rChg) || rChg <= 0.0f) rChg = DEFAULT_CHARGE_RESISTOR_OHMS;
+
+            // If input relay is open, model "no source".
+            const float rChargeEff = self->relayControl->isOn() ? rChg : INFINITY;
+
+            const float v0 = self->discharger->sampleVoltageNow();
+            const float dtS = (float)onTimeMs * 0.001f;
+            const float v1 = CapModel::predictVoltage(v0, dtS, capF, Rload, vSrc, rChargeEff);
+            const float eJ = CapModel::energyToLoadJ(v0, dtS, capF, Rload, vSrc, rChargeEff);
+
+            DEBUG_PRINTF("[Pulse] pre: mask=0x%03X V0=%.2fV -> V1(pred)=%.2fV  E(pred)=%.2fJ  C=%.6fF\n",
+                         (unsigned)mask,
+                         (double)v0,
+                         (double)v1,
+                         (double)eJ,
+                         (double)capF);
+        }
     }
 
     // Apply mask atomically.
@@ -172,6 +214,7 @@ void Device::loopTask() {
         }
 
         // ===================== POWER-UP SEQUENCE =====================
+        RGB->clearActivePattern(); // clear any latched error code from previous attempt
         RGB->setWait();
         BUZZ->bip();
         DEBUG_PRINTLN("[Device] Waiting for 12V input...");
@@ -184,40 +227,19 @@ void Device::loopTask() {
         relayControl->turnOn();
         RGB->postOverlay(OverlayEvent::RELAY_ON);
         vTaskDelay(pdMS_TO_TICKS(150));
-
-        // Charge capacitors to GO_THRESHOLD_RATIO.
-        TickType_t lastChargePost = 0;
-        while (discharger->readCapVoltage() < GO_THRESHOLD_RATIO) {
-            TickType_t now = xTaskGetTickCount();
-            if ((now - lastChargePost) * portTICK_PERIOD_MS >= 1000) {
-                RGB->postOverlay(OverlayEvent::PWR_CHARGING);
-                lastChargePost = now;
-            }
-            DEBUG_PRINTF("[Device] Charging... Cap=%.2fV Target=%.2fV\n",
-                         discharger->readCapVoltage(), GO_THRESHOLD_RATIO);
-            vTaskDelay(pdMS_TO_TICKS(200));
-        }
-
-        DEBUG_PRINTLN("[Device] Threshold met -> bypass inrush");
-        RGB->postOverlay(OverlayEvent::PWR_BYPASS_ON);
-
-        // Ensure NO heaters during idle calibration.
+        // Ensure outputs are OFF before idling.
         if (WIRE)      WIRE->disableAll();
         if (indicator) indicator->clearAll();
-
-        // Idle current calibration (uses only relay+AC; no heaters).
-        calibrateIdleCurrent();
-
-        // IMPORTANT:
-        //  No probeWirePresence() here.
-        //  No mask pulses here.
-        //  We start with config+thermal only; presence refined in StartLoop().
 
         checkAllowedOutputs();
         BUZZ->bipSystemReady();
         RGB->postOverlay(OverlayEvent::WAKE_FLASH);
 
         // ======================= IDLE STATE =======================
+        setState(DeviceState::Idle);
+        DEBUG_PRINTLN("[Device] State=IDLE. Waiting for RUN or STOP");
+        RGB->setIdle();
+
         bool runRequested = false;
         if (gEvt) {
             EventBits_t bits = xEventGroupGetBits(gEvt);
@@ -228,10 +250,6 @@ void Device::loopTask() {
         }
 
         if (!runRequested) {
-            setState(DeviceState::Idle);
-            DEBUG_PRINTLN("[Device] State=IDLE. Waiting for RUN or STOP");
-            RGB->setIdle();
-
             if (gEvt) {
                 EventBits_t got = xEventGroupWaitBits(
                     gEvt,
@@ -250,8 +268,183 @@ void Device::loopTask() {
                     RGB->setOff();
                     continue; // back to OFF state
                 }
+
+                if (got & EVT_RUN_REQ) {
+                    runRequested = true;
+                }
             }
         }
+
+        // ===================== RUN PREP (timeouts + calibrations) =====================
+        // All calibration and presence probing happen ONLY here, before StartLoop().
+        RGB->clearActivePattern(); // clear any latched error code from previous attempt
+        RGB->setWait();
+        BUZZ->bip();
+
+        const TickType_t prepStart = xTaskGetTickCount();
+        auto timedOut = [&]() -> bool {
+            return (xTaskGetTickCount() - prepStart) * portTICK_PERIOD_MS >= CAL_TIMEOUT_MS;
+        };
+
+        bool abortRun = false;
+        ErrorCategory abortCat = ErrorCategory::POWER;
+        uint8_t abortCode = 0;
+
+        // Ensure a quiet, known state before any calibration.
+        if (WIRE)      WIRE->disableAll();
+        if (indicator) indicator->clearAll();
+
+        // 0) Current sensor zero calibration must happen first, with relay OFF (no load).
+        relayControl->turnOff();
+        vTaskDelay(pdMS_TO_TICKS(40));
+        if (currentSensor) {
+            currentSensor->calibrateZeroCurrent();
+        }
+        if (timedOut()) {
+            DEBUG_PRINTLN("[Device] Timeout during current sensor zero calibration; aborting start");
+            abortRun = true;
+            abortCat = ErrorCategory::CALIB;
+            abortCode = 1;
+        }
+
+        // 1) Enable relay and charge capacitors to GO threshold.
+        if (!abortRun) {
+            DEBUG_PRINTLN("[Device] RUN prep: enabling relay");
+            relayControl->turnOn();
+            RGB->postOverlay(OverlayEvent::RELAY_ON);
+            vTaskDelay(pdMS_TO_TICKS(150));
+
+            TickType_t lastChargePost = 0;
+            while (discharger && discharger->readCapVoltage() < GO_THRESHOLD_RATIO) {
+                if (timedOut()) {
+                    DEBUG_PRINTLN("[Device] Timeout while charging caps to GO threshold; aborting start");
+                    abortRun = true;
+                    abortCat = ErrorCategory::POWER;
+                    abortCode = 2;
+                    break;
+                }
+                TickType_t now = xTaskGetTickCount();
+                if ((now - lastChargePost) * portTICK_PERIOD_MS >= 1000) {
+                    RGB->postOverlay(OverlayEvent::PWR_CHARGING);
+                    lastChargePost = now;
+                }
+                DEBUG_PRINTF("[Device] Charging... Cap=%.2fV Target=%.2fV\n",
+                             discharger ? discharger->readCapVoltage() : -1.0f,
+                             (double)GO_THRESHOLD_RATIO);
+                if (!delayWithPowerWatch(200)) {
+                    // STOP or 12V loss handled inside delayWithPowerWatch()
+                    abortRun = true;
+                    if (getState() == DeviceState::Idle) {
+                        // Treat STOP as a clean cancel (no error code).
+                        abortCode = 0;
+                    } else {
+                        abortCat = ErrorCategory::POWER;
+                        abortCode = 2;
+                    }
+                    break;
+                }
+            }
+        }
+
+        // 2) Idle current calibration (relay ON, no heaters).
+        if (!abortRun) {
+            calibrateIdleCurrent();
+            if (timedOut()) {
+                DEBUG_PRINTLN("[Device] Timeout during idle current calibration; aborting start");
+                abortRun = true;
+                abortCat = ErrorCategory::CALIB;
+                abortCode = 1;
+            }
+        }
+
+        // 3) Capacitor voltage gain calibration (coarse + fine) + presence probing.
+        if (!abortRun) {
+            const bool ok = calibrateCapVoltageGain();
+            if (!ok) {
+                DEBUG_PRINTLN("[Device] Cap gain calibration failed; aborting start");
+                abortRun  = true;
+                abortCat  = ErrorCategory::CALIB;
+                abortCode = 2;
+            }
+            if (timedOut()) {
+                DEBUG_PRINTLN("[Device] Timeout during capacitor gain calibration; aborting start");
+                abortRun = true;
+                abortCat = ErrorCategory::CALIB;
+                abortCode = 2;
+            }
+        }
+
+        // 4) Capacitor bank capacitance calibration (timed discharge with relay OFF).
+        if (!abortRun) {
+            if (!calibrateCapacitance()) {
+                DEBUG_PRINTLN("[Device] Capacitance calibration failed; aborting start");
+                abortRun = true;
+                abortCat = ErrorCategory::CALIB;
+                abortCode = 3;
+            } else if (timedOut()) {
+                DEBUG_PRINTLN("[Device] Timeout during capacitance calibration; aborting start");
+                abortRun = true;
+                abortCat = ErrorCategory::CALIB;
+                abortCode = 3;
+            }
+        }
+
+        // 5) Recharge after discharge-based calibration so RUN starts with sane voltage.
+        if (!abortRun) {
+            TickType_t lastChargePost = 0;
+            while (discharger && discharger->readCapVoltage() < GO_THRESHOLD_RATIO) {
+                if (timedOut()) {
+                    DEBUG_PRINTLN("[Device] Timeout while re-charging caps after calibration; aborting start");
+                    abortRun = true;
+                    abortCat = ErrorCategory::POWER;
+                    abortCode = 2;
+                    break;
+                }
+                TickType_t now = xTaskGetTickCount();
+                if ((now - lastChargePost) * portTICK_PERIOD_MS >= 1000) {
+                    RGB->postOverlay(OverlayEvent::PWR_CHARGING);
+                    lastChargePost = now;
+                }
+                if (!delayWithPowerWatch(200)) {
+                    abortRun = true;
+                    if (getState() == DeviceState::Idle) {
+                        abortCode = 0; // STOP cancel
+                    } else {
+                        abortCat = ErrorCategory::POWER;
+                        abortCode = 2;
+                    }
+                    break;
+                }
+            }
+        }
+
+        if (abortRun) {
+            if (getState() == DeviceState::Idle && abortCode == 0) {
+                DEBUG_PRINTLN("[Device] RUN prep cancelled by STOP -> returning to OFF");
+                RGB->postOverlay(OverlayEvent::RELAY_OFF);
+                relayControl->turnOff();
+                if (WIRE)      WIRE->disableAll();
+                if (indicator) indicator->clearAll();
+                RGB->setOff();
+                continue; // back to OFF state
+            } else {
+                RGB->setFault();
+                if (abortCode) {
+                    RGB->showError(abortCat, abortCode);
+                }
+                DEBUG_PRINTLN("[Device] RUN prep aborted -> returning to OFF");
+                RGB->postOverlay(OverlayEvent::RELAY_OFF);
+                relayControl->turnOff();
+                if (WIRE)      WIRE->disableAll();
+                if (indicator) indicator->clearAll();
+                RGB->setOff();
+                setState(DeviceState::Error);
+                continue; // back to OFF state
+            }
+        }
+
+        // Refresh gating after calibrations (presence + thermal + config).
+        checkAllowedOutputs();
 
         // ======================== RUN STATE =========================
         setState(DeviceState::Running);
@@ -331,17 +524,7 @@ void Device::StartLoop() {
 
     manualMode = false; // auto loop enforces model updates
 
-    // Re-calibrate current sensor offset (middle point) at start of each run,
-    // while no heaters are active.
-    if (currentSensor) {
-        currentSensor->calibrateZeroCurrent();
-    }
-
-    // Calibrate empirical capacitor voltage gain using all available wires.
-    calibrateCapVoltageGain();
-    if (getState() != DeviceState::Running) {
-        return;
-    }
+    // Current sensor zero calibration is performed in RUN-prep (before state=RUN).
 
     // 1) Thermal model ready & wires cooled.
     initWireThermalModelOnce();

@@ -1,6 +1,7 @@
 ﻿#include "system/DeviceTransport.h"
 
 DeviceTransport* DeviceTransport::s_inst = nullptr;
+static TaskHandle_t s_calTaskHandle = nullptr;
 
 DeviceTransport* DeviceTransport::Get() {
   if (!s_inst) s_inst = new DeviceTransport();
@@ -144,6 +145,35 @@ bool DeviceTransport::setCoolingProfile(bool fast)      { return sendCommandAndW
 bool DeviceTransport::setLoopMode(uint8_t mode)         { return sendCommandAndWait(Device::DevCmdType::SET_LOOP_MODE, static_cast<int32_t>(mode)); }
 bool DeviceTransport::requestResetFlagAndRestart() {
   return sendCommandAndWait(Device::DevCmdType::REQUEST_RESET);
+}
+
+bool DeviceTransport::startCalibrationTask(uint32_t timeoutMs) {
+  if (!DEVICE) return false;
+  if (s_calTaskHandle != nullptr) return false;
+  if (DEVICE->getState() == DeviceState::Running) return false;
+
+  const BaseType_t ok = xTaskCreatePinnedToCore(
+      [](void* pv) {
+        const uint32_t toMs =
+            static_cast<uint32_t>(reinterpret_cast<uintptr_t>(pv));
+        if (DEVICE) {
+          DEVICE->runCalibrationsStandalone(toMs);
+        }
+        s_calTaskHandle = nullptr;
+        vTaskDelete(nullptr);
+      },
+      "CalibTask",
+      4096,
+      reinterpret_cast<void*>(static_cast<uintptr_t>(timeoutMs)),
+      1,
+      &s_calTaskHandle,
+      APP_CPU_NUM);
+
+  if (ok != pdPASS) {
+    s_calTaskHandle = nullptr;
+    return false;
+  }
+  return true;
 }
 
 bool DeviceTransport::sendCommandAndWait(Device::DevCmdType t, int32_t i1, float f1, bool b1, TickType_t to) {

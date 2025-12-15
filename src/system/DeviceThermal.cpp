@@ -293,7 +293,7 @@ void Device::thermalTask() {
 }
 
 void Device::updateWireThermalFromHistory() {
-    if (!currentSensor || !WIRE) {
+    if (!WIRE) {
         return;
     }
     if (manualMode) {
@@ -326,28 +326,47 @@ void Device::updateWireThermalFromHistory() {
     // Buffers for incremental reads (keep small to limit stack use).
     CurrentSensor::Sample       curBuf[32];
     BusSampler::Sample          busBuf[32];
+    CpDischg::Sample            voltBuf[32];
     HeaterManager::OutputEvent  outBuf[32];
 
-    uint32_t newCurSeq = currentHistorySeq;
-    uint32_t newBusSeq = busHistorySeq;
-    uint32_t newOutSeq = outputHistorySeq;
+    uint32_t newCurSeq  = currentHistorySeq;
+    uint32_t newVoltSeq = voltageHistorySeq;
+    uint32_t newBusSeq  = busHistorySeq;
+    uint32_t newOutSeq  = outputHistorySeq;
 
     size_t nCur = 0;
+    size_t nVolt = 0;
 
-    // Prefer synchronized bus sampler if available
+    const bool useCapModel = isfinite(capBankCapF) && capBankCapF > 0.0f;
+
+    // Prefer synchronized bus sampler (V+I) if available
     if (busSampler) {
         size_t nBus = busSampler->getHistorySince(
             busHistorySeq, busBuf, (size_t)32, newBusSeq);
         if (nBus > 0) {
+            // Current samples (used by current-only model and watchdog)
             nCur = nBus;
             for (size_t i = 0; i < nBus; ++i) {
                 curBuf[i].timestampMs = busBuf[i].timestampMs;
                 curBuf[i].currentA    = busBuf[i].currentA;
             }
+
+            // Voltage samples (used by capacitor model)
+            nVolt = nBus;
+            for (size_t i = 0; i < nBus; ++i) {
+                voltBuf[i].timestampMs = busBuf[i].timestampMs;
+                voltBuf[i].voltageV    = busBuf[i].voltageV;
+            }
         }
     }
 
-    if (nCur == 0 && currentSensor) {
+    if (useCapModel && nVolt == 0 && discharger) {
+        // Fallback: use CpDischg history if BusSampler isn't available.
+        nVolt = discharger->getHistorySince(
+            voltageHistorySeq, voltBuf, (size_t)32, newVoltSeq);
+    }
+
+    if (!useCapModel && nCur == 0 && currentSensor) {
         nCur = currentSensor->getHistorySince(
             currentHistorySeq, curBuf, (size_t)32, newCurSeq);
     }
@@ -377,21 +396,56 @@ void Device::updateWireThermalFromHistory() {
         return false;
     };
 
-    // Delegate integration to WireThermalModel (current-only variant).
-    if (nCur > 0 || nOut > 0) {
-        wireThermalModel.integrateCurrentOnly(curBuf, nCur,
-                                              outBuf, nOut,
-                                              ambientC,
-                                              wireStateModel,
-                                              *WIRE);
+    // Delegate integration to WireThermalModel:
+    //  - If capBankCapF is calibrated: use capacitor+recharge model (pulse-based).
+    //  - Otherwise: fall back to current-only integration.
+    if (useCapModel) {
+        float vSrc = DEFAULT_DC_VOLTAGE;
+        float rChg = DEFAULT_CHARGE_RESISTOR_OHMS;
+        if (CONF) {
+            vSrc = CONF->GetFloat(DC_VOLTAGE_KEY, DEFAULT_DC_VOLTAGE);
+            rChg = CONF->GetFloat(CHARGE_RESISTOR_KEY, DEFAULT_CHARGE_RESISTOR_OHMS);
+        }
+        if (!isfinite(vSrc) || vSrc <= 0.0f) vSrc = DEFAULT_DC_VOLTAGE;
+        if (!isfinite(rChg) || rChg <= 0.0f) rChg = DEFAULT_CHARGE_RESISTOR_OHMS;
 
-        if (nCur)  currentHistorySeq = newCurSeq;
-        if (busSampler) busHistorySeq = newBusSeq;
-        outputHistorySeq  = newOutSeq;
-        lastHeaterMask    = wireStateModel.getLastMask();
+        // If relay is open, model "no source".
+        const float rChargeEff = (relayControl && relayControl->isOn()) ? rChg : INFINITY;
 
+        wireThermalModel.integrateCapModel(voltBuf, nVolt,
+                                           outBuf, nOut,
+                                           capBankCapF, vSrc, rChargeEff,
+                                           ambientC,
+                                           wireStateModel,
+                                           *WIRE);
+
+        if (nVolt) {
+            if (busSampler) busHistorySeq = newBusSeq;
+            else            voltageHistorySeq = newVoltSeq;
+        }
+        outputHistorySeq = newOutSeq;
+        lastHeaterMask   = wireStateModel.getLastMask();
+
+        // Optional current-sampling watchdog (still useful when heating is active).
         if (checkCurrentWatchdog(lastHeaterMask)) {
             return;
+        }
+    } else {
+        if (nCur > 0 || nOut > 0) {
+            wireThermalModel.integrateCurrentOnly(curBuf, nCur,
+                                                  outBuf, nOut,
+                                                  ambientC,
+                                                  wireStateModel,
+                                                  *WIRE);
+
+            if (nCur)  currentHistorySeq = newCurSeq;
+            if (busSampler) busHistorySeq = newBusSeq;
+            outputHistorySeq  = newOutSeq;
+            lastHeaterMask    = wireStateModel.getLastMask();
+
+            if (checkCurrentWatchdog(lastHeaterMask)) {
+                return;
+            }
         }
     }
 }

@@ -24,6 +24,124 @@
 #include "control/CpDischg.h"
 #include "system/StatusSnapshot.h"
 #include "system/Config.h"
+#include <math.h>
+
+// ======================================================================
+// CapModel – simple R-C prediction helpers
+// ======================================================================
+//
+// Models the bus as:
+//   - A capacitor C [F] at the load node
+//   - A charge path from a source Vsrc through Rcharge [Ω] (optional)
+//   - A resistive load Rload [Ω] (optional)
+//
+// dV/dt = (Vsrc - V)/ (Rcharge*C) - V/(Rload*C)
+//
+// Notes:
+//  - Pass Rcharge as INFINITY (or <=0) to model "relay open" (no source).
+//  - Pass Rload   as INFINITY (or <=0) to model "no load" (pure recharge).
+// ======================================================================
+namespace CapModel {
+
+static inline float _safeResOhm(float r) {
+    if (!isfinite(r) || r <= 0.0f) return INFINITY;
+    return r;
+}
+
+static inline float predictVoltage(float v0,
+                                   float dtS,
+                                   float capF,
+                                   float rLoadOhm,
+                                   float vSrc,
+                                   float rChargeOhm)
+{
+    if (!isfinite(v0)) v0 = 0.0f;
+    if (!isfinite(dtS) || dtS <= 0.0f) return v0;
+    if (!isfinite(capF) || capF <= 0.0f) return v0;
+
+    const float rL = _safeResOhm(rLoadOhm);
+    const float rC = _safeResOhm(rChargeOhm);
+    float vS = (isfinite(vSrc) && vSrc > 0.0f) ? vSrc : 0.0f;
+
+    // No source + no load -> hold.
+    if (isinf(rC) && isinf(rL)) {
+        return v0;
+    }
+
+    // No source -> pure discharge: V(t)=V0*exp(-t/(Rload*C))
+    if (isinf(rC)) {
+        if (isinf(rL)) return v0;
+        const float tau = rL * capF;
+        if (!isfinite(tau) || tau <= 0.0f) return v0;
+        return v0 * expf(-dtS / tau);
+    }
+
+    // No load -> pure charge: V(t)=Vsrc + (V0-Vsrc)*exp(-t/(Rcharge*C))
+    if (isinf(rL)) {
+        const float tau = rC * capF;
+        if (!isfinite(tau) || tau <= 0.0f) return v0;
+        return vS + (v0 - vS) * expf(-dtS / tau);
+    }
+
+    // Source + load -> first-order to V_inf with tau = (Rcharge||Rload)*C
+    const float rSum = rC + rL;
+    if (!isfinite(rSum) || rSum <= 0.0f) return v0;
+
+    const float rEff = (rC * rL) / rSum;
+    const float tau  = rEff * capF;
+    if (!isfinite(tau) || tau <= 0.0f) return v0;
+
+    const float vInf = vS * (rL / rSum);
+    return vInf + (v0 - vInf) * expf(-dtS / tau);
+}
+
+// Energy delivered to the load resistor over dt (Joules).
+static inline float energyToLoadJ(float v0,
+                                 float dtS,
+                                 float capF,
+                                 float rLoadOhm,
+                                 float vSrc,
+                                 float rChargeOhm)
+{
+    if (!isfinite(v0)) v0 = 0.0f;
+    if (!isfinite(dtS) || dtS <= 0.0f) return 0.0f;
+    if (!isfinite(capF) || capF <= 0.0f) return 0.0f;
+
+    const float rL = _safeResOhm(rLoadOhm);
+    const float rC = _safeResOhm(rChargeOhm);
+    float vS = (isfinite(vSrc) && vSrc > 0.0f) ? vSrc : 0.0f;
+
+    if (isinf(rL)) {
+        return 0.0f; // no load -> no load energy
+    }
+
+    // No source: use capacitor energy drop directly (stable numerically).
+    if (isinf(rC)) {
+        const float v1 = predictVoltage(v0, dtS, capF, rL, 0.0f, INFINITY);
+        return 0.5f * capF * (v0 * v0 - v1 * v1);
+    }
+
+    const float rSum = rC + rL;
+    if (!isfinite(rSum) || rSum <= 0.0f) return 0.0f;
+
+    const float rEff = (rC * rL) / rSum;
+    const float tau  = rEff * capF;
+    if (!isfinite(tau) || tau <= 0.0f) return 0.0f;
+
+    const float vInf = vS * (rL / rSum);
+    const float A    = v0 - vInf;
+
+    const float e1 = expf(-dtS / tau);
+    const float e2 = expf(-2.0f * dtS / tau);
+
+    const float term = vInf * vInf * dtS
+                     + 2.0f * vInf * A * tau * (1.0f - e1)
+                     + (A * A) * (tau * 0.5f) * (1.0f - e2);
+
+    return term / rL;
+}
+
+} // namespace CapModel
 
 // ======================================================================
 // WireRuntimeState: per-wire runtime fields
@@ -111,6 +229,14 @@ public:
                               float ambientC,
                               WireStateModel& runtime, HeaterManager& heater);
 
+    // Variant that estimates heating from a capacitor + recharge resistor model.
+    // Uses output-mask history and bus voltage snapshots (no per-sample current needed).
+    void integrateCapModel(const CpDischg::Sample* voltBuf, size_t nVolt,
+                           const HeaterManager::OutputEvent* outBuf, size_t nOut,
+                           float capF, float vSrc, float rChargeOhm,
+                           float ambientC,
+                           WireStateModel& runtime, HeaterManager& heater);
+
     float getWireTemp(uint8_t index) const;
     void  setCoolingScale(float scale);
     void  setCoolingParams(float kCold, float maxDropC, float scale);
@@ -135,6 +261,13 @@ private:
     float            _coolKCold     = DEFAULT_COOL_K_COLD;
     float            _coolKHot      = 0.04f; // default hot-side cooling gain (slower cooling)
     float            _maxCoolDropC  = DEFAULT_MAX_COOL_DROP_C;
+
+    // Pulse state for integrateCapModel()
+    bool     _pulseActive   = false;
+    uint16_t _pulseMask     = 0;
+    uint32_t _pulseStartMs  = 0;
+    float    _pulseStartV   = NAN;
+    float    _lastBusV      = NAN;
 };
 
 // ======================================================================
