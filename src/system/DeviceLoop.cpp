@@ -149,14 +149,13 @@ void Device::startLoopTask() {
     }
 
     DEBUG_PRINTLN("[Device] Starting main loop task");
-    BaseType_t result = xTaskCreatePinnedToCore(
+    BaseType_t result = xTaskCreate(
         Device::loopTaskWrapper,
         "DeviceLoopTask",
         DEVICE_LOOP_TASK_STACK_SIZE,
         this,
         DEVICE_LOOP_TASK_PRIORITY,
-        &loopTaskHandle,
-        DEVICE_LOOP_TASK_CORE
+        &loopTaskHandle
     );
 
     if (result != pdPASS) {

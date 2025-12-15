@@ -112,14 +112,13 @@ void TempSensor::startTemperatureTask(uint32_t intervalMs) {
         unlock();
     }
 
-    BaseType_t ok = xTaskCreatePinnedToCore(
+    BaseType_t ok = xTaskCreate(
         TempSensor::temperatureTask,
         "TempUpdateTask",
         TEMP_SENSOR_TASK_STACK_SIZE,
         this,
         TEMP_SENSOR_TASK_PRIORITY,
-        &tempTaskHandle,
-        TEMP_SENSOR_TASK_CORE
+        &tempTaskHandle
     );
 
     if (ok != pdPASS) {

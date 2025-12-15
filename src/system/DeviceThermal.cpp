@@ -251,14 +251,13 @@ void Device::startThermalTask() {
         return;
     }
 
-    BaseType_t ok = xTaskCreatePinnedToCore(
+    BaseType_t ok = xTaskCreate(
         Device::thermalTaskWrapper,
         "ThermalTask",
         THERMAL_TASK_STACK_SIZE,
         this,
         THERMAL_TASK_PRIORITY,
-        &thermalTaskHandle,
-        THERMAL_TASK_CORE
+        &thermalTaskHandle
     );
 
     if (ok != pdPASS) {

@@ -153,7 +153,7 @@ bool DeviceTransport::startCalibrationTask(uint32_t timeoutMs) {
   if (s_calTaskHandle != nullptr) return false;
   if (DEVICE->getState() == DeviceState::Running) return false;
 
-  const BaseType_t ok = xTaskCreatePinnedToCore(
+  const BaseType_t ok = xTaskCreate(
       [](void* pv) {
         const uint32_t toMs =
             static_cast<uint32_t>(reinterpret_cast<uintptr_t>(pv));
@@ -167,8 +167,7 @@ bool DeviceTransport::startCalibrationTask(uint32_t timeoutMs) {
       4096,
       reinterpret_cast<void*>(static_cast<uintptr_t>(timeoutMs)),
       1,
-      &s_calTaskHandle,
-      APP_CPU_NUM);
+      &s_calTaskHandle);
 
   if (ok != pdPASS) {
     s_calTaskHandle = nullptr;

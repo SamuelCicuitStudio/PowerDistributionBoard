@@ -165,7 +165,7 @@ void ensureDebugStart_(unsigned long baud = 115200) {
     ensureGroupInit_();
 
     if (!s_dbgTask) {
-        xTaskCreatePinnedToCore(
+        xTaskCreate(
             [](void*) {
                 DebugMsg* p = nullptr;
                 for (;;) {
@@ -197,8 +197,7 @@ void ensureDebugStart_(unsigned long baud = 115200) {
             4096,
             nullptr,
             1,
-            &s_dbgTask,
-            tskNO_AFFINITY
+            &s_dbgTask
         );
     }
 

@@ -20,14 +20,13 @@ void BusSampler::begin(CurrentSensor* cs, CpDischg* cp, uint32_t periodMs) {
 
     if (periodMs == 0) periodMs = 5; // ~200 Hz
 
-    BaseType_t ok = xTaskCreatePinnedToCore(
+    BaseType_t ok = xTaskCreate(
         BusSampler::taskThunk,
         "BusSampler",
         3072,
         reinterpret_cast<void*>(periodMs),
         2,
-        &taskHandle,
-        APP_CPU_NUM
+        &taskHandle
     );
 
     if (ok != pdPASS) {

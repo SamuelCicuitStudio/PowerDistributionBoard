@@ -58,14 +58,13 @@ void WiFiManager::begin() {
         _ctrlQueue = xQueueCreate(24, sizeof(ControlCmd));
     }
     if (_ctrlTask == nullptr) {
-        xTaskCreatePinnedToCore(
+        xTaskCreate(
             controlTaskTrampoline,
             "WiFiCtrlTask",
             4096,
             this,
             1,
-            &_ctrlTask,
-            APP_CPU_NUM
+            &_ctrlTask
         );
     }
 
@@ -842,14 +841,13 @@ void WiFiManager::inactivityTask(void* param) {
 void WiFiManager::startInactivityTimer() {
     resetTimer();
     if (inactivityTaskHandle == nullptr) {
-        xTaskCreatePinnedToCore(
+        xTaskCreate(
             WiFiManager::inactivityTask,
             "WiFiInactivity",
             2048,
             this,
             1,
-            &inactivityTaskHandle,
-            APP_CPU_NUM
+            &inactivityTaskHandle
         );
         DEBUG_PRINTLN("[WiFi] Inactivity timer started ");
     }
@@ -918,7 +916,7 @@ void WiFiManager::heartbeat() {
     DEBUG_PRINTLN("[WiFi] Heartbeat Create ");
     BUZZ->bip();
 
-    xTaskCreatePinnedToCore(
+    xTaskCreate(
         [](void* param) {
             WiFiManager* self = static_cast<WiFiManager*>(param);
             const TickType_t interval = pdMS_TO_TICKS(6000);
@@ -967,8 +965,7 @@ void WiFiManager::heartbeat() {
         2048,
         this,
         1,
-        &heartbeatTaskHandle,
-        APP_CPU_NUM
+        &heartbeatTaskHandle
     );
 }
 
@@ -1245,14 +1242,13 @@ void WiFiManager::startStateStreamTask() {
         client->send(json.c_str(), "state", snap.seq);
     });
 
-    BaseType_t ok = xTaskCreatePinnedToCore(
+    BaseType_t ok = xTaskCreate(
         WiFiManager::stateStreamTask,
         "StateStreamTask",
         3072,
         this,
         1,
-        &stateStreamTaskHandle,
-        APP_CPU_NUM
+        &stateStreamTaskHandle
     );
     if (ok != pdPASS) {
         stateStreamTaskHandle = nullptr;
@@ -1287,14 +1283,13 @@ void WiFiManager::startSnapshotTask(uint32_t periodMs) {
         _snapMtx = xSemaphoreCreateMutex();
     }
     if (snapshotTaskHandle == nullptr) {
-        xTaskCreatePinnedToCore(
+        xTaskCreate(
             WiFiManager::snapshotTask,
             "WiFiSnapshot",
             4096,
             reinterpret_cast<void*>(periodMs),
             1, // low priority
-            &snapshotTaskHandle,
-            APP_CPU_NUM
+            &snapshotTaskHandle
         );
     }
 }

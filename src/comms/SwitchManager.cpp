@@ -118,12 +118,11 @@ void SwitchManager::SwitchTask(void* pvParameters) {
 
 // Member function: launch RTOS task
 void SwitchManager::TapDetect() {
-    xTaskCreatePinnedToCore(
+    xTaskCreate(
         SwitchTask,
         "SwitchTask",
         SWITCH_TASK_STACK_SIZE,
         nullptr,
-        SWITCH_TASK_PRIORITY, nullptr,
-        SWITCH_TASK_CORE
+        SWITCH_TASK_PRIORITY, nullptr
     );
 }

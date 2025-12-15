@@ -186,7 +186,7 @@ void Device::startCommandTask() {
 
     if (cmdTaskHandle) return;
 
-    xTaskCreatePinnedToCore(
+    xTaskCreate(
 
         Device::commandTask,
 
@@ -198,9 +198,7 @@ void Device::startCommandTask() {
 
         1,
 
-        &cmdTaskHandle,
-
-        APP_CPU_NUM
+        &cmdTaskHandle
 
     );
 
@@ -866,7 +864,7 @@ void Device::begin() {
 
     // Per-channel LED feedback maintainer
 
-    xTaskCreatePinnedToCore(
+    xTaskCreate(
 
         Device::LedUpdateTask,
 
@@ -878,9 +876,7 @@ void Device::begin() {
 
         LED_UPDATE_TASK_PRIORITY,
 
-        &ledTaskHandle,
-
-        LED_UPDATE_TASK_CORE
+        &ledTaskHandle
 
     );
 
@@ -1107,7 +1103,7 @@ void Device::startTemperatureMonitor() {
 
     if (tempMonitorTaskHandle == nullptr) {
 
-        xTaskCreatePinnedToCore(
+        xTaskCreate(
 
             Device::monitorTemperatureTask,
 
@@ -1119,9 +1115,7 @@ void Device::startTemperatureMonitor() {
 
             TEMP_MONITOR_TASK_PRIORITY,
 
-            &tempMonitorTaskHandle,
-
-            TEMP_MONITOR_TASK_CORE
+            &tempMonitorTaskHandle
 
         );
 
@@ -1826,7 +1820,7 @@ void Device::startFanControlTask() {
 
 
 
-    BaseType_t ok = xTaskCreatePinnedToCore(
+    BaseType_t ok = xTaskCreate(
 
         Device::fanControlTask,
 
@@ -1838,9 +1832,7 @@ void Device::startFanControlTask() {
 
         2,
 
-        &fanTaskHandle,
-
-        1
+        &fanTaskHandle
 
     );
 
