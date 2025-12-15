@@ -1124,6 +1124,15 @@ bool Device::runCalibrationsStandalone(uint32_t timeoutMs) {
         return (xTaskGetTickCount() - start) * portTICK_PERIOD_MS >= timeoutMs;
     };
 
+    auto failSafe = [&](const char* msg) -> bool {
+        if (msg) DEBUG_PRINTLN(msg);
+        if (WIRE) WIRE->disableAll();
+        if (indicator) indicator->clearAll();
+        relayControl->turnOff();
+        setState(DeviceState::Idle);
+        return false;
+    };
+
     DEBUG_PRINTLN("[Device] Manual calibration sequence starting");
 
     if (WIRE) WIRE->disableAll();
@@ -1135,50 +1144,50 @@ bool Device::runCalibrationsStandalone(uint32_t timeoutMs) {
     if (currentSensor) {
         currentSensor->calibrateZeroCurrent();
     }
-    if (timedOut()) return false;
+    if (timedOut()) return failSafe("[Device] Calibration timeout (zero current)");
 
     // 1) Charge caps to threshold
     relayControl->turnOn();
     TickType_t lastChargePost = 0;
     while (discharger->readCapVoltage() < GO_THRESHOLD_RATIO) {
-        if (timedOut()) return false;
+        if (timedOut()) return failSafe("[Device] Calibration timeout (charging caps)");
         TickType_t now = xTaskGetTickCount();
         if ((now - lastChargePost) * portTICK_PERIOD_MS >= 1000) {
             if (RGB) RGB->postOverlay(OverlayEvent::PWR_CHARGING);
             lastChargePost = now;
         }
         if (!delayWithPowerWatch(200)) {
-            return false;
+            return failSafe("[Device] Calibration aborted (power/watch stop)");
         }
     }
 
     // 2) Idle current calibration (relay on, heaters off)
     calibrateIdleCurrent();
-    if (timedOut()) return false;
+    if (timedOut()) return failSafe("[Device] Calibration timeout (idle current)");
 
     // 3) Cap voltage gain calibration (presence + empirical gain)
     if (!calibrateCapVoltageGain()) {
-        return false;
+        return failSafe("[Device] Cap gain calibration failed");
     }
-    if (timedOut()) return false;
+    if (timedOut()) return failSafe("[Device] Calibration timeout (gain)");
 
     // 4) Capacitance calibration (relay cycled inside)
     if (!calibrateCapacitance()) {
-        return false;
+        return failSafe("[Device] Capacitance calibration failed");
     }
-    if (timedOut()) return false;
+    if (timedOut()) return failSafe("[Device] Calibration timeout (capacitance)");
 
     // 5) Recharge after discharge
     TickType_t lastRechargePost = 0;
     while (discharger->readCapVoltage() < GO_THRESHOLD_RATIO) {
-        if (timedOut()) return false;
+        if (timedOut()) return failSafe("[Device] Calibration timeout (recharge)");
         TickType_t now = xTaskGetTickCount();
         if ((now - lastRechargePost) * portTICK_PERIOD_MS >= 1000) {
             if (RGB) RGB->postOverlay(OverlayEvent::PWR_CHARGING);
             lastRechargePost = now;
         }
         if (!delayWithPowerWatch(200)) {
-            return false;
+            return failSafe("[Device] Calibration aborted (power/watch stop)");
         }
     }
 
