@@ -1,5 +1,7 @@
 ﻿#include "comms/SwitchManager.h"
 #include "control/RGBLed.h"
+#include "control/HeaterManager.h"
+#include "services/NVSManager.h"
 
 SwitchManager* SwitchManager::instance = nullptr;
 
@@ -15,13 +17,33 @@ SwitchManager::SwitchManager() {
     instance = this;
 }
 
+static void forceStopAndRestartNow() {
+    // Best-effort immediate safety before restart.
+    // (Do not set RESET_FLAG here; this is a "force stop + restart", not a factory reset.)
+    if (WIRE) {
+        WIRE->disableAll();
+    }
+
+    // Ensure relay is driven to OFF. Relay::turnOff() writes LOW.
+    pinMode(RELAY_CONTROL_PIN, OUTPUT);
+    digitalWrite(RELAY_CONTROL_PIN, LOW);
+
+    // Ask device state machine to stop if it is responsive.
+    if (DEVTRAN) {
+        DEVTRAN->requestStop();
+    }
+
+    vTaskDelay(pdMS_TO_TICKS(50));
+    CONF->simulatePowerDown();
+}
+
 void SwitchManager::detectTapOrHold() {
     uint8_t tapCount = 0;
     unsigned long pressStart = 0;
     unsigned long lastTapTime = 0;
 
     while (true) {
-        // BOOT pin hold -> full reset
+        // BOOT pin long-hold -> FACTORY RESET (persist RESET_FLAG then restart)
         if (digitalRead(SW_USER_BOOT_PIN) == LOW) {
             pressStart = millis();
             while (digitalRead(SW_USER_BOOT_PIN) == LOW) {
@@ -30,8 +52,10 @@ void SwitchManager::detectTapOrHold() {
             unsigned long pressDuration = millis() - pressStart;
             if (pressDuration >= HOLD_THRESHOLD_MS) {
                 RGB->postOverlay(OverlayEvent::RESET_TRIGGER);
-                DEBUG_PRINTLN("[Switch] BOOT hold detected -> reset");
-                DEVTRAN->requestResetFlagAndRestart();
+                DEBUG_PRINTLN("[Switch] BOOT hold detected -> factory reset");
+                CONF->PutBool(RESET_FLAG, true);
+                vTaskDelay(pdMS_TO_TICKS(50));
+                ESP.restart();
                 tapCount = 0;
                 continue;
             }
@@ -47,19 +71,19 @@ void SwitchManager::detectTapOrHold() {
 
             unsigned long pressDuration = millis() - pressStart;
 
-            // HOLD
+            // HOLD (POWER button) -> force stop + restart (no factory reset)
             if (pressDuration >= HOLD_THRESHOLD_MS) {
                 RGB->postOverlay(OverlayEvent::RESET_TRIGGER);
                 DEBUGGSTART();
-                DEBUG_PRINTLN("[Switch] Long press detected");
+                DEBUG_PRINTLN("[Switch] POWER hold detected -> force stop + restart");
                 DEBUG_PRINTLN("###########################################################");
-                DEBUG_PRINTLN("#                   Resetting device                      #");
+                DEBUG_PRINTLN("#                Forcing stop and restart                 #");
                 DEBUG_PRINTLN("###########################################################");
                 DEBUGGSTOP();
-                DEVTRAN->requestResetFlagAndRestart();
+                forceStopAndRestartNow();
                 tapCount = 0;
             } else {
-                // TAP
+                // TAP (POWER button) -> RUN / OFF (toggle)
                 tapCount++;
                 lastTapTime = millis();
                 RGB->postOverlay(OverlayEvent::WAKE_FLASH);
@@ -84,15 +108,12 @@ void SwitchManager::detectTapOrHold() {
                 DEVTRAN->ensureLoopTask(); // ensure Device task is running
 
                 DeviceState st = DEVTRAN->getStateSnapshot().state;
-                if (st == DeviceState::Shutdown) {
-                    DEVTRAN->requestWake();
-                    RGB->postOverlay(OverlayEvent::WAKE_FLASH);
-                } else if (st == DeviceState::Idle) {
-                    DEVTRAN->requestRun();
-                    RGB->postOverlay(OverlayEvent::PWR_START);
-                } else if (st == DeviceState::Running) {
+                if (st == DeviceState::Running || st == DeviceState::Error) {
                     DEVTRAN->requestStop();
                     RGB->postOverlay(OverlayEvent::RELAY_OFF);
+                } else {
+                    DEVTRAN->requestRun();
+                    RGB->postOverlay(OverlayEvent::PWR_START);
                 }
 
                 tapCount = 0;
