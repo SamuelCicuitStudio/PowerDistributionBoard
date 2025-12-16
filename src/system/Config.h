@@ -74,11 +74,10 @@
 #define INRUSH_DELAY_KEY               "INSHDY"    // Inrush delay duration key
 #define LED_FEEDBACK_KEY               "LEDFB"     // LED feedback toggle key
 #define TEMP_THRESHOLD_KEY             "TMPTH"     // Over-temperature shutdown key
+#define TEMP_WARN_KEY                  "TPWRN"     // Over-temperature warning (pre-trip) [degC]
 #define CHARGE_RESISTOR_KEY            "CHRES"     // Charge resistor value key
 #define AC_FREQUENCY_KEY               "ACFRQ"     // Sampling rate key (Hz)
 #define AC_VOLTAGE_KEY                 "ACVLT"     // AC line voltage key
-#define DC_VOLTAGE_KEY                 "DCVLT"     // Target DC output voltage key
-#define DESIRED_OUTPUT_VOLTAGE_KEY     "DOUTV"     // User-defined target output voltage
 #define CP_EMP_GAIN_KEY                "CPEMGN"    // Empirical capacitor ADC gain key
 #define CAP_BANK_CAP_F_KEY             "CPCAPF"    // Capacitor bank capacitance [F] key
 #define COOLING_PROFILE_KEY            "CLPRF"     // bool: true=fast (air), false=buried/slow
@@ -86,6 +85,7 @@
 #define TIMING_MODE_KEY                "TMMODE"    // int: 0=preset, 1=manual
 #define TIMING_PROFILE_KEY             "TMPROF"    // int: 0=hot, 1=medium, 2=gentle
 #define CURR_LIMIT_KEY                 "CURRLT"   // float: over-current trip threshold [A]
+#define WIRE_TAU_KEY                   "TAUSEC"   // float: virtual wire thermal inertia (tau) [s]
 #define TEMP_SENSOR_COUNT_KEY          "TMNT"    // Number of temperature sensors detected
 #define RTC_CURRENT_EPOCH_KEY          "RCUR"    // Last known epoch persisted
 #define RTC_PRESLEEP_EPOCH_KEY         "RSLP"   // Epoch saved before deep sleep
@@ -108,6 +108,8 @@ ASSERT_NVS_KEY_LEN(DEV_HW_KEY);
 ASSERT_NVS_KEY_LEN(TIMING_MODE_KEY);
 ASSERT_NVS_KEY_LEN(TIMING_PROFILE_KEY);
 ASSERT_NVS_KEY_LEN(CURR_LIMIT_KEY);
+ASSERT_NVS_KEY_LEN(TEMP_WARN_KEY);
+ASSERT_NVS_KEY_LEN(WIRE_TAU_KEY);
 
 // ---------- Output Access Flags ----------
 #define OUT01_ACCESS_KEY               "OUT1F"
@@ -194,11 +196,11 @@ ASSERT_NVS_KEY_LEN(CURR_LIMIT_KEY);
 #define DEFAULT_INRUSH_DELAY           100              // ms
 #define DEFAULT_LED_FEEDBACK           true             // true = LED feedback enabled
 #define DEFAULT_TEMP_THRESHOLD         75.0f            // °C
+#define DEFAULT_TEMP_WARN_C            65.0f            // °C (pre-trip warning)
 #define DEFAULT_CHARGE_RESISTOR_OHMS   35.0f            // Ohms (VBUS- to System_GND tie / charge resistor)
 #define DEFAULT_AC_FREQUENCY           500              // Hz sampling rate (50..500)
 #define DEFAULT_AC_VOLTAGE             230.0f           // Volts
-#define DEFAULT_DC_VOLTAGE             325.0f           // Volts
-#define DEFAULT_DESIRED_OUTPUT_VOLTAGE 180.0f           // Volts (safe default power level)
+#define DEFAULT_DC_VOLTAGE             325.0f           // Volts (fixed target)
 #define DEFAULT_CAP_EMP_GAIN           (321.0f / 1.90f) // Default empirical ADC->bus gain
 #define DEFAULT_CAP_BANK_CAP_F         0.0f             // Farads (0 => unknown until calibrated)
 #define DEFAULT_TEMP_SENSOR_COUNT      12               // Default to 12 sensors unless discovered otherwise
@@ -207,6 +209,7 @@ ASSERT_NVS_KEY_LEN(CURR_LIMIT_KEY);
 #define DEFAULT_TIMING_MODE            0                // 0=preset, 1=manual
 #define DEFAULT_TIMING_PROFILE         1                // 0=hot, 1=medium, 2=gentle
 #define DEFAULT_CURR_LIMIT_A           36.0f            // Default over-current trip [A]
+#define DEFAULT_WIRE_TAU_SEC           1.5f             // Default virtual wire tau [s]
 #define DEFAULT_WIRE_GAUGE             20               // AWG number for installed nichrome
 // Cooling defaults (used when NVS unset)
 #define DEFAULT_COOLING_SCALE_BURIED   0.35f            // default scale for buried cooling

@@ -255,7 +255,7 @@ public:
      *
      * @param cs                 CurrentSensor instance (already begin()).
      * @param busVoltage         Supply/bus voltage in volts.
-     *                           If <=0, it will try DC_VOLTAGE_KEY / DESIRED_OUTPUT_VOLTAGE_KEY.
+     *                           Uses fixed DEFAULT_DC_VOLTAGE baseline.
      * @param minValidFraction   Minimum net current (A) to accept as connected.
      * @param maxValidFraction   Reserved for future ratio checks (ignored).
      * @param settleMs           Wait after switching before sampling.

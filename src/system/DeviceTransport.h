@@ -41,10 +41,8 @@ public:
   bool setLedFeedback(bool on);
   bool setOnTimeMs(int v);
   bool setOffTimeMs(int v);
-  bool setDesiredVoltage(float v);
   bool setAcFrequency(int v);
   bool setChargeResistor(float v);
-  bool setDcVoltage(float v);
   bool setAccessFlag(uint8_t idx, bool on);
   bool setWireRes(uint8_t idx, float ohms);
   bool setTargetRes(float ohms);

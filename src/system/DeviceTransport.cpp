@@ -123,10 +123,8 @@ bool DeviceTransport::setFanSpeedPercent(int pct) {
 bool DeviceTransport::setLedFeedback(bool on)           { return sendCommandAndWait(Device::DevCmdType::SET_LED_FEEDBACK, 0, 0.0f, on); }
 bool DeviceTransport::setOnTimeMs(int v)                { return sendCommandAndWait(Device::DevCmdType::SET_ON_TIME_MS, v); }
 bool DeviceTransport::setOffTimeMs(int v)               { return sendCommandAndWait(Device::DevCmdType::SET_OFF_TIME_MS, v); }
-bool DeviceTransport::setDesiredVoltage(float v)        { return sendCommandAndWait(Device::DevCmdType::SET_DESIRED_VOLTAGE, 0, v); }
 bool DeviceTransport::setAcFrequency(int v)             { return sendCommandAndWait(Device::DevCmdType::SET_AC_FREQ, v); }
 bool DeviceTransport::setChargeResistor(float v)        { return sendCommandAndWait(Device::DevCmdType::SET_CHARGE_RES, 0, v); }
-bool DeviceTransport::setDcVoltage(float v)             { return sendCommandAndWait(Device::DevCmdType::SET_DC_VOLT, 0, v); }
 bool DeviceTransport::setAccessFlag(uint8_t idx, bool on) {
   return sendCommandAndWait(Device::DevCmdType::SET_ACCESS_FLAG, idx, 0.0f, on);
 }

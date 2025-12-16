@@ -868,14 +868,6 @@
     const cur = lastLoadedControls || {};
 
     // Core device settings
-    const desiredV = getFloat("desiredVoltage");
-    if (
-      desiredV !== undefined &&
-      !approxEqual(desiredV, cur.desiredVoltage, 0.05)
-    ) {
-      cmds.push(["set", "desiredVoltage", desiredV]);
-    }
-
     const acFreq = getInt("acFrequency");
     if (acFreq !== undefined && acFreq !== cur.acFrequency) {
       cmds.push(["set", "acFrequency", acFreq]);
@@ -889,14 +881,41 @@
       cmds.push(["set", "chargeResistor", chargeR]);
     }
 
-    const dcV = getFloat("dcVoltage");
-    if (dcV !== undefined && !approxEqual(dcV, cur.dcVoltage, 0.05)) {
-      cmds.push(["set", "dcVoltage", dcV]);
-    }
-
     const currLimit = getFloat("currLimit");
     if (currLimit !== undefined && !approxEqual(currLimit, cur.currLimit, 0.05)) {
       cmds.push(["set", "currLimit", currLimit]);
+    }
+
+    const tempWarnC = getFloat("tempWarnC");
+    if (
+      tempWarnC !== undefined &&
+      !approxEqual(tempWarnC, cur.tempWarnC, 0.05)
+    ) {
+      cmds.push(["set", "tempWarnC", tempWarnC]);
+    }
+
+    const tempTripC = getFloat("tempTripC");
+    if (
+      tempTripC !== undefined &&
+      !approxEqual(tempTripC, cur.tempTripC, 0.05)
+    ) {
+      cmds.push(["set", "tempTripC", tempTripC]);
+    }
+
+    const idleCurrentA = getFloat("idleCurrentA");
+    if (
+      idleCurrentA !== undefined &&
+      !approxEqual(idleCurrentA, cur.idleCurrentA, 0.01)
+    ) {
+      cmds.push(["set", "idleCurrentA", idleCurrentA]);
+    }
+
+    const wireTauSec = getFloat("wireTauSec");
+    if (
+      wireTauSec !== undefined &&
+      !approxEqual(wireTauSec, cur.wireTauSec, 0.01)
+    ) {
+      cmds.push(["set", "wireTauSec", wireTauSec]);
     }
 
     const onTime = getInt("onTime");
@@ -1014,11 +1033,13 @@
 
     const data = lastLoadedControls;
 
-    setField("desiredVoltage", data.desiredVoltage);
     setField("acFrequency", data.acFrequency);
     setField("chargeResistor", data.chargeResistor);
-    setField("dcVoltage", data.dcVoltage);
     setField("currLimit", data.currLimit);
+    setField("tempWarnC", data.tempWarnC);
+    setField("tempTripC", data.tempTripC);
+    setField("idleCurrentA", data.idleCurrentA);
+    setField("wireTauSec", data.wireTauSec);
     setField("onTime", data.onTime);
     setField("offTime", data.offTime);
     const coolingToggle = document.getElementById("coolingAirToggle");
@@ -1110,11 +1131,13 @@
       if (offLed) offLed.style.backgroundColor = data.off ? "red" : "gray";
 
       // Device numeric fields
-      setField("desiredVoltage", data.desiredVoltage);
       setField("acFrequency", data.acFrequency);
       setField("chargeResistor", data.chargeResistor);
-      setField("dcVoltage", data.dcVoltage);
       setField("currLimit", data.currLimit);
+      setField("tempWarnC", data.tempWarnC);
+      setField("tempTripC", data.tempTripC);
+      setField("idleCurrentA", data.idleCurrentA);
+      setField("wireTauSec", data.wireTauSec);
       setField("onTime", data.onTime);
       setField("offTime", data.offTime);
       const coolingToggle = document.getElementById("coolingAirToggle");
@@ -1582,10 +1605,7 @@
       if (relayToggle) relayToggle.checked = serverRelay;
 
       // Voltage gauge (cap voltage or fallback)
-      const fallback =
-        typeof (lastLoadedControls && lastLoadedControls.dcVoltage) === "number"
-          ? lastLoadedControls.dcVoltage
-          : 220;
+      const fallback = 325;
       let shownV = fallback;
       if (ac) {
         const v = parseFloat(mon.capVoltage);
@@ -2042,11 +2062,7 @@
         setDot("ac", ac);
 
         // Voltage gauge (cap voltage or fallback)
-        const fallback =
-          typeof (lastLoadedControls && lastLoadedControls.dcVoltage) ===
-          "number"
-            ? lastLoadedControls.dcVoltage
-            : 220;
+      const fallback = 325;
         let shownV = fallback;
         if (ac) {
           const v = parseFloat(data.capVoltage);

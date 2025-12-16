@@ -45,11 +45,22 @@
       .user-modal-content.device-settings-box {
         width: 100%;
         max-width: 720px;
-        max-height: 480px;
+        max-height: 540px;
         margin: 0 auto;
         display: flex;
         flex-direction: column; /* grid + actions stacked */
         gap: 16px;
+        overflow: hidden; /* scrolling happens inside .device-grid */
+      }
+      .ds-group-title {
+        grid-column: 1 / -1;
+        margin-top: 6px;
+        padding-bottom: 6px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+        font-size: 12px;
+        font-weight: 600;
+        opacity: 0.9;
+        letter-spacing: 0.2px;
       }
       /* Two-column grid inside the box */
       .device-settings-box .device-grid {
@@ -58,12 +69,17 @@
         gap: 18px 28px; /* row gap | column gap */
         align-items: flex-start;
         min-width: 0;
+        min-height: 0;
+        flex: 1 1 auto;
+        overflow-y: auto;
+        padding-right: 6px; /* keep scrollbar off content */
       }
       .device-settings-box .device-col {
         display: flex;
         flex-direction: column;
         gap: 10px;
         min-width: 0;
+        min-height: 0;
       }
       /* Left column (Device Settings) as a compact 2-column grid */
       .device-settings-box .device-grid > .device-col:first-child {
@@ -118,6 +134,7 @@
       .device-settings-box .user-modal-actions.round-actions {
         margin-top: 8px;
         justify-content: center;
+        flex: 0 0 auto; /* always visible under the scroll area */
       }
       /* Optional: tiny responsive fallback if viewport is very short or narrow */
       @media (max-height: 640px) {
@@ -835,21 +852,7 @@
               <section class="device-col device-col--left">
                 <h3>Device Settings</h3>
 
-                <div class="ds-field">
-                  <label for="desiredVoltage">Desired Output Voltage</label>
-                  <div class="input-with-unit">
-                    <input type="number" id="desiredVoltage" />
-                    <span class="unit-label">V</span>
-                  </div>
-                </div>
-
-                <div class="ds-field">
-                  <label for="dcVoltage">DC Output Voltage</label>
-                  <div class="input-with-unit">
-                    <input type="number" id="dcVoltage" />
-                    <span class="unit-label">V</span>
-                  </div>
-                </div>
+                <div class="ds-group-title">Sampling &amp; Power</div>
 
                 <div class="ds-field">
                   <label for="acFrequency">Sampling Rate</label>
@@ -879,6 +882,44 @@
                     <span class="unit-label">A</span>
                   </div>
                 </div>
+
+                <div class="ds-group-title">Thermal Safety</div>
+
+                <div class="ds-field">
+                  <label for="tempWarnC">Temp Warning</label>
+                  <div class="input-with-unit">
+                    <input type="number" id="tempWarnC" step="0.1" />
+                    <span class="unit-label">°C</span>
+                  </div>
+                </div>
+
+                <div class="ds-field">
+                  <label for="tempTripC">Temp Trip (Shutdown)</label>
+                  <div class="input-with-unit">
+                    <input type="number" id="tempTripC" step="0.1" />
+                    <span class="unit-label">°C</span>
+                  </div>
+                </div>
+
+                <div class="ds-group-title">Thermal Model</div>
+
+                <div class="ds-field">
+                  <label for="idleCurrentA">Idle Current Baseline</label>
+                  <div class="input-with-unit">
+                    <input type="number" id="idleCurrentA" step="0.01" />
+                    <span class="unit-label">A</span>
+                  </div>
+                </div>
+
+                <div class="ds-field">
+                  <label for="wireTauSec">Wire Tau (Inertia)</label>
+                  <div class="input-with-unit">
+                    <input type="number" id="wireTauSec" step="0.01" />
+                    <span class="unit-label">s</span>
+                  </div>
+                </div>
+
+                <div class="ds-group-title">Loop Timing</div>
 
                 <div class="ds-field" id="onTimeField" style="display: none">
                   <label for="onTime">ON Time</label>

@@ -595,10 +595,8 @@ void WiFiManager::registerRoutes_() {
                 else if (target == "offTime")                 { c.type = CTRL_OFF_TIME_MS;       c.i1 = value.as<int>(); }
                 else if (target == "relay")                   { c.type = CTRL_RELAY_BOOL;        c.b1 = value.as<bool>(); }
                 else if (target.startsWith("output"))         { c.type = CTRL_OUTPUT_BOOL;       c.i1 = target.substring(6).toInt(); c.b1 = value.as<bool>(); }
-                else if (target == "desiredVoltage")          { c.type = CTRL_DESIRED_V;         c.f1 = value.as<float>(); }
                 else if (target == "acFrequency")             { c.type = CTRL_AC_FREQ;           c.i1 = value.as<int>(); }
                 else if (target == "chargeResistor")          { c.type = CTRL_CHARGE_RES;        c.f1 = value.as<float>(); }
-                else if (target == "dcVoltage")               { c.type = CTRL_DC_VOLT;           c.f1 = value.as<float>(); }
                 else if (target.startsWith("Access"))         { c.type = CTRL_ACCESS_BOOL;       c.i1 = target.substring(6).toInt(); c.b1 = value.as<bool>(); }
                 else if (target == "mode")                    { c.type = CTRL_SET_MODE;          c.b1 = value.as<bool>(); }
                 else if (target == "systemStart")             c.type = CTRL_SYSTEM_START;
@@ -611,6 +609,39 @@ void WiFiManager::registerRoutes_() {
                 else if (target == "wireGauge")               { c.type = CTRL_WIRE_GAUGE;        c.i1 = value.as<int>(); }
                 else if (target == "coolingAir")              { c.type = CTRL_COOL_PROFILE;      c.b1 = value.as<bool>(); }
                 else if (target == "currLimit")               { c.type = CTRL_CURR_LIMIT;        c.f1 = value.as<float>(); }
+                else if (target == "tempWarnC") {
+                    float v = value.as<float>();
+                    if (!isfinite(v) || v < 0.0f) v = 0.0f;
+                    CONF->PutFloat(TEMP_WARN_KEY, v);
+                    request->send(200, "application/json",
+                                  "{\"status\":\"ok\",\"applied\":true}");
+                    return;
+                }
+                else if (target == "tempTripC") {
+                    float v = value.as<float>();
+                    if (!isfinite(v) || v < 0.0f) v = DEFAULT_TEMP_THRESHOLD;
+                    CONF->PutFloat(TEMP_THRESHOLD_KEY, v);
+                    request->send(200, "application/json",
+                                  "{\"status\":\"ok\",\"applied\":true}");
+                    return;
+                }
+                else if (target == "idleCurrentA") {
+                    float v = value.as<float>();
+                    if (!isfinite(v) || v < 0.0f) v = 0.0f;
+                    CONF->PutFloat(IDLE_CURR_KEY, v);
+                    request->send(200, "application/json",
+                                  "{\"status\":\"ok\",\"applied\":true}");
+                    return;
+                }
+                else if (target == "wireTauSec") {
+                    float v = value.as<float>();
+                    if (!isfinite(v) || v < 0.05f) v = DEFAULT_WIRE_TAU_SEC;
+                    if (v > 60.0f) v = 60.0f;
+                    CONF->PutFloat(WIRE_TAU_KEY, v);
+                    request->send(200, "application/json",
+                                  "{\"status\":\"ok\",\"applied\":true}");
+                    return;
+                }
                 else if (target == "timingMode") {
                     String modeStr = value.as<String>();
                     modeStr.toLowerCase();
@@ -699,10 +730,8 @@ void WiFiManager::registerRoutes_() {
             doc["ledFeedback"]    = CONF->GetBool(LED_FEEDBACK_KEY, false);
             doc["onTime"]         = CONF->GetInt(ON_TIME_KEY, 500);
             doc["offTime"]        = CONF->GetInt(OFF_TIME_KEY, 500);
-            doc["desiredVoltage"] = CONF->GetFloat(DESIRED_OUTPUT_VOLTAGE_KEY, 0);
             doc["acFrequency"]    = CONF->GetInt(AC_FREQUENCY_KEY, DEFAULT_AC_FREQUENCY);
             doc["chargeResistor"] = CONF->GetFloat(CHARGE_RESISTOR_KEY, 0.0f);
-            doc["dcVoltage"]      = CONF->GetFloat(DC_VOLTAGE_KEY, 0.0f);
             doc["wireOhmPerM"]    = CONF->GetFloat(WIRE_OHM_PER_M_KEY,
                                                     DEFAULT_WIRE_OHM_PER_M);
             doc["wireGauge"]      = CONF->GetInt(WIRE_GAUGE_KEY, DEFAULT_WIRE_GAUGE);
@@ -711,6 +740,10 @@ void WiFiManager::registerRoutes_() {
             doc["coolBuriedScale"] = CONF->GetFloat(COOL_BURIED_SCALE_KEY, DEFAULT_COOLING_SCALE_BURIED);
             doc["coolKCold"]       = CONF->GetFloat(COOL_KCOLD_KEY,        DEFAULT_COOL_K_COLD);
             doc["coolDropMaxC"]    = CONF->GetFloat(COOL_DROP_MAX_KEY,     DEFAULT_MAX_COOL_DROP_C);
+            doc["tempTripC"]       = CONF->GetFloat(TEMP_THRESHOLD_KEY, DEFAULT_TEMP_THRESHOLD);
+            doc["tempWarnC"]       = CONF->GetFloat(TEMP_WARN_KEY, DEFAULT_TEMP_WARN_C);
+            doc["idleCurrentA"]    = CONF->GetFloat(IDLE_CURR_KEY, DEFAULT_IDLE_CURR);
+            doc["wireTauSec"]      = CONF->GetFloat(WIRE_TAU_KEY, DEFAULT_WIRE_TAU_SEC);
             const int loopModeCfg = CONF->GetInt(LOOP_MODE_KEY, DEFAULT_LOOP_MODE);
             doc["loopMode"]       = (loopModeCfg == 1) ? "sequential" : "advanced";
             const int timingModeCfg = CONF->GetInt(TIMING_MODE_KEY, DEFAULT_TIMING_MODE);
@@ -1074,11 +1107,6 @@ bool WiFiManager::handleControl(const ControlCmd& c) {
             }
             break;
 
-        case CTRL_DESIRED_V:
-            BUZZ->bip();
-            ok = DEVTRAN->setDesiredVoltage(c.f1);
-            break;
-
         case CTRL_AC_FREQ:
             BUZZ->bip();
             ok = DEVTRAN->setAcFrequency(c.i1);
@@ -1087,11 +1115,6 @@ bool WiFiManager::handleControl(const ControlCmd& c) {
         case CTRL_CHARGE_RES:
             BUZZ->bip();
             ok = DEVTRAN->setChargeResistor(c.f1);
-            break;
-
-        case CTRL_DC_VOLT:
-            BUZZ->bip();
-            ok = DEVTRAN->setDcVoltage(c.f1);
             break;
 
         case CTRL_ACCESS_BOOL:

@@ -61,7 +61,6 @@ static bool _runMaskedPulse(Device* self,
             float vSrc = DEFAULT_DC_VOLTAGE;
             float rChg = DEFAULT_CHARGE_RESISTOR_OHMS;
             if (CONF) {
-                vSrc = CONF->GetFloat(DC_VOLTAGE_KEY, DEFAULT_DC_VOLTAGE);
                 rChg = CONF->GetFloat(CHARGE_RESISTOR_KEY, DEFAULT_CHARGE_RESISTOR_OHMS);
             }
             if (!isfinite(vSrc) || vSrc <= 0.0f) vSrc = DEFAULT_DC_VOLTAGE;
@@ -555,16 +554,6 @@ void Device::StartLoop() {
 
     // 6) Setup PowerTracker session (no control over outputs).
     float busV = DEFAULT_DC_VOLTAGE;
-    if (CONF) {
-        float vdc = CONF->GetFloat(DC_VOLTAGE_KEY, 0.0f);
-        if (vdc > 0.0f) {
-            busV = vdc;
-        } else {
-            float vset = CONF->GetFloat(DESIRED_OUTPUT_VOLTAGE_KEY,
-                                        DEFAULT_DESIRED_OUTPUT_VOLTAGE);
-            if (vset > 0.0f) busV = vset;
-        }
-    }
 
     float idleA = DEFAULT_IDLE_CURR;
     if (CONF) {

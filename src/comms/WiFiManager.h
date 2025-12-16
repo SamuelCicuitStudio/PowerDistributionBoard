@@ -164,10 +164,8 @@ private:
         CTRL_OFF_TIME_MS,
         CTRL_RELAY_BOOL,
         CTRL_OUTPUT_BOOL,       // i1=index(1..10), b1=state
-        CTRL_DESIRED_V,         // f1
         CTRL_AC_FREQ,           // i1
         CTRL_CHARGE_RES,        // f1
-        CTRL_DC_VOLT,           // f1
         CTRL_ACCESS_BOOL,       // i1=index(1..10), b1=flag
         CTRL_SET_MODE,          // b1: true=manual, false=auto
         CTRL_SYSTEM_START,

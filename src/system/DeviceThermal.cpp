@@ -80,7 +80,13 @@ void Device::initWireThermalModelOnce() {
         }
 
         // First-order time constant tau (can be tuned per design)
-        ws.tau = (DEFAULT_TAU_SEC > 0.05f) ? DEFAULT_TAU_SEC : 0.05f;
+        float tau = DEFAULT_WIRE_TAU_SEC;
+        if (CONF) {
+            tau = CONF->GetFloat(WIRE_TAU_KEY, DEFAULT_WIRE_TAU_SEC);
+        }
+        if (!isfinite(tau) || tau < 0.05f) tau = 0.05f;
+        if (tau > 60.0f) tau = 60.0f;
+        ws.tau = tau;
 
         ws.T                 = ambientC;
         ws.lastUpdateMs      = now;
@@ -276,10 +282,6 @@ void Device::thermalTaskWrapper(void* param) {
 void Device::thermalTask() {
     initWireThermalModelOnce();
 
-    // Load idle current baseline if available.
-    idleCurrentA = CONF->GetFloat(IDLE_CURR_KEY, 0.0f);
-    if (idleCurrentA < 0.0f) idleCurrentA = 0.0f;
-
     const TickType_t period = pdMS_TO_TICKS(THERMAL_TASK_PERIOD_MS);
 
     while (true) {
@@ -300,6 +302,20 @@ void Device::updateWireThermalFromHistory() {
     }
     if (!thermalInitDone) {
         initWireThermalModelOnce();
+    }
+
+    // Refresh tunables that may be changed via UI / NVS at runtime.
+    if (CONF) {
+        float idle = CONF->GetFloat(IDLE_CURR_KEY, DEFAULT_IDLE_CURR);
+        if (!isfinite(idle) || idle < 0.0f) idle = 0.0f;
+        idleCurrentA = idle;
+
+        float tau = CONF->GetFloat(WIRE_TAU_KEY, DEFAULT_WIRE_TAU_SEC);
+        if (!isfinite(tau) || tau < 0.05f) tau = 0.05f;
+        if (tau > 60.0f) tau = 60.0f;
+        for (uint8_t i = 0; i < HeaterManager::kWireCount; ++i) {
+            wireThermal[i].tau = tau;
+        }
     }
 
     // Refresh ambient slowly.
@@ -415,7 +431,6 @@ void Device::updateWireThermalFromHistory() {
         float vSrc = DEFAULT_DC_VOLTAGE;
         float rChg = DEFAULT_CHARGE_RESISTOR_OHMS;
         if (CONF) {
-            vSrc = CONF->GetFloat(DC_VOLTAGE_KEY, DEFAULT_DC_VOLTAGE);
             rChg = CONF->GetFloat(CHARGE_RESISTOR_KEY, DEFAULT_CHARGE_RESISTOR_OHMS);
         }
         if (!isfinite(vSrc) || vSrc <= 0.0f) vSrc = DEFAULT_DC_VOLTAGE;

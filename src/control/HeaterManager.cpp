@@ -575,10 +575,7 @@ void HeaterManager::probeWirePresence(CurrentSensor& cs,
     }
 
     if (busVoltage <= 0.0f && CONF) {
-        busVoltage = CONF->GetFloat(DC_VOLTAGE_KEY, 0.0f);
-        if (busVoltage <= 0.0f) {
-            busVoltage = CONF->GetFloat(DESIRED_OUTPUT_VOLTAGE_KEY, 0.0f);
-        }
+        busVoltage = DEFAULT_DC_VOLTAGE;
     }
 
     if (busVoltage <= 0.0f) {
@@ -610,10 +607,7 @@ void HeaterManager::updatePresenceFromMask(uint16_t mask,
     }
 
     if (busVoltage <= 0.0f && CONF) {
-        busVoltage = CONF->GetFloat(DC_VOLTAGE_KEY, 0.0f);
-        if (busVoltage <= 0.0f) {
-            busVoltage = CONF->GetFloat(DESIRED_OUTPUT_VOLTAGE_KEY, 0.0f);
-        }
+        busVoltage = DEFAULT_DC_VOLTAGE;
     }
     if (busVoltage <= 0.0f) {
         return;

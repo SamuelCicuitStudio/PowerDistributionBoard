@@ -18,12 +18,14 @@
     ledFeedback: true,
     buzzerMute: false,
     fanSpeed: 0, // 0..255
-    desiredVoltage: 325, // V
     acFrequency: 500, // Hz sampling rate
     chargeResistor: 47, // ohm
-    dcVoltage: 325, // V
     wireOhmPerM: 2, // ohm/m
     wireGauge: 20, // AWG
+    tempWarnC: 65, // °C
+    tempTripC: 75, // °C
+    idleCurrentA: 0.0, // A
+    wireTauSec: 1.5, // s
     onTime: 800, // ms
     offTime: 600, // ms
     temps: new Array(12).fill(26),
@@ -53,8 +55,8 @@
     if (S.deviceState === "Running" && !S.manualMode) {
       S.relay = true;
 
-      // Cap voltage swings between ~0.5..1.0 of desired
-      const v = S.desiredVoltage;
+      // Cap voltage swings between ~0.5..1.0 of nominal
+      const v = 325;
       S.capVoltage = +(v * (0.55 + 0.45 * Math.sin(S.t / 2))).toFixed(2);
       S.capAdcRaw = +(S.capVoltage / 10).toFixed(2);
 
@@ -152,10 +154,12 @@
         buzzerMute: S.buzzerMute,
         ready: S.deviceState === "Running",
         off: S.deviceState === "Shutdown",
-        desiredVoltage: S.desiredVoltage,
         acFrequency: S.acFrequency,
         chargeResistor: S.chargeResistor,
-        dcVoltage: S.dcVoltage,
+        tempWarnC: S.tempWarnC,
+        tempTripC: S.tempTripC,
+        idleCurrentA: S.idleCurrentA,
+        wireTauSec: S.wireTauSec,
         wireOhmPerM: S.wireOhmPerM,
         wireGauge: S.wireGauge,
         onTime: S.onTime,
@@ -226,10 +230,12 @@
             S.ledFeedback = !!value;
             break;
 
-          case "desiredVoltage":
           case "acFrequency":
           case "chargeResistor":
-          case "dcVoltage":
+          case "tempWarnC":
+          case "tempTripC":
+          case "idleCurrentA":
+          case "wireTauSec":
           case "wireOhmPerM":
           case "onTime":
           case "offTime":

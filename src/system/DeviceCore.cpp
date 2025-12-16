@@ -328,16 +328,6 @@ void Device::handleCommand(const DevCommand& cmd) {
 
             break;
 
-        case DevCmdType::SET_DESIRED_VOLTAGE:
-
-            if (!floatEq(CONF->GetFloat(DESIRED_OUTPUT_VOLTAGE_KEY, 0), cmd.f1)) {
-
-                CONF->PutFloat(DESIRED_OUTPUT_VOLTAGE_KEY, cmd.f1);
-
-            }
-
-            break;
-
         case DevCmdType::SET_AC_FREQ:
 
             {
@@ -371,16 +361,6 @@ void Device::handleCommand(const DevCommand& cmd) {
             if (!floatEq(CONF->GetFloat(CHARGE_RESISTOR_KEY, 0.0f), cmd.f1)) {
 
                 CONF->PutFloat(CHARGE_RESISTOR_KEY, cmd.f1);
-
-            }
-
-            break;
-
-        case DevCmdType::SET_DC_VOLT:
-
-            if (!floatEq(CONF->GetFloat(DC_VOLTAGE_KEY, 0.0f), cmd.f1)) {
-
-                CONF->PutFloat(DC_VOLTAGE_KEY, cmd.f1);
 
             }
 
@@ -1132,9 +1112,6 @@ void Device::monitorTemperatureTask(void* param) {
     Device* self = static_cast<Device*>(param);
 
 
-
-    const float   threshold   = CONF->GetFloat(TEMP_THRESHOLD_KEY, DEFAULT_TEMP_THRESHOLD);
-
     const uint8_t sensorCount = self->tempSensor->getSensorCount();
 
 
@@ -1159,6 +1136,18 @@ void Device::monitorTemperatureTask(void* param) {
 
     while (true) {
 
+        float tripC = DEFAULT_TEMP_THRESHOLD;
+        float warnC = DEFAULT_TEMP_WARN_C;
+        if (CONF) {
+            tripC = CONF->GetFloat(TEMP_THRESHOLD_KEY, DEFAULT_TEMP_THRESHOLD);
+            warnC = CONF->GetFloat(TEMP_WARN_KEY, DEFAULT_TEMP_WARN_C);
+        }
+        if (!isfinite(tripC) || tripC <= 0.0f) tripC = DEFAULT_TEMP_THRESHOLD;
+        if (!isfinite(warnC) || warnC < 0.0f) warnC = 0.0f;
+        if (warnC > 0.0f && warnC >= tripC) warnC = tripC - 1.0f;
+
+        bool anyWarn = false;
+
         for (uint8_t i = 0; i < sensorCount; ++i) {
 
             const float temp = self->tempSensor->getTemperature(i);
@@ -1167,7 +1156,11 @@ void Device::monitorTemperatureTask(void* param) {
 
 
 
-            if (temp >= threshold) {
+            if (warnC > 0.0f && temp >= warnC) {
+                anyWarn = true;
+            }
+
+            if (temp >= tripC) {
 
                 DEBUG_PRINTF("[Device] Overtemperature Detected! Sensor[%u] = %.2f°C\n", i, temp);
 
@@ -1195,6 +1188,10 @@ void Device::monitorTemperatureTask(void* param) {
 
             }
 
+        }
+
+        if (anyWarn && self->getState() != DeviceState::Error) {
+            RGB->postOverlay(OverlayEvent::TEMP_WARN);
         }
 
 
