@@ -31,6 +31,7 @@ public:
 
   // Telemetry snapshot reused by WiFiManager snapshot task
   bool getTelemetry(StatusSnapshot& out) const;
+  bool isManualMode() const;
 
   // Output / relay helpers for UI control paths
   bool setRelay(bool on);

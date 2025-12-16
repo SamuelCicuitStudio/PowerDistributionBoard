@@ -39,6 +39,215 @@
   let monitorPollTimer = null; // /monitor polling timer (UI snapshot)
   let calibrationBusy = false; // prevent overlapping manual calibrations
 
+  // ========================================================
+  // ===============          TOOLTIPS          =============
+  // ========================================================
+
+  const TOOLTIP_BY_ID = {
+    // Dashboard / global controls
+    modeToggle:
+      "Auto vs Manual. Manual gives direct relay/output control; Auto runs the heating loop.",
+    ltToggle:
+      "LT (LED feedback). When enabled, output LEDs mirror output states during the loop.",
+    muteBtn: "Mute/unmute buzzer sounds.",
+    powerButton: "Start/stop the device loop (RUN / OFF).",
+    forceCalibrationBtn:
+      "Force a full calibration sequence (runs before starting the loop).",
+    disconnectBtn:
+      "Disconnect from the device UI (logs out and redirects to login).",
+    sessionHistoryBtn: "Open session history (energy/duration/peaks).",
+    readyLed: "Ready status indicator LED.",
+    offLed: "OFF status indicator LED.",
+
+    // Dashboard gauges
+    voltageValue: "Capacitor bank voltage estimate (V) from the ADC input.",
+    adcRawValue: "Raw ADC reading used for the voltage estimate.",
+    currentValue: "Measured load current (A).",
+    temp1Value: "Board temperature sensor 01 (degC).",
+    temp2Value: "Board temperature sensor 02 (degC).",
+    temp3Value: "Heatsink temperature (degC).",
+    capacitanceValue: "Detected/assumed capacitor bank capacitance (mF).",
+
+    // Manual control
+    fanSlider: "Manual fan speed (%).",
+    relayToggle: "Manual input relay control (manual mode).",
+
+    // Device settings (Sampling & Power)
+    acFrequency:
+      "Sampling rate for current/telemetry (Hz). Higher = faster updates (50..500).",
+    chargeResistor:
+      "Bleed/charge resistor value between capacitor bank negative and system GND (Ohms).",
+    currLimit:
+      "Over-current trip threshold (A). Trips if current stays above this for a short time window.",
+
+    // Thermal safety
+    tempWarnC:
+      "Temperature warning threshold (degC). Shows a warning overlay before shutdown.",
+    tempTripC:
+      "Temperature trip threshold (degC). Triggers shutdown and Error when exceeded.",
+
+    // Thermal model
+    idleCurrentA:
+      "Baseline current when heaters are OFF (A). Used by virtual temperature estimation.",
+    wireTauSec:
+      "Virtual wire thermal inertia tau (seconds). Higher = slower virtual temperature response.",
+
+    // Loop timing
+    onTime: "Pulse ON duration (ms). Used in manual timing mode.",
+    offTime: "Pulse OFF duration (ms). Used in manual timing mode.",
+    loopModeSelect:
+      "Loop mode. Advanced = grouped outputs; Sequential = one output at a time.",
+    timingModeSelect:
+      "Timing UI mode. Normal uses Hot/Medium/Gentle presets; Advanced exposes manual Ton/Toff.",
+    timingProfileSelect:
+      "Preset heat profile (Hot/Medium/Gentle). Updates Ton/Toff automatically.",
+    timingResolved: "Read-only preview of the currently resolved Ton/Toff.",
+
+    // Cooling & nichrome
+    coolingAirToggle: "Cooling profile. ON = air/fast, OFF = buried/slow.",
+    coolBuriedScale:
+      "Cooling scale for buried profile. Higher = stronger cooling in the model.",
+    coolKCold: "Base cooling gain (kCold) for the thermal model.",
+    coolDropMaxC:
+      "Maximum cooling drop per integration step (degC). Limits sudden cooling.",
+    wireOhmPerM: "Nichrome resistivity (Ohms per meter).",
+    rTarget: "Target resistance used by the selector/planner (Ohms).",
+
+    // Admin settings
+    adminCurrentPassword: "Current admin password (required to change settings).",
+    adminUsername: "New admin username.",
+    adminPassword: "New admin password.",
+    wifiSSID: "WiFi station SSID to connect to.",
+    wifiPassword: "WiFi station password.",
+
+    // User settings
+    userCurrentPassword: "Current user password (required to change user settings).",
+    userNewPassword: "New user password to set.",
+    userDeviceId: "Change the displayed device ID/label.",
+  };
+
+  function applyTooltips(root = document) {
+    // 1) Explicit per-id tooltips (overwrite if present)
+    for (const [id, tip] of Object.entries(TOOLTIP_BY_ID)) {
+      const el = root.getElementById ? root.getElementById(id) : null;
+      if (el) el.title = tip;
+      const lbl = root.querySelector
+        ? root.querySelector('label[for="' + id + '"]')
+        : null;
+      if (lbl) lbl.title = tip;
+    }
+
+    // 2) Common icon / container helpers (non-id)
+    const userIcon = root.querySelector ? root.querySelector(".user-icon") : null;
+    if (
+      userIcon &&
+      (!userIcon.title || String(userIcon.title).trim().length === 0)
+    ) {
+      userIcon.title = "User menu";
+    }
+
+    // 3) Gauges: provide hover help on the card/value/label.
+    const gaugeTipByName = {
+      Voltage: "Capacitor bank voltage estimate (V) from the ADC input.",
+      Current: "Measured load current (A).",
+      "Board 01": "Board temperature sensor 01 (degC).",
+      "Board 02": "Board temperature sensor 02 (degC).",
+      Heatsink: "Heatsink temperature (degC).",
+      Capacitance: "Detected/assumed capacitor bank capacitance (mF).",
+    };
+
+    const gaugeCards = root.querySelectorAll
+      ? root.querySelectorAll(".gauge-card")
+      : [];
+
+    for (const card of gaugeCards) {
+      const labels = card.querySelectorAll
+        ? card.querySelectorAll(".gauge-label")
+        : [];
+      const mainLabel = labels && labels.length ? labels[0] : null;
+      const name =
+        mainLabel && mainLabel.textContent ? mainLabel.textContent.trim() : "";
+      if (!name) continue;
+
+      let tip = gaugeTipByName[name] || "";
+      if (!tip) {
+        const m = /^Temp\s*(\d+)$/i.exec(name);
+        if (m) tip = "Temperature channel " + m[1] + " (degC).";
+        else tip = name + " (live reading).";
+      }
+
+      if (!card.title || String(card.title).trim().length === 0) {
+        card.title = tip;
+      }
+      if (
+        mainLabel &&
+        (!mainLabel.title || String(mainLabel.title).trim().length === 0)
+      ) {
+        mainLabel.title = tip;
+      }
+      const value = card.querySelector ? card.querySelector(".gauge-value") : null;
+      if (value && (!value.title || String(value.title).trim().length === 0)) {
+        value.title = tip;
+      }
+      for (const lbl of labels) {
+        if (lbl && (!lbl.title || String(lbl.title).trim().length === 0)) {
+          lbl.title = tip;
+        }
+      }
+    }
+
+    // 4) Fallback: any interactive element without a tooltip gets one from its label/placeholder/text.
+    const candidates = root.querySelectorAll
+      ? root.querySelectorAll("input, select, textarea, button, [onclick]")
+      : [];
+
+    for (const el of candidates) {
+      if (!el || typeof el !== "object") continue;
+      if (el.title && String(el.title).trim().length) continue;
+
+      const id = el.id || "";
+      let tip = "";
+
+      if (id) {
+        const lbl = root.querySelector('label[for="' + id + '"]');
+        if (lbl && lbl.textContent) tip = lbl.textContent.trim();
+      }
+
+      if (!tip && el.getAttribute) {
+        const aria = el.getAttribute("aria-label");
+        if (aria) tip = String(aria).trim();
+      }
+
+      if (!tip && el.getAttribute) {
+        const ph = el.getAttribute("placeholder");
+        if (ph) tip = String(ph).trim();
+      }
+
+      if (!tip && el.closest) {
+        const item = el.closest(".manual-item");
+        if (item) {
+          const span = item.querySelector ? item.querySelector("span") : null;
+          if (span && span.textContent) tip = span.textContent.trim();
+        }
+      }
+
+      if (!tip && el.querySelector) {
+        const img = el.querySelector("img[alt]");
+        if (img) {
+          const alt = img.getAttribute ? img.getAttribute("alt") : "";
+          if (alt) tip = String(alt).trim();
+        }
+      }
+
+      if (!tip && el.textContent) {
+        const txt = String(el.textContent).trim();
+        if (txt) tip = txt;
+      }
+
+      if (tip) el.title = tip;
+    }
+  }
+
   function isManualMode() {
     const t = document.getElementById("modeToggle");
     return !!(t && t.checked);
@@ -400,19 +609,21 @@
       if (!isControlMode) block.classList.add("access-style");
 
       if (isControlMode) {
+        block.title = "Manual control: toggle Output " + i;
         block.innerHTML = `
           <span>Output ${i}</span>
           <label class="switch">
-            <input type="checkbox" onchange="handleOutputToggle(${i}, this)">
+            <input type="checkbox" title="Toggle Output ${i} (manual mode)" aria-label="Toggle Output ${i}" onchange="handleOutputToggle(${i}, this)">
             <span class="slider"></span>
           </label>
-          <div class="led" id="manualLed${i}"></div>
+          <div class="led" id="manualLed${i}" title="Output ${i} state indicator"></div>
         `;
       } else {
+        block.title = "Authorize Output " + i + " for loop/calibration";
         block.innerHTML = `
           <span>Allow Output ${i}</span>
           <label class="switch">
-            <input type="checkbox" id="accessToggle${i}" onchange="updateOutputAccess(${i}, this.checked)">
+            <input type="checkbox" id="accessToggle${i}" title="Authorize Output ${i} for loop/calibration" aria-label="Authorize Output ${i}" onchange="updateOutputAccess(${i}, this.checked)">
             <span class="slider"></span>
           </label>
         `;
@@ -420,6 +631,9 @@
 
       container.appendChild(block);
     }
+
+    // Ensure tooltips exist for newly created toggles.
+    applyTooltips(document);
   }
 
   function enableDragScroll(containerId) {
@@ -1106,6 +1320,13 @@
       const ltToggle = document.getElementById("ltToggle");
       if (ltToggle) ltToggle.checked = !!data.ledFeedback;
 
+      // Manual/Auto mode initial sync
+      const modeToggle = document.getElementById("modeToggle");
+      if (modeToggle && data.manualMode !== undefined) {
+        modeToggle.checked = !!data.manualMode;
+      }
+      setModeDot(isManualMode());
+
       // Buzzer mute initial sync (accept bool, 0/1, "true"/"false")
       if (data.buzzerMute !== undefined) {
         const muted =
@@ -1140,6 +1361,12 @@
       setField("wireTauSec", data.wireTauSec);
       setField("onTime", data.onTime);
       setField("offTime", data.offTime);
+      if (data.deviceId !== undefined) setField("userDeviceId", data.deviceId);
+      if (data.wifiSSID !== undefined) setField("wifiSSID", data.wifiSSID);
+      const fanSlider = document.getElementById("fanSlider");
+      if (fanSlider && typeof data.fanSpeed === "number") {
+        fanSlider.value = data.fanSpeed;
+      }
       const coolingToggle = document.getElementById("coolingAirToggle");
       if (coolingToggle) coolingToggle.checked = !!data.coolingAir;
       const loopModeSelect = document.getElementById("loopModeSelect");
@@ -2197,6 +2424,9 @@
         sendControlCommand("set", "fanSpeed", speed);
       });
     }
+
+    // Ensure tooltips exist for all visible UI elements.
+    applyTooltips(document);
   });
 
   // ========================================================

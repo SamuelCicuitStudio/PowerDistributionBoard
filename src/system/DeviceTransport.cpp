@@ -19,6 +19,10 @@ Device::StateSnapshot DeviceTransport::getStateSnapshot() const {
   return DEVICE->getStateSnapshot();
 }
 
+bool DeviceTransport::isManualMode() const {
+  return DEVICE ? DEVICE->manualMode : false;
+}
+
 bool DeviceTransport::waitForStateEvent(Device::StateSnapshot& out, TickType_t toTicks) {
   if (!DEVICE) {
     vTaskDelay(toTicks);

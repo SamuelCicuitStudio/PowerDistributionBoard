@@ -255,97 +255,65 @@ void TempSensor::identifyAndPersistSensors() {
     String b1 = CONF->GetString(TSB1ID_KEY, "");
     String hs = CONF->GetString(TSHSID_KEY, "");
 
-    // ----- 1) First learning of board sensors (assumes â‰¥2 present) -----
-    if ((b0.length() == 0 || b1.length() == 0) && sensorCount >= 2) {
-        // Select two stable IDs to be the board sensors, sorted for determinism
-        String a = roms[0], c = roms[1];
-        if (c < a) std::swap(a, c);
-        CONF->PutString(TSB0ID_KEY, a);
-        CONF->PutString(TSB1ID_KEY, c);
-        b0 = a; b1 = c;
-        DEBUG_PRINTLN("[TempSensor] Learned Board0/Board1 IDs âœ…");
-    }
-
-    // Build fast presence checks
+    // Presence helper
     auto present = [&](const String& hex)->bool {
         if (hex.length() != 16) return false;
         for (uint8_t i=0;i<sensorCount;++i) if (roms[i] == hex) return true;
         return false;
     };
 
-    // ----- 2) Keep board roles current if one is swapped/replaced -----
-    // (At least 2 sensors will be connected â€” your guarantee.)
-    if (b0.length() == 16 && b1.length() == 16) {
-        bool b0Present = present(b0);
-        bool b1Present = present(b1);
-
-        // Collect unknowns (not equal to current b0/b1/hs)
-        String unknowns[MAX_TEMP_SENSORS];
-        uint8_t ucnt = 0;
-        for (uint8_t i=0;i<sensorCount;++i) {
-            if (roms[i] != b0 && roms[i] != b1 && roms[i] != hs) {
-                unknowns[ucnt++] = roms[i];
-            }
-        }
-
-        // If one of the board sensors disappeared but we have an unknown,
-        // promote the unknown into the missing board slot.
-        if (!b0Present && ucnt > 0) {
-            // Avoid stealing a known heatsink if present
-            CONF->PutString(TSB0ID_KEY, unknowns[0]);
-            b0 = unknowns[0];
-            // remove it from unknowns
-            for (uint8_t k=1;k<ucnt;++k) unknowns[k-1]=unknowns[k];
-            if (ucnt) --ucnt;
-            DEBUG_PRINTLN("[TempSensor] Updated Board0 ID (replacement detected) â™»ï¸");
-        }
-        if (!b1Present && ucnt > 0) {
-            CONF->PutString(TSB1ID_KEY, unknowns[0]);
-            b1 = unknowns[0];
-            DEBUG_PRINTLN("[TempSensor] Updated Board1 ID (replacement detected) â™»ï¸");
-        }
-
-        // Edge case: if both missing and exactly two (or more) unknowns exist,
-        // re-learn both board IDs from current set (sorted).
-        if (!b0Present && !b1Present && sensorCount >= 2) {
-            String a = roms[0], c = roms[1];
-            if (c < a) std::swap(a,c);
-            CONF->PutString(TSB0ID_KEY, a);
-            CONF->PutString(TSB1ID_KEY, c);
-            b0 = a; b1 = c;
-            DEBUG_PRINTLN("[TempSensor] Re-learned Board0/Board1 (both replaced) â™»ï¸");
+    // Sort detected ROMs for deterministic selection
+    String sorted[MAX_TEMP_SENSORS];
+    uint8_t n = sensorCount;
+    for (uint8_t i = 0; i < n; ++i) sorted[i] = roms[i];
+    for (uint8_t i = 0; i + 1 < n; ++i) {
+        for (uint8_t j = i + 1; j < n; ++j) {
+            if (sorted[j] < sorted[i]) std::swap(sorted[i], sorted[j]);
         }
     }
 
-    // ----- 3) Learn or refresh heatsink sensor when a third appears -----
-    // Learn when: boards known, and exactly one ROM is neither b0 nor b1.
-    if (b0.length()==16 && b1.length()==16) {
-        // Build unknown list against boards
-        String unknowns2[MAX_TEMP_SENSORS];
-        uint8_t u2 = 0;
-        for (uint8_t i=0;i<sensorCount;++i) {
-            if (roms[i] != b0 && roms[i] != b1) unknowns2[u2++] = roms[i];
-        }
+    // Re-learn board sensors whenever stored IDs are missing or unset
+    bool boardMismatch =
+        (b0.length() != 16 || b1.length() != 16) ||
+        (b0.length() == 16 && !present(b0)) ||
+        (b1.length() == 16 && !present(b1));
 
-        if (hs.length()==0) {
-            // First time heatsink appears: accept if there's exactly one unknown
-            if (u2 == 1) {
-                CONF->PutString(TSHSID_KEY, unknowns2[0]);
-                hs = unknowns2[0];
-                DEBUG_PRINTLN("[TempSensor] Learned Heatsink ID âœ…");
-            }
-        } else {
-            // If persisted heatsink is not present and exactly one alternative exists, update it
-            bool hsPresent = present(hs);
-            if (!hsPresent && u2 == 1) {
-                CONF->PutString(TSHSID_KEY, unknowns2[0]);
-                hs = unknowns2[0];
-                DEBUG_PRINTLN("[TempSensor] Updated Heatsink ID (replacement) â™»ï¸");
+    if (boardMismatch && n >= 2) {
+        // Pick first two distinct ROMs (fallback to duplicates if only two identical)
+        String newB0 = sorted[0];
+        String newB1 = sorted[0];
+        for (uint8_t i = 1; i < n; ++i) {
+            if (sorted[i] != newB0 || i == 1) {
+                newB1 = sorted[i];
+                break;
             }
         }
+        CONF->PutString(TSB0ID_KEY, newB0);
+        CONF->PutString(TSB1ID_KEY, newB1);
+        b0 = newB0;
+        b1 = newB1;
+        DEBUG_PRINTLN("[TempSensor] Re-learned Board0/Board1 IDs.");
     }
 
-    // ----- 4) Map roles to current indices -----
+    // Persist heatsink: first ROM that is neither board sensor. Clear if stale.
+    String newHs = "";
+    for (uint8_t i = 0; i < n; ++i) {
+        if (sorted[i] != b0 && sorted[i] != b1) {
+            newHs = sorted[i];
+            break;
+        }
+    }
+    if (newHs.length() == 16 && newHs != hs) {
+        CONF->PutString(TSHSID_KEY, newHs);
+        hs = newHs;
+        DEBUG_PRINTLN("[TempSensor] Updated Heatsink ID.");
+    } else if (hs.length() == 16 && !present(hs)) {
+        CONF->PutString(TSHSID_KEY, "");
+        hs = "";
+        DEBUG_PRINTLN("[TempSensor] Cleared stale Heatsink ID.");
+    }
+
+    // Map roles to current indices
     map_.board0 = -1; map_.board1 = -1; map_.heatsink = -1;
     if (b0.length()==16) { uint8_t a[8]; if (hexToAddr(b0,a)) map_.board0 = findIndexByAddr(a); }
     if (b1.length()==16) { uint8_t a[8]; if (hexToAddr(b1,a)) map_.board1 = findIndexByAddr(a); }
@@ -353,7 +321,6 @@ void TempSensor::identifyAndPersistSensors() {
 
     DEBUG_PRINTF("[TempSensor] Map -> B0:%d  B1:%d  HS:%d\n", map_.board0, map_.board1, map_.heatsink);
 }
-
 int TempSensor::indexForRole(TempRole role) const {
     switch (role) {
         case TempRole::Board0:   return map_.board0;

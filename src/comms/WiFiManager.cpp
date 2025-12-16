@@ -723,7 +723,7 @@ void WiFiManager::registerRoutes_() {
                 return;
             }
 
-            StaticJsonDocument<1024> doc;
+            StaticJsonDocument<1280> doc;
             const Device::StateSnapshot snap = DEVTRAN->getStateSnapshot();
 
             // Preferences (config only)
@@ -732,6 +732,8 @@ void WiFiManager::registerRoutes_() {
             doc["offTime"]        = CONF->GetInt(OFF_TIME_KEY, 500);
             doc["acFrequency"]    = CONF->GetInt(AC_FREQUENCY_KEY, DEFAULT_AC_FREQUENCY);
             doc["chargeResistor"] = CONF->GetFloat(CHARGE_RESISTOR_KEY, 0.0f);
+            doc["deviceId"]       = CONF->GetString(DEV_ID_KEY, "");
+            doc["wifiSSID"]       = CONF->GetString(STA_SSID_KEY, DEFAULT_STA_SSID);
             doc["wireOhmPerM"]    = CONF->GetFloat(WIRE_OHM_PER_M_KEY,
                                                     DEFAULT_WIRE_OHM_PER_M);
             doc["wireGauge"]      = CONF->GetInt(WIRE_GAUGE_KEY, DEFAULT_WIRE_GAUGE);
@@ -755,6 +757,8 @@ void WiFiManager::registerRoutes_() {
             doc["timingProfile"]  = profStr;
             doc["currLimit"]      = CONF->GetFloat(CURR_LIMIT_KEY, DEFAULT_CURR_LIMIT_A);
             doc["capacitanceF"]   = DEVICE ? DEVICE->getCapBankCapF() : 0.0f;
+            doc["manualMode"]     = DEVTRAN->isManualMode();
+            doc["fanSpeed"]       = FAN->getSpeedPercent();
 
             // Fast bits via snapshot
             doc["relay"] = s.relayOn;
