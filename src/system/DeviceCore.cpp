@@ -6,6 +6,8 @@
 
 #include "control/Buzzer.h"    // BUZZ macro
 
+#include "sensing/NtcSensor.h"
+
 #include <math.h>
 
 
@@ -506,25 +508,16 @@ void Device::handleCommand(const DevCommand& cmd) {
 
             break;
 
-        case DevCmdType::SET_COOLING_PROFILE: {
-
-            applyCoolingProfile(cmd.b1);
-
-            if (CONF && CONF->GetBool(COOLING_PROFILE_KEY, DEFAULT_COOLING_PROFILE_FAST) != cmd.b1) {
-
-                CONF->PutBool(COOLING_PROFILE_KEY, cmd.b1);
-
-            }
-
-            break;
-
-        }
-
         case DevCmdType::SET_LOOP_MODE: {
 
-            int mode = (cmd.i1 == 1) ? 1 : 0;
+            int mode = cmd.i1;
+            if (mode < 0 || mode > 2) {
+                mode = DEFAULT_LOOP_MODE;
+            }
 
-            loopModeSetting = (mode == 1) ? LoopMode::Sequential : LoopMode::Advanced;
+            loopModeSetting = (mode == 1)
+                                  ? LoopMode::Sequential
+                                  : (mode == 2 ? LoopMode::Mixed : LoopMode::Advanced);
 
             if (CONF && CONF->GetInt(LOOP_MODE_KEY, DEFAULT_LOOP_MODE) != mode) {
 
@@ -714,6 +707,8 @@ void Device::prepareForDeepSleep() {
 
     DEBUG_PRINTLN("[Device] Preparing for deep sleep (power down paths)");
 
+    stopWireTargetTest();
+    stopCalibrationPwm();
     stopTemperatureMonitor();
 
     stopFanControlTask();
@@ -799,6 +794,7 @@ void Device::begin() {
     if (!cmdQueue)  cmdQueue  = xQueueCreate(12, sizeof(DevCommand));
 
     if (!ackQueue)  ackQueue  = xQueueCreate(12, sizeof(DevCommandAck));
+    if (!controlMtx) controlMtx = xSemaphoreCreateMutex();
 
 
 
@@ -883,6 +879,7 @@ void Device::begin() {
     if (busSampler && currentSensor && discharger) {
 
         busSampler->begin(currentSensor, discharger, 5);
+        busSampler->attachNtc(NTC);
 
     }
 
@@ -922,10 +919,11 @@ void Device::begin() {
     }
 
     startThermalTask();
+    startControlTask();
 
 
 
-    DEBUG_PRINTLN("[Device] Configuring system I/O pins ðŸ§°");
+    DEBUG_PRINTLN("[Device] Configuring system I/O pins");
 
 }
 
@@ -1039,6 +1037,8 @@ void Device::shutdown() {
 
     BUZZ->bipSystemShutdown();
 
+    stopWireTargetTest();
+    stopCalibrationPwm();
     stopTemperatureMonitor();
 
 
@@ -1069,7 +1069,7 @@ void Device::shutdown() {
 
     DEBUGGSTART();
 
-    DEBUG_PRINTLN("[Device] Shutdown Complete â€“ System is Now OFF ");
+    DEBUG_PRINTLN("[Device] Shutdown Complete System is Now OFF ");
 
     DEBUG_PRINTLN("-----------------------------------------------------------");
 
@@ -1981,84 +1981,57 @@ void Device::fanControlTask(void* param) {
 
 
 
-void Device::applyCoolingProfile(bool fastProfile) {
-
-    coolingFastProfile = fastProfile;
-
-    coolingScale = fastProfile ? COOLING_SCALE_AIR : coolingBuriedScale;
-
-    wireThermalModel.setCoolingScale(coolingScale);
-
-}
-
-
-
-void Device::loadRuntimeSettings() {
-
-    bool fast = DEFAULT_COOLING_PROFILE_FAST;
-
-    int mode = DEFAULT_LOOP_MODE;
-
-
+void Device::refreshThermalParams() {
+    float tau = DEFAULT_WIRE_TAU_SEC;
+    float k   = DEFAULT_WIRE_K_LOSS;
+    float C   = DEFAULT_WIRE_THERMAL_C;
 
     if (CONF) {
+        tau = CONF->GetFloat(WIRE_TAU_KEY,     DEFAULT_WIRE_TAU_SEC);
+        k   = CONF->GetFloat(WIRE_K_LOSS_KEY,  DEFAULT_WIRE_K_LOSS);
+        C   = CONF->GetFloat(WIRE_C_TH_KEY,    DEFAULT_WIRE_THERMAL_C);
+    }
 
-        fast = CONF->GetBool(COOLING_PROFILE_KEY, DEFAULT_COOLING_PROFILE_FAST);
+    bool tauOk = isfinite(tau) && tau > 0.05f;
+    bool kOk   = isfinite(k)   && k > 0.0f;
+    bool cOk   = isfinite(C)   && C > 0.0f;
 
+    if (!cOk) C = DEFAULT_WIRE_THERMAL_C;
+
+    if (!kOk && tauOk) {
+        k = C / tau;
+    } else if (!tauOk && kOk) {
+        tau = C / k;
+    } else if (!kOk && !tauOk) {
+        tau = DEFAULT_WIRE_TAU_SEC;
+        k   = C / tau;
+    }
+
+    if (!isfinite(tau) || tau < 0.05f) tau = DEFAULT_WIRE_TAU_SEC;
+    if (!isfinite(k) || k <= 0.0f)     k   = DEFAULT_WIRE_K_LOSS;
+    if (!isfinite(C) || C <= 0.0f)     C   = DEFAULT_WIRE_THERMAL_C;
+
+    wireThermalModel.setThermalParams(tau, k, C);
+}
+
+void Device::loadRuntimeSettings() {
+    int mode = DEFAULT_LOOP_MODE;
+
+    if (CONF) {
         mode = CONF->GetInt(LOOP_MODE_KEY, DEFAULT_LOOP_MODE);
-
         capBankCapF = CONF->GetFloat(CAP_BANK_CAP_F_KEY, DEFAULT_CAP_BANK_CAP_F);
-
-        coolingBuriedScale = CONF->GetFloat(COOL_BURIED_SCALE_KEY, DEFAULT_COOLING_SCALE_BURIED);
-
-        coolingKCold       = CONF->GetFloat(COOL_KCOLD_KEY,        DEFAULT_COOL_K_COLD);
-
-        coolingMaxDropC    = CONF->GetFloat(COOL_DROP_MAX_KEY,     DEFAULT_MAX_COOL_DROP_C);
-
-
-
-        if (!isfinite(capBankCapF) || capBankCapF < 0.0f) {
-
-            capBankCapF = DEFAULT_CAP_BANK_CAP_F;
-
-        }
-
-
-
-        if (!isfinite(coolingBuriedScale) || coolingBuriedScale <= 0.0f) {
-
-            coolingBuriedScale = DEFAULT_COOLING_SCALE_BURIED;
-
-        }
-
-        if (!isfinite(coolingKCold) || coolingKCold <= 0.0f) {
-
-            coolingKCold = DEFAULT_COOL_K_COLD;
-
-        }
-
-        if (!isfinite(coolingMaxDropC) || coolingMaxDropC <= 0.0f) {
-
-            coolingMaxDropC = DEFAULT_MAX_COOL_DROP_C;
-
-        }
-
     }
 
+    if (!isfinite(capBankCapF) || capBankCapF < 0.0f) {
+        capBankCapF = DEFAULT_CAP_BANK_CAP_F;
+    }
 
+    refreshThermalParams();
 
-    applyCoolingProfile(fast);
-
-    wireThermalModel.setCoolingParams(coolingKCold, coolingMaxDropC, coolingScale);
-
-
-
-    if (mode != 0 && mode != 1) {
-
+    if (mode < 0 || mode > 2) {
         mode = DEFAULT_LOOP_MODE;
-
     }
-
-    loopModeSetting = (mode == 1) ? LoopMode::Sequential : LoopMode::Advanced;
-
+    loopModeSetting = (mode == 1)
+                          ? LoopMode::Sequential
+                          : (mode == 2 ? LoopMode::Mixed : LoopMode::Advanced);
 }

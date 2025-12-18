@@ -6,12 +6,12 @@
 void TempSensor::begin() {
     DEBUGGSTART();
     DEBUG_PRINTLN("###########################################################");
-    DEBUG_PRINTLN("#               Starting Temperature Manager ðŸŒ¡ï¸          #");
+    DEBUG_PRINTLN("#               Starting Temperature Manager           #");
     DEBUG_PRINTLN("###########################################################");
     DEBUGGSTOP();
 
     if (!CONF || !ow) {
-        DEBUG_PRINTLN("[TempSensor] Missing dependencies âŒ");
+        DEBUG_PRINTLN("[TempSensor] Missing dependencies");
         return;
     }
 
@@ -19,7 +19,7 @@ void TempSensor::begin() {
     if (_mutex == nullptr) {
         _mutex = xSemaphoreCreateMutex();
         if (!_mutex) {
-            DEBUG_PRINTLN("[TempSensor] Failed to create mutex âŒ");
+            DEBUG_PRINTLN("[TempSensor] Failed to create mutex");
             return;
         }
     }
@@ -27,18 +27,19 @@ void TempSensor::begin() {
     discoverSensors();
 
     if (sensorCount == 0) {
-        DEBUG_PRINTLN("[TempSensor] No sensors found âŒ");
+        DEBUG_PRINTLN("[TempSensor] No sensors found");
         return;
     }
 
     CONF->PutInt(TEMP_SENSOR_COUNT_KEY, sensorCount);
-    DEBUG_PRINTF("[TempSensor] %u sensor(s) found âœ…\n", sensorCount);
+    DEBUG_PRINTF("[TempSensor] %u sensor(s) found\n", sensorCount);
 
     // Initialize cache as invalid
     if (lock()) {
         for (uint8_t i = 0; i < sensorCount; ++i) {
             lastTempsC[i] = NAN;
             lastValid[i]  = false;
+            badReadStreak[i] = 0;
         }
         unlock();
     }
@@ -54,7 +55,7 @@ void TempSensor::requestTemperatures() {
     if (!ow || sensorCount == 0) return;
 
     if (!lock(pdMS_TO_TICKS(50))) {
-        DEBUG_PRINTLN("[TempSensor] requestTemperatures(): lock timeout âŒ");
+        DEBUG_PRINTLN("[TempSensor] requestTemperatures(): lock timeout");
         return;
     }
     ow->reset();
@@ -123,9 +124,9 @@ void TempSensor::startTemperatureTask(uint32_t intervalMs) {
 
     if (ok != pdPASS) {
         tempTaskHandle = nullptr;
-        DEBUG_PRINTLN("[TempSensor] Failed to start TempUpdateTask âŒ");
+        DEBUG_PRINTLN("[TempSensor] Failed to start TempUpdateTask ");
     } else {
-        DEBUG_PRINTF("[TempSensor] TempUpdateTask started (interval=%lums) âœ…\n",
+        DEBUG_PRINTF("[TempSensor] TempUpdateTask started (interval=%lums)\n",
                      (unsigned long)intervalMs);
     }
 }
@@ -136,7 +137,7 @@ void TempSensor::discoverSensors() {
     if (!ow) return;
 
     if (!lock()) {
-        DEBUG_PRINTLN("[TempSensor] discoverSensors(): lock failed âŒ");
+        DEBUG_PRINTLN("[TempSensor] discoverSensors(): lock failed");
         return;
     }
 
@@ -159,10 +160,11 @@ void TempSensor::updateAllTemperaturesBlocking() {
     if (!ow || sensorCount == 0) return;
 
     if (!lock()) {
-        DEBUG_PRINTLN("[TempSensor] updateAllTemperaturesBlocking(): lock failed âŒ");
+        DEBUG_PRINTLN("[TempSensor] updateAllTemperaturesBlocking(): lock failed");
         return;
     }
 
+    bool restartNeeded = false;
     for (uint8_t i = 0; i < sensorCount; ++i) {
         ow->reset();
         ow->select(sensorAddresses[i]);
@@ -175,11 +177,23 @@ void TempSensor::updateAllTemperaturesBlocking() {
         int16_t raw = (int16_t)((scratchpad[1] << 8) | scratchpad[0]);
         float tempC = (float)raw / 16.0f;
 
-        lastTempsC[i] = tempC;
-        lastValid[i]  = true;
+        if (isTempValid(tempC)) {
+            lastTempsC[i] = tempC;
+            lastValid[i]  = true;
+            badReadStreak[i] = 0;
+        } else {
+            if (badReadStreak[i] < 255) badReadStreak[i]++;
+            if (badReadStreak[i] >= TEMP_SENSOR_BAD_READ_RESTART_THRESHOLD) {
+                restartNeeded = true;
+            }
+        }
     }
 
     unlock();
+
+    if (restartNeeded) {
+        restartBus();
+    }
 }
 
 // ======================= Background RTOS Task =======================
@@ -331,15 +345,86 @@ int TempSensor::indexForRole(TempRole role) const {
 }
 float TempSensor::getHeatsinkTemp() {
     int idx = indexForRole(TempRole::Heatsink);
-    return (idx >= 0) ? getTemperature((uint8_t)idx) : NAN;
+    float t = (idx >= 0) ? getTemperature((uint8_t)idx) : NAN;
+    if (isfinite(t)) {
+        lastHeatsinkC = t;
+        lastHeatsinkValid = true;
+        return t;
+    }
+    return lastHeatsinkValid ? lastHeatsinkC : NAN;
 }
 float TempSensor::getBoardTemp(uint8_t which) {
     int idx = (which == 0) ? map_.board0 : map_.board1;
-    return (idx >= 0) ? getTemperature((uint8_t)idx) : NAN;
+    float t = (idx >= 0) ? getTemperature((uint8_t)idx) : NAN;
+    if (isfinite(t)) {
+        if (which == 0) {
+            lastBoard0C = t;
+            lastBoard0Valid = true;
+        } else {
+            lastBoard1C = t;
+            lastBoard1Valid = true;
+        }
+        return t;
+    }
+    if (which == 0) return lastBoard0Valid ? lastBoard0C : NAN;
+    return lastBoard1Valid ? lastBoard1C : NAN;
 }
 String TempSensor::getLabelForIndex(uint8_t index) {
     if (index == map_.board0)   return "Board0";
     if (index == map_.board1)   return "Board1";
     if (index == map_.heatsink) return "Heatsink";
     return "Unknown";
+}
+
+bool TempSensor::isTempValid(float tempC) const {
+    if (!isfinite(tempC)) return false;
+    return (tempC >= TEMP_SENSOR_VALID_MIN_C && tempC <= TEMP_SENSOR_VALID_MAX_C);
+}
+
+void TempSensor::restartBus() {
+    if (!ow) return;
+
+    DEBUG_PRINTLN("[TempSensor] Bad read detected -> restarting OneWire bus");
+
+    uint8_t prevCount = 0;
+    uint8_t prevAddr[MAX_TEMP_SENSORS][8] = {};
+
+    if (lock(pdMS_TO_TICKS(50))) {
+        prevCount = sensorCount;
+        for (uint8_t i = 0; i < sensorCount; ++i) {
+            for (uint8_t b = 0; b < 8; ++b) {
+                prevAddr[i][b] = sensorAddresses[i][b];
+            }
+        }
+        unlock();
+    }
+
+    discoverSensors();
+
+    if (sensorCount == 0 && prevCount > 0) {
+        if (lock(pdMS_TO_TICKS(50))) {
+            sensorCount = prevCount;
+            for (uint8_t i = 0; i < sensorCount; ++i) {
+                for (uint8_t b = 0; b < 8; ++b) {
+                    sensorAddresses[i][b] = prevAddr[i][b];
+                }
+            }
+            unlock();
+        }
+        DEBUG_PRINTLN("[TempSensor] Bus restart found no sensors; keeping previous map");
+        return;
+    }
+
+    if (sensorCount > 0) {
+        identifyAndPersistSensors();
+    }
+
+    if (lock(pdMS_TO_TICKS(50))) {
+        for (uint8_t i = 0; i < sensorCount; ++i) {
+            lastTempsC[i] = NAN;
+            lastValid[i]  = false;
+            badReadStreak[i] = 0;
+        }
+        unlock();
+    }
 }

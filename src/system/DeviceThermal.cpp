@@ -1,6 +1,7 @@
 ﻿#include "system/Device.h"
 #include "system/Utils.h"
 #include "control/CpDischg.h"
+#include "sensing/NtcSensor.h"
 #include <math.h>
 #ifndef THERMAL_TASK_STACK_SIZE
 #define THERMAL_TASK_STACK_SIZE 6144
@@ -72,21 +73,17 @@ void Device::initWireThermalModelOnce() {
         // Cold resistance
         ws.R0 = (wi.resistanceOhm > 0.01f) ? wi.resistanceOhm : 1.0f;
 
-        // Thermal capacity C_th = m * cp
-        const float m = (wi.massKg > 0.0f) ? wi.massKg : 0.0001f;
-        ws.C_th = m * NICHROME_CP_J_PER_KG;
-        if (!isfinite(ws.C_th) || ws.C_th <= 0.0f) {
-            ws.C_th = 0.05f;  // safe tiny default
-        }
-
-        // First-order time constant tau (can be tuned per design)
+        // Thermal parameters (global first-order model)
+        float cTh = DEFAULT_WIRE_THERMAL_C;
         float tau = DEFAULT_WIRE_TAU_SEC;
         if (CONF) {
+            cTh = CONF->GetFloat(WIRE_C_TH_KEY, DEFAULT_WIRE_THERMAL_C);
             tau = CONF->GetFloat(WIRE_TAU_KEY, DEFAULT_WIRE_TAU_SEC);
         }
-        if (!isfinite(tau) || tau < 0.05f) tau = 0.05f;
-        if (tau > 60.0f) tau = 60.0f;
-        ws.tau = tau;
+        if (!isfinite(cTh) || cTh <= 0.0f) cTh = DEFAULT_WIRE_THERMAL_C;
+        if (!isfinite(tau) || tau < 0.05f) tau = DEFAULT_WIRE_TAU_SEC;
+        ws.C_th = cTh;
+        ws.tau  = tau;
 
         ws.T                 = ambientC;
         ws.lastUpdateMs      = now;
@@ -96,9 +93,12 @@ void Device::initWireThermalModelOnce() {
         WIRE->setWireEstimatedTemp(i + 1, ws.T);
     }
 
+    wireThermalModel.init(*WIRE, ambientC);
+    refreshThermalParams();
+
     lastAmbientUpdateMs = now;
 
-    DEBUG_PRINTF("[Thermal] Model initialized, ambient=%.1fÂ°C\n", ambientC);
+    DEBUG_PRINTF("[Thermal] Model initialized, ambient=%.1f°C\n", ambientC);
     thermalInitDone = true;
 }
 
@@ -207,14 +207,16 @@ void Device::waitForWiresNearAmbient(float tolC, uint32_t maxWaitMs) {
     }
 
     const uint32_t start = millis();
-    DEBUG_PRINTF("[Thermal] Waiting for wires within %.1fÂ°C of ambient...\n", tolC);
+    DEBUG_PRINTF("[Thermal] Waiting for wires within %.1f°C of ambient...\n", tolC);
 
     while (true) {
         updateAmbientFromSensors(false);
 
         bool allOk = true;
         for (uint8_t i = 0; i < HeaterManager::kWireCount; ++i) {
-            float d = fabsf(wireThermal[i].T - ambientC);
+            float t = (WIRE ? WIRE->getWireEstimatedTemp(i + 1) : NAN);
+            if (!isfinite(t)) t = ambientC;
+            float d = fabsf(t - ambientC);
             if (d > tolC) {
                 allOk = false;
                 break;
@@ -222,7 +224,7 @@ void Device::waitForWiresNearAmbient(float tolC, uint32_t maxWaitMs) {
         }
 
         if (allOk) {
-            DEBUG_PRINTF("[Thermal] All wires near ambient (%.1fÂ°C). Ready.\n", ambientC);
+            DEBUG_PRINTF("[Thermal] All wires near ambient (%.1f°C). Ready.\n", ambientC);
             break;
         }
 
@@ -309,14 +311,8 @@ void Device::updateWireThermalFromHistory() {
         float idle = CONF->GetFloat(IDLE_CURR_KEY, DEFAULT_IDLE_CURR);
         if (!isfinite(idle) || idle < 0.0f) idle = 0.0f;
         idleCurrentA = idle;
-
-        float tau = CONF->GetFloat(WIRE_TAU_KEY, DEFAULT_WIRE_TAU_SEC);
-        if (!isfinite(tau) || tau < 0.05f) tau = 0.05f;
-        if (tau > 60.0f) tau = 60.0f;
-        for (uint8_t i = 0; i < HeaterManager::kWireCount; ++i) {
-            wireThermal[i].tau = tau;
-        }
     }
+    refreshThermalParams();
 
     // Refresh ambient slowly.
     updateAmbientFromSensors(false);
@@ -480,6 +476,26 @@ void Device::updateWireThermalFromHistory() {
             if (checkCurrentWatchdog(lastHeaterMask)) {
                 return;
             }
+        } else {
+            // No new samples or output events: still decay temperatures so
+            // lockouts can clear and sequential/advanced loops keep working.
+            wireThermalModel.coolingOnlyTick(ambientC, wireStateModel, *WIRE);
+            outputHistorySeq = newOutSeq;
+            lastHeaterMask   = wireStateModel.getLastMask();
+        }
+    }
+
+    if (NTC && CONF) {
+        int idx = CONF->GetInt(NTC_GATE_INDEX_KEY, DEFAULT_NTC_GATE_INDEX);
+        if (idx < 1) idx = 1;
+        if (idx > HeaterManager::kWireCount) idx = HeaterManager::kWireCount;
+        const float ntcTemp = NTC->getLastTempC();
+        if (isfinite(ntcTemp)) {
+            wireThermalModel.applyExternalWireTemp(static_cast<uint8_t>(idx),
+                                                   ntcTemp,
+                                                   millis(),
+                                                   wireStateModel,
+                                                   *WIRE);
         }
     }
 }

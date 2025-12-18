@@ -176,7 +176,6 @@ private:
         CTRL_WIRE_RES,          // i1=index(1..10), f1=ohms
         CTRL_WIRE_OHM_PER_M,    // f1
         CTRL_WIRE_GAUGE,        // i1=awg gauge
-        CTRL_COOL_PROFILE,      // b1: true=air/fast, false=buried/slow
         CTRL_LOOP_MODE,         // i1: 0=advanced, 1=sequential
         CTRL_CURR_LIMIT,        // f1: over-current trip [A]
         CTRL_CALIBRATE,         // manual calibration sequence

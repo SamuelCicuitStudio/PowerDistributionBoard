@@ -51,11 +51,19 @@ public:
   bool setWireGaugeAwg(int awg);
   bool setBuzzerMute(bool on);
   bool setManualMode(bool manual);
-  bool setCoolingProfile(bool fast);
   bool setLoopMode(uint8_t mode);
   bool setCurrentLimitA(float limitA);
   bool requestResetFlagAndRestart();
   bool startCalibrationTask(uint32_t timeoutMs = 10000);
+
+  bool startWireTargetTest(float targetC, uint8_t wireIndex = 0);
+  void stopWireTargetTest();
+  bool getWireTargetStatus(Device::WireTargetStatus& out) const;
+  bool getFloorControlStatus(Device::FloorControlStatus& out) const;
+
+  bool startCalibrationPwm(uint8_t wireIndex, uint32_t onMs, uint32_t offMs);
+  void stopCalibrationPwm();
+  bool getCalibrationPwmStatus(Device::CalibPwmStatus& out) const;
 
 private:
   bool sendCommandAndWait(Device::DevCmdType t, int32_t i1 = 0, float f1 = 0.0f, bool b1 = false, TickType_t to = pdMS_TO_TICKS(500));

@@ -37,7 +37,7 @@
  *          - current history from CurrentSensor,
  *          - output history from HeaterManager.
  *      - For each time segment, applies:
- *          - cooling toward ambient using per-wire tau,
+ *          - first-order thermal model using tau/k/C,
  *          - heating based on measured I(t), active mask, and R(T),
  *          - clamping at 150Â°C and re-enable hysteresis.
  *      - Publishes results via HeaterManager::setWireEstimatedTemp().
@@ -100,8 +100,9 @@
 
 // Runtime-selectable loop mode (persisted in NVS; see LOOP_MODE_KEY)
 enum class LoopMode : uint8_t {
-    Advanced  = 0,
-    Sequential = 1
+    Advanced   = 0,
+    Sequential = 1,
+    Mixed      = 2
 };
 
 // -----------------------------------------------------------------------------
@@ -189,7 +190,6 @@ public:
         SET_WIRE_GAUGE,
         SET_BUZZER_MUTE,
         SET_MANUAL_MODE,
-        SET_COOLING_PROFILE,
         SET_LOOP_MODE,
         SET_CURR_LIMIT,
         SET_RELAY,
@@ -334,6 +334,45 @@ public:
     void stopFanControlTask();
     static void fanControlTask(void* param);
 
+    struct WireTargetStatus {
+        bool     active      = false;
+        uint8_t  wireIndex   = 0;
+        float    targetC     = NAN;
+        float    tempC       = NAN;
+        float    duty        = 0.0f;
+        uint32_t onMs        = 0;
+        uint32_t offMs       = 0;
+        uint32_t updatedMs   = 0;
+    };
+
+    struct FloorControlStatus {
+        bool     active      = false;
+        float    targetC     = NAN;
+        float    tempC       = NAN;
+        float    wireTargetC = NAN;
+        uint32_t updatedMs   = 0;
+    };
+
+    struct CalibPwmStatus {
+        bool     active    = false;
+        uint8_t  wireIndex = 0;
+        uint32_t onMs      = 0;
+        uint32_t offMs     = 0;
+    };
+
+    bool startWireTargetTest(float targetC, uint8_t wireIndex = 0);
+    void stopWireTargetTest();
+    WireTargetStatus getWireTargetStatus() const;
+    FloorControlStatus getFloorControlStatus() const;
+
+    bool startCalibrationPwm(uint8_t wireIndex, uint32_t onMs, uint32_t offMs);
+    void stopCalibrationPwm();
+    CalibPwmStatus getCalibrationPwmStatus() const;
+
+    void startControlTask();
+    static void controlTaskWrapper(void* param);
+    void controlTask();
+
     // -------------------------------------------------------------------------
     // Subsystem References
     // -------------------------------------------------------------------------
@@ -373,6 +412,8 @@ private:
     TaskHandle_t ledTaskHandle          = nullptr;
     TaskHandle_t thermalTaskHandle      = nullptr;
     TaskHandle_t fanTaskHandle          = nullptr;
+    TaskHandle_t controlTaskHandle      = nullptr;
+    TaskHandle_t calibPwmTaskHandle     = nullptr;
     // ---------------------------------------------------------------------
     // Virtual Wire Thermal Model
     // ---------------------------------------------------------------------
@@ -391,15 +432,12 @@ private:
     static constexpr float   WIRE_T_REENABLE_C     = 140.0f;
     static constexpr float   NICHROME_CP_J_PER_KG  = 450.0f;
     static constexpr float   NICHROME_ALPHA        = 0.00017f;
-    static constexpr float   DEFAULT_TAU_SEC       = 1.5f;
+    static constexpr float   DEFAULT_TAU_SEC       = 35.0f;
     static constexpr uint32_t LOCK_MIN_COOLDOWN_MS = 500;
     static constexpr float   PHYSICAL_HARD_MAX_C   = 90.0f;   ///< Hard cutoff from real sensors
     static constexpr uint32_t AMBIENT_UPDATE_INTERVAL_MS = 1000; ///< Faster ambient tracking
     static constexpr float   AMBIENT_MAX_STEP_C    = 15.0f;   ///< Clamp ambient jumps
     static constexpr uint32_t NO_CURRENT_SAMPLE_TIMEOUT_MS = 750; ///< Watchdog for stalled current sampling
-
-    static constexpr float   COOLING_SCALE_AIR      = 1.0f;   ///< Natural convection/radiation in free air
-    static constexpr float   COOLING_SCALE_BURIED   = DEFAULT_COOLING_SCALE_BURIED;  ///< Slower cooling when embedded (floor)
 
     WireThermalState wireThermal[HeaterManager::kWireCount];
 
@@ -438,12 +476,6 @@ private:
     uint8_t lastCapFanPct = 0;
     uint8_t lastHsFanPct  = 0;
     LoopMode loopModeSetting     = LoopMode::Advanced;
-    bool     coolingFastProfile  = DEFAULT_COOLING_PROFILE_FAST;
-    float    coolingScale        = COOLING_SCALE_AIR;
-    float    coolingKCold        = DEFAULT_COOL_K_COLD;
-    float    coolingMaxDropC     = DEFAULT_MAX_COOL_DROP_C;
-    float    coolingBuriedScale  = DEFAULT_COOLING_SCALE_BURIED;
-
     // ---------------------------------------------------------------------
     // Wire subsystem helpers (config + runtime + planner + telemetry)
     // ---------------------------------------------------------------------
@@ -454,12 +486,17 @@ private:
     WirePlanner          wirePlanner;
     WireTelemetryAdapter wireTelemetryAdapter;
     BusSampler*          busSampler = nullptr;
+
+    SemaphoreHandle_t    controlMtx = nullptr;
+    WireTargetStatus     wireTargetStatus{};
+    FloorControlStatus   floorControlStatus{};
+    CalibPwmStatus       calibPwmStatus{};
     // Internal helpers
     void syncWireRuntimeFromHeater();
     void updateAmbientFromSensors(bool force = false);
     void waitForWiresNearAmbient(float tolC, uint32_t maxWaitMs = 0);
     void loadRuntimeSettings();
-    void applyCoolingProfile(bool fastProfile);
+    void refreshThermalParams();
 };
 
 // -----------------------------------------------------------------------------

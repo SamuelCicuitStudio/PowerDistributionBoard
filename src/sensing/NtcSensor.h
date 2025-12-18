@@ -1,0 +1,100 @@
+/**************************************************************
+ *  Author      : Tshibangu Samuel
+ *  Role        : Freelance Embedded Systems Engineer
+ *  Expertise   : Secure IoT Systems, Embedded C++, RTOS, Control Logic
+ *  Contact     : tshibsamuel47@gmail.com
+ *  Portfolio   : https://www.freelancer.com/u/tshibsamuel477
+ *  Phone       : +216 54 429 793
+ **************************************************************/
+#ifndef NTC_SENSOR_H
+#define NTC_SENSOR_H
+
+#include <Arduino.h>
+#include "system/Config.h"
+#include "services/NVSManager.h"
+
+class NtcSensor {
+public:
+    struct Sample {
+        uint32_t timestampMs = 0;
+        uint16_t adcRaw      = 0;
+        float    volts       = NAN;
+        float    rNtcOhm      = NAN;
+        float    tempC       = NAN;
+        bool     valid       = false;
+        bool     pressed     = false;
+    };
+
+    static void Init();
+    static NtcSensor* Get();
+
+    void begin(uint8_t pin = POWER_ON_SWITCH_PIN);
+
+    // Sampling / state
+    void   update();
+    Sample getLastSample() const;
+    float  getLastTempC() const;
+    bool   isPressed() const;
+
+    // Calibration / configuration
+    void setBeta(float beta, bool persist = true);
+    void setR0(float r0Ohm, bool persist = true);
+    void setFixedRes(float rFixedOhm, bool persist = true);
+    void setSampleCount(uint8_t samples, bool persist = true);
+    void setTempLimits(float minC, float maxC, bool persist = true);
+    void setButtonThresholdsMv(float pressMv, float releaseMv, uint32_t debounceMs, bool persist = true);
+    bool calibrateAtTempC(float refTempC);
+
+    float getBeta() const;
+    float getR0() const;
+    float getFixedRes() const;
+
+private:
+    NtcSensor() = default;
+
+    uint16_t sampleAdcAveraged() const;
+    float    adcToVolts(uint16_t adc) const;
+    float    computeResistance(float volts) const;
+    float    computeTempC(float rNtcOhm) const;
+    void     updateButtonState(float volts, uint32_t nowMs);
+
+    inline bool lock(TickType_t timeoutTicks = portMAX_DELAY) const {
+        if (_mutex == nullptr) return true;
+        return (xSemaphoreTake(_mutex, timeoutTicks) == pdTRUE);
+    }
+    inline void unlock() const {
+        if (_mutex) xSemaphoreGive(_mutex);
+    }
+
+    SemaphoreHandle_t _mutex = nullptr;
+
+    uint8_t _pin     = POWER_ON_SWITCH_PIN;
+    bool    _started = false;
+
+    float _vRef      = NTC_ADC_REF_VOLTAGE;
+    float _adcMax    = NTC_ADC_MAX;
+    float _rFixedOhm = DEFAULT_NTC_FIXED_RES_OHMS;
+    float _r0Ohm     = DEFAULT_NTC_R0_OHMS;
+    float _beta      = DEFAULT_NTC_BETA;
+    float _t0K       = DEFAULT_NTC_T0_C + 273.15f;
+    float _minTempC  = DEFAULT_NTC_MIN_C;
+    float _maxTempC  = DEFAULT_NTC_MAX_C;
+    uint8_t _samples = DEFAULT_NTC_SAMPLES;
+
+    float    _pressV        = DEFAULT_NTC_PRESS_MV / 1000.0f;
+    float    _releaseV      = DEFAULT_NTC_RELEASE_MV / 1000.0f;
+    uint32_t _debounceMs    = DEFAULT_NTC_DEBOUNCE_MS;
+    bool     _pressed       = false;
+    bool     _candidate     = false;
+    uint32_t _candidateMs   = 0;
+
+    Sample _last{};
+    float  _lastValidTempC = NAN;
+    bool   _lastValid      = false;
+
+    static NtcSensor* s_instance;
+};
+
+#define NTC NtcSensor::Get()
+
+#endif // NTC_SENSOR_H

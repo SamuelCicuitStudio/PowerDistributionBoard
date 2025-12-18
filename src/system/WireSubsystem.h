@@ -237,15 +237,20 @@ public:
                            float ambientC,
                            WireStateModel& runtime, HeaterManager& heater);
 
+    // Cooling-only integration (no new history). Keeps temps decaying and
+    // lockout timers advancing even when current/voltage samples are missing.
+    void coolingOnlyTick(float ambientC,
+                         WireStateModel& runtime,
+                         HeaterManager& heater);
+
     float getWireTemp(uint8_t index) const;
-    void  setCoolingScale(float scale);
-    void  setCoolingParams(float kCold, float maxDropC, float scale);
+    void  setThermalParams(float tauSec, float kLoss, float thermalMassC);
+    bool  applyExternalWireTemp(uint8_t index, float tempC, uint32_t tsMs,
+                                WireStateModel& runtime, HeaterManager& heater);
 
 private:
     struct WireThermalState {
         float    R0              = 1.0f;
-        float    C_th            = 0.05f;
-        float    tau             = 0.5f;
         float    T               = 25.0f;
         uint32_t lastUpdateMs    = 0;
         bool     locked          = false;
@@ -253,14 +258,14 @@ private:
     };
 
     float wireResistanceAtTemp(uint8_t idx) const;
+    void  advanceWireTemp(WireThermalState& ws, float ambientC, float powerW, float dtS);
 
     WireThermalState _state[HeaterManager::kWireCount];
     float            _ambientC      = 25.0f;
     bool             _initialized   = false;
-    float            _coolingScale  = 1.0f;
-    float            _coolKCold     = DEFAULT_COOL_K_COLD;
-    float            _coolKHot      = 0.04f; // default hot-side cooling gain (slower cooling)
-    float            _maxCoolDropC  = DEFAULT_MAX_COOL_DROP_C;
+    float            _tauSec        = DEFAULT_WIRE_TAU_SEC;
+    float            _heatLossK     = DEFAULT_WIRE_K_LOSS;
+    float            _thermalMassC  = DEFAULT_WIRE_THERMAL_C;
 
     // Pulse state for integrateCapModel()
     bool     _pulseActive   = false;

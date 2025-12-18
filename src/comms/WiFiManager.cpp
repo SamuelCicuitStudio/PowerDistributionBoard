@@ -1,12 +1,56 @@
 ﻿#include "comms/WiFiManager.h"
 #include "system/Utils.h"
 #include "system/DeviceTransport.h"
+#include "services/CalibrationRecorder.h"
+#include "sensing/NtcSensor.h"
+#include "services/ThermalPiControllers.h"
 #include "services/RTCManager.h"
 #include <SPIFFS.h>
 #include <ArduinoJson.h>
 #include <ESPmDNS.h>
 #include <WiFiUdp.h>
 #include <NTPClient.h>
+
+static const char* floorMaterialToString(int code) {
+    switch (code) {
+        case FLOOR_MAT_WOOD:     return "wood";
+        case FLOOR_MAT_EPOXY:    return "epoxy";
+        case FLOOR_MAT_CONCRETE: return "concrete";
+        case FLOOR_MAT_SLATE:    return "slate";
+        case FLOOR_MAT_MARBLE:   return "marble";
+        case FLOOR_MAT_GRANITE:  return "granite";
+        default:                 return "wood";
+    }
+}
+
+static int parseFloorMaterialCode(const String& raw, int fallback) {
+    if (raw.isEmpty()) return fallback;
+
+    String s = raw;
+    s.toLowerCase();
+    s.trim();
+
+    if (s == "wood") return FLOOR_MAT_WOOD;
+    if (s == "epoxy") return FLOOR_MAT_EPOXY;
+    if (s == "concrete") return FLOOR_MAT_CONCRETE;
+    if (s == "slate") return FLOOR_MAT_SLATE;
+    if (s == "marble") return FLOOR_MAT_MARBLE;
+    if (s == "granite") return FLOOR_MAT_GRANITE;
+
+    bool numeric = true;
+    for (size_t i = 0; i < s.length(); ++i) {
+        if (!isDigit(s[i])) {
+            numeric = false;
+            break;
+        }
+    }
+    if (numeric) {
+        int v = s.toInt();
+        if (v >= FLOOR_MAT_WOOD && v <= FLOOR_MAT_GRANITE) return v;
+    }
+
+    return fallback;
+}
 
 // ===== Singleton storage & accessors =====
 
@@ -79,7 +123,7 @@ void WiFiManager::begin() {
 
 #if WIFI_START_IN_STA
     if (!StartWifiSTA()) {
-        DEBUG_PRINTLN("[WiFi] STA connect failed â†’ falling back to AP");
+        DEBUG_PRINTLN("[WiFi] STA connect failed falling back to AP");
         StartWifiAP();
     }
 #else
@@ -410,6 +454,405 @@ void WiFiManager::registerRoutes_() {
         }
     );
 
+    // ---- Calibration recorder status ----
+    server.on("/calib_status", HTTP_GET,
+        [this](AsyncWebServerRequest* request) {
+            if (!isAuthenticated(request)) return;
+            if (lock()) { lastActivityMillis = millis(); unlock(); }
+
+            const CalibrationRecorder::Meta meta = CALIB->getMeta();
+            const char* modeStr =
+                (meta.mode == CalibrationRecorder::Mode::Ntc)   ? "ntc" :
+                (meta.mode == CalibrationRecorder::Mode::Model) ? "model" :
+                "none";
+
+            StaticJsonDocument<256> doc;
+            doc["running"]     = meta.running;
+            doc["mode"]        = modeStr;
+            doc["count"]       = meta.count;
+            doc["capacity"]    = meta.capacity;
+            doc["interval_ms"] = meta.intervalMs;
+            doc["start_ms"]    = meta.startMs;
+            doc["saved"]       = meta.saved;
+            doc["saved_ms"]    = meta.savedMs;
+            if (isfinite(meta.targetTempC)) {
+                doc["target_c"] = meta.targetTempC;
+            }
+            if (meta.wireIndex > 0) {
+                doc["wire_index"] = meta.wireIndex;
+            }
+            Device::CalibPwmStatus pwm{};
+            if (DEVTRAN && DEVTRAN->getCalibrationPwmStatus(pwm)) {
+                doc["pwm_running"] = pwm.active;
+                if (pwm.wireIndex > 0) doc["pwm_wire_index"] = pwm.wireIndex;
+                if (pwm.onMs > 0) doc["pwm_on_ms"] = pwm.onMs;
+                if (pwm.offMs > 0) doc["pwm_off_ms"] = pwm.offMs;
+            }
+
+            String json;
+            serializeJson(doc, json);
+            request->send(200, "application/json", json);
+        }
+    );
+
+    // ---- Calibration recorder start ----
+    server.on("/calib_start", HTTP_POST,
+        [this](AsyncWebServerRequest* request) {},
+        nullptr,
+        [this](AsyncWebServerRequest* request,
+               uint8_t* data,
+               size_t len,
+               size_t index,
+               size_t total)
+        {
+            if (!isAuthenticated(request)) return;
+            if (lock()) { lastActivityMillis = millis(); unlock(); }
+
+            static String body;
+            if (index == 0) body = "";
+            body += String((char*)data, len);
+            if (index + len != total) return;
+
+            DynamicJsonDocument doc(512);
+            if (deserializeJson(doc, body)) {
+                body = "";
+                request->send(400, "application/json",
+                              "{\"error\":\"Invalid JSON\"}");
+                return;
+            }
+            body = "";
+
+            String modeStr = doc["mode"] | "";
+            modeStr.toLowerCase();
+            CalibrationRecorder::Mode mode = CalibrationRecorder::Mode::None;
+            if (modeStr == "ntc") mode = CalibrationRecorder::Mode::Ntc;
+            else if (modeStr == "model") mode = CalibrationRecorder::Mode::Model;
+
+            if (mode == CalibrationRecorder::Mode::None) {
+                request->send(400, "application/json",
+                              "{\"error\":\"Invalid mode\"}");
+                return;
+            }
+
+            uint32_t intervalMs = doc["interval_ms"] | CalibrationRecorder::kDefaultIntervalMs;
+            uint16_t maxSamples = doc["max_samples"] | CalibrationRecorder::kDefaultMaxSamples;
+            float targetC = NAN;
+            if (!doc["target_c"].isNull()) {
+                targetC = doc["target_c"].as<float>();
+            }
+            int defaultWire = CONF->GetInt(NTC_GATE_INDEX_KEY, DEFAULT_NTC_GATE_INDEX);
+            if (defaultWire < 1) defaultWire = 1;
+            if (defaultWire > HeaterManager::kWireCount) defaultWire = HeaterManager::kWireCount;
+            uint8_t wireIndex = doc["wire_index"] | defaultWire;
+
+            const bool ok = CALIB->start(mode, intervalMs, maxSamples, targetC, wireIndex);
+            if (!ok) {
+                request->send(400, "application/json",
+                              "{\"error\":\"start_failed\"}");
+                return;
+            }
+
+            if (mode == CalibrationRecorder::Mode::Model) {
+                uint32_t pwmOnMs = doc["pwm_on_ms"] | CONF->GetInt(ON_TIME_KEY, 500);
+                uint32_t pwmOffMs = doc["pwm_off_ms"] | CONF->GetInt(OFF_TIME_KEY, 500);
+                uint8_t pwmWire = doc["pwm_wire_index"] | wireIndex;
+                if (!DEVTRAN || !DEVTRAN->startCalibrationPwm(pwmWire, pwmOnMs, pwmOffMs)) {
+                    CALIB->stop();
+                    request->send(400, "application/json",
+                                  "{\"error\":\"pwm_start_failed\"}");
+                    return;
+                }
+            }
+
+            request->send(200, "application/json",
+                          "{\"status\":\"ok\",\"running\":true}");
+        }
+    );
+
+    // ---- Calibration recorder stop ----
+    server.on("/calib_stop", HTTP_POST,
+        [this](AsyncWebServerRequest* request) {},
+        nullptr,
+        [this](AsyncWebServerRequest* request,
+               uint8_t* data,
+               size_t len,
+               size_t index,
+               size_t total)
+        {
+            if (!isAuthenticated(request)) return;
+            if (lock()) { lastActivityMillis = millis(); unlock(); }
+
+            (void)data; (void)len; (void)index; (void)total;
+            const bool saved = CALIB->stopAndSave();
+            if (DEVTRAN) {
+                DEVTRAN->stopCalibrationPwm();
+            }
+            String json = String("{\"status\":\"ok\",\"running\":false,\"saved\":") +
+                          (saved ? "true" : "false") + "}";
+            request->send(200, "application/json", json);
+        }
+    );
+
+    // ---- Calibration recorder clear ----
+    server.on("/calib_clear", HTTP_POST,
+        [this](AsyncWebServerRequest* request) {},
+        nullptr,
+        [this](AsyncWebServerRequest* request,
+               uint8_t* data,
+               size_t len,
+               size_t index,
+               size_t total)
+        {
+            if (!isAuthenticated(request)) return;
+            if (lock()) { lastActivityMillis = millis(); unlock(); }
+
+            (void)data; (void)len; (void)index; (void)total;
+            CALIB->clear();
+            if (DEVTRAN) {
+                DEVTRAN->stopCalibrationPwm();
+            }
+
+            bool removed = false;
+            if (SPIFFS.begin(false) && SPIFFS.exists(CALIB_MODEL_BIN_FILE)) {
+                removed = SPIFFS.remove(CALIB_MODEL_BIN_FILE);
+            }
+
+            String json = String("{\"status\":\"ok\",\"cleared\":true,\"file_removed\":") +
+                          (removed ? "true" : "false") + "}";
+            request->send(200, "application/json", json);
+        }
+    );
+
+    // ---- Calibration recorder data (paged) ----
+    server.on("/calib_data", HTTP_GET,
+        [this](AsyncWebServerRequest* request) {
+            if (!isAuthenticated(request)) return;
+            if (lock()) { lastActivityMillis = millis(); unlock(); }
+
+            uint16_t offset = 0;
+            uint16_t count = 0;
+            if (request->hasParam("offset")) {
+                offset = request->getParam("offset")->value().toInt();
+            }
+            if (request->hasParam("count")) {
+                count = request->getParam("count")->value().toInt();
+            }
+            if (count == 0) count = 200;
+            if (count > 200) count = 200;
+
+            const CalibrationRecorder::Meta meta = CALIB->getMeta();
+            const uint16_t total = meta.count;
+
+            DynamicJsonDocument doc(4096 + count * 128);
+            JsonObject m = doc.createNestedObject("meta");
+            const char* modeStr =
+                (meta.mode == CalibrationRecorder::Mode::Ntc)   ? "ntc" :
+                (meta.mode == CalibrationRecorder::Mode::Model) ? "model" :
+                "none";
+            m["mode"]        = modeStr;
+            m["running"]     = meta.running;
+            m["count"]       = total;
+            m["capacity"]    = meta.capacity;
+            m["interval_ms"] = meta.intervalMs;
+            m["start_ms"]    = meta.startMs;
+            m["saved"]       = meta.saved;
+            m["saved_ms"]    = meta.savedMs;
+            if (isfinite(meta.targetTempC)) m["target_c"] = meta.targetTempC;
+            if (meta.wireIndex > 0) m["wire_index"] = meta.wireIndex;
+            m["offset"] = offset;
+            m["limit"]  = count;
+
+            JsonArray arr = doc.createNestedArray("samples");
+            CalibrationRecorder::Sample buf[32];
+            uint16_t copied = 0;
+            while (copied < count) {
+                const size_t chunk = (count - copied) < 32 ? (count - copied) : 32;
+                const size_t got = CALIB->copySamples(offset + copied, buf, chunk);
+                if (got == 0) break;
+                for (size_t i = 0; i < got; ++i) {
+                    JsonObject row = arr.createNestedObject();
+                    row["t_ms"]     = buf[i].tMs;
+                    row["v"]        = buf[i].voltageV;
+                    row["i"]        = buf[i].currentA;
+                    row["temp_c"]   = buf[i].tempC;
+                    row["ntc_v"]    = buf[i].ntcVolts;
+                    row["ntc_ohm"]  = buf[i].ntcOhm;
+                    row["ntc_adc"]  = buf[i].ntcAdc;
+                    row["ntc_ok"]   = buf[i].ntcValid;
+                    row["pressed"]  = buf[i].pressed;
+                }
+                copied += got;
+            }
+
+            String json;
+            serializeJson(doc, json);
+            request->send(200, "application/json", json);
+        }
+    );
+
+    // ---- Calibration recorder file (binary) ----
+    server.on("/calib_file", HTTP_GET,
+        [this](AsyncWebServerRequest* request) {
+            if (!isAuthenticated(request)) return;
+            if (lock()) { lastActivityMillis = millis(); unlock(); }
+
+            if (SPIFFS.begin(false) && SPIFFS.exists(CALIB_MODEL_BIN_FILE)) {
+                request->send(SPIFFS, CALIB_MODEL_BIN_FILE, "application/octet-stream");
+            } else {
+                request->send(404, "application/json", "{\"error\":\"not_found\"}");
+            }
+        }
+    );
+
+    // ---- Wire target test status ----
+    server.on("/wire_test_status", HTTP_GET,
+        [this](AsyncWebServerRequest* request) {
+            if (!isAuthenticated(request)) return;
+            if (lock()) { lastActivityMillis = millis(); unlock(); }
+
+            Device::WireTargetStatus st{};
+            if (!DEVTRAN || !DEVTRAN->getWireTargetStatus(st)) {
+                request->send(503, "application/json",
+                              "{\"error\":\"status_unavailable\"}");
+                return;
+            }
+
+            StaticJsonDocument<256> doc;
+            doc["running"] = st.active;
+            if (st.wireIndex > 0) doc["wire_index"] = st.wireIndex;
+            if (isfinite(st.targetC)) doc["target_c"] = st.targetC;
+            if (isfinite(st.tempC)) doc["temp_c"] = st.tempC;
+            doc["duty"] = st.duty;
+            doc["on_ms"] = st.onMs;
+            doc["off_ms"] = st.offMs;
+            doc["updated_ms"] = st.updatedMs;
+
+            String json;
+            serializeJson(doc, json);
+            request->send(200, "application/json", json);
+        }
+    );
+
+    // ---- Wire target test start ----
+    server.on("/wire_test_start", HTTP_POST,
+        [this](AsyncWebServerRequest* request) {},
+        nullptr,
+        [this](AsyncWebServerRequest* request,
+               uint8_t* data,
+               size_t len,
+               size_t index,
+               size_t total)
+        {
+            if (!isAuthenticated(request)) return;
+            if (lock()) { lastActivityMillis = millis(); unlock(); }
+
+            static String body;
+            if (index == 0) body = "";
+            body += String((char*)data, len);
+            if (index + len != total) return;
+
+            DynamicJsonDocument doc(256);
+            if (deserializeJson(doc, body)) {
+                body = "";
+                request->send(400, "application/json",
+                              "{\"error\":\"Invalid JSON\"}");
+                return;
+            }
+            body = "";
+
+            float targetC = doc["target_c"].as<float>();
+            uint8_t wireIndex = doc["wire_index"] | 0;
+
+            if (!DEVTRAN || !DEVTRAN->startWireTargetTest(targetC, wireIndex)) {
+                request->send(400, "application/json",
+                              "{\"error\":\"start_failed\"}");
+                return;
+            }
+
+            request->send(200, "application/json",
+                          "{\"status\":\"ok\",\"running\":true}");
+        }
+    );
+
+    // ---- Wire target test stop ----
+    server.on("/wire_test_stop", HTTP_POST,
+        [this](AsyncWebServerRequest* request) {},
+        nullptr,
+        [this](AsyncWebServerRequest* request,
+               uint8_t* data,
+               size_t len,
+               size_t index,
+               size_t total)
+        {
+            if (!isAuthenticated(request)) return;
+            if (lock()) { lastActivityMillis = millis(); unlock(); }
+            (void)data; (void)len; (void)index; (void)total;
+
+            if (DEVTRAN) {
+                DEVTRAN->stopWireTargetTest();
+            }
+            request->send(200, "application/json",
+                          "{\"status\":\"ok\",\"running\":false}");
+        }
+    );
+
+    // ---- NTC calibrate (uses heatsink temp if no ref provided) ----
+    server.on("/ntc_calibrate", HTTP_POST,
+        [this](AsyncWebServerRequest* request) {},
+        nullptr,
+        [this](AsyncWebServerRequest* request,
+               uint8_t* data,
+               size_t len,
+               size_t index,
+               size_t total)
+        {
+            if (!isAuthenticated(request)) return;
+            if (lock()) { lastActivityMillis = millis(); unlock(); }
+
+            static String body;
+            if (index == 0) body = "";
+            body += String((char*)data, len);
+            if (index + len != total) return;
+
+            DynamicJsonDocument doc(256);
+            if (deserializeJson(doc, body)) {
+                body = "";
+                request->send(400, "application/json",
+                              "{\"error\":\"Invalid JSON\"}");
+                return;
+            }
+            body = "";
+
+            float refTempC = NAN;
+            if (!doc["ref_temp_c"].isNull()) {
+                refTempC = doc["ref_temp_c"].as<float>();
+            } else if (DEVICE && DEVICE->tempSensor) {
+                refTempC = DEVICE->tempSensor->getHeatsinkTemp();
+            }
+
+            if (!isfinite(refTempC) || !NTC) {
+                request->send(400, "application/json",
+                              "{\"error\":\"no_reference\"}");
+                return;
+            }
+
+            const bool ok = NTC->calibrateAtTempC(refTempC);
+            if (!ok) {
+                request->send(400, "application/json",
+                              "{\"error\":\"calibration_failed\"}");
+                return;
+            }
+
+            StaticJsonDocument<256> out;
+            out["status"] = "ok";
+            out["ref_c"] = refTempC;
+            out["r0_ohm"] = NTC->getR0();
+            String json;
+            serializeJson(out, json);
+            request->send(200, "application/json", json);
+        }
+    );
+
     server.on("/History.json", HTTP_GET,
         [this](AsyncWebServerRequest* request) {
             if (!isAuthenticated(request)) return;
@@ -607,7 +1050,6 @@ void WiFiManager::registerRoutes_() {
                 else if (target == "targetRes")               { c.type = CTRL_TARGET_RES;        c.f1 = value.as<float>(); }
                 else if (target == "wireOhmPerM")             { c.type = CTRL_WIRE_OHM_PER_M;    c.f1 = value.as<float>(); }
                 else if (target == "wireGauge")               { c.type = CTRL_WIRE_GAUGE;        c.i1 = value.as<int>(); }
-                else if (target == "coolingAir")              { c.type = CTRL_COOL_PROFILE;      c.b1 = value.as<bool>(); }
                 else if (target == "currLimit")               { c.type = CTRL_CURR_LIMIT;        c.f1 = value.as<float>(); }
                 else if (target == "tempWarnC") {
                     float v = value.as<float>();
@@ -636,8 +1078,206 @@ void WiFiManager::registerRoutes_() {
                 else if (target == "wireTauSec") {
                     float v = value.as<float>();
                     if (!isfinite(v) || v < 0.05f) v = DEFAULT_WIRE_TAU_SEC;
-                    if (v > 60.0f) v = 60.0f;
+                    if (v > 600.0f) v = 600.0f;
                     CONF->PutFloat(WIRE_TAU_KEY, v);
+                    request->send(200, "application/json",
+                                  "{\"status\":\"ok\",\"applied\":true}");
+                    return;
+                }
+                else if (target == "wireKLoss") {
+                    float v = value.as<float>();
+                    if (!isfinite(v) || v <= 0.0f) v = DEFAULT_WIRE_K_LOSS;
+                    CONF->PutFloat(WIRE_K_LOSS_KEY, v);
+                    request->send(200, "application/json",
+                                  "{\"status\":\"ok\",\"applied\":true}");
+                    return;
+                }
+                else if (target == "wireThermalC") {
+                    float v = value.as<float>();
+                    if (!isfinite(v) || v <= 0.0f) v = DEFAULT_WIRE_THERMAL_C;
+                    CONF->PutFloat(WIRE_C_TH_KEY, v);
+                    request->send(200, "application/json",
+                                  "{\"status\":\"ok\",\"applied\":true}");
+                    return;
+                }
+                else if (target == "wireKp") {
+                    float v = value.as<float>();
+                    if (!isfinite(v) || v < 0.0f) v = DEFAULT_WIRE_KP;
+                    if (THERMAL_PI) THERMAL_PI->setWireKp(v, true);
+                    else CONF->PutFloat(WIRE_KP_KEY, v);
+                    request->send(200, "application/json",
+                                  "{\"status\":\"ok\",\"applied\":true}");
+                    return;
+                }
+                else if (target == "wireKi") {
+                    float v = value.as<float>();
+                    if (!isfinite(v) || v < 0.0f) v = DEFAULT_WIRE_KI;
+                    if (THERMAL_PI) THERMAL_PI->setWireKi(v, true);
+                    else CONF->PutFloat(WIRE_KI_KEY, v);
+                    request->send(200, "application/json",
+                                  "{\"status\":\"ok\",\"applied\":true}");
+                    return;
+                }
+                else if (target == "floorKp") {
+                    float v = value.as<float>();
+                    if (!isfinite(v) || v < 0.0f) v = DEFAULT_FLOOR_KP;
+                    if (THERMAL_PI) THERMAL_PI->setFloorKp(v, true);
+                    else CONF->PutFloat(FLOOR_KP_KEY, v);
+                    request->send(200, "application/json",
+                                  "{\"status\":\"ok\",\"applied\":true}");
+                    return;
+                }
+                else if (target == "floorKi") {
+                    float v = value.as<float>();
+                    if (!isfinite(v) || v < 0.0f) v = DEFAULT_FLOOR_KI;
+                    if (THERMAL_PI) THERMAL_PI->setFloorKi(v, true);
+                    else CONF->PutFloat(FLOOR_KI_KEY, v);
+                    request->send(200, "application/json",
+                                  "{\"status\":\"ok\",\"applied\":true}");
+                    return;
+                }
+                else if (target == "ntcBeta") {
+                    float v = value.as<float>();
+                    if (!isfinite(v) || v <= 0.0f) v = DEFAULT_NTC_BETA;
+                    if (NTC) NTC->setBeta(v, true);
+                    request->send(200, "application/json",
+                                  "{\"status\":\"ok\",\"applied\":true}");
+                    return;
+                }
+                else if (target == "ntcR0") {
+                    float v = value.as<float>();
+                    if (!isfinite(v) || v <= 0.0f) v = DEFAULT_NTC_R0_OHMS;
+                    if (NTC) NTC->setR0(v, true);
+                    request->send(200, "application/json",
+                                  "{\"status\":\"ok\",\"applied\":true}");
+                    return;
+                }
+                else if (target == "ntcFixedRes") {
+                    float v = value.as<float>();
+                    if (!isfinite(v) || v <= 0.0f) v = DEFAULT_NTC_FIXED_RES_OHMS;
+                    if (NTC) NTC->setFixedRes(v, true);
+                    request->send(200, "application/json",
+                                  "{\"status\":\"ok\",\"applied\":true}");
+                    return;
+                }
+                else if (target == "ntcPressMv") {
+                    float v = value.as<float>();
+                    if (!isfinite(v) || v < 0.0f) v = DEFAULT_NTC_PRESS_MV;
+                    const float release = CONF->GetFloat(NTC_RELEASE_MV_KEY, DEFAULT_NTC_RELEASE_MV);
+                    const uint32_t db = static_cast<uint32_t>(
+                        CONF->GetInt(NTC_DEBOUNCE_MS_KEY, DEFAULT_NTC_DEBOUNCE_MS));
+                    if (NTC) NTC->setButtonThresholdsMv(v, release, db, true);
+                    else CONF->PutFloat(NTC_PRESS_MV_KEY, v);
+                    request->send(200, "application/json",
+                                  "{\"status\":\"ok\",\"applied\":true}");
+                    return;
+                }
+                else if (target == "ntcReleaseMv") {
+                    float v = value.as<float>();
+                    if (!isfinite(v) || v < 0.0f) v = DEFAULT_NTC_RELEASE_MV;
+                    const float press = CONF->GetFloat(NTC_PRESS_MV_KEY, DEFAULT_NTC_PRESS_MV);
+                    const uint32_t db = static_cast<uint32_t>(
+                        CONF->GetInt(NTC_DEBOUNCE_MS_KEY, DEFAULT_NTC_DEBOUNCE_MS));
+                    if (NTC) NTC->setButtonThresholdsMv(press, v, db, true);
+                    else CONF->PutFloat(NTC_RELEASE_MV_KEY, v);
+                    request->send(200, "application/json",
+                                  "{\"status\":\"ok\",\"applied\":true}");
+                    return;
+                }
+                else if (target == "ntcDebounceMs") {
+                    int v = value.as<int>();
+                    if (v < 0) v = DEFAULT_NTC_DEBOUNCE_MS;
+                    const float press = CONF->GetFloat(NTC_PRESS_MV_KEY, DEFAULT_NTC_PRESS_MV);
+                    const float release = CONF->GetFloat(NTC_RELEASE_MV_KEY, DEFAULT_NTC_RELEASE_MV);
+                    if (NTC) NTC->setButtonThresholdsMv(press, release, static_cast<uint32_t>(v), true);
+                    else CONF->PutInt(NTC_DEBOUNCE_MS_KEY, v);
+                    request->send(200, "application/json",
+                                  "{\"status\":\"ok\",\"applied\":true}");
+                    return;
+                }
+                else if (target == "ntcMinC") {
+                    float v = value.as<float>();
+                    if (!isfinite(v)) v = DEFAULT_NTC_MIN_C;
+                    const float maxC = CONF->GetFloat(NTC_MAX_C_KEY, DEFAULT_NTC_MAX_C);
+                    if (NTC) NTC->setTempLimits(v, maxC, true);
+                    else CONF->PutFloat(NTC_MIN_C_KEY, v);
+                    request->send(200, "application/json",
+                                  "{\"status\":\"ok\",\"applied\":true}");
+                    return;
+                }
+                else if (target == "ntcMaxC") {
+                    float v = value.as<float>();
+                    if (!isfinite(v)) v = DEFAULT_NTC_MAX_C;
+                    const float minC = CONF->GetFloat(NTC_MIN_C_KEY, DEFAULT_NTC_MIN_C);
+                    if (NTC) NTC->setTempLimits(minC, v, true);
+                    else CONF->PutFloat(NTC_MAX_C_KEY, v);
+                    request->send(200, "application/json",
+                                  "{\"status\":\"ok\",\"applied\":true}");
+                    return;
+                }
+                else if (target == "ntcSamples") {
+                    int v = value.as<int>();
+                    if (v < 1) v = 1;
+                    if (v > 64) v = 64;
+                    if (NTC) NTC->setSampleCount(static_cast<uint8_t>(v), true);
+                    else CONF->PutInt(NTC_SAMPLES_KEY, v);
+                    request->send(200, "application/json",
+                                  "{\"status\":\"ok\",\"applied\":true}");
+                    return;
+                }
+                else if (target == "ntcGateIndex") {
+                    int v = value.as<int>();
+                    if (v < 1) v = 1;
+                    if (v > HeaterManager::kWireCount) v = HeaterManager::kWireCount;
+                    CONF->PutInt(NTC_GATE_INDEX_KEY, v);
+                    request->send(200, "application/json",
+                                  "{\"status\":\"ok\",\"applied\":true}");
+                    return;
+                }
+                else if (target == "floorThicknessMm") {
+                    float v = value.as<float>();
+                    if (!isfinite(v) || v < 0.0f) {
+                        v = DEFAULT_FLOOR_THICKNESS_MM;
+                    } else if (v > 0.0f) {
+                        if (v < FLOOR_THICKNESS_MIN_MM) v = FLOOR_THICKNESS_MIN_MM;
+                        if (v > FLOOR_THICKNESS_MAX_MM) v = FLOOR_THICKNESS_MAX_MM;
+                    }
+                    CONF->PutFloat(FLOOR_THICKNESS_MM_KEY, v);
+                    request->send(200, "application/json",
+                                  "{\"status\":\"ok\",\"applied\":true}");
+                    return;
+                }
+                else if (target == "floorMaterial") {
+                    const int fallback = CONF->GetInt(FLOOR_MATERIAL_KEY, DEFAULT_FLOOR_MATERIAL);
+                    int code = fallback;
+                    if (value.is<const char*>()) {
+                        code = parseFloorMaterialCode(String(value.as<const char*>()), fallback);
+                    } else if (value.is<String>()) {
+                        code = parseFloorMaterialCode(value.as<String>(), fallback);
+                    } else {
+                        int v = value.as<int>();
+                        if (v >= FLOOR_MAT_WOOD && v <= FLOOR_MAT_GRANITE) {
+                            code = v;
+                        }
+                    }
+                    CONF->PutInt(FLOOR_MATERIAL_KEY, code);
+                    request->send(200, "application/json",
+                                  "{\"status\":\"ok\",\"applied\":true}");
+                    return;
+                }
+                else if (target == "floorMaxC") {
+                    float v = value.as<float>();
+                    if (!isfinite(v) || v < 0.0f) v = DEFAULT_FLOOR_MAX_C;
+                    if (v > DEFAULT_FLOOR_MAX_C) v = DEFAULT_FLOOR_MAX_C;
+                    CONF->PutFloat(FLOOR_MAX_C_KEY, v);
+                    request->send(200, "application/json",
+                                  "{\"status\":\"ok\",\"applied\":true}");
+                    return;
+                }
+                else if (target == "nichromeFinalTempC") {
+                    float v = value.as<float>();
+                    if (!isfinite(v) || v < 0.0f) v = DEFAULT_NICHROME_FINAL_TEMP_C;
+                    CONF->PutFloat(NICHROME_FINAL_TEMP_C_KEY, v);
                     request->send(200, "application/json",
                                   "{\"status\":\"ok\",\"applied\":true}");
                     return;
@@ -671,12 +1311,46 @@ void WiFiManager::registerRoutes_() {
                     modeStr.toLowerCase();
                     int mode = 0;
                     if (modeStr == "sequential" || value.as<int>() == 1) mode = 1;
+                    else if (modeStr == "mixed" || value.as<int>() == 2) mode = 2;
                     c.type = CTRL_LOOP_MODE;
                     c.i1   = mode;
                 }
-                else if (target == "coolBuriedScale")        { c.type = CTRL_COOL_PROFILE;      c.f1 = value.as<float>(); }
-                else if (target == "coolKCold")              { c.type = CTRL_COOL_PROFILE;      c.i1 = -1; c.f1 = value.as<float>(); }
-                else if (target == "coolDropMaxC")           { c.type = CTRL_COOL_PROFILE;      c.i1 = -2; c.f1 = value.as<float>(); }
+                else if (target == "mixPreheatMs") {
+                    int v = value.as<int>();
+                    if (v < 0) v = 0;
+                    if (v > 600000) v = 600000; // cap at 10 minutes
+                    CONF->PutInt(MIX_PREHEAT_MS_KEY, v);
+                    request->send(200, "application/json",
+                                  "{\"status\":\"ok\",\"applied\":true}");
+                    return;
+                }
+                else if (target == "mixPreheatOnMs") {
+                    int v = value.as<int>();
+                    if (v < 1) v = 1;
+                    if (v > 1000) v = 1000;
+                    CONF->PutInt(MIX_PREHEAT_ON_KEY, v);
+                    request->send(200, "application/json",
+                                  "{\"status\":\"ok\",\"applied\":true}");
+                    return;
+                }
+                else if (target == "mixKeepMs") {
+                    int v = value.as<int>();
+                    if (v < 0) v = 0;
+                    if (v > 1000) v = 1000;
+                    CONF->PutInt(MIX_KEEP_MS_KEY, v);
+                    request->send(200, "application/json",
+                                  "{\"status\":\"ok\",\"applied\":true}");
+                    return;
+                }
+                else if (target == "mixFrameMs") {
+                    int v = value.as<int>();
+                    if (v < 10) v = 10;
+                    if (v > 2000) v = 2000;
+                    CONF->PutInt(MIX_FRAME_MS_KEY, v);
+                    request->send(200, "application/json",
+                                  "{\"status\":\"ok\",\"applied\":true}");
+                    return;
+                }
                 else if (target == "calibrate")              { c.type = CTRL_CALIBRATE; }
                 else {
                     request->send(400, "application/json",
@@ -723,7 +1397,7 @@ void WiFiManager::registerRoutes_() {
                 return;
             }
 
-            StaticJsonDocument<1280> doc;
+            StaticJsonDocument<2048> doc;
             const Device::StateSnapshot snap = DEVTRAN->getStateSnapshot();
 
             // Preferences (config only)
@@ -738,16 +1412,41 @@ void WiFiManager::registerRoutes_() {
                                                     DEFAULT_WIRE_OHM_PER_M);
             doc["wireGauge"]      = CONF->GetInt(WIRE_GAUGE_KEY, DEFAULT_WIRE_GAUGE);
             doc["buzzerMute"]     = CONF->GetBool(BUZMUT_KEY, BUZMUT_DEFAULT);
-            doc["coolingAir"]     = CONF->GetBool(COOLING_PROFILE_KEY, DEFAULT_COOLING_PROFILE_FAST);
-            doc["coolBuriedScale"] = CONF->GetFloat(COOL_BURIED_SCALE_KEY, DEFAULT_COOLING_SCALE_BURIED);
-            doc["coolKCold"]       = CONF->GetFloat(COOL_KCOLD_KEY,        DEFAULT_COOL_K_COLD);
-            doc["coolDropMaxC"]    = CONF->GetFloat(COOL_DROP_MAX_KEY,     DEFAULT_MAX_COOL_DROP_C);
             doc["tempTripC"]       = CONF->GetFloat(TEMP_THRESHOLD_KEY, DEFAULT_TEMP_THRESHOLD);
             doc["tempWarnC"]       = CONF->GetFloat(TEMP_WARN_KEY, DEFAULT_TEMP_WARN_C);
             doc["idleCurrentA"]    = CONF->GetFloat(IDLE_CURR_KEY, DEFAULT_IDLE_CURR);
             doc["wireTauSec"]      = CONF->GetFloat(WIRE_TAU_KEY, DEFAULT_WIRE_TAU_SEC);
+            doc["wireKLoss"]       = CONF->GetFloat(WIRE_K_LOSS_KEY, DEFAULT_WIRE_K_LOSS);
+            doc["wireThermalC"]    = CONF->GetFloat(WIRE_C_TH_KEY, DEFAULT_WIRE_THERMAL_C);
+            doc["wireKp"]          = CONF->GetFloat(WIRE_KP_KEY, DEFAULT_WIRE_KP);
+            doc["wireKi"]          = CONF->GetFloat(WIRE_KI_KEY, DEFAULT_WIRE_KI);
+            doc["floorKp"]         = CONF->GetFloat(FLOOR_KP_KEY, DEFAULT_FLOOR_KP);
+            doc["floorKi"]         = CONF->GetFloat(FLOOR_KI_KEY, DEFAULT_FLOOR_KI);
+            doc["ntcBeta"]         = CONF->GetFloat(NTC_BETA_KEY, DEFAULT_NTC_BETA);
+            doc["ntcR0"]           = CONF->GetFloat(NTC_R0_KEY, DEFAULT_NTC_R0_OHMS);
+            doc["ntcFixedRes"]     = CONF->GetFloat(NTC_FIXED_RES_KEY, DEFAULT_NTC_FIXED_RES_OHMS);
+            doc["ntcPressMv"]      = CONF->GetFloat(NTC_PRESS_MV_KEY, DEFAULT_NTC_PRESS_MV);
+            doc["ntcReleaseMv"]    = CONF->GetFloat(NTC_RELEASE_MV_KEY, DEFAULT_NTC_RELEASE_MV);
+            doc["ntcDebounceMs"]   = CONF->GetInt(NTC_DEBOUNCE_MS_KEY, DEFAULT_NTC_DEBOUNCE_MS);
+            doc["ntcMinC"]         = CONF->GetFloat(NTC_MIN_C_KEY, DEFAULT_NTC_MIN_C);
+            doc["ntcMaxC"]         = CONF->GetFloat(NTC_MAX_C_KEY, DEFAULT_NTC_MAX_C);
+            doc["ntcSamples"]      = CONF->GetInt(NTC_SAMPLES_KEY, DEFAULT_NTC_SAMPLES);
+            doc["ntcGateIndex"]    = CONF->GetInt(NTC_GATE_INDEX_KEY, DEFAULT_NTC_GATE_INDEX);
+            doc["floorThicknessMm"] = CONF->GetFloat(FLOOR_THICKNESS_MM_KEY, DEFAULT_FLOOR_THICKNESS_MM);
+            const int floorMatCode = CONF->GetInt(FLOOR_MATERIAL_KEY, DEFAULT_FLOOR_MATERIAL);
+            doc["floorMaterial"]    = floorMaterialToString(floorMatCode);
+            doc["floorMaterialCode"] = floorMatCode;
+            doc["floorMaxC"]         = CONF->GetFloat(FLOOR_MAX_C_KEY, DEFAULT_FLOOR_MAX_C);
+            doc["nichromeFinalTempC"] = CONF->GetFloat(NICHROME_FINAL_TEMP_C_KEY, DEFAULT_NICHROME_FINAL_TEMP_C);
             const int loopModeCfg = CONF->GetInt(LOOP_MODE_KEY, DEFAULT_LOOP_MODE);
-            doc["loopMode"]       = (loopModeCfg == 1) ? "sequential" : "advanced";
+            const char* loopModeStr =
+                (loopModeCfg == 1) ? "sequential" :
+                (loopModeCfg == 2) ? "mixed" : "advanced";
+            doc["loopMode"]        = loopModeStr;
+            doc["mixPreheatMs"]    = CONF->GetInt(MIX_PREHEAT_MS_KEY, DEFAULT_MIX_PREHEAT_MS);
+            doc["mixPreheatOnMs"]  = CONF->GetInt(MIX_PREHEAT_ON_KEY, DEFAULT_MIX_PREHEAT_ON_MS);
+            doc["mixKeepMs"]       = CONF->GetInt(MIX_KEEP_MS_KEY, DEFAULT_MIX_KEEP_MS);
+            doc["mixFrameMs"]      = CONF->GetInt(MIX_FRAME_MS_KEY, DEFAULT_MIX_FRAME_MS);
             const int timingModeCfg = CONF->GetInt(TIMING_MODE_KEY, DEFAULT_TIMING_MODE);
             doc["timingMode"]     = (timingModeCfg == 1) ? "manual" : "preset";
             const int timingProfileCfg = CONF->GetInt(TIMING_PROFILE_KEY, DEFAULT_TIMING_PROFILE);
@@ -981,7 +1680,7 @@ void WiFiManager::heartbeat() {
                 }
 
                 if (!ka) {
-                    DEBUG_PRINTLN("[WiFi] âš ï¸ Heartbeat timeout  disconnecting");
+                    DEBUG_PRINTLN("[WiFi]  Heartbeat timeout  disconnecting");
                     self->onDisconnected();
                     BUZZ->bipWiFiOff();
                     RGB->postOverlay(OverlayEvent::WIFI_LOST);
@@ -1043,7 +1742,7 @@ bool WiFiManager::handleControl(const ControlCmd& c) {
 
     switch (c.type) {
         case CTRL_REBOOT:
-            DEBUG_PRINTLN("[WiFi] CTRL_REBOOT â†’ Restarting system...");
+            DEBUG_PRINTLN("[WiFi] CTRL_REBOOT Restarting system...");
             RGB->postOverlay(OverlayEvent::RESET_TRIGGER);
             BUZZ->bip();
             CONF->RestartSysDelayDown(3000);
@@ -1187,36 +1886,6 @@ bool WiFiManager::handleControl(const ControlCmd& c) {
             ok = DEVTRAN->setWireGaugeAwg(awg);
             break;
         }
-        case CTRL_COOL_PROFILE:
-            BUZZ->bip();
-            if (c.i1 == -1) {
-                // buried scale
-                float scale = c.f1;
-                if (!isfinite(scale) || scale <= 0.0f) {
-                    scale = DEFAULT_COOLING_SCALE_BURIED;
-                }
-                CONF->PutFloat(COOL_BURIED_SCALE_KEY, scale);
-                ok = true;
-            } else if (c.i1 == -2) {
-                // max cool drop
-                float drop = c.f1;
-                if (!isfinite(drop) || drop <= 0.0f) {
-                    drop = DEFAULT_MAX_COOL_DROP_C;
-                }
-                CONF->PutFloat(COOL_DROP_MAX_KEY, drop);
-                ok = true;
-            } else if (c.i1 == -3) {
-                // base cooling gain
-                float k = c.f1;
-                if (!isfinite(k) || k <= 0.0f) {
-                    k = DEFAULT_COOL_K_COLD;
-                }
-                CONF->PutFloat(COOL_KCOLD_KEY, k);
-                ok = true;
-            } else {
-                ok = DEVTRAN->setCoolingProfile(c.b1);
-            }
-            break;
         case CTRL_LOOP_MODE: {
             BUZZ->bip();
             int mode = (c.i1 == 1) ? 1 : 0;

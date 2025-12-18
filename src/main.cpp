@@ -9,6 +9,9 @@
 #include "comms/SwitchManager.h"
 #include "system/Device.h"
 #include "services/SleepTimer.h"
+#include "sensing/NtcSensor.h"
+#include "services/CalibrationRecorder.h"
+#include "services/ThermalPiControllers.h"
 
 // OneWire bus instance
 OneWire oneWire(ONE_WIRE_BUS);
@@ -137,6 +140,12 @@ void setup() {
   tempSensor->begin();
 
   DEBUG_PRINTLN("[Setup] Current & temperature sensing initialized (zero-cal done).");
+
+  NtcSensor::Init();
+  NTC->begin();
+  CalibrationRecorder::Init();
+  ThermalPiControllers::Init();
+  THERMAL_PI->begin();
 
   // --------------------------------------------------
   // 6. Device Orchestrator

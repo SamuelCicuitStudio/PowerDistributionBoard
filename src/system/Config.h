@@ -80,16 +80,39 @@
 #define AC_VOLTAGE_KEY                 "ACVLT"     // AC line voltage key
 #define CP_EMP_GAIN_KEY                "CPEMGN"    // Empirical capacitor ADC gain key
 #define CAP_BANK_CAP_F_KEY             "CPCAPF"    // Capacitor bank capacitance [F] key
-#define COOLING_PROFILE_KEY            "CLPRF"     // bool: true=fast (air), false=buried/slow
 #define LOOP_MODE_KEY                  "LPMODE"    // int: 0=advanced, 1=sequential
+#define MIX_PREHEAT_MS_KEY             "MXPHMS"    // int: total preheat duration for mixed mode [ms]
+#define MIX_PREHEAT_ON_KEY             "MXPHON"    // int: primary pulse during mixed-mode preheat [ms]
+#define MIX_KEEP_MS_KEY                "MXKEEP"    // int: keep-warm pulse for non-active wires [ms]
+#define MIX_FRAME_MS_KEY               "MXFRMS"    // int: frame period for mixed scheduler [ms]
 #define TIMING_MODE_KEY                "TMMODE"    // int: 0=preset, 1=manual
 #define TIMING_PROFILE_KEY             "TMPROF"    // int: 0=hot, 1=medium, 2=gentle
 #define CURR_LIMIT_KEY                 "CURRLT"   // float: over-current trip threshold [A]
-#define WIRE_TAU_KEY                   "TAUSEC"   // float: virtual wire thermal inertia (tau) [s]
+#define WIRE_TAU_KEY                   "TAUSEC"   // float: thermal time constant tau [s]
+#define WIRE_K_LOSS_KEY                "WKLOS"    // float: heat loss coefficient k [W/K]
+#define WIRE_C_TH_KEY                  "WCTH"     // float: thermal mass C [J/K]
+#define WIRE_KP_KEY                    "WKP"      // float: wire PI Kp
+#define WIRE_KI_KEY                    "WKI"      // float: wire PI Ki
+#define FLOOR_KP_KEY                   "FKP"      // float: floor PI Kp
+#define FLOOR_KI_KEY                   "FKI"      // float: floor PI Ki
 #define TEMP_SENSOR_COUNT_KEY          "TMNT"    // Number of temperature sensors detected
 #define RTC_CURRENT_EPOCH_KEY          "RCUR"    // Last known epoch persisted
 #define RTC_PRESLEEP_EPOCH_KEY         "RSLP"   // Epoch saved before deep sleep
 #define RTC_DEFAULT_EPOCH              0ULL
+#define NTC_BETA_KEY                   "NTCBET"  // float: NTC beta constant
+#define NTC_R0_KEY                     "NTCR0"   // float: NTC resistance at T0 [ohms]
+#define NTC_FIXED_RES_KEY              "NTCRFX"  // float: fixed divider resistor [ohms]
+#define NTC_PRESS_MV_KEY               "NTCPRS"  // float: press threshold [mV]
+#define NTC_RELEASE_MV_KEY             "NTCRLS"  // float: release threshold [mV]
+#define NTC_DEBOUNCE_MS_KEY            "NTCDBN"  // int: debounce time [ms]
+#define NTC_MIN_C_KEY                  "NTCMIN"  // float: minimum valid temp [C]
+#define NTC_MAX_C_KEY                  "NTCMAX"  // float: maximum valid temp [C]
+#define NTC_SAMPLES_KEY                "NTCSMP"  // int: ADC samples per update
+#define NTC_GATE_INDEX_KEY             "NTCGAT"  // int: wire index attached to NTC
+#define FLOOR_THICKNESS_MM_KEY         "FLTHK"   // float: floor thickness [mm]
+#define FLOOR_MATERIAL_KEY             "FLMAT"   // int: floor material code
+#define FLOOR_MAX_C_KEY                "FLMAX"   // float: max floor temp [C]
+#define NICHROME_FINAL_TEMP_C_KEY      "NCFIN"   // float: target final nichrome temp [C]
 
 // ---------- Device Identity & Versions (NVS keys, <= 6 chars) ----------
 #define DEV_ID_KEY                     "DEVID"     // Human-readable device id
@@ -107,9 +130,33 @@ ASSERT_NVS_KEY_LEN(DEV_SW_KEY);
 ASSERT_NVS_KEY_LEN(DEV_HW_KEY);
 ASSERT_NVS_KEY_LEN(TIMING_MODE_KEY);
 ASSERT_NVS_KEY_LEN(TIMING_PROFILE_KEY);
+ASSERT_NVS_KEY_LEN(MIX_PREHEAT_MS_KEY);
+ASSERT_NVS_KEY_LEN(MIX_PREHEAT_ON_KEY);
+ASSERT_NVS_KEY_LEN(MIX_KEEP_MS_KEY);
+ASSERT_NVS_KEY_LEN(MIX_FRAME_MS_KEY);
 ASSERT_NVS_KEY_LEN(CURR_LIMIT_KEY);
 ASSERT_NVS_KEY_LEN(TEMP_WARN_KEY);
 ASSERT_NVS_KEY_LEN(WIRE_TAU_KEY);
+ASSERT_NVS_KEY_LEN(WIRE_K_LOSS_KEY);
+ASSERT_NVS_KEY_LEN(WIRE_C_TH_KEY);
+ASSERT_NVS_KEY_LEN(WIRE_KP_KEY);
+ASSERT_NVS_KEY_LEN(WIRE_KI_KEY);
+ASSERT_NVS_KEY_LEN(FLOOR_KP_KEY);
+ASSERT_NVS_KEY_LEN(FLOOR_KI_KEY);
+ASSERT_NVS_KEY_LEN(NTC_BETA_KEY);
+ASSERT_NVS_KEY_LEN(NTC_R0_KEY);
+ASSERT_NVS_KEY_LEN(NTC_FIXED_RES_KEY);
+ASSERT_NVS_KEY_LEN(NTC_PRESS_MV_KEY);
+ASSERT_NVS_KEY_LEN(NTC_RELEASE_MV_KEY);
+ASSERT_NVS_KEY_LEN(NTC_DEBOUNCE_MS_KEY);
+ASSERT_NVS_KEY_LEN(NTC_MIN_C_KEY);
+ASSERT_NVS_KEY_LEN(NTC_MAX_C_KEY);
+ASSERT_NVS_KEY_LEN(NTC_SAMPLES_KEY);
+ASSERT_NVS_KEY_LEN(NTC_GATE_INDEX_KEY);
+ASSERT_NVS_KEY_LEN(FLOOR_THICKNESS_MM_KEY);
+ASSERT_NVS_KEY_LEN(FLOOR_MATERIAL_KEY);
+ASSERT_NVS_KEY_LEN(FLOOR_MAX_C_KEY);
+ASSERT_NVS_KEY_LEN(NICHROME_FINAL_TEMP_C_KEY);
 
 // ---------- Output Access Flags ----------
 #define OUT01_ACCESS_KEY               "OUT1F"
@@ -175,11 +222,6 @@ ASSERT_NVS_KEY_LEN(WIRE_TAU_KEY);
 #define PT_DEF_LAST_SESS_PEAK_W         0.0f
 #define PT_DEF_LAST_SESS_PEAK_A         0.0f
 
-// Cooling profile tuning keys (<= 6 chars)
-#define COOL_BURIED_SCALE_KEY           "CBURI"   // float: buried cooling scale
-#define COOL_KCOLD_KEY                  "CKCLD"   // float: base cooling gain
-#define COOL_DROP_MAX_KEY               "CDROP"   // float: max drop per step [degC]
-
 // ==================================================
 // Default Values for Preferences
 // ==================================================
@@ -204,17 +246,53 @@ ASSERT_NVS_KEY_LEN(WIRE_TAU_KEY);
 #define DEFAULT_CAP_EMP_GAIN           (321.0f / 1.90f) // Default empirical ADC->bus gain
 #define DEFAULT_CAP_BANK_CAP_F         0.0f             // Farads (0 => unknown until calibrated)
 #define DEFAULT_TEMP_SENSOR_COUNT      12               // Default to 12 sensors unless discovered otherwise
-#define DEFAULT_COOLING_PROFILE_FAST   true             // true=air/fast cooling, false=buried/slow
-#define DEFAULT_LOOP_MODE              0                // 0=advanced, 1=sequential
+#define DEFAULT_LOOP_MODE              0                // 0=advanced, 1=sequential, 2=mixed
+#define DEFAULT_MIX_PREHEAT_MS         5000             // ms of bulk preheat in mixed mode
+#define DEFAULT_MIX_PREHEAT_ON_MS      15               // ms: primary pulse during preheat (mixed)
+#define DEFAULT_MIX_KEEP_MS            4                // ms: keep-warm pulse for non-active wires
+#define DEFAULT_MIX_FRAME_MS           120              // ms: frame period for mixed scheduler
 #define DEFAULT_TIMING_MODE            0                // 0=preset, 1=manual
 #define DEFAULT_TIMING_PROFILE         1                // 0=hot, 1=medium, 2=gentle
 #define DEFAULT_CURR_LIMIT_A           36.0f            // Default over-current trip [A]
-#define DEFAULT_WIRE_TAU_SEC           1.5f             // Default virtual wire tau [s]
+#define DEFAULT_WIRE_TAU_SEC           35.0f            // Default thermal time constant [s] (empirical)
+#define DEFAULT_WIRE_THERMAL_C         1.0f             // Default thermal mass [J/K]
+#define DEFAULT_WIRE_K_LOSS            (DEFAULT_WIRE_THERMAL_C / DEFAULT_WIRE_TAU_SEC) // Default k [W/K]
+#define DEFAULT_WIRE_KP                0.0f             // Default wire PI Kp (0 disables until tuned)
+#define DEFAULT_WIRE_KI                0.0f             // Default wire PI Ki (0 disables until tuned)
+#define DEFAULT_FLOOR_KP               0.0f             // Default floor PI Kp (0 disables until tuned)
+#define DEFAULT_FLOOR_KI               0.0f             // Default floor PI Ki (0 disables until tuned)
 #define DEFAULT_WIRE_GAUGE             20               // AWG number for installed nichrome
-// Cooling defaults (used when NVS unset)
-#define DEFAULT_COOLING_SCALE_BURIED   0.35f            // default scale for buried cooling
-#define DEFAULT_COOL_K_COLD            0.01f            // default cold-side cooling gain (slower cooling)
-#define DEFAULT_MAX_COOL_DROP_C        0.5f             // default max drop per integration step [degC]
+// NTC / analog power button defaults
+#define NTC_ADC_REF_VOLTAGE            3.3f             // ADC reference [V]
+#define NTC_ADC_MAX                    4095.0f          // 12-bit ADC full scale
+#define DEFAULT_NTC_FIXED_RES_OHMS     10000.0f         // Divider fixed resistor [ohms]
+#define DEFAULT_NTC_R0_OHMS            10000.0f         // NTC R0 at T0 [ohms]
+#define DEFAULT_NTC_BETA               3950.0f          // Beta constant
+#define DEFAULT_NTC_T0_C               25.0f            // Reference temperature [degC]
+#define DEFAULT_NTC_MIN_C              -40.0f           // Minimum valid temp [degC]
+#define DEFAULT_NTC_MAX_C              200.0f           // Maximum valid temp [degC]
+#define DEFAULT_NTC_PRESS_MV           20.0f            // Button press threshold [mV]
+#define DEFAULT_NTC_RELEASE_MV         40.0f            // Button release threshold [mV]
+#define DEFAULT_NTC_DEBOUNCE_MS        40               // Debounce duration [ms]
+#define DEFAULT_NTC_SAMPLES            8                // ADC samples per update
+#define DEFAULT_NTC_GATE_INDEX         1                // Wire index tied to NTC by default
+#define FLOOR_THICKNESS_MIN_MM         20.0f            // 2 cm minimum
+#define FLOOR_THICKNESS_MAX_MM         50.0f            // 5 cm maximum
+#define DEFAULT_FLOOR_THICKNESS_MM     0.0f             // Floor thickness [mm] (0 = unset)
+#define DEFAULT_FLOOR_MAX_C            35.0f            // Max floor temperature [C]
+#define DEFAULT_NICHROME_FINAL_TEMP_C  0.0f             // Final temp [C] (0 = unset)
+
+// Floor material codes
+#define FLOOR_MAT_WOOD                 0
+#define FLOOR_MAT_EPOXY                1
+#define FLOOR_MAT_CONCRETE             2
+#define FLOOR_MAT_SLATE                3
+#define FLOOR_MAT_MARBLE               4
+#define FLOOR_MAT_GRANITE              5
+#define DEFAULT_FLOOR_MATERIAL         FLOOR_MAT_WOOD
+
+// Calibration data storage (model calibration history)
+#define CALIB_MODEL_BIN_FILE           "/CalibModel.bin"
 
 // ---------- Output Access Defaults ----------
 #define DEFAULT_OUT01_ACCESS           true

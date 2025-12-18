@@ -19,6 +19,15 @@ static inline uint16_t _allowedMaskFrom(const bool allowed[10]) {
 
 static constexpr uint32_t CAL_TIMEOUT_MS = 10000; // max time for pre-loop charge + calibrations
 
+static inline const char* _loopModeName(LoopMode m) {
+    switch (m) {
+        case LoopMode::Sequential: return "SEQUENTIAL";
+        case LoopMode::Mixed:      return "MIXED";
+        case LoopMode::Advanced:
+        default:                   return "ADVANCED";
+    }
+}
+
 // ============================================================================
 // Helper: single guarded ON pulse for a mask
 // ============================================================================
@@ -573,13 +582,10 @@ void Device::StartLoop() {
     DEBUG_PRINTF("[Device] Loop config: on=%ums off=%ums mode=%s\n",
                  (unsigned)onTime,
                  (unsigned)offTime,
-                 (loopModeSetting == LoopMode::Sequential ? "SEQUENTIAL"
-                                                          : "ADVANCED")
+                 _loopModeName(loopModeSetting)
     );
 
-    const bool sequentialMode = (loopModeSetting == LoopMode::Sequential);
-
-    if (sequentialMode) {
+    if (loopModeSetting == LoopMode::Sequential) {
 
     // ====================== SEQUENTIAL MODE ======================
 
@@ -657,6 +663,152 @@ void Device::StartLoop() {
         }
 
         session.tick();
+    }
+
+    } else if (loopModeSetting == LoopMode::Mixed) {
+
+    // ====================== MIXED MODE ======================
+    //
+    // Serialized pulses inside a short frame:
+    //  - One primary (coolest) wire gets the main pulse.
+    //  - All other allowed wires get a small keep-warm pulse.
+    //  - Frame repeats; preheat stage uses a separate pulse width.
+    // =======================================================
+
+    DEBUG_PRINTLN("[Device] Mode: MIXED");
+
+    // Clamp mixed-mode tunables.
+    int mixPreheatMsI   = CONF ? CONF->GetInt(MIX_PREHEAT_MS_KEY, DEFAULT_MIX_PREHEAT_MS)   : DEFAULT_MIX_PREHEAT_MS;
+    int mixPreheatOnI   = CONF ? CONF->GetInt(MIX_PREHEAT_ON_KEY, DEFAULT_MIX_PREHEAT_ON_MS): DEFAULT_MIX_PREHEAT_ON_MS;
+    int mixKeepI        = CONF ? CONF->GetInt(MIX_KEEP_MS_KEY,    DEFAULT_MIX_KEEP_MS)      : DEFAULT_MIX_KEEP_MS;
+    int mixFrameI       = CONF ? CONF->GetInt(MIX_FRAME_MS_KEY,   DEFAULT_MIX_FRAME_MS)     : DEFAULT_MIX_FRAME_MS;
+
+    if (mixPreheatMsI < 0)    mixPreheatMsI = 0;
+    if (mixPreheatMsI > 600000) mixPreheatMsI = 600000; // cap at 10 minutes
+    if (mixPreheatOnI < 1)    mixPreheatOnI = 1;
+    if (mixPreheatOnI > 1000) mixPreheatOnI = 1000;
+    if (mixKeepI < 0)         mixKeepI = 0;
+    if (mixKeepI > 1000)      mixKeepI = 1000;
+    if (mixFrameI < 10)       mixFrameI = 10;
+    if (mixFrameI > 2000)     mixFrameI = 2000;
+
+    const uint32_t mixPreheatMs  = static_cast<uint32_t>(mixPreheatMsI);
+    const uint32_t mixPreheatOn  = static_cast<uint32_t>(mixPreheatOnI);
+    const uint32_t mixKeepMs     = static_cast<uint32_t>(mixKeepI);
+    const uint32_t mixFrameMs    = static_cast<uint32_t>(mixFrameI);
+
+    const uint32_t preheatDeadline = millis() + mixPreheatMs;
+
+    while (getState() == DeviceState::Running) {
+        if (!is12VPresent()) {
+            handle12VDrop();
+            break;
+        }
+        if (gEvt) {
+            EventBits_t bits = xEventGroupGetBits(gEvt);
+            if (bits & EVT_STOP_REQ) {
+                DEBUG_PRINTLN("[Device] STOP -> exit MIXED loop");
+                xEventGroupClearBits(gEvt, EVT_STOP_REQ);
+                setState(DeviceState::Idle);
+                break;
+            }
+        }
+
+        checkAllowedOutputs();
+
+        const uint16_t allowedMask = _allowedMaskFrom(allowedOutputs);
+        if (allowedMask == 0) {
+            if (!delayWithPowerWatch(100)) {
+                if (!is12VPresent()) handle12VDrop();
+                else {
+                    xEventGroupClearBits(gEvt, EVT_STOP_REQ);
+                    setState(DeviceState::Idle);
+                }
+                break;
+            }
+            session.tick();
+            continue;
+        }
+
+        // Find coolest allowed wire (primary).
+        bool   havePrimary = false;
+        uint8_t primaryIdx = 0;
+        float  coolestT    = 1e9f;
+        for (uint8_t i = 0; i < HeaterManager::kWireCount; ++i) {
+            if (!allowedOutputs[i]) continue;
+            float t = WIRE->getWireEstimatedTemp(i + 1);
+            if (isnan(t)) t = ambientC;
+            if (t < coolestT) {
+                coolestT    = t;
+                primaryIdx  = i;
+                havePrimary = true;
+            }
+        }
+
+        if (!havePrimary) {
+            if (!delayWithPowerWatch(50)) {
+                if (!is12VPresent()) handle12VDrop();
+                else {
+                    xEventGroupClearBits(gEvt, EVT_STOP_REQ);
+                    setState(DeviceState::Idle);
+                }
+                break;
+            }
+            session.tick();
+            continue;
+        }
+
+        // Build pulse order: primary first, then the rest.
+        uint8_t order[HeaterManager::kWireCount];
+        size_t  orderCount = 0;
+        order[orderCount++] = primaryIdx;
+        for (uint8_t i = 0; i < HeaterManager::kWireCount; ++i) {
+            if (i == primaryIdx) continue;
+            if (!allowedOutputs[i]) continue;
+            order[orderCount++] = i;
+        }
+
+        const uint32_t frameStartMs  = millis();
+        const bool     preheatActive = (mixPreheatMs > 0) &&
+                                       ((int32_t)(preheatDeadline - frameStartMs) > 0);
+
+        uint32_t primaryPulseMs = preheatActive ? mixPreheatOn : static_cast<uint32_t>(onTime);
+        if (primaryPulseMs > mixFrameMs) primaryPulseMs = mixFrameMs;
+        uint32_t keepPulseMs = (mixKeepMs > mixFrameMs) ? mixFrameMs : mixKeepMs;
+
+        bool abortMixed = false;
+
+        for (size_t oi = 0; oi < orderCount; ++oi) {
+            const uint8_t idx = order[oi];
+            const uint16_t mask = (1u << idx);
+            const uint32_t pulseMs = (idx == primaryIdx) ? primaryPulseMs : keepPulseMs;
+            if (pulseMs == 0) continue;
+
+            if (!_runMaskedPulse(this, mask, pulseMs, ledFeedback && (idx == primaryIdx))) {
+                if (!is12VPresent()) handle12VDrop();
+                else setState(DeviceState::Idle);
+                abortMixed = true;
+                break;
+            }
+
+            session.tick();
+        }
+
+        if (abortMixed) break;
+
+        // Hold remaining frame time to limit average power and let cooling model update.
+        const uint32_t elapsed = millis() - frameStartMs;
+        if (elapsed < mixFrameMs) {
+            if (!delayWithPowerWatch(mixFrameMs - elapsed)) {
+                if (!is12VPresent()) handle12VDrop();
+                else {
+                    xEventGroupClearBits(gEvt, EVT_STOP_REQ);
+                    setState(DeviceState::Idle);
+                }
+                break;
+            }
+            session.tick();
+        }
     }
 
     } else {

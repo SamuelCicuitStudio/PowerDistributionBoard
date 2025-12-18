@@ -39,6 +39,18 @@
 #define TEMP_SENSOR_UPDATE_INTERVAL_MS 1000UL
 #endif
 
+#ifndef TEMP_SENSOR_VALID_MIN_C
+#define TEMP_SENSOR_VALID_MIN_C (-55.0f)
+#endif
+
+#ifndef TEMP_SENSOR_VALID_MAX_C
+#define TEMP_SENSOR_VALID_MAX_C 128.0f
+#endif
+
+#ifndef TEMP_SENSOR_BAD_READ_RESTART_THRESHOLD
+#define TEMP_SENSOR_BAD_READ_RESTART_THRESHOLD 2
+#endif
+
 enum class TempRole : uint8_t { Unknown=0, Board0, Board1, Heatsink };
 
 class TempSensor {
@@ -81,6 +93,14 @@ private:
     // Cached readings
     float lastTempsC[MAX_TEMP_SENSORS] = {0};
     bool  lastValid[MAX_TEMP_SENSORS]  = {false};
+    uint8_t badReadStreak[MAX_TEMP_SENSORS] = {0};
+
+    float lastBoard0C = NAN;
+    float lastBoard1C = NAN;
+    float lastHeatsinkC = NAN;
+    bool  lastBoard0Valid = false;
+    bool  lastBoard1Valid = false;
+    bool  lastHeatsinkValid = false;
 
     // OneWire scratch
     uint8_t scratchpad[9];
@@ -106,6 +126,8 @@ private:
 
     void discoverSensors();
     void updateAllTemperaturesBlocking();
+    void restartBus();
+    bool isTempValid(float tempC) const;
 };
 
 #endif

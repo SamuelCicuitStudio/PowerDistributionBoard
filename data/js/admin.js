@@ -90,27 +90,67 @@
     idleCurrentA:
       "Baseline current when heaters are OFF (A). Used by virtual temperature estimation.",
     wireTauSec:
-      "Virtual wire thermal inertia tau (seconds). Higher = slower virtual temperature response.",
+      "Wire thermal time constant tau (seconds). Higher = slower temperature response.",
+    wireKLoss:
+      "Heat loss coefficient k (W/K). Higher = faster cooling toward ambient.",
+    wireThermalC:
+      "Thermal mass C (J/K). Higher = slower temperature rise per watt.",
+    wireKp: "Wire PI proportional gain (Kp).",
+    wireKi: "Wire PI integral gain (Ki).",
+    floorKp: "Floor PI proportional gain (Kp).",
+    floorKi: "Floor PI integral gain (Ki).",
+    ntcBeta: "NTC beta constant (B value).",
+    ntcR0: "NTC resistance at the reference temperature (Ohms).",
+    ntcFixedRes: "Fixed divider resistor value (Ohms).",
+    ntcMinC: "Minimum valid NTC temperature (degC).",
+    ntcMaxC: "Maximum valid NTC temperature (degC).",
+    ntcSamples: "ADC samples per NTC update (1..64).",
+    ntcGateIndex: "Wire index physically tied to the NTC sensor.",
+    ntcPressMv: "Button press threshold (mV) for the NTC analog input.",
+    ntcReleaseMv: "Button release threshold (mV) for the NTC analog input.",
+    ntcDebounceMs: "Button debounce time (ms) for the NTC analog input.",
+    wireTestTargetC: "Target wire temperature for the NTC-attached wire test.",
+    wireTestWireIndex: "Wire index to drive during the wire test (blank = NTC gate).",
+    wireTestStartBtn: "Start PI-controlled wire test using the NTC wire.",
+    wireTestStopBtn: "Stop the wire test immediately.",
+    ntcCalRef: "Reference temperature for NTC calibration (blank = use heatsink).",
+    ntcCalibrateBtn: "Calibrate NTC using the reference (or heatsink if blank).",
 
     // Loop timing
     onTime: "Pulse ON duration (ms). Used in manual timing mode.",
     offTime: "Pulse OFF duration (ms). Used in manual timing mode.",
     loopModeSelect:
-      "Loop mode. Advanced = grouped outputs; Sequential = one output at a time.",
+      "Loop mode. Advanced = grouped outputs; Sequential = one at a time; Mixed = sequential with preheat + keep-warm pulses.",
+    mixPreheatMs:
+      "Total preheat duration for mixed mode (all allowed wires get pulses).",
+    mixPreheatOnMs:
+      "Primary wire pulse length during mixed-mode preheat frames.",
+    mixKeepMs:
+      "Keep-warm pulse for non-primary wires inside each mixed-mode frame.",
+    mixFrameMs:
+      "Frame period that contains all serialized mixed-mode pulses.",
     timingModeSelect:
       "Timing UI mode. Normal uses Hot/Medium/Gentle presets; Advanced exposes manual Ton/Toff.",
     timingProfileSelect:
       "Preset heat profile (Hot/Medium/Gentle). Updates Ton/Toff automatically.",
     timingResolved: "Read-only preview of the currently resolved Ton/Toff.",
 
-    // Cooling & nichrome
-    coolingAirToggle: "Cooling profile. ON = air/fast, OFF = buried/slow.",
-    coolBuriedScale:
-      "Cooling scale for buried profile. Higher = stronger cooling in the model.",
-    coolKCold: "Base cooling gain (kCold) for the thermal model.",
-    coolDropMaxC:
-      "Maximum cooling drop per integration step (degC). Limits sudden cooling.",
-    wireOhmPerM: "Nichrome resistivity (Ohms per meter).",
+    // Calibration + nichrome
+    calibrationBtn: "Open calibration tools and live temperature trace.",
+    startNtcCalibBtn: "Start NTC calibration recording.",
+    startModelCalibBtn: "Start temperature model calibration recording.",
+    stopCalibBtn: "Stop recording and save calibration data.",
+    calibLatestBtn: "Jump to the most recent part of the chart.",
+    calibPauseBtn: "Pause/resume chart updates so you can inspect history.",
+    calibHistoryBtn: "Load and view the full calibration history buffer.",
+      calibClearBtn: "Clear calibration buffer and saved data.",
+      calibrationInfoBtn: "Show the calibration help overlay.",
+      wireOhmPerM: "Nichrome resistivity (Ohms per meter).",
+      floorThicknessMm: "Floor/cover thickness above the wire (20-50 mm).",
+      floorMaterial: "Floor material selection (wood, epoxy, concrete, slate, marble, granite).",
+      floorMaxC: "Max allowed floor temperature (C, capped at 35).",
+      nichromeFinalTempC:
+      "Target final nichrome temperature for the current installation (degC).",
     rTarget: "Target resistance used by the selector/planner (Ohms).",
 
     // Admin settings
@@ -280,6 +320,25 @@
       el.value = "";
     } else {
       el.value = val;
+    }
+  }
+
+  function floorMaterialFromCode(code) {
+    switch (code) {
+      case 0:
+        return "wood";
+      case 1:
+        return "epoxy";
+      case 2:
+        return "concrete";
+      case 3:
+        return "slate";
+      case 4:
+        return "marble";
+      case 5:
+        return "granite";
+      default:
+        return "wood";
     }
   }
 
@@ -895,6 +954,11 @@
       medium: { onMs: 10, offMs: 15 },
       gentle: { onMs: 10, offMs: 75 },
     },
+    mixed: {
+      hot: { onMs: 10, offMs: 5 },
+      medium: { onMs: 10, offMs: 20 },
+      gentle: { onMs: 10, offMs: 80 },
+    },
     advanced: {
       hot: { onMs: 10, offMs: 15 },
       medium: { onMs: 10, offMs: 45 },
@@ -918,7 +982,7 @@
     if (!Number.isFinite(on) || !Number.isFinite(off)) return null;
     if (on !== 10) return null;
 
-    if (loopMode === "sequential") {
+    if (loopMode === "sequential" || loopMode === "mixed") {
       if (off <= 5) return "hot";
       if (off <= 20) return "medium";
       return "gentle";
@@ -943,6 +1007,14 @@
     if (offField) offField.style.display = manual ? "" : "none";
     if (profileField) profileField.style.display = manual ? "none" : "";
     if (resolvedField) resolvedField.style.display = manual ? "none" : "";
+  }
+
+  function setMixedVisibility() {
+    const isMixed = getLoopMode() === "mixed";
+    const nodes = document.querySelectorAll(".mixed-only");
+    nodes.forEach((el) => {
+      el.style.display = isMixed ? "" : "none";
+    });
   }
 
   function renderTimingResolved() {
@@ -1020,6 +1092,7 @@
 
     if (loopModeSelect) {
       loopModeSelect.addEventListener("change", () => {
+        setMixedVisibility();
         if (getTimingMode() === "preset") {
           applyTimingPreset();
         } else {
@@ -1030,6 +1103,7 @@
 
     // Initial visibility (default: preset)
     setTimingVisibility();
+    setMixedVisibility();
     renderTimingResolved();
   }
 
@@ -1132,6 +1206,99 @@
       cmds.push(["set", "wireTauSec", wireTauSec]);
     }
 
+    const wireKLoss = getFloat("wireKLoss");
+    if (
+      wireKLoss !== undefined &&
+      !approxEqual(wireKLoss, cur.wireKLoss, 0.001)
+    ) {
+      cmds.push(["set", "wireKLoss", wireKLoss]);
+    }
+
+    const wireThermalC = getFloat("wireThermalC");
+    if (
+      wireThermalC !== undefined &&
+      !approxEqual(wireThermalC, cur.wireThermalC, 0.01)
+    ) {
+      cmds.push(["set", "wireThermalC", wireThermalC]);
+    }
+
+    const wireKp = getFloat("wireKp");
+    if (wireKp !== undefined && !approxEqual(wireKp, cur.wireKp, 0.001)) {
+      cmds.push(["set", "wireKp", wireKp]);
+    }
+
+    const wireKi = getFloat("wireKi");
+    if (wireKi !== undefined && !approxEqual(wireKi, cur.wireKi, 0.001)) {
+      cmds.push(["set", "wireKi", wireKi]);
+    }
+
+    const floorKp = getFloat("floorKp");
+    if (floorKp !== undefined && !approxEqual(floorKp, cur.floorKp, 0.001)) {
+      cmds.push(["set", "floorKp", floorKp]);
+    }
+
+    const floorKi = getFloat("floorKi");
+    if (floorKi !== undefined && !approxEqual(floorKi, cur.floorKi, 0.001)) {
+      cmds.push(["set", "floorKi", floorKi]);
+    }
+
+    // NTC / analog input settings
+    const ntcBeta = getFloat("ntcBeta");
+    if (ntcBeta !== undefined && !approxEqual(ntcBeta, cur.ntcBeta, 1)) {
+      cmds.push(["set", "ntcBeta", ntcBeta]);
+    }
+
+    const ntcR0 = getFloat("ntcR0");
+    if (ntcR0 !== undefined && !approxEqual(ntcR0, cur.ntcR0, 1)) {
+      cmds.push(["set", "ntcR0", ntcR0]);
+    }
+
+    const ntcFixedRes = getFloat("ntcFixedRes");
+    if (
+      ntcFixedRes !== undefined &&
+      !approxEqual(ntcFixedRes, cur.ntcFixedRes, 1)
+    ) {
+      cmds.push(["set", "ntcFixedRes", ntcFixedRes]);
+    }
+
+    const ntcMinC = getFloat("ntcMinC");
+    if (ntcMinC !== undefined && !approxEqual(ntcMinC, cur.ntcMinC, 0.1)) {
+      cmds.push(["set", "ntcMinC", ntcMinC]);
+    }
+
+    const ntcMaxC = getFloat("ntcMaxC");
+    if (ntcMaxC !== undefined && !approxEqual(ntcMaxC, cur.ntcMaxC, 0.1)) {
+      cmds.push(["set", "ntcMaxC", ntcMaxC]);
+    }
+
+    const ntcSamples = getInt("ntcSamples");
+    if (ntcSamples !== undefined && ntcSamples !== cur.ntcSamples) {
+      cmds.push(["set", "ntcSamples", ntcSamples]);
+    }
+
+    const ntcGateIndex = getInt("ntcGateIndex");
+    if (ntcGateIndex !== undefined && ntcGateIndex !== cur.ntcGateIndex) {
+      cmds.push(["set", "ntcGateIndex", ntcGateIndex]);
+    }
+
+    const ntcPressMv = getFloat("ntcPressMv");
+    if (ntcPressMv !== undefined && !approxEqual(ntcPressMv, cur.ntcPressMv, 1)) {
+      cmds.push(["set", "ntcPressMv", ntcPressMv]);
+    }
+
+    const ntcReleaseMv = getFloat("ntcReleaseMv");
+    if (
+      ntcReleaseMv !== undefined &&
+      !approxEqual(ntcReleaseMv, cur.ntcReleaseMv, 1)
+    ) {
+      cmds.push(["set", "ntcReleaseMv", ntcReleaseMv]);
+    }
+
+    const ntcDebounceMs = getInt("ntcDebounceMs");
+    if (ntcDebounceMs !== undefined && ntcDebounceMs !== cur.ntcDebounceMs) {
+      cmds.push(["set", "ntcDebounceMs", ntcDebounceMs]);
+    }
+
     const onTime = getInt("onTime");
     if (onTime !== undefined && onTime !== cur.onTime) {
       cmds.push(["set", "onTime", onTime]);
@@ -1142,41 +1309,38 @@
       cmds.push(["set", "offTime", offTime]);
     }
 
-    const coolingToggle = document.getElementById("coolingAirToggle");
-    if (coolingToggle) {
-      const val = !!coolingToggle.checked;
-      if (val !== cur.coolingAir) {
-        cmds.push(["set", "coolingAir", val]);
-      }
-    }
-
-    const coolBuried = getFloat("coolBuriedScale");
-    if (
-      coolBuried !== undefined &&
-      !approxEqual(coolBuried, cur.coolBuriedScale, 0.001)
-    ) {
-      cmds.push(["set", "coolBuriedScale", coolBuried]);
-    }
-
-    const coolK = getFloat("coolKCold");
-    if (coolK !== undefined && !approxEqual(coolK, cur.coolKCold, 0.0001)) {
-      cmds.push(["set", "coolKCold", coolK]);
-    }
-
-    const coolDrop = getFloat("coolDropMaxC");
-    if (
-      coolDrop !== undefined &&
-      !approxEqual(coolDrop, cur.coolDropMaxC, 0.001)
-    ) {
-      cmds.push(["set", "coolDropMaxC", coolDrop]);
-    }
-
     const loopModeSelect = document.getElementById("loopModeSelect");
     if (loopModeSelect) {
       const modeVal = loopModeSelect.value || "advanced";
       if (modeVal !== cur.loopMode) {
         cmds.push(["set", "loopMode", modeVal]);
       }
+    }
+
+    const mixPreheatMs = getInt("mixPreheatMs");
+    if (
+      mixPreheatMs !== undefined &&
+      mixPreheatMs !== cur.mixPreheatMs
+    ) {
+      cmds.push(["set", "mixPreheatMs", mixPreheatMs]);
+    }
+
+    const mixPreheatOnMs = getInt("mixPreheatOnMs");
+    if (
+      mixPreheatOnMs !== undefined &&
+      mixPreheatOnMs !== cur.mixPreheatOnMs
+    ) {
+      cmds.push(["set", "mixPreheatOnMs", mixPreheatOnMs]);
+    }
+
+    const mixKeepMs = getInt("mixKeepMs");
+    if (mixKeepMs !== undefined && mixKeepMs !== cur.mixKeepMs) {
+      cmds.push(["set", "mixKeepMs", mixKeepMs]);
+    }
+
+    const mixFrameMs = getInt("mixFrameMs");
+    if (mixFrameMs !== undefined && mixFrameMs !== cur.mixFrameMs) {
+      cmds.push(["set", "mixFrameMs", mixFrameMs]);
     }
 
     const timingModeSelect = document.getElementById("timingModeSelect");
@@ -1227,6 +1391,39 @@
       cmds.push(["set", "wireOhmPerM", wireOhmPerM]);
     }
 
+    const floorThicknessMm = getFloat("floorThicknessMm");
+    if (
+      floorThicknessMm !== undefined &&
+      !approxEqual(floorThicknessMm, cur.floorThicknessMm, 0.1)
+    ) {
+      cmds.push(["set", "floorThicknessMm", floorThicknessMm]);
+    }
+
+    const floorMaterialSelect = document.getElementById("floorMaterial");
+    if (floorMaterialSelect) {
+      const floorMaterial = floorMaterialSelect.value || "wood";
+      const curFloorMaterial =
+        cur.floorMaterial !== undefined
+          ? cur.floorMaterial
+          : floorMaterialFromCode(cur.floorMaterialCode);
+      if (floorMaterial !== curFloorMaterial) {
+        cmds.push(["set", "floorMaterial", floorMaterial]);
+      }
+    }
+
+    const floorMaxC = getFloat("floorMaxC");
+    if (floorMaxC !== undefined && !approxEqual(floorMaxC, cur.floorMaxC, 0.1)) {
+      cmds.push(["set", "floorMaxC", floorMaxC]);
+    }
+
+    const nichromeFinalTempC = getFloat("nichromeFinalTempC");
+    if (
+      nichromeFinalTempC !== undefined &&
+      !approxEqual(nichromeFinalTempC, cur.nichromeFinalTempC, 0.1)
+    ) {
+      cmds.push(["set", "nichromeFinalTempC", nichromeFinalTempC]);
+    }
+
     if (!cmds.length) {
       return;
     }
@@ -1254,14 +1451,33 @@
     setField("tempTripC", data.tempTripC);
     setField("idleCurrentA", data.idleCurrentA);
     setField("wireTauSec", data.wireTauSec);
+    setField("wireKLoss", data.wireKLoss);
+    setField("wireThermalC", data.wireThermalC);
+    setField("wireKp", data.wireKp);
+    setField("wireKi", data.wireKi);
+    setField("floorKp", data.floorKp);
+    setField("floorKi", data.floorKi);
+    setField("ntcBeta", data.ntcBeta);
+    setField("ntcR0", data.ntcR0);
+    setField("ntcFixedRes", data.ntcFixedRes);
+    setField("ntcMinC", data.ntcMinC);
+    setField("ntcMaxC", data.ntcMaxC);
+    setField("ntcSamples", data.ntcSamples);
+    setField("ntcGateIndex", data.ntcGateIndex);
+    setField("ntcPressMv", data.ntcPressMv);
+    setField("ntcReleaseMv", data.ntcReleaseMv);
+    setField("ntcDebounceMs", data.ntcDebounceMs);
     setField("onTime", data.onTime);
     setField("offTime", data.offTime);
-    const coolingToggle = document.getElementById("coolingAirToggle");
-    if (coolingToggle) coolingToggle.checked = !!data.coolingAir;
+    setField("mixPreheatMs", data.mixPreheatMs);
+    setField("mixPreheatOnMs", data.mixPreheatOnMs);
+    setField("mixKeepMs", data.mixKeepMs);
+    setField("mixFrameMs", data.mixFrameMs);
     const loopModeSelect = document.getElementById("loopModeSelect");
     if (loopModeSelect && data.loopMode) {
       loopModeSelect.value = data.loopMode;
     }
+    setMixedVisibility();
     const timingModeSelect = document.getElementById("timingModeSelect");
     if (timingModeSelect && data.timingMode) {
       timingModeSelect.value = data.timingMode;
@@ -1280,17 +1496,24 @@
     if (data.wireGauge !== undefined) {
       setField("wireGauge", data.wireGauge);
     }
-    if (data.coolBuriedScale !== undefined) {
-      setField("coolBuriedScale", data.coolBuriedScale);
-    }
-    if (data.coolKCold !== undefined) {
-      setField("coolKCold", data.coolKCold);
-    }
-    if (data.coolDropMaxC !== undefined) {
-      setField("coolDropMaxC", data.coolDropMaxC);
-    }
     if (data.wireOhmPerM !== undefined) {
       setField("wireOhmPerM", data.wireOhmPerM);
+    }
+    if (data.floorThicknessMm !== undefined) {
+      setField("floorThicknessMm", data.floorThicknessMm);
+    }
+    if (data.floorMaterial !== undefined) {
+      setField("floorMaterial", data.floorMaterial);
+    } else if (data.floorMaterialCode !== undefined) {
+      setField("floorMaterial", floorMaterialFromCode(data.floorMaterialCode));
+    } else {
+      setField("floorMaterial", "wood");
+    }
+    if (data.floorMaxC !== undefined) {
+      setField("floorMaxC", data.floorMaxC);
+    }
+    if (data.nichromeFinalTempC !== undefined) {
+      setField("nichromeFinalTempC", data.nichromeFinalTempC);
     }
 
     const wr = data.wireRes || {};
@@ -1359,20 +1582,42 @@
       setField("tempTripC", data.tempTripC);
       setField("idleCurrentA", data.idleCurrentA);
       setField("wireTauSec", data.wireTauSec);
+      setField("wireKLoss", data.wireKLoss);
+      setField("wireThermalC", data.wireThermalC);
+      setField("wireKp", data.wireKp);
+      setField("wireKi", data.wireKi);
+      setField("floorKp", data.floorKp);
+      setField("floorKi", data.floorKi);
+      setField("ntcBeta", data.ntcBeta);
+      setField("ntcR0", data.ntcR0);
+      setField("ntcFixedRes", data.ntcFixedRes);
+      setField("ntcMinC", data.ntcMinC);
+      setField("ntcMaxC", data.ntcMaxC);
+      setField("ntcSamples", data.ntcSamples);
+      setField("ntcGateIndex", data.ntcGateIndex);
+      setField("ntcPressMv", data.ntcPressMv);
+      setField("ntcReleaseMv", data.ntcReleaseMv);
+      setField("ntcDebounceMs", data.ntcDebounceMs);
       setField("onTime", data.onTime);
       setField("offTime", data.offTime);
+      setField("mixPreheatMs", data.mixPreheatMs);
+      setField("mixPreheatOnMs", data.mixPreheatOnMs);
+      setField("mixKeepMs", data.mixKeepMs);
+      setField("mixFrameMs", data.mixFrameMs);
       if (data.deviceId !== undefined) setField("userDeviceId", data.deviceId);
+      // Always clear credential fields on load to avoid autofill showing deviceId.
+      setField("userCurrentPassword", "");
+      setField("userNewPassword", "");
       if (data.wifiSSID !== undefined) setField("wifiSSID", data.wifiSSID);
       const fanSlider = document.getElementById("fanSlider");
       if (fanSlider && typeof data.fanSpeed === "number") {
         fanSlider.value = data.fanSpeed;
       }
-      const coolingToggle = document.getElementById("coolingAirToggle");
-      if (coolingToggle) coolingToggle.checked = !!data.coolingAir;
       const loopModeSelect = document.getElementById("loopModeSelect");
       if (loopModeSelect && data.loopMode) {
         loopModeSelect.value = data.loopMode;
       }
+      setMixedVisibility();
       const timingModeSelect = document.getElementById("timingModeSelect");
       if (timingModeSelect && data.timingMode) {
         timingModeSelect.value = data.timingMode;
@@ -1391,17 +1636,24 @@
       if (data.wireGauge !== undefined) {
         setField("wireGauge", data.wireGauge);
       }
-      if (data.coolBuriedScale !== undefined) {
-        setField("coolBuriedScale", data.coolBuriedScale);
-      }
-      if (data.coolKCold !== undefined) {
-        setField("coolKCold", data.coolKCold);
-      }
-      if (data.coolDropMaxC !== undefined) {
-        setField("coolDropMaxC", data.coolDropMaxC);
-      }
       if (data.wireOhmPerM !== undefined) {
         setField("wireOhmPerM", data.wireOhmPerM);
+      }
+      if (data.floorThicknessMm !== undefined) {
+        setField("floorThicknessMm", data.floorThicknessMm);
+      }
+      if (data.floorMaterial !== undefined) {
+        setField("floorMaterial", data.floorMaterial);
+      } else if (data.floorMaterialCode !== undefined) {
+        setField("floorMaterial", floorMaterialFromCode(data.floorMaterialCode));
+      } else {
+        setField("floorMaterial", "wood");
+      }
+      if (data.floorMaxC !== undefined) {
+        setField("floorMaxC", data.floorMaxC);
+      }
+      if (data.nichromeFinalTempC !== undefined) {
+        setField("nichromeFinalTempC", data.nichromeFinalTempC);
       }
       if (data.capacitanceF !== undefined) {
         renderCapacitance(parseFloat(data.capacitanceF));
@@ -1861,9 +2113,9 @@
         const id = "temp" + (i + 1) + "Value";
         const t = temps[i];
         if (t === -127 || t === undefined) {
-          updateGauge(id, "Off", "AøC", 150);
+          updateGauge(id, "Off", "\u00B0C", 150);
         } else {
-          updateGauge(id, Number(t), "AøC", 150);
+          updateGauge(id, Number(t), "\u00B0C", 150);
         }
       }
 
@@ -2204,6 +2456,732 @@
     }
   }
 
+  // Calibration modal controls
+  let calibPollTimer = null;
+  let calibSamples = [];
+  let calibViewMode = "live";
+  let calibLastMeta = null;
+  let wireTestPollTimer = null;
+  let calibChartPaused = false;
+  let calibChartDrag = {
+    dragging: false,
+    startX: 0,
+    startScrollLeft: 0,
+  };
+
+  function setCalibText(id, value) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = value;
+  }
+
+  function mountOverlayInsideUiContainer(id) {
+    const el = document.getElementById(id);
+    const stage = document.querySelector(".ui-container");
+    if (!el || !stage) return;
+    if (el.parentElement !== stage) stage.appendChild(el);
+  }
+
+  function mountAllOverlays() {
+    mountOverlayInsideUiContainer("sessionHistoryModal");
+    mountOverlayInsideUiContainer("calibrationModal");
+    const shClose = document.querySelector(
+      "#sessionHistoryModal .session-history-close"
+    );
+    if (shClose) shClose.textContent = "x";
+  }
+
+  function openCalibrationModal() {
+    const m = document.getElementById("calibrationModal");
+    if (!m) return;
+    m.classList.add("show");
+    calibChartPaused = false;
+    const pauseBtn = document.getElementById("calibPauseBtn");
+    if (pauseBtn) pauseBtn.textContent = "Pause";
+    calibViewMode = "live";
+    calibSamples = [];
+    const historyBtn = document.getElementById("calibHistoryBtn");
+    if (historyBtn) historyBtn.textContent = "Load History";
+    setCalibrationInfoVisible(false);
+    initCalibrationChartUi();
+    startCalibrationPoll();
+    startWireTestPoll();
+  }
+
+  function closeCalibrationModal() {
+    const m = document.getElementById("calibrationModal");
+    if (m) m.classList.remove("show");
+    calibChartPaused = false;
+    setCalibrationInfoVisible(false);
+    stopCalibrationPoll();
+    stopWireTestPoll();
+  }
+
+  function bindCalibrationButton() {
+    const btn = document.getElementById("calibrationBtn");
+    if (btn) btn.addEventListener("click", openCalibrationModal);
+
+    const infoBtn = document.getElementById("calibrationInfoBtn");
+    if (infoBtn) {
+      infoBtn.addEventListener("click", toggleCalibrationInfo);
+    }
+    const infoClose = document.getElementById("calibrationInfoCloseBtn");
+    if (infoClose) {
+      infoClose.addEventListener("click", () => setCalibrationInfoVisible(false));
+    }
+    const latestBtn = document.getElementById("calibLatestBtn");
+    if (latestBtn) {
+      latestBtn.addEventListener("click", () => scrollCalibToLatest());
+    }
+    const pauseBtn = document.getElementById("calibPauseBtn");
+    if (pauseBtn) {
+      pauseBtn.addEventListener("click", toggleCalibPause);
+    }
+
+    const startNtc = document.getElementById("startNtcCalibBtn");
+    if (startNtc) {
+      startNtc.addEventListener("click", () => startCalibration("ntc"));
+    }
+
+    const startModel = document.getElementById("startModelCalibBtn");
+    if (startModel) {
+      startModel.addEventListener("click", () => startCalibration("model"));
+    }
+
+    const stopBtn = document.getElementById("stopCalibBtn");
+    if (stopBtn) {
+      stopBtn.addEventListener("click", stopCalibration);
+    }
+
+    const wireStart = document.getElementById("wireTestStartBtn");
+    if (wireStart) {
+      wireStart.addEventListener("click", startWireTest);
+    }
+
+    const wireStop = document.getElementById("wireTestStopBtn");
+    if (wireStop) {
+      wireStop.addEventListener("click", stopWireTest);
+    }
+
+    const ntcCalBtn = document.getElementById("ntcCalibrateBtn");
+    if (ntcCalBtn) {
+      ntcCalBtn.addEventListener("click", ntcCalibrate);
+    }
+
+    const historyBtn = document.getElementById("calibHistoryBtn");
+    if (historyBtn) {
+      historyBtn.addEventListener("click", toggleCalibrationHistory);
+    }
+
+    const clearBtn = document.getElementById("calibClearBtn");
+    if (clearBtn) {
+      clearBtn.addEventListener("click", clearCalibrationData);
+    }
+  }
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      setCalibrationInfoVisible(false);
+    }
+  });
+
+  function scrollCalibToLatest() {
+    const wrap = document.getElementById("calibScrollWrap");
+    if (!wrap) return;
+    wrap.scrollLeft = wrap.scrollWidth;
+  }
+
+  function toggleCalibPause() {
+    calibChartPaused = !calibChartPaused;
+    const pauseBtn = document.getElementById("calibPauseBtn");
+    if (pauseBtn) pauseBtn.textContent = calibChartPaused ? "Resume" : "Pause";
+    if (!calibChartPaused) {
+      // Catch up immediately after resuming.
+      pollCalibrationOnce();
+    }
+  }
+
+  function setCalibrationInfoVisible(show) {
+    const pop = document.getElementById("calibrationInfoPopover");
+    if (!pop) return;
+    if (show) pop.classList.add("show");
+    else pop.classList.remove("show");
+    pop.setAttribute("aria-hidden", show ? "false" : "true");
+  }
+
+  function toggleCalibrationInfo() {
+    const pop = document.getElementById("calibrationInfoPopover");
+    if (!pop) return;
+    const show = !pop.classList.contains("show");
+    setCalibrationInfoVisible(show);
+  }
+
+  async function startCalibration(mode) {
+    const payload = {
+      mode,
+      interval_ms: 500,
+      max_samples: 1200,
+    };
+
+    try {
+      const res = await fetch("/calib_start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        console.error("Calibration start failed:", res.status);
+      }
+      calibViewMode = "live";
+      const historyBtn = document.getElementById("calibHistoryBtn");
+      if (historyBtn) historyBtn.textContent = "Load History";
+      await pollCalibrationOnce();
+    } catch (err) {
+      console.error("Calibration start error:", err);
+    }
+  }
+
+  async function stopCalibration() {
+    try {
+      const res = await fetch("/calib_stop", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+      if (!res.ok) {
+        console.error("Calibration stop failed:", res.status);
+      }
+      await pollCalibrationOnce();
+    } catch (err) {
+      console.error("Calibration stop error:", err);
+    }
+  }
+
+  async function startWireTest() {
+    const target = parseFloat(
+      (document.getElementById("wireTestTargetC") || {}).value
+    );
+    const wireIdx = parseInt(
+      (document.getElementById("wireTestWireIndex") || {}).value,
+      10
+    );
+
+    if (!isFinite(target) || target <= 0) {
+      openAlert("Wire Test", "Enter a valid target temperature.", "warning");
+      return;
+    }
+
+    const payload = { target_c: target };
+    if (isFinite(wireIdx) && wireIdx > 0) {
+      payload.wire_index = wireIdx;
+    }
+
+    try {
+      const res = await fetch("/wire_test_start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        openAlert("Wire Test", "Start failed.", "danger");
+      } else {
+        openAlert("Wire Test", "Started.", "success");
+      }
+      await pollWireTestOnce();
+    } catch (err) {
+      console.error("Wire test start error:", err);
+    }
+  }
+
+  async function stopWireTest() {
+    try {
+      await fetch("/wire_test_stop", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+      await pollWireTestOnce();
+    } catch (err) {
+      console.error("Wire test stop error:", err);
+    }
+  }
+
+  async function clearCalibrationData() {
+    try {
+      const res = await fetch("/calib_clear", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+      if (!res.ok) {
+        console.error("Calibration clear failed:", res.status);
+      }
+      calibSamples = [];
+      calibViewMode = "live";
+      const historyBtn = document.getElementById("calibHistoryBtn");
+      if (historyBtn) historyBtn.textContent = "Load History";
+      renderCalibrationChart();
+      await pollCalibrationOnce();
+    } catch (err) {
+      console.error("Calibration clear error:", err);
+    }
+  }
+
+  async function pollWireTestOnce() {
+    try {
+      const res = await fetch("/wire_test_status", { cache: "no-store" });
+      if (!res.ok) return;
+      const data = await res.json();
+
+      const running = !!data.running;
+      const stateEl = document.getElementById("wireTestState");
+      if (stateEl) stateEl.textContent = running ? "Running" : "Idle";
+
+      const tempEl = document.getElementById("wireTestTemp");
+      if (tempEl) {
+        tempEl.textContent = isFinite(data.temp_c)
+          ? `${data.temp_c.toFixed(1)} C`
+          : "--";
+      }
+
+      const dutyEl = document.getElementById("wireTestDuty");
+      if (dutyEl) {
+        dutyEl.textContent = `${Math.round((data.duty || 0) * 100)}%`;
+      }
+
+      const onOffEl = document.getElementById("wireTestOnOff");
+      if (onOffEl) {
+        if (data.on_ms != null && data.off_ms != null) {
+          onOffEl.textContent = `${data.on_ms} / ${data.off_ms} ms`;
+        } else {
+          onOffEl.textContent = "--";
+        }
+      }
+
+      const tgtInput = document.getElementById("wireTestTargetC");
+      if (tgtInput && isFinite(data.target_c)) {
+        tgtInput.value = data.target_c;
+      }
+      const wireInput = document.getElementById("wireTestWireIndex");
+      if (wireInput && data.wire_index) {
+        wireInput.value = data.wire_index;
+      }
+
+      const startBtn = document.getElementById("wireTestStartBtn");
+      const stopBtn = document.getElementById("wireTestStopBtn");
+      if (startBtn) startBtn.disabled = running;
+      if (stopBtn) stopBtn.disabled = !running;
+    } catch (err) {
+      console.warn("Wire test status error:", err);
+    }
+  }
+
+  function startWireTestPoll() {
+    stopWireTestPoll();
+    pollWireTestOnce();
+    wireTestPollTimer = setInterval(pollWireTestOnce, 1000);
+  }
+
+  function stopWireTestPoll() {
+    if (wireTestPollTimer) {
+      clearInterval(wireTestPollTimer);
+      wireTestPollTimer = null;
+    }
+  }
+
+  async function ntcCalibrate() {
+    const refVal = (document.getElementById("ntcCalRef") || {}).value;
+    const payload = {};
+    if (refVal != null && String(refVal).trim().length > 0) {
+      const ref = parseFloat(refVal);
+      if (!isFinite(ref)) {
+        openAlert("NTC Calibrate", "Enter a valid reference temperature.", "warning");
+        return;
+      }
+      payload.ref_temp_c = ref;
+    }
+
+    const statusEl = document.getElementById("ntcCalibrateStatus");
+    if (statusEl) statusEl.textContent = "Running...";
+
+    try {
+      const res = await fetch("/ntc_calibrate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = res.ok ? await res.json() : {};
+      if (!res.ok || data.error) {
+        openAlert("NTC Calibrate", data.error || "Failed.", "danger");
+        if (statusEl) statusEl.textContent = "Failed";
+      } else {
+        openAlert("NTC Calibrate", "Calibration done.", "success");
+        if (statusEl) {
+          statusEl.textContent = `R0=${(data.r0_ohm || 0).toFixed(1)} ohm @ ${data.ref_c} C`;
+        }
+      }
+    } catch (err) {
+      console.error("NTC calibrate error:", err);
+      if (statusEl) statusEl.textContent = "Failed";
+    }
+  }
+
+  async function fetchCalibrationStatus() {
+    try {
+      const res = await fetch("/calib_status", { cache: "no-store" });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch (err) {
+      console.warn("Calibration status error:", err);
+      return null;
+    }
+  }
+
+  async function fetchCalibrationPage(offset, count) {
+    const url = `/calib_data?offset=${offset}&count=${count}`;
+    const res = await fetch(url, { cache: "no-store" });
+    if (!res.ok) return null;
+    return await res.json();
+  }
+
+  async function loadCalibrationHistory() {
+    const meta = calibLastMeta || (await fetchCalibrationStatus());
+    if (!meta || !meta.count) {
+      calibSamples = [];
+      renderCalibrationChart();
+      return;
+    }
+
+    const total = meta.count || 0;
+    const all = [];
+    let offset = 0;
+    const pageSize = 200;
+
+    while (offset < total) {
+      const page = await fetchCalibrationPage(offset, pageSize);
+      if (!page || !page.samples) break;
+      all.push(...page.samples);
+      offset += page.samples.length;
+      if (page.samples.length < pageSize) break;
+    }
+
+    calibSamples = all;
+    renderCalibrationChart();
+    scrollCalibToLatest();
+
+    const last = [...calibSamples].reverse().find((s) => isFinite(s.temp_c));
+    if (last && isFinite(last.temp_c)) {
+      setCalibText("calibTempText", `${last.temp_c.toFixed(1)} C`);
+    }
+  }
+
+  async function toggleCalibrationHistory() {
+    const btn = document.getElementById("calibHistoryBtn");
+    if (calibViewMode === "history") {
+      calibViewMode = "live";
+      if (btn) btn.textContent = "Load History";
+      await pollCalibrationOnce();
+      return;
+    }
+
+    calibViewMode = "history";
+    if (btn) btn.textContent = "Resume Live";
+    await loadCalibrationHistory();
+  }
+
+  async function pollCalibrationOnce() {
+    const meta = await fetchCalibrationStatus();
+    if (!meta) return;
+
+    calibLastMeta = meta;
+    setCalibText("calibStatusText", meta.running ? "Running" : "Idle");
+    setCalibText("calibModeText", meta.mode || "--");
+    setCalibText("calibCountText", meta.count != null ? String(meta.count) : "0");
+    setCalibText(
+      "calibIntervalText",
+      meta.interval_ms ? `${meta.interval_ms} ms` : "--"
+    );
+
+    if (calibViewMode === "history") return;
+    if (calibChartPaused) return;
+
+    const count = meta.count || 0;
+    if (!count) {
+      calibSamples = [];
+      renderCalibrationChart();
+      setCalibText("calibTempText", "--");
+      return;
+    }
+
+    const page = await fetchCalibrationPage(Math.max(0, count - 200), 200);
+    if (page && page.samples) {
+      calibSamples = page.samples;
+      renderCalibrationChart();
+
+      const last = [...calibSamples].reverse().find((s) => isFinite(s.temp_c));
+      if (last && isFinite(last.temp_c)) {
+        setCalibText("calibTempText", `${last.temp_c.toFixed(1)} C`);
+      } else {
+        setCalibText("calibTempText", "--");
+      }
+    }
+  }
+
+  function startCalibrationPoll() {
+    stopCalibrationPoll();
+    pollCalibrationOnce();
+    calibPollTimer = setInterval(pollCalibrationOnce, 1000);
+  }
+
+  function stopCalibrationPoll() {
+    if (calibPollTimer) {
+      clearInterval(calibPollTimer);
+      calibPollTimer = null;
+    }
+  }
+
+  function initCalibrationChartUi() {
+    drawCalibYAxis();
+    bindCalibChartDrag();
+  }
+
+  function clamp(v, lo, hi) {
+    return Math.max(lo, Math.min(hi, v));
+  }
+
+  function fmtUptime(ms) {
+    const total = Math.max(0, Math.floor((ms || 0) / 1000));
+    const hh = Math.floor(total / 3600);
+    const mm = Math.floor((total % 3600) / 60);
+    const ss = total % 60;
+    if (hh > 0) return `${hh}:${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
+    return `${mm}:${String(ss).padStart(2, "0")}`;
+  }
+
+  const CALIB_T_MIN = 0;
+  const CALIB_T_MAX = 150;
+  const CALIB_Y_TICK_STEP = 10;
+  const CALIB_H = 220;
+  const CALIB_PLOT_PAD_LEFT = 10;
+  const CALIB_Y1 = 18;
+  const CALIB_Y0 = CALIB_H - 46;
+  const CALIB_RIGHT_PAD = 24;
+  const CALIB_DX = 10;
+  const CALIB_TICK_EVERY_SECONDS = 5;
+
+  function yFromTemp(tC) {
+    const t = clamp(Number(tC), CALIB_T_MIN, CALIB_T_MAX);
+    return CALIB_Y0 - ((t - CALIB_T_MIN) * (CALIB_Y0 - CALIB_Y1)) / (CALIB_T_MAX - CALIB_T_MIN);
+  }
+
+  function tag(x, y, text) {
+    const padX = 6;
+    const charW = 7;
+    const w = Math.max(34, String(text).length * charW + padX * 2);
+    const h = 20;
+    return `
+      <g>
+        <rect class="tag" x="${x}" y="${y - h / 2}" width="${w}" height="${h}" rx="9"></rect>
+        <text class="tagText" x="${x + padX}" y="${y + 4}">${text}</text>
+      </g>
+    `;
+  }
+
+  function drawCalibYAxis() {
+    const yAxisSvg = document.getElementById("calibYAxis");
+    if (!yAxisSvg) return;
+
+    const W = 72;
+    yAxisSvg.setAttribute("width", W);
+    yAxisSvg.setAttribute("height", CALIB_H);
+    yAxisSvg.setAttribute("viewBox", `0 0 ${W} ${CALIB_H}`);
+
+    let s = `
+      <line class="axisLine" x1="${W - 1}" y1="${CALIB_Y1}" x2="${W - 1}" y2="${CALIB_Y0}"></line>
+      <text class="label" x="16" y="${(CALIB_Y1 + CALIB_Y0) / 2}" transform="rotate(-90 16 ${(CALIB_Y1 + CALIB_Y0) / 2})">C</text>
+    `;
+
+    for (let t = CALIB_T_MIN; t <= CALIB_T_MAX; t += CALIB_Y_TICK_STEP) {
+      const y = yFromTemp(t);
+      s += `<line class="yTick" x1="${W - 8}" y1="${y}" x2="${W - 1}" y2="${y}"></line>`;
+      s += `<text class="yLabel" x="${W - 12}" y="${y + 4}" text-anchor="end">${t}</text>`;
+    }
+    yAxisSvg.innerHTML = s;
+  }
+
+  function buildCalibGrid(xMax, intervalMs, pointCount) {
+    let s = `<g class="grid">`;
+    for (let t = CALIB_T_MIN; t <= CALIB_T_MAX; t += CALIB_Y_TICK_STEP) {
+      const y = yFromTemp(t);
+      s += `<line class="gridLine" x1="0" y1="${y}" x2="${xMax}" y2="${y}"></line>`;
+    }
+    const vEverySamples = Math.max(1, Math.round(1000 / Math.max(50, intervalMs || 500)));
+    for (let i = 0; i < pointCount; i += vEverySamples) {
+      const x = CALIB_PLOT_PAD_LEFT + i * CALIB_DX;
+      s += `<line x1="${x}" y1="${CALIB_Y1}" x2="${x}" y2="${CALIB_Y0}"></line>`;
+    }
+    s += `</g>`;
+    return s;
+  }
+
+  function buildCalibXAxis(xMax) {
+    return `
+      <line class="xAxis" x1="0" y1="${CALIB_Y0}" x2="${xMax}" y2="${CALIB_Y0}"></line>
+      <text class="label" x="${Math.max(40, xMax / 2 - 20)}" y="${CALIB_H - 10}">Time</text>
+    `;
+  }
+
+  function buildCalibTimeTicks(samples, intervalMs, startMs) {
+    let s = `<g>`;
+    const tickEverySamples = Math.max(
+      1,
+      Math.round((CALIB_TICK_EVERY_SECONDS * 1000) / Math.max(50, intervalMs || 500))
+    );
+    for (let i = 0; i < samples.length; i += tickEverySamples) {
+      const x = CALIB_PLOT_PAD_LEFT + i * CALIB_DX;
+      const tAbs = (startMs || 0) + (samples[i]?.t_ms || 0);
+      const label = fmtUptime(tAbs);
+      s += `<line class="tick" x1="${x}" y1="${CALIB_Y0}" x2="${x}" y2="${CALIB_Y0 + 6}"></line>`;
+      s += `<text class="subtext" x="${x - 18}" y="${CALIB_Y0 + 22}">${label}</text>`;
+    }
+    s += `</g>`;
+    return s;
+  }
+
+  function buildCalibPolyline(samples) {
+    if (samples.length === 0) return "";
+    const pts = samples
+      .map((p, i) => `${CALIB_PLOT_PAD_LEFT + i * CALIB_DX},${yFromTemp(p.temp_c)}`)
+      .join(" ");
+    return `<polyline class="temp-line" points="${pts}"></polyline>`;
+  }
+
+  function buildCalibLatestMarker(samples, xMax, startMs) {
+    if (samples.length === 0) return "";
+    const i = samples.length - 1;
+    const p = samples[i];
+    const x = CALIB_PLOT_PAD_LEFT + i * CALIB_DX;
+    const y = yFromTemp(p.temp_c);
+
+    const timeLabel = fmtUptime((startMs || 0) + (p.t_ms || 0));
+    const tempLabel = `${Number(p.temp_c).toFixed(1)}C`;
+    const timeTagX = clamp(x + 8, 8, xMax - 110);
+
+    return `
+      <g>
+        <line class="crosshair" x1="${x}" y1="${CALIB_Y1}" x2="${x}" y2="${CALIB_Y0}"></line>
+        <line class="crosshair" x1="0" y1="${y}" x2="${xMax}" y2="${y}"></line>
+        <circle class="end-dot" cx="${x}" cy="${y}" r="6"></circle>
+        ${tag(timeTagX, CALIB_Y0 + 26, timeLabel)}
+        ${tag(8, clamp(y, CALIB_Y1 + 12, CALIB_Y0 - 12), tempLabel)}
+      </g>
+    `;
+  }
+
+  function renderCalibrationChart() {
+    const plotSvg = document.getElementById("calibPlot");
+    const scrollWrap = document.getElementById("calibScrollWrap");
+    if (!plotSvg || !scrollWrap) return;
+
+    drawCalibYAxis();
+
+    const samples = (calibSamples || []).filter(
+      (s) => isFinite(s.temp_c) && isFinite(s.t_ms)
+    );
+
+    if (!samples.length) {
+      plotSvg.setAttribute("width", 600);
+      plotSvg.setAttribute("height", CALIB_H);
+      plotSvg.setAttribute("viewBox", `0 0 600 ${CALIB_H}`);
+      plotSvg.innerHTML = `<text class="subtext" x="8" y="18">No calibration data yet.</text>`;
+      const tEl = document.getElementById("calibNowTempPill");
+      const tsEl = document.getElementById("calibNowTimePill");
+      if (tEl) tEl.textContent = "--";
+      if (tsEl) tsEl.textContent = "--:--";
+      return;
+    }
+
+    const intervalMs =
+      (calibLastMeta && calibLastMeta.interval_ms) ||
+      (calibLastMeta && calibLastMeta.intervalMs) ||
+      500;
+    const startMs =
+      (calibLastMeta && (calibLastMeta.start_ms ?? calibLastMeta.startMs)) || 0;
+
+    const xMax =
+      CALIB_PLOT_PAD_LEFT + Math.max(1, samples.length - 1) * CALIB_DX + CALIB_RIGHT_PAD;
+    const nearEnd =
+      scrollWrap.scrollLeft + scrollWrap.clientWidth >= scrollWrap.scrollWidth - 30;
+
+    plotSvg.setAttribute("width", xMax);
+    plotSvg.setAttribute("height", CALIB_H);
+    plotSvg.setAttribute("viewBox", `0 0 ${xMax} ${CALIB_H}`);
+    plotSvg.innerHTML = `
+      ${buildCalibGrid(xMax, intervalMs, samples.length)}
+      ${buildCalibXAxis(xMax)}
+      ${buildCalibTimeTicks(samples, intervalMs, startMs)}
+      <text class="subtext" x="8" y="18">Latest point: dot + dotted guides</text>
+      ${buildCalibPolyline(samples)}
+      ${buildCalibLatestMarker(samples, xMax, startMs)}
+    `;
+
+    const last = samples[samples.length - 1];
+    const tEl = document.getElementById("calibNowTempPill");
+    const tsEl = document.getElementById("calibNowTimePill");
+    if (tEl) tEl.textContent = Number(last.temp_c).toFixed(1);
+    if (tsEl) tsEl.textContent = fmtUptime(startMs + (last.t_ms || 0));
+
+    if (!calibChartPaused && nearEnd) {
+      scrollCalibToLatest();
+    }
+  }
+
+  function bindCalibChartDrag() {
+    const scrollWrap = document.getElementById("calibScrollWrap");
+    if (!scrollWrap || scrollWrap.__dragBound) return;
+    scrollWrap.__dragBound = true;
+
+    const dragStart = (clientX) => {
+      calibChartDrag.dragging = true;
+      scrollWrap.classList.add("dragging");
+      calibChartDrag.startX = clientX;
+      calibChartDrag.startScrollLeft = scrollWrap.scrollLeft;
+    };
+    const dragMove = (clientX) => {
+      if (!calibChartDrag.dragging) return;
+      const dx = clientX - calibChartDrag.startX;
+      scrollWrap.scrollLeft = calibChartDrag.startScrollLeft - dx;
+    };
+    const dragEnd = () => {
+      calibChartDrag.dragging = false;
+      scrollWrap.classList.remove("dragging");
+    };
+
+    scrollWrap.addEventListener("mousedown", (e) => {
+      if (e.button !== 0) return;
+      dragStart(e.clientX);
+    });
+    window.addEventListener("mousemove", (e) => dragMove(e.clientX));
+    window.addEventListener("mouseup", dragEnd);
+
+    scrollWrap.addEventListener(
+      "touchstart",
+      (e) => {
+        if (!e.touches || e.touches.length !== 1) return;
+        dragStart(e.touches[0].clientX);
+      },
+      { passive: true }
+    );
+    scrollWrap.addEventListener(
+      "touchmove",
+      (e) => {
+        if (!e.touches || e.touches.length !== 1) return;
+        dragMove(e.touches[0].clientX);
+      },
+      { passive: true }
+    );
+    scrollWrap.addEventListener("touchend", dragEnd);
+  }
+
   function scheduleLiveInterval() {
     if (monitorPollTimer) clearInterval(monitorPollTimer);
     const ms = lastState === "Running" ? 250 : 1000;
@@ -2318,9 +3296,9 @@
           const id = "temp" + (i + 1) + "Value";
           const t = temps[i];
           if (t === -127 || t === undefined) {
-            updateGauge(id, "Off", "°C", 150);
+            updateGauge(id, "Off", "\u00B0C", 150);
           } else {
-            updateGauge(id, Number(t), "°C", 150);
+            updateGauge(id, Number(t), "\u00B0C", 150);
           }
         }
 
@@ -2382,6 +3360,7 @@
   // ========================================================
 
   document.addEventListener("DOMContentLoaded", () => {
+    mountAllOverlays();
     bindConfirmModal();
 
     renderAllOutputs("manualOutputs", true);
@@ -2399,6 +3378,7 @@
     startHeartbeat(4000);
     loadControls();
     bindSessionHistoryButton();
+    bindCalibrationButton();
     updateSessionStatsUI(null);
     // Disconnect button
     const disconnectBtn = document.getElementById("disconnectBtn");
@@ -2455,5 +3435,7 @@
   window.loadControls = loadControls;
   window.openSessionHistory = openSessionHistory;
   window.closeSessionHistory = closeSessionHistory;
+  window.openCalibrationModal = openCalibrationModal;
+  window.closeCalibrationModal = closeCalibrationModal;
   window.updateSessionStatsUI = updateSessionStatsUI; // for backend to call later
 })();

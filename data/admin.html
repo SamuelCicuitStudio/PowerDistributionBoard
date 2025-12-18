@@ -78,6 +78,22 @@
         --ds-accent: #a855f7;
         background: rgba(168, 85, 247, 0.12);
       }
+      .ds-group-title.ds-ntc {
+        --ds-accent: #22d3ee;
+        background: rgba(34, 211, 238, 0.12);
+      }
+      .ds-group-title.ds-control {
+        --ds-accent: #4d9efc;
+        background: rgba(77, 158, 252, 0.12);
+      }
+      .ds-group-title.ds-floor {
+        --ds-accent: #10b981;
+        background: rgba(16, 185, 129, 0.12);
+      }
+      .ds-group-title.ds-nichrome {
+        --ds-accent: #f97316;
+        background: rgba(249, 115, 22, 0.12);
+      }
       .ds-group-title.ds-loop-timing {
         --ds-accent: #20c997;
         background: rgba(32, 201, 151, 0.12);
@@ -112,6 +128,9 @@
         margin: 0 0 10px;
         font-size: 15px;
       }
+      .mixed-only {
+        display: none;
+      }
       /* Inputs with right-side unit tag */
       .input-with-unit {
         position: relative;
@@ -134,6 +153,14 @@
         display: grid;
         grid-template-columns: repeat(5, minmax(0, 1fr));
         gap: 10px 12px;
+      }
+      .nichrome-meta {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px 12px;
+      }
+      .nichrome-meta .ds-field {
+        min-width: 0;
       }
       .nichrome-grid .field {
         display: flex;
@@ -745,14 +772,21 @@
           <input
             type="password"
             id="userCurrentPassword"
+            autocomplete="current-password"
             placeholder="Current Password"
           />
           <input
             type="password"
             id="userNewPassword"
+            autocomplete="new-password"
             placeholder="New Password"
           />
-          <input type="text" id="userDeviceId" placeholder="New Device ID" />
+          <input
+            type="text"
+            id="userDeviceId"
+            autocomplete="off"
+            placeholder="New Device ID"
+          />
           <div class="user-modal-actions round-actions">
             <div class="round-button save" onclick="saveUserSettings()">
               <img src="icons/ok_tank.png" alt="Save" />
@@ -877,12 +911,7 @@
                 <div class="ds-field">
                   <label for="acFrequency">Sampling Rate</label>
                   <div class="input-with-unit">
-                    <input
-                      type="number"
-                      id="acFrequency"
-                      min="50"
-                      max="500"
-                    />
+                    <input type="number" id="acFrequency" min="50" max="500" />
                     <span class="unit-label">Hz</span>
                   </div>
                 </div>
@@ -903,7 +932,9 @@
                   </div>
                 </div>
 
-                <div class="ds-group-title ds-thermal-safety">Thermal Safety</div>
+                <div class="ds-group-title ds-thermal-safety">
+                  Thermal Safety
+                </div>
 
                 <div class="ds-field">
                   <label for="tempWarnC">Temp Warning</label>
@@ -932,10 +963,136 @@
                 </div>
 
                 <div class="ds-field">
-                  <label for="wireTauSec">Wire Tau (Inertia)</label>
+                  <label for="wireTauSec">Wire Tau (time constant)</label>
                   <div class="input-with-unit">
                     <input type="number" id="wireTauSec" step="0.01" />
                     <span class="unit-label">s</span>
+                  </div>
+                </div>
+
+                <div class="ds-field">
+                  <label for="wireKLoss">Heat Loss k</label>
+                  <div class="input-with-unit">
+                    <input type="number" id="wireKLoss" step="0.001" />
+                    <span class="unit-label">W/K</span>
+                  </div>
+                </div>
+
+                <div class="ds-field">
+                  <label for="wireThermalC">Thermal Mass C</label>
+                  <div class="input-with-unit">
+                    <input type="number" id="wireThermalC" step="0.01" />
+                    <span class="unit-label">J/K</span>
+                  </div>
+                </div>
+
+                <div class="ds-group-title ds-control">PI Control</div>
+
+                <div class="ds-field">
+                  <label for="wireKp">Wire Kp</label>
+                  <input type="number" id="wireKp" step="0.001" />
+                </div>
+
+                <div class="ds-field">
+                  <label for="wireKi">Wire Ki</label>
+                  <input type="number" id="wireKi" step="0.001" />
+                </div>
+
+                <div class="ds-field">
+                  <label for="floorKp">Floor Kp</label>
+                  <input type="number" id="floorKp" step="0.001" />
+                </div>
+
+                <div class="ds-field">
+                  <label for="floorKi">Floor Ki</label>
+                  <input type="number" id="floorKi" step="0.001" />
+                </div>
+
+                <div class="ds-group-title ds-ntc">NTC Input</div>
+
+                <div class="ds-field">
+                  <label for="ntcBeta">NTC Beta</label>
+                  <div class="input-with-unit">
+                    <input type="number" id="ntcBeta" step="1" />
+                    <span class="unit-label">K</span>
+                  </div>
+                </div>
+
+                <div class="ds-field">
+                  <label for="ntcR0">NTC R0</label>
+                  <div class="input-with-unit">
+                    <input type="number" id="ntcR0" step="1" />
+                    <span class="unit-label">Ohm</span>
+                  </div>
+                </div>
+
+                <div class="ds-field">
+                  <label for="ntcFixedRes">NTC Fixed Resistor</label>
+                  <div class="input-with-unit">
+                    <input type="number" id="ntcFixedRes" step="1" />
+                    <span class="unit-label">Ohm</span>
+                  </div>
+                </div>
+
+                <div class="ds-field">
+                  <label for="ntcMinC">NTC Min Temp</label>
+                  <div class="input-with-unit">
+                    <input type="number" id="ntcMinC" step="0.1" />
+                    <span class="unit-label">C</span>
+                  </div>
+                </div>
+
+                <div class="ds-field">
+                  <label for="ntcMaxC">NTC Max Temp</label>
+                  <div class="input-with-unit">
+                    <input type="number" id="ntcMaxC" step="0.1" />
+                    <span class="unit-label">C</span>
+                  </div>
+                </div>
+
+                <div class="ds-field">
+                  <label for="ntcSamples">NTC Samples</label>
+                  <input
+                    type="number"
+                    id="ntcSamples"
+                    min="1"
+                    max="64"
+                    step="1"
+                  />
+                </div>
+
+                <div class="ds-field">
+                  <label for="ntcGateIndex">NTC Wire Index</label>
+                  <input
+                    type="number"
+                    id="ntcGateIndex"
+                    min="1"
+                    max="10"
+                    step="1"
+                  />
+                </div>
+
+                <div class="ds-field">
+                  <label for="ntcPressMv">Button Press Threshold</label>
+                  <div class="input-with-unit">
+                    <input type="number" id="ntcPressMv" step="1" />
+                    <span class="unit-label">mV</span>
+                  </div>
+                </div>
+
+                <div class="ds-field">
+                  <label for="ntcReleaseMv">Button Release Threshold</label>
+                  <div class="input-with-unit">
+                    <input type="number" id="ntcReleaseMv" step="1" />
+                    <span class="unit-label">mV</span>
+                  </div>
+                </div>
+
+                <div class="ds-field">
+                  <label for="ntcDebounceMs">Button Debounce</label>
+                  <div class="input-with-unit">
+                    <input type="number" id="ntcDebounceMs" step="1" />
+                    <span class="unit-label">ms</span>
                   </div>
                 </div>
 
@@ -964,13 +1121,86 @@
                     <option value="sequential">
                       Sequential (coolest-first)
                     </option>
+                    <option value="mixed">
+                      Mixed (preheat + keep-warm, sequential pulses)
+                    </option>
                   </select>
+                </div>
+
+                <div class="ds-field mixed-only" id="mixPreheatField">
+                  <label
+                    for="mixPreheatMs"
+                    title="Bulk preheat duration before holding temperature"
+                    >Mixed Preheat Duration</label
+                  >
+                  <div class="input-with-unit">
+                    <input
+                      type="number"
+                      id="mixPreheatMs"
+                      min="0"
+                      title="How long to bulk-preheat all allowed wires before settling into hold"
+                    />
+                    <span class="unit-label">ms</span>
+                  </div>
+                </div>
+
+                <div class="ds-field mixed-only" id="mixPreheatOnField">
+                  <label
+                    for="mixPreheatOnMs"
+                    title="Primary wire pulse width during preheat frames"
+                    >Preheat Pulse (primary)</label
+                  >
+                  <div class="input-with-unit">
+                    <input
+                      type="number"
+                      id="mixPreheatOnMs"
+                      min="1"
+                      title="Pulse length for the active wire while preheating (sequential)"
+                    />
+                    <span class="unit-label">ms</span>
+                  </div>
+                </div>
+
+                <div class="ds-field mixed-only" id="mixKeepField">
+                  <label
+                    for="mixKeepMs"
+                    title="Keep-warm pulse for the other wires in each frame"
+                    >Keep-warm Pulse (others)</label
+                  >
+                  <div class="input-with-unit">
+                    <input
+                      type="number"
+                      id="mixKeepMs"
+                      min="0"
+                      title="Small serialized pulse for non-primary wires to reduce cooldown"
+                    />
+                    <span class="unit-label">ms</span>
+                  </div>
+                </div>
+
+                <div class="ds-field mixed-only" id="mixFrameField">
+                  <label
+                    for="mixFrameMs"
+                    title="Frame period that contains all serialized pulses"
+                    >Frame Period</label
+                  >
+                  <div class="input-with-unit">
+                    <input
+                      type="number"
+                      id="mixFrameMs"
+                      min="10"
+                      title="Total frame length; all mixed pulses are serialized within this window"
+                    />
+                    <span class="unit-label">ms</span>
+                  </div>
                 </div>
 
                 <div class="ds-field">
                   <label for="timingModeSelect">Timing Settings</label>
                   <select id="timingModeSelect">
-                    <option value="preset">Normal (Hot / Medium / Gentle)</option>
+                    <option value="preset">
+                      Normal (Hot / Medium / Gentle)
+                    </option>
                     <option value="manual">Advanced (manual ON/OFF)</option>
                   </select>
                 </div>
@@ -1000,53 +1230,57 @@
                     inputmode="numeric"
                   />
                 </div>
-
-                <div class="ds-field ds-field--toggle ds-span-2">
-                  <label for="coolingAirToggle">Air Cooling (fast)</label>
-                  <label class="switch">
-                    <input type="checkbox" id="coolingAirToggle" />
-                    <span class="slider"></span>
-                  </label>
-                </div>
               </section>
 
-              <!-- Right column: Cooling + Nichrome -->
+              <!-- Right column: Nichrome -->
               <section class="device-col device-col--right">
-                <h3>Cooling &amp; Nichrome</h3>
-
-                <div class="cooling-grid">
-                  <div class="field">
-                    <label for="coolBuriedScale">Buried cooling scale</label>
-                    <input
-                      id="coolBuriedScale"
-                      type="number"
-                      step="0.01"
-                      inputmode="decimal"
-                    />
+                <h3>Nichrome Calibration</h3>
+                <div class="ds-group-title ds-floor">Floor Settings</div>
+                <div class="nichrome-meta">
+                  <div class="ds-field">
+                    <label for="floorThicknessMm"
+                      >Floor Thickness (20-50 mm)</label
+                    >
+                    <div class="input-with-unit">
+                      <input
+                        type="number"
+                        id="floorThicknessMm"
+                        step="0.1"
+                        min="20"
+                        max="50"
+                      />
+                      <span class="unit-label">mm</span>
+                    </div>
                   </div>
-                  <div class="field">
-                    <label for="coolKCold">Base cooling gain (kCold)</label>
-                    <input
-                      id="coolKCold"
-                      type="number"
-                      step="0.001"
-                      inputmode="decimal"
-                    />
+                  <div class="ds-field">
+                    <label for="nichromeFinalTempC">Nichrome Final Temp</label>
+                    <div class="input-with-unit">
+                      <input type="number" id="nichromeFinalTempC" step="0.1" />
+                      <span class="unit-label">C</span>
+                    </div>
                   </div>
-                  <div class="field">
-                    <label for="coolDropMaxC">Max cool drop / sample (degC)</label>
-                    <input
-                      id="coolDropMaxC"
-                      type="number"
-                      step="0.01"
-                      inputmode="decimal"
-                    />
+                  <div class="ds-field">
+                    <label for="floorMaterial">Floor Material</label>
+                    <select id="floorMaterial">
+                      <option value="wood">Wood</option>
+                      <option value="epoxy">Epoxy</option>
+                      <option value="concrete">Concrete</option>
+                      <option value="slate">Slate</option>
+                      <option value="marble">Marble</option>
+                      <option value="granite">Granite</option>
+                    </select>
+                  </div>
+                  <div class="ds-field">
+                    <label for="floorMaxC">Max Floor Temp (<= 35 C)</label>
+                    <div class="input-with-unit">
+                      <input type="number" id="floorMaxC" step="0.1" max="35" />
+                      <span class="unit-label">C</span>
+                    </div>
                   </div>
                 </div>
-
-                <div class="ds-section-divider"></div>
-
-                <h3>Nichrome Calibration</h3>
+                <div class="ds-group-title ds-nichrome">
+                  Nichrome Calibration
+                </div>
                 <div class="nichrome-grid">
                   <!-- New: global Ω/m -->
                   <div class="field">
@@ -1217,13 +1451,6 @@
             <div class="live-core">
               <div class="live-core-header">
                 <div class="live-core-label">Current Session</div>
-                <button
-                  id="sessionHistoryBtn"
-                  type="button"
-                  class="session-history-btn"
-                >
-                  History
-                </button>
               </div>
 
               <div
@@ -1250,6 +1477,23 @@
                   <div class="metric-label">Peak Current</div>
                   <div id="sessionPeakCurrent" class="metric-value">-- A</div>
                 </div>
+              </div>
+
+              <div class="live-core-actions">
+                <button
+                  id="sessionHistoryBtn"
+                  type="button"
+                  class="session-history-btn"
+                >
+                  History
+                </button>
+                <button
+                  id="calibrationBtn"
+                  type="button"
+                  class="session-history-btn session-calib-btn"
+                >
+                  Calibration
+                </button>
               </div>
             </div>
           </div>
@@ -1292,6 +1536,287 @@
               </div>
             </div>
           </div>
+
+          <!-- Calibration modal -->
+          <div id="calibrationModal" class="calibration-modal">
+            <div
+              class="calibration-backdrop"
+              onclick="closeCalibrationModal()"
+            ></div>
+            <div class="calibration-content">
+              <div class="calibration-header">
+                <h3>Calibration</h3>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <button
+                    id="calibrationInfoBtn"
+                    type="button"
+                    class="calib-btn"
+                    style="padding: 4px 8px; min-width: 32px;"
+                  >
+                    ?
+                  </button>
+                  <button
+                    type="button"
+                    class="calibration-close"
+                    onclick="closeCalibrationModal()"
+                  >
+                    x
+                  </button>
+                </div>
+              </div>
+              <div class="calibration-body">
+                <div id="calibrationInfoPopover" class="calibration-info-popover" aria-hidden="true">
+                  <div class="calibration-info-header">
+                    <div class="calibration-info-title">Calibration help</div>
+                    <button id="calibrationInfoCloseBtn" type="button" class="calibration-info-close">x</button>
+                  </div>
+                  <div class="calibration-info-content">
+                    <div class="calibration-info-grid">
+                      <div class="calibration-info-card">
+                        <div class="calibration-info-icon">1</div>
+                        <div class="calibration-info-card-title">NTC calibration</div>
+                        <div class="calibration-info-card-text">
+                          Calibrates the NTC using a known reference temperature.
+                          Leave the field blank to use the heatsink temperature automatically.
+                          This does not heat the wire.
+                        </div>
+                      </div>
+                      <div class="calibration-info-card">
+                        <div class="calibration-info-icon">2</div>
+                        <div class="calibration-info-card-title">Temp model calibration</div>
+                        <div class="calibration-info-card-text">
+                          Records temperature and time while the system drives a repeatable PWM profile.
+                          Use the resulting curve to fit τ/k/C so the model matches real measurements.
+                        </div>
+                      </div>
+                      <div class="calibration-info-card">
+                        <div class="calibration-info-icon">3</div>
+                        <div class="calibration-info-card-title">Wire test</div>
+                        <div class="calibration-info-card-text">
+                          Runs the PI controller to reach and hold a target temperature on the NTC-attached wire.
+                          This is a live test and does not save history.
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="calibration-info-actions">
+                      <div class="calibration-info-actions-title">Buttons</div>
+                      <ul>
+                        <li><strong>NTC Calibration:</strong> Start NTC recording (optional) and use “Calibrate NTC” to compute R0.</li>
+                        <li><strong>Temp Model Calibration:</strong> Start/stop the model capture while PWM runs.</li>
+                        <li><strong>Start/Stop Wire Test:</strong> Hold target temperature (PI control).</li>
+                        <li><strong>Load History / Resume Live:</strong> View saved buffer or live feed.</li>
+                        <li><strong>Clear Data:</strong> Clears the buffer and removes the saved file.</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="calibration-hero">
+                  <h4>Simple steps</h4>
+                  <div class="cal-steps">
+                    <div class="cal-step">
+                      <span class="dot">1</span>
+                      <p>
+                        NTC calibrate<br />
+                        <span class="hint">Use heatsink temp or enter a ref; no heating.</span>
+                      </p>
+                    </div>
+                    <div class="cal-step">
+                      <span class="dot">2</span>
+                      <p>
+                        Model capture<br />
+                        <span class="hint">Start Temp Model Calibration to log heat/cool with PWM.</span>
+                      </p>
+                    </div>
+                    <div class="cal-step">
+                      <span class="dot">3</span>
+                      <p>
+                        Wire test<br />
+                        <span class="hint">Hold a target temp and verify control (PI, no logging).</span>
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="calibration-actions">
+                  <button id="startNtcCalibBtn" type="button" class="calib-btn">
+                    NTC Calibration
+                  </button>
+                  <button
+                    id="startModelCalibBtn"
+                    type="button"
+                    class="calib-btn"
+                  >
+                    Temp Model Calibration
+                  </button>
+                  <button
+                    id="stopCalibBtn"
+                    type="button"
+                    class="calib-btn calib-stop"
+                  >
+                    Stop &amp; Save
+                  </button>
+                </div>
+
+                <div class="calibration-status">
+                  <div class="calib-stat">
+                    Status: <span id="calibStatusText">Idle</span>
+                  </div>
+                  <div class="calib-stat">
+                    Mode: <span id="calibModeText">--</span>
+                  </div>
+                  <div class="calib-stat">
+                    Samples: <span id="calibCountText">0</span>
+                  </div>
+                  <div class="calib-stat">
+                    Interval: <span id="calibIntervalText">--</span>
+                  </div>
+                  <div class="calib-stat">
+                    Temp: <span id="calibTempText">--</span>
+                  </div>
+                </div>
+
+                <div class="calibration-wire-test">
+                  <div class="ds-field">
+                    <label for="wireTestTargetC">Wire Target Temp</label>
+                    <div class="input-with-unit">
+                      <input type="number" id="wireTestTargetC" step="0.1" />
+                      <span class="unit-label">C</span>
+                    </div>
+                  </div>
+                  <div class="ds-field">
+                    <label for="wireTestWireIndex">Wire Index</label>
+                    <input
+                      type="number"
+                      id="wireTestWireIndex"
+                      min="1"
+                      max="10"
+                      step="1"
+                    />
+                  </div>
+                  <div class="ds-field">
+                    <button
+                      id="wireTestStartBtn"
+                      type="button"
+                      class="calib-btn"
+                    >
+                      Start Wire Test
+                    </button>
+                  </div>
+                  <div class="ds-field">
+                    <button
+                      id="wireTestStopBtn"
+                      type="button"
+                      class="calib-btn calib-stop"
+                    >
+                      Stop Wire Test
+                    </button>
+                  </div>
+                  <div class="status-line wide">
+                    Wire Test: <span id="wireTestState">Idle</span> | Temp:
+                    <span id="wireTestTemp">--</span> | Duty:
+                    <span id="wireTestDuty">--</span> | On/Off:
+                    <span id="wireTestOnOff">--</span>
+                  </div>
+                  <div class="status-line wide">
+                    NTC Calibrate:
+                    <input
+                      type="number"
+                      id="ntcCalRef"
+                      step="0.1"
+                      placeholder="Ref temp (blank = heatsink)"
+                      style="width: 210px; margin-left: 6px"
+                    />
+                    <button
+                      id="ntcCalibrateBtn"
+                      type="button"
+                      class="calib-btn"
+                      style="margin-left: 8px"
+                    >
+                      Calibrate NTC
+                    </button>
+                    <span
+                      id="ntcCalibrateStatus"
+                      style="margin-left: 8px; font-size: 0.78rem; opacity: 0.9"
+                    ></span>
+                  </div>
+                </div>
+
+                <div class="calibration-chart">
+                  <div class="calib-chart-top">
+                    <div>
+                      <div class="calib-chart-title">Temperature vs Time</div>
+                      <div class="calib-chart-sub">
+                        Drag the chart to pan horizontally. Y axis stays visible.
+                      </div>
+                    </div>
+
+                    <div class="calib-chart-controls">
+                      <button
+                        id="calibLatestBtn"
+                        type="button"
+                        class="calib-secondary"
+                      >
+                        Most recent
+                      </button>
+                      <button
+                        id="calibPauseBtn"
+                        type="button"
+                        class="calib-secondary"
+                      >
+                        Pause
+                      </button>
+                    </div>
+
+                    <div class="calib-chart-stats">
+                      <div class="calib-pill">
+                        Temp: <b id="calibNowTempPill">--</b>&nbsp;C
+                      </div>
+                      <div class="calib-pill">
+                        Time: <b id="calibNowTimePill" class="calib-mono">--:--</b>
+                      </div>
+                      <div class="calib-pill">Max: <b>150</b>&nbsp;C</div>
+                    </div>
+                  </div>
+
+                  <div class="calib-chart-shell">
+                    <div class="calib-axis-col">
+                      <svg id="calibYAxis" role="img" aria-label="Y axis"></svg>
+                    </div>
+                    <div
+                      id="calibScrollWrap"
+                      class="calib-scroll-wrap"
+                      title="Drag to pan horizontally"
+                    >
+                      <svg
+                        id="calibPlot"
+                        role="img"
+                        aria-label="Temperature chart"
+                      ></svg>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="calibration-footer">
+                  <button
+                    id="calibHistoryBtn"
+                    type="button"
+                    class="calib-secondary"
+                  >
+                    Load History
+                  </button>
+                  <button
+                    id="calibClearBtn"
+                    type="button"
+                    class="calib-secondary calib-danger"
+                  >
+                    Clear Data
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -1304,6 +1829,7 @@
       window.USE_MOCK = false;
     </script>
     <script src="js/admin.js"></script>
+    <script src="js/mock.js"></script>
 
     <!-- Confirm dialog -->
     <div id="confirmModal" class="user-modal" style="display: none">

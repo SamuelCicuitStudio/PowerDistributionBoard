@@ -11,6 +11,8 @@
 #include "sensing/CurrentSensor.h"
 #include "control/CpDischg.h"
 
+class NtcSensor;
+
 class BusSampler {
 public:
     struct Sample {
@@ -19,11 +21,27 @@ public:
         float    currentA;
     };
 
+    struct SyncSample {
+        uint32_t timestampMs = 0;
+        float    voltageV    = NAN;
+        float    currentA    = NAN;
+        float    tempC       = NAN;
+        float    ntcVolts    = NAN;
+        float    ntcOhm      = NAN;
+        uint16_t ntcAdc      = 0;
+        bool     ntcValid    = false;
+        bool     pressed     = false;
+    };
+
     // Singleton-style accessor
     static BusSampler* Get();
 
     // Start sampling task. periodMs = sampling interval (default ~200 Hz -> 5ms).
     void begin(CurrentSensor* cs, CpDischg* cp, uint32_t periodMs = 5);
+    void attachNtc(NtcSensor* ntc);
+
+    // On-demand sync sample for calibration (V, I, and NTC temp).
+    bool sampleNow(SyncSample& out);
 
     // Get history since lastSeq (similar to CurrentSensor API).
     size_t getHistorySince(uint32_t lastSeq,
@@ -40,6 +58,7 @@ private:
 
     CurrentSensor* currentSensor = nullptr;
     CpDischg*      cpDischg      = nullptr;
+    NtcSensor*     ntcSensor     = nullptr;
 
     static constexpr size_t BUS_HISTORY_SAMPLES = 256;
     Sample   _history[BUS_HISTORY_SAMPLES]{};

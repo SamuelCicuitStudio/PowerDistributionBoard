@@ -2,6 +2,7 @@
 #include "control/RGBLed.h"
 #include "control/HeaterManager.h"
 #include "services/NVSManager.h"
+#include "sensing/NtcSensor.h"
 
 SwitchManager* SwitchManager::instance = nullptr;
 
@@ -12,9 +13,22 @@ SwitchManager::SwitchManager() {
     DEBUG_PRINTLN("#                  Starting Switch Manager                #");
     DEBUG_PRINTLN("###########################################################");
     DEBUGGSTOP();
-    pinMode(POWER_ON_SWITCH_PIN, INPUT_PULLUP);
+    // POWER_ON_SWITCH_PIN is shared with the NTC divider; no pullups here.
     pinMode(SW_USER_BOOT_PIN, INPUT_PULLUP);
     instance = this;
+}
+
+static inline void updatePowerSample() {
+    if (NTC) {
+        NTC->update();
+    }
+}
+
+static inline bool powerPressed() {
+    if (NTC) {
+        return NTC->isPressed();
+    }
+    return digitalRead(POWER_ON_SWITCH_PIN) == LOW;
 }
 
 static void forceStopAndRestartNow() {
@@ -43,6 +57,7 @@ void SwitchManager::detectTapOrHold() {
     unsigned long lastTapTime = 0;
 
     while (true) {
+        updatePowerSample();
         // BOOT pin long-hold -> FACTORY RESET (persist RESET_FLAG then restart)
         if (digitalRead(SW_USER_BOOT_PIN) == LOW) {
             pressStart = millis();
@@ -61,11 +76,12 @@ void SwitchManager::detectTapOrHold() {
             }
         }
 
-        if (digitalRead(POWER_ON_SWITCH_PIN) == LOW) {
+        if (powerPressed()) {
             pressStart = millis();
 
             // Wait until button is released
-            while (digitalRead(POWER_ON_SWITCH_PIN) == LOW) {
+            while (powerPressed()) {
+                updatePowerSample();
                 vTaskDelay(pdMS_TO_TICKS(10));
             }
 

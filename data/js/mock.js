@@ -1,289 +1,298 @@
-/* mock.js — Fake ESP32 API so the UI runs without hardware.
- * Include BEFORE admin.js.
- * Toggle: set window.USE_MOCK = true|false before this file (default: true).
+/**
+ * Mock backend for the admin calibration UI.
+ *
+ * How to use:
+ *   1) Serve the UI normally (no firmware needed).
+ *   2) Open the browser console and run: window.enableCalibrationMock();
+ *   3) The calibration modal, wire test, and NTC calibrate buttons will
+ *      operate against this mock instead of real endpoints.
+ *
+ * Notes:
+ *   - Unknown fetch() URLs fall through to the real network fetch.
+ *   - Calibration samples are synthesized (smooth heat-up + cooldown).
  */
 (function () {
-  const ENABLED = typeof window.USE_MOCK === "boolean" ? window.USE_MOCK : true;
-  if (!ENABLED) return;
+  const realFetch = window.fetch ? window.fetch.bind(window) : null;
+  if (!realFetch) return;
 
-  const realFetch = window.fetch.bind(window);
+  let mockEnabled = false;
 
-  // ----- Simulated device state -----
-  const S = {
-    deviceState: "Shutdown", // "Shutdown" | "Idle" | "Running" | "Error"
-    manualMode: false, // admin.js toggles via /control set mode
-    outputs: Array(10).fill(false), // 10 outputs
-    outputAccess: Array(10).fill(true),
-    relay: false,
-    ledFeedback: true,
-    buzzerMute: false,
-    fanSpeed: 0, // 0..255
-    acFrequency: 500, // Hz sampling rate
-    chargeResistor: 47, // ohm
-    wireOhmPerM: 2, // ohm/m
-    wireGauge: 20, // AWG
-    tempWarnC: 65, // °C
-    tempTripC: 75, // °C
-    idleCurrentA: 0.0, // A
-    wireTauSec: 1.5, // s
-    onTime: 800, // ms
-    offTime: 600, // ms
-    temps: new Array(12).fill(26),
-    capVoltage: 0,
-    capAdcRaw: 0,
-    current: 0,
-    t: 0, // "seconds" counter (sim time)
-    tick: null,
+  const state = {
+    calib: {
+      running: false,
+      mode: "none",
+      intervalMs: 500,
+      startMs: 0,
+      samples: [],
+      timer: null,
+      targetC: 120,
+      wireIndex: 1,
+      saved: false,
+      savedMs: 0,
+      seq: 0,
+    },
+    wireTest: {
+      running: false,
+      targetC: 120,
+      wireIndex: 1,
+      tempC: 25,
+      duty: 0,
+      onMs: 0,
+      offMs: 333,
+      updatedMs: 0,
+    },
+    ntc: {
+      r0: 13710,
+    },
   };
 
-  // Helpers
-  function outputsMap() {
-    const m = {};
-    for (let i = 1; i <= 10; i++) m["output" + i] = !!S.outputs[i - 1];
-    return m;
-  }
-  function accessMap() {
-    const m = {};
-    for (let i = 1; i <= 10; i++) m["output" + i] = !!S.outputAccess[i - 1];
-    return m;
+  function nowMs() {
+    return Math.floor(performance.now());
   }
 
-  // ----- Simulation step (every 250ms) -----
-  function step() {
-    S.t += 0.25;
+  function synthTemp(tMs) {
+    // Simple 2-phase curve: rise then plateau + mild decay.
+    const t = tMs / 1000;
+    if (t < 80) {
+      return 25 + 0.9 * t; // ~97 C at 80s
+    }
+    if (t < 140) {
+      return 97 + 0.25 * (t - 80); // drift to ~112 C
+    }
+    const decay = Math.max(0, 112 - 0.15 * (t - 140));
+    return 25 + decay;
+  }
 
-    if (S.deviceState === "Running" && !S.manualMode) {
-      S.relay = true;
+  function addCalibSample() {
+    if (!state.calib.running) return;
+    const tMs = nowMs() - state.calib.startMs;
+    const tempC = synthTemp(tMs);
+    const voltageV = 310 - 0.08 * state.calib.samples.length;
+    const currentA = 8 + 0.02 * state.calib.samples.length;
+    state.calib.samples.push({
+      t_ms: tMs,
+      time_s: tMs / 1000,
+      temp_c: tempC,
+      volt_v: voltageV,
+      curr_a: currentA,
+      ntc_valid: true,
+    });
+    state.calib.seq++;
+  }
 
-      // Cap voltage swings between ~0.5..1.0 of nominal
-      const v = 325;
-      S.capVoltage = +(v * (0.55 + 0.45 * Math.sin(S.t / 2))).toFixed(2);
-      S.capAdcRaw = +(S.capVoltage / 10).toFixed(2);
+  function startCalibTimer() {
+    stopCalibTimer();
+    addCalibSample();
+    state.calib.timer = setInterval(addCalibSample, state.calib.intervalMs);
+  }
 
-      // Current has a soft ripple
-      S.current = +(5 + 3 * Math.sin(S.t * 1.8)).toFixed(2);
+  function stopCalibTimer() {
+    if (state.calib.timer) {
+      clearInterval(state.calib.timer);
+      state.calib.timer = null;
+    }
+  }
 
-      // Chase animation across outputs
-      const idx = Math.floor((S.t * 2) % 10);
-      S.outputs = S.outputs.map((_, i) => i === idx || i === (idx + 1) % 10);
+  function handleCalibStatus() {
+    const meta = state.calib;
+    return {
+      running: meta.running,
+      mode: meta.mode,
+      count: meta.samples.length,
+      capacity: 2048,
+      interval_ms: meta.intervalMs,
+      start_ms: meta.startMs,
+      saved: meta.saved,
+      saved_ms: meta.savedMs,
+      target_c: meta.targetC,
+      wire_index: meta.wireIndex,
+      pwm_running: state.wireTest.running,
+      pwm_wire_index: state.wireTest.wireIndex,
+      pwm_on_ms: state.wireTest.onMs,
+      pwm_off_ms: state.wireTest.offMs,
+    };
+  }
 
-      // Fan breathes  <-- FIXED: removed one extra ')'
-      S.fanSpeed = Math.max(
-        0,
-        Math.min(255, Math.floor(128 + 100 * Math.sin(S.t)))
-      );
-    } else if (S.deviceState === "Idle" || S.manualMode) {
-      // Hold-ish state, slight bleed
-      S.capVoltage = Math.max(0, +(S.capVoltage - 2).toFixed(2));
-      S.capAdcRaw = +(S.capVoltage / 10).toFixed(2);
-      S.current = +(0.2 + 0.1 * Math.sin(S.t)).toFixed(2);
-      S.fanSpeed = Math.floor(S.capVoltage / 3);
-      // No auto output toggling in manual/idle
+  function handleCalibData(url) {
+    const params = new URL(url, window.location.origin).searchParams;
+    const offset = parseInt(params.get("offset") || "0", 10);
+    const count = parseInt(params.get("count") || "200", 10);
+    const slice = state.calib.samples.slice(offset, offset + count);
+    return {
+      samples: slice,
+    };
+  }
+
+  function handleCalibStart(body) {
+    const mode = body.mode || "ntc";
+    const interval = body.interval_ms || 500;
+    const maxSamples = body.max_samples || 1200;
+    const targetC = body.target_c || 120;
+    const wireIndex = body.wire_index || 1;
+
+    state.calib.running = true;
+    state.calib.mode = mode;
+    state.calib.intervalMs = interval;
+    state.calib.startMs = nowMs();
+    state.calib.samples = [];
+    state.calib.targetC = targetC;
+    state.calib.wireIndex = wireIndex;
+    state.calib.saved = false;
+    state.calib.savedMs = 0;
+    state.calib.seq = 0;
+
+    // Fill some starter samples
+    for (let i = 0; i < Math.min(20, maxSamples); i++) {
+      addCalibSample();
+    }
+    startCalibTimer();
+
+    // Auto-start wire test mock only for model calibration (not for NTC-only)
+    if (mode === "model") {
+      state.wireTest.running = true;
+      state.wireTest.targetC = targetC;
+      state.wireTest.wireIndex = wireIndex;
+      state.wireTest.duty = 0.5;
+      state.wireTest.onMs = 160;
+      state.wireTest.offMs = 173;
+      state.wireTest.updatedMs = nowMs();
     } else {
-      // Shutdown
-      S.relay = false;
-      S.capVoltage = Math.max(0, +(S.capVoltage - 5).toFixed(2));
-      S.capAdcRaw = +(S.capVoltage / 10).toFixed(2);
-      S.current = 0;
-      S.fanSpeed = 0;
-      S.outputs = Array(10).fill(false);
+      state.wireTest.running = false;
     }
 
-    // Temperatures with gentle offsets
-    S.temps = S.temps.map((_, i) => {
-      const base = 26 + (i % 3) * 2;
-      return +(base + 0.5 * Math.sin(S.t + i)).toFixed(2);
-    });
+    return { status: "ok", running: true };
   }
-  S.tick = setInterval(step, 250);
 
-  // ----- Response helpers -----
-  const J = (obj, code = 200) =>
-    new Response(JSON.stringify(obj), {
-      status: code,
+  function handleCalibStop() {
+    stopCalibTimer();
+    state.calib.running = false;
+    state.calib.saved = true;
+    state.calib.savedMs = nowMs();
+    return { status: "ok", running: false, saved: true };
+  }
+
+  function handleCalibClear() {
+    stopCalibTimer();
+    state.calib.running = false;
+    state.calib.samples = [];
+    state.calib.saved = false;
+    state.calib.savedMs = 0;
+    return { status: "ok", cleared: true, file_removed: true };
+  }
+
+  function handleWireTestStatus() {
+    const wt = state.wireTest;
+    if (wt.running) {
+      const t = Math.sin(nowMs() / 3000);
+      wt.tempC = 25 + (wt.targetC - 25) * 0.6 + 5 * t;
+      wt.duty = 0.4 + 0.2 * Math.sin(nowMs() / 2000);
+      wt.onMs = Math.round(wt.duty * 333);
+      wt.offMs = 333 - wt.onMs;
+      wt.updatedMs = nowMs();
+    }
+    return {
+      running: wt.running,
+      wire_index: wt.wireIndex,
+      target_c: wt.targetC,
+      temp_c: wt.tempC,
+      duty: wt.duty,
+      on_ms: wt.onMs,
+      off_ms: wt.offMs,
+      updated_ms: wt.updatedMs,
+    };
+  }
+
+  function handleWireTestStart(body) {
+    const target = body.target_c || 120;
+    const idx = body.wire_index || 1;
+    state.wireTest.running = true;
+    state.wireTest.targetC = target;
+    state.wireTest.wireIndex = idx;
+    state.wireTest.updatedMs = nowMs();
+    return { status: "ok", running: true };
+  }
+
+  function handleWireTestStop() {
+    state.wireTest.running = false;
+    state.wireTest.onMs = 0;
+    state.wireTest.offMs = 333;
+    state.wireTest.duty = 0;
+    return { status: "ok", running: false };
+  }
+
+  function handleNtcCalibrate(body) {
+    const ref = body.ref_temp_c || 32.5;
+    // Nudge R0 slightly each time
+    state.ntc.r0 += (Math.random() - 0.5) * 50;
+    return { status: "ok", ref_c: ref, r0_ohm: state.ntc.r0 };
+  }
+
+  function jsonResponse(obj, status = 200) {
+    return new Response(JSON.stringify(obj), {
+      status,
       headers: { "Content-Type": "application/json" },
     });
-  const T = (text, code = 200, type = "text/plain") =>
-    new Response(text, { status: code, headers: { "Content-Type": type } });
+  }
 
-  // ----- Mocked endpoints -----
-  window.fetch = async (input, init = {}) => {
+  async function mockFetch(input, init = {}) {
     const url = typeof input === "string" ? input : input.url;
-    const method = (init.method || "GET").toUpperCase();
+    const method = (init.method || (typeof input === "object" && input.method) || "GET").toUpperCase();
 
-    // Compact /live (optional, for fast polling)
-    if (url.endsWith("/live") && method === "GET") {
-      const arr = S.outputs.slice();
-      let mask = 0,
-        allowMask = 0;
-      arr.forEach((on, i) => {
-        if (on) mask |= 1 << i;
-        if (S.outputAccess[i]) allowMask |= 1 << i;
-      });
-      return J({
-        state: S.deviceState,
-        relay: S.relay,
-        cap: S.capVoltage,
-        curr: S.current,
-        outs: arr,
-        mask,
-        allowMask,
-        ac: S.capVoltage > 10,
-      });
-    }
-
-    // /monitor (GET) — live gauges & overlay dots
-    if (url.endsWith("/monitor") && method === "GET") {
-      return J({
-        capVoltage: S.capVoltage,
-        capAdcRaw: S.capAdcRaw,
-        current: S.current,
-        temperatures: S.temps,
-        relay: S.relay,
-        fanSpeed: S.fanSpeed,
-        ready: S.deviceState === "Running",
-        off: S.deviceState === "Shutdown",
-        outputs: outputsMap(),
-      });
-    }
-
-    // /load_controls (GET) — initial config + toggles
-    if (url.endsWith("/load_controls") && method === "GET") {
-      return J({
-        ledFeedback: S.ledFeedback,
-        buzzerMute: S.buzzerMute,
-        ready: S.deviceState === "Running",
-        off: S.deviceState === "Shutdown",
-        acFrequency: S.acFrequency,
-        chargeResistor: S.chargeResistor,
-        tempWarnC: S.tempWarnC,
-        tempTripC: S.tempTripC,
-        idleCurrentA: S.idleCurrentA,
-        wireTauSec: S.wireTauSec,
-        wireOhmPerM: S.wireOhmPerM,
-        wireGauge: S.wireGauge,
-        onTime: S.onTime,
-        offTime: S.offTime,
-        outputs: outputsMap(),
-        outputAccess: accessMap(),
-        wireRes: {
-          1: 44,
-          2: 44,
-          3: 44,
-          4: 44,
-          5: 44,
-          6: 44,
-          7: 44,
-          8: 44,
-          9: 44,
-          10: 44,
-        },
-        targetRes: 44,
-      });
-    }
-
-    // /control (POST)
-    if (url.endsWith("/control") && method === "POST") {
-      let payload = {};
-      try {
-        payload = JSON.parse(init.body || "{}");
-      } catch {}
-      const { action, target, value } = payload || {};
-
-      // ---- GETs ----
-      if (action === "get") {
-        if (target === "status") return J({ state: S.deviceState }); // used by power button
-        if (target === "relay") return J({ value: !!S.relay }); // sometimes used as fallback
-        if (/^output\d{1,2}$/.test(target)) {
-          const i = parseInt(target.slice(6), 10) - 1;
-          return J({ value: !!S.outputs[i] });
-        }
-        return J({ error: "unsupported get" }, 400);
+    try {
+      // Calibration status/data
+      if (url.includes("/calib_status")) {
+        return jsonResponse(handleCalibStatus());
+      }
+      if (url.includes("/calib_data")) {
+        return jsonResponse(handleCalibData(url));
+      }
+      if (url.includes("/calib_start") && method === "POST") {
+        const body = init.body ? JSON.parse(init.body) : {};
+        return jsonResponse(handleCalibStart(body));
+      }
+      if (url.includes("/calib_stop") && method === "POST") {
+        return jsonResponse(handleCalibStop());
+      }
+      if (url.includes("/calib_clear") && method === "POST") {
+        return jsonResponse(handleCalibClear());
       }
 
-      // ---- SETs ----
-      if (action === "set") {
-        let ok = true;
-        switch (target) {
-          case "systemStart":
-            S.deviceState = "Running";
-            break;
-          case "systemShutdown":
-            S.deviceState = "Shutdown";
-            break;
-          case "abortAuto":
-            S.deviceState = "Idle";
-            break;
-          case "mode":
-            S.manualMode = !!value;
-            break;
-          case "relay":
-            S.relay = !!value;
-            break;
-          case "fanSpeed":
-            S.fanSpeed = Math.max(0, Math.min(255, +value || 0));
-            break;
-          case "buzzerMute":
-            S.buzzerMute = !!value;
-            break;
-          case "ledFeedback":
-            S.ledFeedback = !!value;
-            break;
-
-          case "acFrequency":
-          case "chargeResistor":
-          case "tempWarnC":
-          case "tempTripC":
-          case "idleCurrentA":
-          case "wireTauSec":
-          case "wireOhmPerM":
-          case "onTime":
-          case "offTime":
-            S[target] = +value;
-            break;
-          case "wireGauge":
-            S.wireGauge = parseInt(value, 10) || S.wireGauge;
-            break;
-
-          // Per-output & access
-          default:
-            if (/^output\d{1,2}$/.test(target)) {
-              const i = parseInt(target.slice(6), 10) - 1;
-              if (i >= 0 && i < 10) S.outputs[i] = !!value;
-            } else if (/^Access\d{1,2}$/.test(target)) {
-              const i = parseInt(target.slice(6), 10) - 1;
-              if (i >= 0 && i < 10) S.outputAccess[i] = !!value;
-            } else if (/^R\d{2}OHM$/.test(target) || target === "R0XTGT") {
-              // accepted (nichrome demo); no state impact needed for UI preview
-            } else {
-              ok = false;
-            }
-        }
-        return ok ? J({ status: "ok" }) : J({ error: "unknown target" }, 400);
+      // Wire test
+      if (url.includes("/wire_test_status")) {
+        return jsonResponse(handleWireTestStatus());
+      }
+      if (url.includes("/wire_test_start") && method === "POST") {
+        const body = init.body ? JSON.parse(init.body) : {};
+        return jsonResponse(handleWireTestStart(body));
+      }
+      if (url.includes("/wire_test_stop") && method === "POST") {
+        return jsonResponse(handleWireTestStop());
       }
 
-      return J({ error: "unsupported action" }, 400);
+      // NTC calibrate
+      if (url.includes("/ntc_calibrate") && method === "POST") {
+        const body = init.body ? JSON.parse(init.body) : {};
+        return jsonResponse(handleNtcCalibrate(body));
+      }
+    } catch (err) {
+      console.warn("[mock] handler error", err);
+      return jsonResponse({ error: "mock_error" }, 500);
     }
 
-    // /heartbeat (GET)
-    if (url.endsWith("/heartbeat") && method === "GET") {
-      return T("alive");
-    }
-
-    // Credentials/Disconnect stubs (optional)
-    if (url.endsWith("/SetUserCred") && method === "POST")
-      return J({ status: "User cred updated (mock)" });
-    if (url.endsWith("/SetAdminCred") && method === "POST")
-      return J({ status: "Admin cred updated (mock)" });
-    if (url.endsWith("/disconnect") && method === "POST")
-      return J({ status: "ok" });
-
-    // Everything else → real network
+    // Fallback to real network
     return realFetch(input, init);
-  };
+  }
 
-  console.log(
-    "%cMock API enabled",
-    "padding:2px 6px;border-radius:4px;background:#1f2937;color:#22d3ee"
-  );
+  function enableMock() {
+    if (mockEnabled) return true;
+    mockEnabled = true;
+    window.fetch = mockFetch;
+    console.info("[mock] Calibration mock enabled.");
+    return true;
+  }
+
+  window.enableCalibrationMock = enableMock;
+
+  // Auto-enable for convenience.
+  enableMock();
 })();

@@ -23,6 +23,12 @@
 #define EP_LOAD_CONTROLS     "/load_controls"  // Load persisted control/config values
 #define EP_SESSION_HISTORY   "/session_history"// Live history JSON (from tracker)
 #define EP_HISTORY_JSON      "/History.json"   // Static history file fallback
+#define EP_CALIB_STATUS      "/calib_status"   // Calibration recorder status
+#define EP_CALIB_START       "/calib_start"    // Start calibration recorder
+#define EP_CALIB_STOP        "/calib_stop"     // Stop calibration recorder
+#define EP_CALIB_CLEAR       "/calib_clear"    // Clear calibration recorder data
+#define EP_CALIB_DATA        "/calib_data"     // Calibration recorder data
+#define EP_CALIB_FILE        "/calib_file"     // Calibration recorder binary file
 #define EP_FAVICON           "/favicon.ico"    // Favicon
 #define EP_ADMIN_PAGE        "/admin.html"     // Admin UI shell
 #define EP_USER_PAGE         "/user.html"      // User UI shell

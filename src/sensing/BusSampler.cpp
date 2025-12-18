@@ -1,4 +1,5 @@
 #include "sensing/BusSampler.h"
+#include "sensing/NtcSensor.h"
 #include <math.h>
 
 BusSampler* BusSampler::Get() {
@@ -32,6 +33,35 @@ void BusSampler::begin(CurrentSensor* cs, CpDischg* cp, uint32_t periodMs) {
     if (ok != pdPASS) {
         taskHandle = nullptr;
     }
+}
+
+void BusSampler::attachNtc(NtcSensor* ntc) {
+    ntcSensor = ntc;
+}
+
+bool BusSampler::sampleNow(SyncSample& out) {
+    out = SyncSample{};
+    out.timestampMs = millis();
+
+    if (cpDischg) {
+        out.voltageV = cpDischg->sampleVoltageNow();
+    }
+    if (currentSensor) {
+        out.currentA = currentSensor->readCurrent();
+    }
+
+    if (ntcSensor) {
+        ntcSensor->update();
+        const NtcSensor::Sample s = ntcSensor->getLastSample();
+        out.tempC    = s.valid ? s.tempC : NAN;
+        out.ntcVolts = s.volts;
+        out.ntcOhm   = s.rNtcOhm;
+        out.ntcAdc   = s.adcRaw;
+        out.ntcValid = s.valid;
+        out.pressed  = s.pressed;
+    }
+
+    return true;
 }
 
 void BusSampler::taskThunk(void* param) {

@@ -33,6 +33,8 @@ bool DeviceTransport::waitForStateEvent(Device::StateSnapshot& out, TickType_t t
 
 bool DeviceTransport::requestRun() {
   if (!DEVICE || !gEvt) return false;
+  DEVICE->stopWireTargetTest();
+  DEVICE->stopCalibrationPwm();
   ensureLoopTask();
   xEventGroupSetBits(gEvt, EVT_WAKE_REQ | EVT_RUN_REQ);
   return true;
@@ -40,6 +42,8 @@ bool DeviceTransport::requestRun() {
 
 bool DeviceTransport::requestStop() {
   if (!DEVICE || !gEvt) return false;
+  DEVICE->stopWireTargetTest();
+  DEVICE->stopCalibrationPwm();
   xEventGroupSetBits(gEvt, EVT_STOP_REQ);
   return true;
 }
@@ -59,6 +63,8 @@ bool DeviceTransport::ensureLoopTask() {
 
 bool DeviceTransport::requestIdle() {
   if (!DEVICE || !gEvt) return false;
+  DEVICE->stopWireTargetTest();
+  DEVICE->stopCalibrationPwm();
   xEventGroupSetBits(gEvt, EVT_STOP_REQ);
   return true;
 }
@@ -143,7 +149,6 @@ bool DeviceTransport::setWireGaugeAwg(int awg) {
 }
 bool DeviceTransport::setBuzzerMute(bool on)            { return sendCommandAndWait(Device::DevCmdType::SET_BUZZER_MUTE, 0, 0.0f, on); }
 bool DeviceTransport::setManualMode(bool manual)        { return sendCommandAndWait(Device::DevCmdType::SET_MANUAL_MODE, 0, 0.0f, manual); }
-bool DeviceTransport::setCoolingProfile(bool fast)      { return sendCommandAndWait(Device::DevCmdType::SET_COOLING_PROFILE, 0, 0.0f, fast); }
 bool DeviceTransport::setLoopMode(uint8_t mode)         { return sendCommandAndWait(Device::DevCmdType::SET_LOOP_MODE, static_cast<int32_t>(mode)); }
 bool DeviceTransport::setCurrentLimitA(float limitA)    { return sendCommandAndWait(Device::DevCmdType::SET_CURR_LIMIT, 0, limitA); }
 bool DeviceTransport::requestResetFlagAndRestart() {
@@ -175,6 +180,46 @@ bool DeviceTransport::startCalibrationTask(uint32_t timeoutMs) {
     s_calTaskHandle = nullptr;
     return false;
   }
+  return true;
+}
+
+bool DeviceTransport::startWireTargetTest(float targetC, uint8_t wireIndex) {
+  if (!DEVICE) return false;
+  return DEVICE->startWireTargetTest(targetC, wireIndex);
+}
+
+void DeviceTransport::stopWireTargetTest() {
+  if (DEVICE) {
+    DEVICE->stopWireTargetTest();
+  }
+}
+
+bool DeviceTransport::getWireTargetStatus(Device::WireTargetStatus& out) const {
+  if (!DEVICE) return false;
+  out = DEVICE->getWireTargetStatus();
+  return true;
+}
+
+bool DeviceTransport::getFloorControlStatus(Device::FloorControlStatus& out) const {
+  if (!DEVICE) return false;
+  out = DEVICE->getFloorControlStatus();
+  return true;
+}
+
+bool DeviceTransport::startCalibrationPwm(uint8_t wireIndex, uint32_t onMs, uint32_t offMs) {
+  if (!DEVICE) return false;
+  return DEVICE->startCalibrationPwm(wireIndex, onMs, offMs);
+}
+
+void DeviceTransport::stopCalibrationPwm() {
+  if (DEVICE) {
+    DEVICE->stopCalibrationPwm();
+  }
+}
+
+bool DeviceTransport::getCalibrationPwmStatus(Device::CalibPwmStatus& out) const {
+  if (!DEVICE) return false;
+  out = DEVICE->getCalibrationPwmStatus();
   return true;
 }
 
