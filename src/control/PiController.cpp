@@ -10,16 +10,16 @@
 
 PiController::PiController() = default;
 
-void PiController::setGains(float kp, float ki) {
+void PiController::setGains(double kp, double ki) {
     _kp = kp;
     _ki = ki;
 }
 
-void PiController::setOutputLimits(float minOut, float maxOut) {
+void PiController::setOutputLimits(double minOut, double maxOut) {
     if (!isfinite(minOut)) minOut = -INFINITY;
     if (!isfinite(maxOut)) maxOut = INFINITY;
     if (minOut > maxOut) {
-        float tmp = minOut;
+        double tmp = minOut;
         minOut = maxOut;
         maxOut = tmp;
     }
@@ -27,11 +27,11 @@ void PiController::setOutputLimits(float minOut, float maxOut) {
     _outMax = maxOut;
 }
 
-void PiController::setIntegralLimits(float minI, float maxI) {
+void PiController::setIntegralLimits(double minI, double maxI) {
     if (!isfinite(minI)) minI = -INFINITY;
     if (!isfinite(maxI)) maxI = INFINITY;
     if (minI > maxI) {
-        float tmp = minI;
+        double tmp = minI;
         minI = maxI;
         maxI = tmp;
     }
@@ -40,26 +40,26 @@ void PiController::setIntegralLimits(float minI, float maxI) {
     _integral = clamp_(_integral, _iMin, _iMax);
 }
 
-void PiController::reset(float integral, float lastOutput) {
+void PiController::reset(double integral, double lastOutput) {
     _integral = integral;
     _lastOutput = lastOutput;
     _integral = clamp_(_integral, _iMin, _iMax);
     _lastOutput = clamp_(_lastOutput, _outMin, _outMax);
 }
 
-float PiController::update(float error, float dtSec) {
+double PiController::update(double error, double dtSec) {
     if (!isfinite(error)) {
         return _lastOutput;
     }
-    if (!isfinite(dtSec) || dtSec <= 0.0f) {
+    if (!isfinite(dtSec) || dtSec <= 0.0) {
         return _lastOutput;
     }
 
-    const float p = _kp * error;
-    float iTerm = _integral + (_ki * error * dtSec);
+    const double p = _kp * error;
+    double iTerm = _integral + (_ki * error * dtSec);
     iTerm = clamp_(iTerm, _iMin, _iMax);
 
-    float out = p + iTerm;
+    double out = p + iTerm;
 
     if (out > _outMax) {
         out = _outMax;
@@ -78,23 +78,23 @@ float PiController::update(float error, float dtSec) {
     return out;
 }
 
-float PiController::getKp() const {
+double PiController::getKp() const {
     return _kp;
 }
 
-float PiController::getKi() const {
+double PiController::getKi() const {
     return _ki;
 }
 
-float PiController::getIntegral() const {
+double PiController::getIntegral() const {
     return _integral;
 }
 
-float PiController::getLastOutput() const {
+double PiController::getLastOutput() const {
     return _lastOutput;
 }
 
-float PiController::clamp_(float v, float lo, float hi) const {
+double PiController::clamp_(double v, double lo, double hi) const {
     if (v < lo) return lo;
     if (v > hi) return hi;
     return v;

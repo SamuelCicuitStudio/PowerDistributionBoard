@@ -44,6 +44,7 @@ bool DeviceTransport::requestStop() {
   if (!DEVICE || !gEvt) return false;
   DEVICE->stopWireTargetTest();
   DEVICE->stopCalibrationPwm();
+  DEVICE->setLastStopReason("Stop requested");
   xEventGroupSetBits(gEvt, EVT_STOP_REQ);
   return true;
 }
@@ -65,6 +66,7 @@ bool DeviceTransport::requestIdle() {
   if (!DEVICE || !gEvt) return false;
   DEVICE->stopWireTargetTest();
   DEVICE->stopCalibrationPwm();
+  DEVICE->setLastStopReason("Idle requested");
   xEventGroupSetBits(gEvt, EVT_STOP_REQ);
   return true;
 }
@@ -81,7 +83,8 @@ bool DeviceTransport::getTelemetry(StatusSnapshot& out) const {
   if (DEVICE->tempSensor) n = DEVICE->tempSensor->getSensorCount();
   if (n > MAX_TEMP_SENSORS) n = MAX_TEMP_SENSORS;
   for (uint8_t i = 0; i < n; ++i) {
-    out.temps[i] = DEVICE->tempSensor->getTemperature(i);
+    const float t = DEVICE->tempSensor->getTemperature(i);
+    out.temps[i] = isfinite(t) ? t : -127.0f;
   }
   for (uint8_t i = n; i < MAX_TEMP_SENSORS; ++i) {
     out.temps[i] = -127.0f;

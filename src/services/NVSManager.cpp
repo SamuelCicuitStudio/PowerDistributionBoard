@@ -264,13 +264,13 @@ void NVS::initializeVariables() {
   PutInt  (TIMING_MODE_KEY, DEFAULT_TIMING_MODE);
   PutInt  (TIMING_PROFILE_KEY, DEFAULT_TIMING_PROFILE);
   PutFloat(CURR_LIMIT_KEY, DEFAULT_CURR_LIMIT_A);
-  PutFloat(WIRE_TAU_KEY, DEFAULT_WIRE_TAU_SEC);
-  PutFloat(WIRE_K_LOSS_KEY, DEFAULT_WIRE_K_LOSS);
-  PutFloat(WIRE_C_TH_KEY, DEFAULT_WIRE_THERMAL_C);
-  PutFloat(WIRE_KP_KEY, DEFAULT_WIRE_KP);
-  PutFloat(WIRE_KI_KEY, DEFAULT_WIRE_KI);
-  PutFloat(FLOOR_KP_KEY, DEFAULT_FLOOR_KP);
-  PutFloat(FLOOR_KI_KEY, DEFAULT_FLOOR_KI);
+  PutDouble(WIRE_TAU_KEY, DEFAULT_WIRE_TAU_SEC);
+  PutDouble(WIRE_K_LOSS_KEY, DEFAULT_WIRE_K_LOSS);
+  PutDouble(WIRE_C_TH_KEY, DEFAULT_WIRE_THERMAL_C);
+  PutDouble(WIRE_KP_KEY, DEFAULT_WIRE_KP);
+  PutDouble(WIRE_KI_KEY, DEFAULT_WIRE_KI);
+  PutDouble(FLOOR_KP_KEY, DEFAULT_FLOOR_KP);
+  PutDouble(FLOOR_KI_KEY, DEFAULT_FLOOR_KI);
 
   // Output access (admin-controlled)
   PutBool(OUT01_ACCESS_KEY, DEFAULT_OUT01_ACCESS);
@@ -379,6 +379,22 @@ float NVS::GetFloat(const char* key, float defaultValue) {
     return v;
 }
 
+double NVS::GetDouble(const char* key, double defaultValue) {
+    esp_task_wdt_reset();
+    lock_();
+    ensureOpenRO_();
+    double v = defaultValue;
+    if (preferences.isKey(key)) {
+        size_t len = preferences.getBytes(key, &v, sizeof(v));
+        if (len != sizeof(v)) {
+            float f = preferences.getFloat(key, NAN);
+            if (isfinite(f)) v = static_cast<double>(f);
+        }
+    }
+    unlock_();
+    return v;
+}
+
 String NVS::GetString(const char* key, const String& defaultValue) {
     esp_task_wdt_reset();
     lock_();
@@ -435,6 +451,15 @@ void NVS::PutFloat(const char* key, float value) {
     ensureOpenRW_();
     if (preferences.isKey(key)) preferences.remove(key);
     preferences.putFloat(key, value);
+    unlock_();
+}
+
+void NVS::PutDouble(const char* key, double value) {
+    esp_task_wdt_reset();
+    lock_();
+    ensureOpenRW_();
+    if (preferences.isKey(key)) preferences.remove(key);
+    preferences.putBytes(key, &value, sizeof(value));
     unlock_();
 }
 

@@ -7,8 +7,11 @@
 #include "control/Buzzer.h"    // BUZZ macro
 
 #include "sensing/NtcSensor.h"
+#include "services/RTCManager.h"
 
 #include <math.h>
+#include <string.h>
+#include <stdio.h>
 
 
 
@@ -701,6 +704,91 @@ void Device::onStateChanged(DeviceState prev, DeviceState next) {
 
 }
 
+void Device::setLastErrorReason(const char* reason) {
+    if (!reason || !reason[0]) return;
+    if (eventMtx == nullptr) {
+        eventMtx = xSemaphoreCreateMutex();
+    }
+    const uint32_t nowMs = millis();
+    uint32_t epoch = 0;
+    if (RTC) {
+        epoch = static_cast<uint32_t>(RTC->getUnixTime());
+    }
+    if (eventMtx && xSemaphoreTake(eventMtx, pdMS_TO_TICKS(50)) == pdTRUE) {
+        strncpy(lastErrorReason, reason, sizeof(lastErrorReason) - 1);
+        lastErrorReason[sizeof(lastErrorReason) - 1] = '\0';
+        lastErrorMs = nowMs;
+        lastErrorEpoch = epoch;
+        xSemaphoreGive(eventMtx);
+    } else {
+        strncpy(lastErrorReason, reason, sizeof(lastErrorReason) - 1);
+        lastErrorReason[sizeof(lastErrorReason) - 1] = '\0';
+        lastErrorMs = nowMs;
+        lastErrorEpoch = epoch;
+    }
+}
+
+void Device::setLastStopReason(const char* reason) {
+    if (!reason || !reason[0]) return;
+    if (eventMtx == nullptr) {
+        eventMtx = xSemaphoreCreateMutex();
+    }
+    const uint32_t nowMs = millis();
+    uint32_t epoch = 0;
+    if (RTC) {
+        epoch = static_cast<uint32_t>(RTC->getUnixTime());
+    }
+    if (eventMtx && xSemaphoreTake(eventMtx, pdMS_TO_TICKS(50)) == pdTRUE) {
+        strncpy(lastStopReason, reason, sizeof(lastStopReason) - 1);
+        lastStopReason[sizeof(lastStopReason) - 1] = '\0';
+        lastStopMs = nowMs;
+        lastStopEpoch = epoch;
+        xSemaphoreGive(eventMtx);
+    } else {
+        strncpy(lastStopReason, reason, sizeof(lastStopReason) - 1);
+        lastStopReason[sizeof(lastStopReason) - 1] = '\0';
+        lastStopMs = nowMs;
+        lastStopEpoch = epoch;
+    }
+}
+
+Device::LastEventInfo Device::getLastEventInfo() const {
+    LastEventInfo out{};
+    if (const_cast<Device*>(this)->eventMtx &&
+        xSemaphoreTake(const_cast<Device*>(this)->eventMtx, pdMS_TO_TICKS(50)) == pdTRUE)
+    {
+        if (lastErrorReason[0]) {
+            out.hasError = true;
+            out.errorMs = lastErrorMs;
+            out.errorEpoch = lastErrorEpoch;
+            strncpy(out.errorReason, lastErrorReason, sizeof(out.errorReason) - 1);
+        }
+        if (lastStopReason[0]) {
+            out.hasStop = true;
+            out.stopMs = lastStopMs;
+            out.stopEpoch = lastStopEpoch;
+            strncpy(out.stopReason, lastStopReason, sizeof(out.stopReason) - 1);
+        }
+        xSemaphoreGive(const_cast<Device*>(this)->eventMtx);
+    } else {
+        if (lastErrorReason[0]) {
+            out.hasError = true;
+            out.errorMs = lastErrorMs;
+            out.errorEpoch = lastErrorEpoch;
+            strncpy(out.errorReason, lastErrorReason, sizeof(out.errorReason) - 1);
+        }
+        if (lastStopReason[0]) {
+            out.hasStop = true;
+            out.stopMs = lastStopMs;
+            out.stopEpoch = lastStopEpoch;
+            strncpy(out.stopReason, lastStopReason, sizeof(out.stopReason) - 1);
+        }
+    }
+    out.errorReason[sizeof(out.errorReason) - 1] = '\0';
+    out.stopReason[sizeof(out.stopReason) - 1] = '\0';
+    return out;
+}
+
 
 
 void Device::prepareForDeepSleep() {
@@ -1152,7 +1240,7 @@ void Device::monitorTemperatureTask(void* param) {
 
             const float temp = self->tempSensor->getTemperature(i);
 
-           // DEBUG_PRINTF("[Device] TempSensor[%u] = %.2f°C\n", i, temp);
+           // DEBUG_PRINTF("[Device] TempSensor[%u] = %.2f??C\n", i, temp);
 
 
 
@@ -1162,7 +1250,7 @@ void Device::monitorTemperatureTask(void* param) {
 
             if (temp >= tripC) {
 
-                DEBUG_PRINTF("[Device] Overtemperature Detected! Sensor[%u] = %.2f°C\n", i, temp);
+                DEBUG_PRINTF("[Device] Overtemperature Detected! Sensor[%u] = %.2f??C\n", i, temp);
 
                 BUZZ->bipOverTemperature();
 
@@ -1176,7 +1264,13 @@ void Device::monitorTemperatureTask(void* param) {
 
                   RGB->showError(ErrorCategory::THERMAL, 1);
 
-  
+                  char reason[96] = {0};
+                  snprintf(reason, sizeof(reason),
+                           "Overtemp trip sensor[%u]=%.1fC (trip %.1fC)",
+                           static_cast<unsigned>(i),
+                           static_cast<double>(temp),
+                           static_cast<double>(tripC));
+                  self->setLastErrorReason(reason);
 
                   self->setState(DeviceState::Error);
 
@@ -1318,6 +1412,31 @@ void Device::handle12VDrop() {
 
     DEBUG_PRINTLN("[Device] 12V lost during RUN  Emergency stop");
 
+    {
+        float vcap = NAN;
+        float curA = NAN;
+        if (discharger) vcap = discharger->readCapVoltage();
+        if (currentSensor) curA = currentSensor->readCurrent();
+        char reason[96] = {0};
+        if (isfinite(vcap) && isfinite(curA)) {
+            snprintf(reason, sizeof(reason),
+                     "12V lost (Vcap=%.1fV I=%.2fA)",
+                     static_cast<double>(vcap),
+                     static_cast<double>(curA));
+            setLastErrorReason(reason);
+        } else if (isfinite(vcap)) {
+            snprintf(reason, sizeof(reason), "12V lost (Vcap=%.1fV)",
+                     static_cast<double>(vcap));
+            setLastErrorReason(reason);
+        } else if (isfinite(curA)) {
+            snprintf(reason, sizeof(reason), "12V lost (I=%.2fA)",
+                     static_cast<double>(curA));
+            setLastErrorReason(reason);
+        } else {
+            setLastErrorReason("12V supply lost during run");
+        }
+    }
+
     // Visual + audible
 
     RGB->postOverlay(OverlayEvent::RELAY_OFF);
@@ -1393,6 +1512,8 @@ bool Device::delayWithPowerWatch(uint32_t ms)
 
                 xEventGroupClearBits(gEvt, EVT_STOP_REQ);
 
+                setLastStopReason("Stop requested");
+
                 setState(DeviceState::Idle);
 
                 return false;
@@ -1407,7 +1528,7 @@ bool Device::delayWithPowerWatch(uint32_t ms)
 
         /*if (currentSensor && currentSensor->isOverCurrentLatched()) {
 
-            DEBUG_PRINTLN("[Device] Over-current latch set during wait â†’ abort");
+            DEBUG_PRINTLN("[Device] Over-current latch set during wait ???????? abort");
 
             handleOverCurrentFault();
 
@@ -1512,6 +1633,8 @@ bool Device::runCalibrationsStandalone(uint32_t timeoutMs) {
         if (indicator) indicator->clearAll();
 
         relayControl->turnOff();
+
+        setLastStopReason(msg ? msg : "Calibration aborted");
 
         setState(DeviceState::Idle);
 
@@ -1719,7 +1842,22 @@ void Device::handleOverCurrentFault()
 
 {
 
-    DEBUG_PRINTLN("[Device] âš¡ Over-current detected EMERGENCY SHUTDOWN");
+    DEBUG_PRINTLN("[Device] Over-current detected EMERGENCY SHUTDOWN");
+    {
+        float curA = NAN;
+        float limitA = DEFAULT_CURR_LIMIT_A;
+        if (currentSensor) curA = currentSensor->readCurrent();
+        if (CONF) limitA = CONF->GetFloat(CURR_LIMIT_KEY, DEFAULT_CURR_LIMIT_A);
+        if (!isfinite(limitA) || limitA <= 0.0f) limitA = DEFAULT_CURR_LIMIT_A;
+        char reason[96] = {0};
+        if (isfinite(curA)) {
+            snprintf(reason, sizeof(reason), "Over-current trip (I=%.2fA lim=%.1fA)",
+                     static_cast<double>(curA), static_cast<double>(limitA));
+            setLastErrorReason(reason);
+        } else {
+            setLastErrorReason("Over-current trip");
+        }
+    }
 
 
 
@@ -1982,14 +2120,14 @@ void Device::fanControlTask(void* param) {
 
 
 void Device::refreshThermalParams() {
-    float tau = DEFAULT_WIRE_TAU_SEC;
-    float k   = DEFAULT_WIRE_K_LOSS;
-    float C   = DEFAULT_WIRE_THERMAL_C;
+    double tau = DEFAULT_WIRE_TAU_SEC;
+    double k   = DEFAULT_WIRE_K_LOSS;
+    double C   = DEFAULT_WIRE_THERMAL_C;
 
     if (CONF) {
-        tau = CONF->GetFloat(WIRE_TAU_KEY,     DEFAULT_WIRE_TAU_SEC);
-        k   = CONF->GetFloat(WIRE_K_LOSS_KEY,  DEFAULT_WIRE_K_LOSS);
-        C   = CONF->GetFloat(WIRE_C_TH_KEY,    DEFAULT_WIRE_THERMAL_C);
+        tau = CONF->GetDouble(WIRE_TAU_KEY, DEFAULT_WIRE_TAU_SEC);
+        k   = CONF->GetDouble(WIRE_K_LOSS_KEY, DEFAULT_WIRE_K_LOSS);
+        C   = CONF->GetDouble(WIRE_C_TH_KEY, DEFAULT_WIRE_THERMAL_C);
     }
 
     bool tauOk = isfinite(tau) && tau > 0.05f;

@@ -11,6 +11,7 @@
 #include <ESPmDNS.h>
 #include <WiFiUdp.h>
 #include <NTPClient.h>
+#include <string.h>
 
 static const char* floorMaterialToString(int code) {
     switch (code) {
@@ -51,6 +52,51 @@ static int parseFloorMaterialCode(const String& raw, int fallback) {
     }
 
     return fallback;
+}
+
+static bool normalizeHistoryPath(const String& rawName,
+                                 String& fullName,
+                                 String& baseName,
+                                 uint32_t* epochOut) {
+    String name = rawName;
+    name.trim();
+    if (name.isEmpty() || name.indexOf("..") >= 0) return false;
+
+    const int slash = name.lastIndexOf('/');
+    baseName = (slash >= 0) ? name.substring(slash + 1) : name;
+
+    const size_t extLen = strlen(CALIB_HISTORY_EXT);
+
+    if (baseName.length() <= extLen || !baseName.endsWith(CALIB_HISTORY_EXT)) return false;
+    String epochStr = baseName.substring(0, baseName.length() - extLen);
+    if (epochStr.isEmpty()) return false;
+    for (size_t i = 0; i < epochStr.length(); ++i) {
+        if (!isDigit(epochStr[i])) return false;
+    }
+
+    String dir = (slash >= 0) ? name.substring(0, slash) : "";
+    if (!dir.isEmpty()) {
+        String dirTrimmed = dir;
+        dirTrimmed.trim();
+        if (dirTrimmed != CALIB_HISTORY_DIR &&
+            dirTrimmed != String(CALIB_HISTORY_DIR).substring(1)) {
+            return false;
+        }
+    }
+
+    if (epochOut) {
+        *epochOut = static_cast<uint32_t>(epochStr.toInt());
+    }
+
+    if (name.startsWith("/")) {
+        fullName = name;
+    } else if (slash >= 0) {
+        fullName = "/" + name;
+    } else {
+        fullName = String(CALIB_HISTORY_DIR) + "/" + baseName;
+    }
+
+    return true;
 }
 
 // ===== Singleton storage & accessors =====
@@ -474,8 +520,14 @@ void WiFiManager::registerRoutes_() {
             doc["capacity"]    = meta.capacity;
             doc["interval_ms"] = meta.intervalMs;
             doc["start_ms"]    = meta.startMs;
+            if (meta.startEpoch > 0) {
+                doc["start_epoch"] = meta.startEpoch;
+            }
             doc["saved"]       = meta.saved;
             doc["saved_ms"]    = meta.savedMs;
+            if (meta.savedEpoch > 0) {
+                doc["saved_epoch"] = meta.savedEpoch;
+            }
             if (isfinite(meta.targetTempC)) {
                 doc["target_c"] = meta.targetTempC;
             }
@@ -541,6 +593,13 @@ void WiFiManager::registerRoutes_() {
             if (!doc["target_c"].isNull()) {
                 targetC = doc["target_c"].as<float>();
             }
+            uint32_t epoch = 0;
+            if (!doc["epoch"].isNull()) {
+                epoch = doc["epoch"].as<uint32_t>();
+            }
+            if (epoch > 0 && RTC) {
+                RTC->setUnixTime(epoch);
+            }
             int defaultWire = CONF->GetInt(NTC_GATE_INDEX_KEY, DEFAULT_NTC_GATE_INDEX);
             if (defaultWire < 1) defaultWire = 1;
             if (defaultWire > HeaterManager::kWireCount) defaultWire = HeaterManager::kWireCount;
@@ -583,7 +642,20 @@ void WiFiManager::registerRoutes_() {
             if (!isAuthenticated(request)) return;
             if (lock()) { lastActivityMillis = millis(); unlock(); }
 
-            (void)data; (void)len; (void)index; (void)total;
+            static String body;
+            if (index == 0) body = "";
+            body += String((char*)data, len);
+            if (index + len != total) return;
+
+            DynamicJsonDocument doc(256);
+            if (!body.isEmpty() && !deserializeJson(doc, body)) {
+                uint32_t epoch = doc["epoch"] | 0;
+                if (epoch > 0 && RTC) {
+                    RTC->setUnixTime(epoch);
+                }
+            }
+            body = "";
+
             const bool saved = CALIB->stopAndSave();
             if (DEVTRAN) {
                 DEVTRAN->stopCalibrationPwm();
@@ -614,12 +686,44 @@ void WiFiManager::registerRoutes_() {
             }
 
             bool removed = false;
-            if (SPIFFS.begin(false) && SPIFFS.exists(CALIB_MODEL_BIN_FILE)) {
-                removed = SPIFFS.remove(CALIB_MODEL_BIN_FILE);
+            size_t removedCount = 0;
+            if (SPIFFS.begin(false)) {
+                if (SPIFFS.exists(CALIB_MODEL_JSON_FILE)) {
+                    removed = SPIFFS.remove(CALIB_MODEL_JSON_FILE);
+                }
+                auto removeFromDir = [&](File dir) {
+                    File file = dir.openNextFile();
+                    while (file) {
+                        const bool isDir = file.isDirectory();
+                        String rawName = file.name();
+                        file.close();
+                        if (!isDir) {
+                            String fullName;
+                            String baseName;
+                            if (normalizeHistoryPath(rawName, fullName, baseName, nullptr)) {
+                                if (SPIFFS.remove(fullName)) {
+                                    ++removedCount;
+                                }
+                            }
+                        }
+                        file = dir.openNextFile();
+                    }
+                };
+
+                File historyDir = SPIFFS.open(CALIB_HISTORY_DIR);
+                if (historyDir && historyDir.isDirectory()) {
+                    removeFromDir(historyDir);
+                }
+
+                File root = SPIFFS.open("/");
+                if (root && root.isDirectory()) {
+                    removeFromDir(root);
+                }
             }
 
             String json = String("{\"status\":\"ok\",\"cleared\":true,\"file_removed\":") +
-                          (removed ? "true" : "false") + "}";
+                          (removed ? "true" : "false") +
+                          ",\"history_removed\":" + String(removedCount) + "}";
             request->send(200, "application/json", json);
         }
     );
@@ -656,8 +760,10 @@ void WiFiManager::registerRoutes_() {
             m["capacity"]    = meta.capacity;
             m["interval_ms"] = meta.intervalMs;
             m["start_ms"]    = meta.startMs;
+            if (meta.startEpoch > 0) m["start_epoch"] = meta.startEpoch;
             m["saved"]       = meta.saved;
             m["saved_ms"]    = meta.savedMs;
+            if (meta.savedEpoch > 0) m["saved_epoch"] = meta.savedEpoch;
             if (isfinite(meta.targetTempC)) m["target_c"] = meta.targetTempC;
             if (meta.wireIndex > 0) m["wire_index"] = meta.wireIndex;
             m["offset"] = offset;
@@ -691,17 +797,104 @@ void WiFiManager::registerRoutes_() {
         }
     );
 
-    // ---- Calibration recorder file (binary) ----
+    // ---- Calibration recorder file (json) ----
     server.on("/calib_file", HTTP_GET,
         [this](AsyncWebServerRequest* request) {
             if (!isAuthenticated(request)) return;
             if (lock()) { lastActivityMillis = millis(); unlock(); }
 
-            if (SPIFFS.begin(false) && SPIFFS.exists(CALIB_MODEL_BIN_FILE)) {
-                request->send(SPIFFS, CALIB_MODEL_BIN_FILE, "application/octet-stream");
+            if (SPIFFS.begin(false) && SPIFFS.exists(CALIB_MODEL_JSON_FILE)) {
+                request->send(SPIFFS, CALIB_MODEL_JSON_FILE, "application/json");
             } else {
                 request->send(404, "application/json", "{\"error\":\"not_found\"}");
             }
+        }
+    );
+
+    // ---- Calibration history list (json) ----
+    server.on("/calib_history_list", HTTP_GET,
+        [this](AsyncWebServerRequest* request) {
+            if (!isAuthenticated(request)) return;
+            if (lock()) { lastActivityMillis = millis(); unlock(); }
+
+            DynamicJsonDocument doc(2048);
+            JsonArray items = doc.createNestedArray("items");
+
+            if (SPIFFS.begin(false)) {
+                auto addItem = [&](const String& rawName) {
+                    String fullName;
+                    String baseName;
+                    uint32_t epoch = 0;
+                    if (!normalizeHistoryPath(rawName, fullName, baseName, &epoch)) return;
+                    for (JsonObject obj : items) {
+                        const char* existing = obj["name"];
+                        if (existing && fullName == existing) return;
+                    }
+                    JsonObject row = items.createNestedObject();
+                    row["name"] = fullName;
+                    if (epoch > 0) row["start_epoch"] = epoch;
+                };
+
+                File historyDir = SPIFFS.open(CALIB_HISTORY_DIR);
+                if (historyDir && historyDir.isDirectory()) {
+                    File file = historyDir.openNextFile();
+                    while (file) {
+                        if (!file.isDirectory()) {
+                            addItem(file.name());
+                        }
+                        file.close();
+                        file = historyDir.openNextFile();
+                    }
+                }
+
+                File root = SPIFFS.open("/");
+                if (root && root.isDirectory()) {
+                    File file = root.openNextFile();
+                    while (file) {
+                        if (!file.isDirectory()) {
+                            addItem(file.name());
+                        }
+                        file.close();
+                        file = root.openNextFile();
+                    }
+                }
+            }
+
+            String json;
+            serializeJson(doc, json);
+            request->send(200, "application/json", json);
+        }
+    );
+
+    // ---- Calibration history file (json) ----
+    server.on("/calib_history_file", HTTP_GET,
+        [this](AsyncWebServerRequest* request) {
+            if (!isAuthenticated(request)) return;
+            if (lock()) { lastActivityMillis = millis(); unlock(); }
+
+            if (!request->hasParam("name")) {
+                request->send(400, "application/json", "{\"error\":\"missing_name\"}");
+                return;
+            }
+            String name = request->getParam("name")->value();
+            String fullName;
+            String baseName;
+            if (!normalizeHistoryPath(name, fullName, baseName, nullptr)) {
+                request->send(400, "application/json", "{\"error\":\"invalid_name\"}");
+                return;
+            }
+            if (SPIFFS.begin(false)) {
+                if (SPIFFS.exists(fullName)) {
+                    request->send(SPIFFS, fullName, "application/json");
+                    return;
+                }
+                String legacyPath = "/" + baseName;
+                if (legacyPath != fullName && SPIFFS.exists(legacyPath)) {
+                    request->send(SPIFFS, legacyPath, "application/json");
+                    return;
+                }
+            }
+            request->send(404, "application/json", "{\"error\":\"not_found\"}");
         }
     );
 
@@ -1008,8 +1201,8 @@ void WiFiManager::registerRoutes_() {
 
             JsonArray wireTemps = doc.createNestedArray("wireTemps");
             for (uint8_t i = 0; i < HeaterManager::kWireCount; ++i) {
-                const float t = s.wireTemps[i];
-                wireTemps.add(isfinite(t) ? (int)lroundf(t) : -127);
+                const double t = s.wireTemps[i];
+                wireTemps.add(isfinite(t) ? (int)lround(t) : -127);
             }
 
             doc["ready"] = (snap.state == DeviceState::Idle);
@@ -1054,6 +1247,38 @@ void WiFiManager::registerRoutes_() {
                 } else {
                     sess["valid"]   = false;
                     sess["running"] = false;
+                }
+            }
+
+            String json;
+            serializeJson(doc, json);
+            request->send(200, "application/json", json);
+        }
+    );
+
+    // ---- Last stop/error event ----
+    server.on("/last_event", HTTP_GET,
+        [this](AsyncWebServerRequest* request) {
+            if (!isAuthenticated(request)) return;
+            if (lock()) { lastActivityMillis = millis(); unlock(); }
+
+            StaticJsonDocument<512> doc;
+            const Device::StateSnapshot snap = DEVTRAN->getStateSnapshot();
+            doc["state"] = stateName(snap.state);
+
+            if (DEVICE) {
+                Device::LastEventInfo info = DEVICE->getLastEventInfo();
+                JsonObject err = doc.createNestedObject("last_error");
+                if (info.hasError) {
+                    err["reason"] = info.errorReason;
+                    if (info.errorMs) err["ms"] = info.errorMs;
+                    if (info.errorEpoch) err["epoch"] = info.errorEpoch;
+                }
+                JsonObject stop = doc.createNestedObject("last_stop");
+                if (info.hasStop) {
+                    stop["reason"] = info.stopReason;
+                    if (info.stopMs) stop["ms"] = info.stopMs;
+                    if (info.stopEpoch) stop["epoch"] = info.stopEpoch;
                 }
             }
 
@@ -1200,62 +1425,62 @@ void WiFiManager::registerRoutes_() {
                     return;
                 }
                 else if (target == "wireTauSec") {
-                    float v = value.as<float>();
-                    if (!isfinite(v) || v < 0.05f) v = DEFAULT_WIRE_TAU_SEC;
-                    if (v > 600.0f) v = 600.0f;
-                    CONF->PutFloat(WIRE_TAU_KEY, v);
+                    double v = value.as<double>();
+                    if (!isfinite(v) || v < 0.05) v = DEFAULT_WIRE_TAU_SEC;
+                    if (v > 600.0) v = 600.0;
+                    CONF->PutDouble(WIRE_TAU_KEY, v);
                     request->send(200, "application/json",
                                   "{\"status\":\"ok\",\"applied\":true}");
                     return;
                 }
                 else if (target == "wireKLoss") {
-                    float v = value.as<float>();
-                    if (!isfinite(v) || v <= 0.0f) v = DEFAULT_WIRE_K_LOSS;
-                    CONF->PutFloat(WIRE_K_LOSS_KEY, v);
+                    double v = value.as<double>();
+                    if (!isfinite(v) || v <= 0.0) v = DEFAULT_WIRE_K_LOSS;
+                    CONF->PutDouble(WIRE_K_LOSS_KEY, v);
                     request->send(200, "application/json",
                                   "{\"status\":\"ok\",\"applied\":true}");
                     return;
                 }
                 else if (target == "wireThermalC") {
-                    float v = value.as<float>();
-                    if (!isfinite(v) || v <= 0.0f) v = DEFAULT_WIRE_THERMAL_C;
-                    CONF->PutFloat(WIRE_C_TH_KEY, v);
+                    double v = value.as<double>();
+                    if (!isfinite(v) || v <= 0.0) v = DEFAULT_WIRE_THERMAL_C;
+                    CONF->PutDouble(WIRE_C_TH_KEY, v);
                     request->send(200, "application/json",
                                   "{\"status\":\"ok\",\"applied\":true}");
                     return;
                 }
                 else if (target == "wireKp") {
-                    float v = value.as<float>();
-                    if (!isfinite(v) || v < 0.0f) v = DEFAULT_WIRE_KP;
+                    double v = value.as<double>();
+                    if (!isfinite(v) || v < 0.0) v = DEFAULT_WIRE_KP;
                     if (THERMAL_PI) THERMAL_PI->setWireKp(v, true);
-                    else CONF->PutFloat(WIRE_KP_KEY, v);
+                    else CONF->PutDouble(WIRE_KP_KEY, v);
                     request->send(200, "application/json",
                                   "{\"status\":\"ok\",\"applied\":true}");
                     return;
                 }
                 else if (target == "wireKi") {
-                    float v = value.as<float>();
-                    if (!isfinite(v) || v < 0.0f) v = DEFAULT_WIRE_KI;
+                    double v = value.as<double>();
+                    if (!isfinite(v) || v < 0.0) v = DEFAULT_WIRE_KI;
                     if (THERMAL_PI) THERMAL_PI->setWireKi(v, true);
-                    else CONF->PutFloat(WIRE_KI_KEY, v);
+                    else CONF->PutDouble(WIRE_KI_KEY, v);
                     request->send(200, "application/json",
                                   "{\"status\":\"ok\",\"applied\":true}");
                     return;
                 }
                 else if (target == "floorKp") {
-                    float v = value.as<float>();
-                    if (!isfinite(v) || v < 0.0f) v = DEFAULT_FLOOR_KP;
+                    double v = value.as<double>();
+                    if (!isfinite(v) || v < 0.0) v = DEFAULT_FLOOR_KP;
                     if (THERMAL_PI) THERMAL_PI->setFloorKp(v, true);
-                    else CONF->PutFloat(FLOOR_KP_KEY, v);
+                    else CONF->PutDouble(FLOOR_KP_KEY, v);
                     request->send(200, "application/json",
                                   "{\"status\":\"ok\",\"applied\":true}");
                     return;
                 }
                 else if (target == "floorKi") {
-                    float v = value.as<float>();
-                    if (!isfinite(v) || v < 0.0f) v = DEFAULT_FLOOR_KI;
+                    double v = value.as<double>();
+                    if (!isfinite(v) || v < 0.0) v = DEFAULT_FLOOR_KI;
                     if (THERMAL_PI) THERMAL_PI->setFloorKi(v, true);
-                    else CONF->PutFloat(FLOOR_KI_KEY, v);
+                    else CONF->PutDouble(FLOOR_KI_KEY, v);
                     request->send(200, "application/json",
                                   "{\"status\":\"ok\",\"applied\":true}");
                     return;
@@ -1539,13 +1764,13 @@ void WiFiManager::registerRoutes_() {
             doc["tempTripC"]       = CONF->GetFloat(TEMP_THRESHOLD_KEY, DEFAULT_TEMP_THRESHOLD);
             doc["tempWarnC"]       = CONF->GetFloat(TEMP_WARN_KEY, DEFAULT_TEMP_WARN_C);
             doc["idleCurrentA"]    = CONF->GetFloat(IDLE_CURR_KEY, DEFAULT_IDLE_CURR);
-            doc["wireTauSec"]      = CONF->GetFloat(WIRE_TAU_KEY, DEFAULT_WIRE_TAU_SEC);
-            doc["wireKLoss"]       = CONF->GetFloat(WIRE_K_LOSS_KEY, DEFAULT_WIRE_K_LOSS);
-            doc["wireThermalC"]    = CONF->GetFloat(WIRE_C_TH_KEY, DEFAULT_WIRE_THERMAL_C);
-            doc["wireKp"]          = CONF->GetFloat(WIRE_KP_KEY, DEFAULT_WIRE_KP);
-            doc["wireKi"]          = CONF->GetFloat(WIRE_KI_KEY, DEFAULT_WIRE_KI);
-            doc["floorKp"]         = CONF->GetFloat(FLOOR_KP_KEY, DEFAULT_FLOOR_KP);
-            doc["floorKi"]         = CONF->GetFloat(FLOOR_KI_KEY, DEFAULT_FLOOR_KI);
+            doc["wireTauSec"]      = CONF->GetDouble(WIRE_TAU_KEY, DEFAULT_WIRE_TAU_SEC);
+            doc["wireKLoss"]       = CONF->GetDouble(WIRE_K_LOSS_KEY, DEFAULT_WIRE_K_LOSS);
+            doc["wireThermalC"]    = CONF->GetDouble(WIRE_C_TH_KEY, DEFAULT_WIRE_THERMAL_C);
+            doc["wireKp"]          = CONF->GetDouble(WIRE_KP_KEY, DEFAULT_WIRE_KP);
+            doc["wireKi"]          = CONF->GetDouble(WIRE_KI_KEY, DEFAULT_WIRE_KI);
+            doc["floorKp"]         = CONF->GetDouble(FLOOR_KP_KEY, DEFAULT_FLOOR_KP);
+            doc["floorKi"]         = CONF->GetDouble(FLOOR_KI_KEY, DEFAULT_FLOOR_KI);
             doc["ntcBeta"]         = CONF->GetFloat(NTC_BETA_KEY, DEFAULT_NTC_BETA);
             doc["ntcR0"]           = CONF->GetFloat(NTC_R0_KEY, DEFAULT_NTC_R0_OHMS);
             doc["ntcFixedRes"]     = CONF->GetFloat(NTC_FIXED_RES_KEY, DEFAULT_NTC_FIXED_RES_OHMS);
@@ -2149,7 +2374,8 @@ void WiFiManager::snapshotTask(void* param) {
             n = DEVICE->tempSensor->getSensorCount();
             if (n > MAX_TEMP_SENSORS) n = MAX_TEMP_SENSORS;
             for (uint8_t i = 0; i < n; ++i) {
-                local.temps[i] = DEVICE->tempSensor->getTemperature(i);
+                const float t = DEVICE->tempSensor->getTemperature(i);
+                local.temps[i] = isfinite(t) ? t : -127.0f;
             }
         }
         for (uint8_t i = n; i < MAX_TEMP_SENSORS; ++i) {
@@ -2158,10 +2384,10 @@ void WiFiManager::snapshotTask(void* param) {
 
         // Virtual wire temps + outputs
         for (uint8_t i = 1; i <= HeaterManager::kWireCount; ++i) {
-            const float wt = (WIRE
-                              ? WIRE->getWireEstimatedTemp(i)
-                              : NAN);
-            local.wireTemps[i - 1] = isfinite(wt) ? wt : -127.0f;
+            const double wt = (WIRE
+                               ? WIRE->getWireEstimatedTemp(i)
+                               : NAN);
+            local.wireTemps[i - 1] = isfinite(wt) ? wt : -127.0;
             local.outputs[i - 1]   =
                 (WIRE ? WIRE->getOutputState(i) : false);
         }

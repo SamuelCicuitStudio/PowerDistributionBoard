@@ -177,6 +177,17 @@ public:
         uint32_t    seq;
     };
 
+    struct LastEventInfo {
+        bool     hasError = false;
+        uint32_t errorMs = 0;
+        uint32_t errorEpoch = 0;
+        char     errorReason[96] = {0};
+        bool     hasStop = false;
+        uint32_t stopMs = 0;
+        uint32_t stopEpoch = 0;
+        char     stopReason[96] = {0};
+    };
+
     enum class DevCmdType : uint8_t {
         SET_LED_FEEDBACK,
         SET_ON_TIME_MS,
@@ -296,6 +307,9 @@ public:
     bool             submitCommand(DevCommand& cmd);
     bool             waitForCommandAck(DevCommandAck& ack, TickType_t toTicks);
     void             prepareForDeepSleep();
+    void             setLastErrorReason(const char* reason);
+    void             setLastStopReason(const char* reason);
+    LastEventInfo     getLastEventInfo() const;
 
     // -------------------------------------------------------------------------
     // Thermal Model Interface (history-based)
@@ -470,6 +484,13 @@ private:
     QueueHandle_t         ackQueue       = nullptr;
     TaskHandle_t          cmdTaskHandle  = nullptr;
     bool                  manualMode     = false;
+    SemaphoreHandle_t     eventMtx       = nullptr;
+    char                  lastErrorReason[96] = {0};
+    uint32_t              lastErrorMs    = 0;
+    uint32_t              lastErrorEpoch = 0;
+    char                  lastStopReason[96] = {0};
+    uint32_t              lastStopMs     = 0;
+    uint32_t              lastStopEpoch  = 0;
 
     // Last known heater mask (for continuity between thermal updates).
     uint16_t lastHeaterMask      = 0;

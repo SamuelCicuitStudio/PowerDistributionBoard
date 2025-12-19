@@ -56,6 +56,7 @@ public:
     void PutBool     (const char* key, bool value);
     void PutInt      (const char* key, int value);
     void PutFloat    (const char* key, float value);
+    void PutDouble   (const char* key, double value);
     void PutString   (const char* key, const String& value);
     void PutUInt     (const char* key, int value);
     void PutULong64  (const char* key, int value);
@@ -67,6 +68,7 @@ public:
     int      GetInt     (const char* key, int defaultValue);
     uint64_t GetULong64 (const char* key, int defaultValue);
     float    GetFloat   (const char* key, float defaultValue);
+    double   GetDouble  (const char* key, double defaultValue);
     String   GetString  (const char* key, const String& defaultValue);
 
     // -----------------------------------------------------------------

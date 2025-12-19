@@ -16,31 +16,31 @@ class PiController {
 public:
     PiController();
 
-    void setGains(float kp, float ki);
-    void setOutputLimits(float minOut, float maxOut);
-    void setIntegralLimits(float minI, float maxI);
+    void setGains(double kp, double ki);
+    void setOutputLimits(double minOut, double maxOut);
+    void setIntegralLimits(double minI, double maxI);
 
-    void reset(float integral = 0.0f, float lastOutput = 0.0f);
+    void reset(double integral = 0.0, double lastOutput = 0.0);
 
-    float update(float error, float dtSec);
+    double update(double error, double dtSec);
 
-    float getKp() const;
-    float getKi() const;
-    float getIntegral() const;
-    float getLastOutput() const;
+    double getKp() const;
+    double getKi() const;
+    double getIntegral() const;
+    double getLastOutput() const;
 
 private:
-    float clamp_(float v, float lo, float hi) const;
+    double clamp_(double v, double lo, double hi) const;
 
-    float _kp         = 0.0f;
-    float _ki         = 0.0f;
-    float _integral   = 0.0f;
-    float _lastOutput = 0.0f;
+    double _kp         = 0.0;
+    double _ki         = 0.0;
+    double _integral   = 0.0;
+    double _lastOutput = 0.0;
 
-    float _outMin = -INFINITY;
-    float _outMax = INFINITY;
-    float _iMin   = -INFINITY;
-    float _iMax   = INFINITY;
+    double _outMin = -INFINITY;
+    double _outMax = INFINITY;
+    double _iMin   = -INFINITY;
+    double _iMax   = INFINITY;
 };
 
 #endif // PI_CONTROLLER_H

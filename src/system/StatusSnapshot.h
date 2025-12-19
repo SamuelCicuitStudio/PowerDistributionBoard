@@ -20,7 +20,7 @@ struct StatusSnapshot {
     float current      = 0.0f;
 
     float temps[MAX_TEMP_SENSORS] = {0};                    // DS18B20s (cached)
-    float wireTemps[HeaterManager::kWireCount] = {0};       // virtual wire temps
+    double wireTemps[HeaterManager::kWireCount] = {0};      // virtual wire temps
     bool  outputs[HeaterManager::kWireCount]   = {false};   // output states
 
     bool  relayOn   = false;

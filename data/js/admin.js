@@ -116,6 +116,8 @@
     ntcCalRef: "Reference temperature for NTC calibration (blank = use heatsink).",
     ntcCalibrateBtn: "Calibrate NTC using the reference (or heatsink if blank).",
     calibSuggestRefresh: "Compute suggested thermal model and PI gains from last calibration data.",
+    calibSuggestFromHistory:
+      "Compute and apply thermal model + PI gains from the selected saved history.",
     calibPersistBtn: "Persist suggested thermal/PI values and reload settings.",
 
     // Loop timing
@@ -139,15 +141,19 @@
 
     // Calibration + nichrome
     calibrationBtn: "Open calibration tools and live temperature trace.",
+    errorBtn: "Show the last stop/error details.",
     startNtcCalibBtn: "Start NTC calibration recording.",
     startModelCalibBtn: "Start temperature model calibration recording.",
     stopCalibBtn: "Stop recording and save calibration data.",
     calibLatestBtn: "Jump to the most recent part of the chart.",
     calibPauseBtn: "Pause/resume chart updates so you can inspect history.",
-    calibHistoryBtn: "Load and view the full calibration history buffer.",
-      calibClearBtn: "Clear calibration buffer and saved data.",
-      calibrationInfoBtn: "Show the calibration help overlay.",
-      wireOhmPerM: "Nichrome resistivity (Ohms per meter).",
+    calibHistoryBtn: "Load and view the in-memory calibration history buffer.",
+    calibClearBtn: "Clear calibration buffer and saved data.",
+    calibrationInfoBtn: "Show the calibration help overlay.",
+    calibHistorySelect: "Pick a saved calibration history file.",
+    calibHistoryLoadBtn: "Load the selected saved history into the chart.",
+    calibHistoryRefreshBtn: "Refresh the saved history list.",
+    wireOhmPerM: "Nichrome resistivity (Ohms per meter).",
       floorThicknessMm: "Floor/cover thickness above the wire (20-50 mm).",
       floorMaterial: "Floor material selection (wood, epoxy, concrete, slate, marble, granite).",
       floorMaxC: "Max allowed floor temperature (C, capped at 35).",
@@ -2114,10 +2120,11 @@
       for (let i = 0; i < 12; i++) {
         const id = "temp" + (i + 1) + "Value";
         const t = temps[i];
-        if (t === -127 || t === undefined) {
+        const num = Number(t);
+        if (t === undefined || t === null || Number.isNaN(num) || num === -127) {
           updateGauge(id, "Off", "\u00B0C", 150);
         } else {
-          updateGauge(id, Number(t), "\u00B0C", 150);
+          updateGauge(id, num, "\u00B0C", 150);
         }
       }
 
@@ -2390,6 +2397,63 @@
     btn.addEventListener("click", loadSessionHistoryAndOpen);
   }
 
+  // Error modal controls
+  function openErrorModal() {
+    const m = document.getElementById("errorModal");
+    if (!m) return;
+    m.classList.add("show");
+  }
+
+  function closeErrorModal() {
+    const m = document.getElementById("errorModal");
+    if (!m) return;
+    m.classList.remove("show");
+  }
+
+  function bindErrorButton() {
+    const btn = document.getElementById("errorBtn");
+    if (!btn) return;
+    btn.addEventListener("click", loadLastEventAndOpen);
+  }
+
+  function formatEventTime(epochSec, ms) {
+    if (epochSec) return formatEpochLocal(epochSec);
+    if (ms) return fmtUptime(ms);
+    return "--";
+  }
+
+  async function loadLastEventAndOpen() {
+    try {
+      const res = await fetch("/last_event", { cache: "no-store" });
+      if (!res.ok) {
+        console.error("Failed to load last_event:", res.status);
+        openErrorModal();
+        return;
+      }
+      const data = await res.json();
+      const stateEl = document.getElementById("errorStateText");
+      if (stateEl) stateEl.textContent = data.state || "--";
+
+      const err = data.last_error || {};
+      const stop = data.last_stop || {};
+
+      const errReason = document.getElementById("errorReasonText");
+      if (errReason) errReason.textContent = err.reason || "--";
+      const errTime = document.getElementById("errorTimeText");
+      if (errTime) errTime.textContent = formatEventTime(err.epoch, err.ms);
+
+      const stopReason = document.getElementById("stopReasonText");
+      if (stopReason) stopReason.textContent = stop.reason || "--";
+      const stopTime = document.getElementById("stopTimeText");
+      if (stopTime) stopTime.textContent = formatEventTime(stop.epoch, stop.ms);
+
+      openErrorModal();
+    } catch (err) {
+      console.error("Last event load failed", err);
+      openErrorModal();
+    }
+  }
+
   async function loadSessionHistoryAndOpen() {
     try {
       // Load from SPIFFS/static file
@@ -2486,6 +2550,7 @@
   function mountAllOverlays() {
     mountOverlayInsideUiContainer("sessionHistoryModal");
     mountOverlayInsideUiContainer("calibrationModal");
+    mountOverlayInsideUiContainer("errorModal");
     const shClose = document.querySelector(
       "#sessionHistoryModal .session-history-close"
     );
@@ -2508,6 +2573,7 @@
     startCalibrationPoll();
     startWireTestPoll();
     fetchCalibPiSuggest();
+    refreshCalibHistoryList(true);
   }
 
   function closeCalibrationModal() {
@@ -2542,6 +2608,10 @@
     const refreshSug = document.getElementById("calibSuggestRefresh");
     if (refreshSug) {
       refreshSug.addEventListener("click", fetchCalibPiSuggest);
+    }
+    const suggestFromHistory = document.getElementById("calibSuggestFromHistory");
+    if (suggestFromHistory) {
+      suggestFromHistory.addEventListener("click", computeModelFromHistory);
     }
     const persistSug = document.getElementById("calibPersistBtn");
     if (persistSug) {
@@ -2583,6 +2653,16 @@
       historyBtn.addEventListener("click", toggleCalibrationHistory);
     }
 
+    const historyLoadBtn = document.getElementById("calibHistoryLoadBtn");
+    if (historyLoadBtn) {
+      historyLoadBtn.addEventListener("click", loadSavedCalibration);
+    }
+
+    const historyRefreshBtn = document.getElementById("calibHistoryRefreshBtn");
+    if (historyRefreshBtn) {
+      historyRefreshBtn.addEventListener("click", () => refreshCalibHistoryList(true));
+    }
+
     const clearBtn = document.getElementById("calibClearBtn");
     if (clearBtn) {
       clearBtn.addEventListener("click", clearCalibrationData);
@@ -2592,6 +2672,7 @@
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
       setCalibrationInfoVisible(false);
+      closeErrorModal();
     }
   });
 
@@ -2626,50 +2707,61 @@
     setCalibrationInfoVisible(show);
   }
 
+  function applyCalibPiSuggestion(d) {
+    const setTxt = (id, val, suffix = "") => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      if (val === undefined || val === null || Number.isNaN(val)) {
+        el.textContent = "--";
+      } else {
+        el.textContent = `${Number(val).toFixed(3)}${suffix}`;
+      }
+    };
+    setTxt("calibTauText", d.wire_tau, " ");
+    setTxt("calibKText", d.wire_k_loss, " ");
+    setTxt("calibCText", d.wire_c, " ");
+    setTxt("calibPmaxText", d.max_power_w, " ");
+    setTxt("calibWireKpSug", d.wire_kp_suggest, "");
+    setTxt("calibWireKiSug", d.wire_ki_suggest, "");
+    setTxt("calibFloorKpSug", d.floor_kp_suggest, "");
+    setTxt("calibFloorKiSug", d.floor_ki_suggest, "");
+    setTxt("calibWireKpCur", d.wire_kp_current, "");
+    setTxt("calibWireKiCur", d.wire_ki_current, "");
+    setTxt("calibFloorKpCur", d.floor_kp_current, "");
+    setTxt("calibFloorKiCur", d.floor_ki_current, "");
+    window.__calibPiSuggestion = d;
+  }
+
   async function fetchCalibPiSuggest() {
     try {
       const res = await fetch("/calib_pi_suggest", { cache: "no-store" });
       if (!res.ok) return;
       const d = await res.json();
-      const setTxt = (id, val, suffix = "") => {
-        const el = document.getElementById(id);
-        if (!el) return;
-        if (val === undefined || val === null || Number.isNaN(val)) {
-          el.textContent = "--";
-        } else {
-          el.textContent = `${Number(val).toFixed(3)}${suffix}`;
-        }
-      };
-      setTxt("calibTauText", d.wire_tau, " ");
-      setTxt("calibKText", d.wire_k_loss, " ");
-      setTxt("calibCText", d.wire_c, " ");
-      setTxt("calibPmaxText", d.max_power_w, " ");
-      setTxt("calibWireKpSug", d.wire_kp_suggest, "");
-      setTxt("calibWireKiSug", d.wire_ki_suggest, "");
-      setTxt("calibFloorKpSug", d.floor_kp_suggest, "");
-      setTxt("calibFloorKiSug", d.floor_ki_suggest, "");
-      setTxt("calibWireKpCur", d.wire_kp_current, "");
-      setTxt("calibWireKiCur", d.wire_ki_current, "");
-      setTxt("calibFloorKpCur", d.floor_kp_current, "");
-      setTxt("calibFloorKiCur", d.floor_ki_current, "");
-      // Store for persist
-      window.__calibPiSuggestion = d;
+      applyCalibPiSuggestion(d);
     } catch (err) {
       console.warn("PI suggest fetch failed", err);
     }
   }
 
+  function buildCalibPiPayload(d) {
+    const payload = {};
+    if (Number.isFinite(d.wire_tau)) payload.wire_tau = d.wire_tau;
+    if (Number.isFinite(d.wire_k_loss)) payload.wire_k_loss = d.wire_k_loss;
+    if (Number.isFinite(d.wire_c)) payload.wire_c = d.wire_c;
+    if (Number.isFinite(d.wire_kp_suggest)) payload.wire_kp = d.wire_kp_suggest;
+    if (Number.isFinite(d.wire_ki_suggest)) payload.wire_ki = d.wire_ki_suggest;
+    if (Number.isFinite(d.floor_kp_suggest)) payload.floor_kp = d.floor_kp_suggest;
+    if (Number.isFinite(d.floor_ki_suggest)) payload.floor_ki = d.floor_ki_suggest;
+    return payload;
+  }
+
   async function saveCalibPiSuggest() {
     const d = window.__calibPiSuggestion || {};
-    const payload = {
-      wire_tau: d.wire_tau,
-      wire_k_loss: d.wire_k_loss,
-      wire_c: d.wire_c,
-      wire_kp: d.wire_kp_suggest,
-      wire_ki: d.wire_ki_suggest,
-      floor_kp: d.floor_kp_suggest,
-      floor_ki: d.floor_ki_suggest,
-    };
+    const payload = buildCalibPiPayload(d);
+    if (!Object.keys(payload).length) {
+      openAlert("Calibration", "No valid model values to save.", "warning");
+      return;
+    }
     try {
       const res = await fetch("/calib_pi_save", {
         method: "POST",
@@ -2689,11 +2781,211 @@
     }
   }
 
+  function avgLastTemps(temps, count) {
+    let sum = 0;
+    let used = 0;
+    for (let i = temps.length - 1; i >= 0 && used < count; i--) {
+      const t = temps[i];
+      if (Number.isFinite(t)) {
+        sum += t;
+        used++;
+      }
+    }
+    return used ? sum / used : NaN;
+  }
+
+  function computeModelFromSamples(samples, fallback) {
+    if (!Array.isArray(samples) || samples.length < 5) return null;
+
+    const tms = [];
+    const temps = [];
+    const powers = [];
+    let maxPower = 0;
+
+    for (const s of samples) {
+      const t = Number(s.t_ms);
+      const temp = Number(s.temp_c);
+      const v = Number(s.v);
+      const i = Number(s.i);
+      tms.push(Number.isFinite(t) ? t : NaN);
+      temps.push(Number.isFinite(temp) ? temp : NaN);
+      let p = NaN;
+      if (Number.isFinite(v) && Number.isFinite(i)) {
+        p = v * i;
+        if (Number.isFinite(p) && p > maxPower) maxPower = p;
+      }
+      powers.push(p);
+    }
+
+    if (!Number.isFinite(maxPower) || maxPower <= 0) {
+      maxPower = Number.isFinite(fallback.max_power_w) ? fallback.max_power_w : 0;
+    }
+    const threshold = Math.max(5, maxPower * 0.2);
+
+    let start = 0;
+    while (
+      start < powers.length &&
+      !(Number.isFinite(powers[start]) && powers[start] > threshold)
+    ) {
+      start++;
+    }
+    if (start >= powers.length) start = 0;
+
+    let end = -1;
+    let lowCount = 0;
+    for (let i = start + 1; i < powers.length; i++) {
+      if (!Number.isFinite(powers[i]) || powers[i] < threshold) {
+        lowCount++;
+        if (lowCount >= 3) {
+          end = i - 2;
+          break;
+        }
+      } else {
+        lowCount = 0;
+      }
+    }
+
+    let peakIndex = start;
+    let peakTemp = -Infinity;
+    for (let i = start; i < temps.length; i++) {
+      const temp = temps[i];
+      if (Number.isFinite(temp) && temp > peakTemp) {
+        peakTemp = temp;
+        peakIndex = i;
+      }
+      if (end >= start && i >= end) break;
+    }
+    if (!Number.isFinite(peakTemp)) return null;
+    if (end < start || end > peakIndex) end = peakIndex;
+
+    const ambient = avgLastTemps(temps, 10);
+    if (!Number.isFinite(ambient)) return null;
+
+    const deltaT = peakTemp - ambient;
+    if (!Number.isFinite(deltaT) || deltaT <= 1.0) return null;
+
+    const tStartMs = Number.isFinite(tms[start]) ? tms[start] : 0;
+    const tPeakMs = Number.isFinite(tms[peakIndex]) ? tms[peakIndex] : tStartMs;
+
+    const t63 = ambient + 0.632 * deltaT;
+    let t63Ms = NaN;
+    for (let i = start; i <= peakIndex; i++) {
+      if (Number.isFinite(temps[i]) && temps[i] >= t63 && Number.isFinite(tms[i])) {
+        t63Ms = tms[i];
+        break;
+      }
+    }
+
+    let tauSec = NaN;
+    if (Number.isFinite(t63Ms) && t63Ms > tStartMs) {
+      tauSec = (t63Ms - tStartMs) / 1000;
+    } else if (tPeakMs > tStartMs) {
+      tauSec = (tPeakMs - tStartMs) / 3000;
+    }
+
+    let pSum = 0;
+    let pCount = 0;
+    for (let i = start; i <= peakIndex; i++) {
+      const p = powers[i];
+      if (Number.isFinite(p) && p > 0) {
+        pSum += p;
+        pCount++;
+      }
+    }
+    let pAvg = pCount ? pSum / pCount : NaN;
+    if (!Number.isFinite(pAvg) || pAvg <= 0) pAvg = maxPower;
+
+    let kLoss = pAvg / deltaT;
+    if (!Number.isFinite(kLoss) || kLoss <= 0) kLoss = NaN;
+
+    let thermalC =
+      Number.isFinite(kLoss) && Number.isFinite(tauSec) ? tauSec * kLoss : NaN;
+
+    const kEff = Number.isFinite(kLoss) && kLoss > 1e-6 ? kLoss : NaN;
+    const kWire = Number.isFinite(kEff) && kEff > 0 ? maxPower / kEff : NaN;
+
+    let wireKpSuggest = NaN;
+    let wireKiSuggest = NaN;
+    let floorKpSuggest = NaN;
+    let floorKiSuggest = NaN;
+
+    if (Number.isFinite(kWire) && kWire > 0 && Number.isFinite(tauSec) && tauSec > 0) {
+      const tcWire = tauSec * 3;
+      wireKpSuggest = tauSec / (kWire * tcWire);
+      wireKiSuggest = 1 / (kWire * tcWire);
+    }
+
+    if (Number.isFinite(tauSec) && tauSec > 0) {
+      const tcFloor = tauSec * 9;
+      floorKpSuggest = tauSec / tcFloor;
+      floorKiSuggest = 1 / tcFloor;
+    }
+
+    return {
+      wire_tau: Number.isFinite(tauSec) ? tauSec : fallback.wire_tau,
+      wire_k_loss: Number.isFinite(kLoss) ? kLoss : fallback.wire_k_loss,
+      wire_c: Number.isFinite(thermalC) ? thermalC : fallback.wire_c,
+      max_power_w: Number.isFinite(maxPower) ? maxPower : fallback.max_power_w,
+      wire_kp_suggest: Number.isFinite(wireKpSuggest)
+        ? wireKpSuggest
+        : fallback.wire_kp_suggest,
+      wire_ki_suggest: Number.isFinite(wireKiSuggest)
+        ? wireKiSuggest
+        : fallback.wire_ki_suggest,
+      floor_kp_suggest: Number.isFinite(floorKpSuggest)
+        ? floorKpSuggest
+        : fallback.floor_kp_suggest,
+      floor_ki_suggest: Number.isFinite(floorKiSuggest)
+        ? floorKiSuggest
+        : fallback.floor_ki_suggest,
+      wire_kp_current: fallback.wire_kp_current,
+      wire_ki_current: fallback.wire_ki_current,
+      floor_kp_current: fallback.floor_kp_current,
+      floor_ki_current: fallback.floor_ki_current,
+    };
+  }
+
+  async function computeModelFromHistory() {
+    const sel = document.getElementById("calibHistorySelect");
+    const name = sel ? sel.value : "";
+    if (!name) {
+      openAlert("Calibration", "Select a saved history first.", "warning");
+      return;
+    }
+
+    if (!window.__calibPiSuggestion) {
+      await fetchCalibPiSuggest();
+    }
+    const fallback = window.__calibPiSuggestion || {};
+
+    try {
+      const res = await fetch(`/calib_history_file?name=${encodeURIComponent(name)}`, {
+        cache: "no-store",
+      });
+      if (!res.ok) {
+        openAlert("Calibration", "Failed to load saved history.", "danger");
+        return;
+      }
+      const data = await res.json();
+      const computed = computeModelFromSamples(data.samples || [], fallback);
+      if (!computed) {
+        openAlert("Calibration", "Not enough data to compute model.", "warning");
+        return;
+      }
+      applyCalibPiSuggestion(computed);
+      await saveCalibPiSuggest();
+    } catch (err) {
+      console.error("History model compute failed:", err);
+      openAlert("Calibration", "History model computation failed.", "danger");
+    }
+  }
+
   async function startCalibration(mode) {
     const payload = {
       mode,
       interval_ms: 500,
       max_samples: 1200,
+      epoch: Math.floor(Date.now() / 1000),
     };
 
     try {
@@ -2716,15 +3008,17 @@
 
   async function stopCalibration() {
     try {
+      const epoch = Math.floor(Date.now() / 1000);
       const res = await fetch("/calib_stop", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: "{}",
+        body: JSON.stringify({ epoch }),
       });
       if (!res.ok) {
         console.error("Calibration stop failed:", res.status);
       }
       await pollCalibrationOnce();
+      refreshCalibHistoryList(true);
     } catch (err) {
       console.error("Calibration stop error:", err);
     }
@@ -2795,6 +3089,7 @@
       if (historyBtn) historyBtn.textContent = "Load History";
       renderCalibrationChart();
       await pollCalibrationOnce();
+      refreshCalibHistoryList(true);
     } catch (err) {
       console.error("Calibration clear error:", err);
     }
@@ -2917,6 +3212,67 @@
     return await res.json();
   }
 
+  async function fetchCalibrationHistoryList() {
+    try {
+      const res = await fetch("/calib_history_list", { cache: "no-store" });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch (err) {
+      console.warn("History list error:", err);
+      return null;
+    }
+  }
+
+  function formatEpochLocal(epochSec) {
+    if (!epochSec) return "--";
+    const d = new Date(epochSec * 1000);
+    if (Number.isNaN(d.getTime())) return "--";
+    return d.toLocaleString();
+  }
+
+  function populateCalibHistorySelect(items, selectNewest) {
+    const sel = document.getElementById("calibHistorySelect");
+    if (!sel) return;
+    const prev = sel.value;
+    sel.innerHTML = "";
+
+    if (!items || !items.length) {
+      const opt = document.createElement("option");
+      opt.value = "";
+      opt.textContent = "No saved history";
+      sel.appendChild(opt);
+      sel.disabled = true;
+      return;
+    }
+
+    const sorted = [...items].sort((a, b) => {
+      const ea = Number(a.start_epoch || 0);
+      const eb = Number(b.start_epoch || 0);
+      return eb - ea;
+    });
+
+    for (const item of sorted) {
+      const opt = document.createElement("option");
+      opt.value = item.name || "";
+      const label = item.start_epoch ? formatEpochLocal(item.start_epoch) : item.name;
+      opt.textContent = label || item.name || "Unknown";
+      sel.appendChild(opt);
+    }
+
+    sel.disabled = false;
+    if (selectNewest) {
+      sel.value = sel.options.length ? sel.options[0].value : "";
+    } else if (prev) {
+      sel.value = prev;
+    }
+  }
+
+  async function refreshCalibHistoryList(selectNewest = false) {
+    const data = await fetchCalibrationHistoryList();
+    const items = (data && data.items) ? data.items : [];
+    populateCalibHistorySelect(items, selectNewest);
+  }
+
   async function loadCalibrationHistory() {
     const meta = calibLastMeta || (await fetchCalibrationStatus());
     if (!meta || !meta.count) {
@@ -2948,9 +3304,51 @@
     }
   }
 
+  async function loadSavedCalibration() {
+    const sel = document.getElementById("calibHistorySelect");
+    const name = sel ? sel.value : "";
+    if (!name) {
+      openAlert("Calibration", "Select a saved history first.", "warning");
+      return;
+    }
+    try {
+      const res = await fetch(`/calib_history_file?name=${encodeURIComponent(name)}`, {
+        cache: "no-store",
+      });
+      if (!res.ok) {
+        openAlert("Calibration", "Failed to load saved history.", "danger");
+        return;
+      }
+      const data = await res.json();
+      calibViewMode = "saved";
+      calibSamples = Array.isArray(data.samples) ? data.samples : [];
+      calibLastMeta = data.meta || null;
+      renderCalibrationChart();
+      scrollCalibToLatest();
+
+      const last = [...calibSamples].reverse().find((s) => isFinite(s.temp_c));
+      setCalibText("calibTempText", last && isFinite(last.temp_c) ? `${last.temp_c.toFixed(1)} C` : "--");
+
+      if (calibLastMeta) {
+        setCalibText("calibStatusText", "Saved");
+        setCalibText("calibModeText", calibLastMeta.mode || "--");
+        setCalibText("calibCountText", calibLastMeta.count != null ? String(calibLastMeta.count) : "0");
+        setCalibText(
+          "calibIntervalText",
+          calibLastMeta.interval_ms ? `${calibLastMeta.interval_ms} ms` : "--"
+        );
+      }
+      const historyBtn = document.getElementById("calibHistoryBtn");
+      if (historyBtn) historyBtn.textContent = "Resume Live";
+    } catch (err) {
+      console.error("Saved history load error:", err);
+      openAlert("Calibration", "Saved history load failed.", "danger");
+    }
+  }
+
   async function toggleCalibrationHistory() {
     const btn = document.getElementById("calibHistoryBtn");
-    if (calibViewMode === "history") {
+    if (calibViewMode !== "live") {
       calibViewMode = "live";
       if (btn) btn.textContent = "Load History";
       await pollCalibrationOnce();
@@ -2975,7 +3373,7 @@
       meta.interval_ms ? `${meta.interval_ms} ms` : "--"
     );
 
-    if (calibViewMode === "history") return;
+    if (calibViewMode !== "live") return;
     if (calibChartPaused) return;
 
     const count = meta.count || 0;
@@ -3029,6 +3427,24 @@
     const ss = total % 60;
     if (hh > 0) return `${hh}:${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
     return `${mm}:${String(ss).padStart(2, "0")}`;
+  }
+
+  function fmtEpochTime(epochSec) {
+    if (!epochSec) return "--:--";
+    const d = new Date(epochSec * 1000);
+    if (Number.isNaN(d.getTime())) return "--:--";
+    const hh = String(d.getHours()).padStart(2, "0");
+    const mm = String(d.getMinutes()).padStart(2, "0");
+    const ss = String(d.getSeconds()).padStart(2, "0");
+    return `${hh}:${mm}:${ss}`;
+  }
+
+  function fmtCalibTime(msFromStart, startEpochSec, startMs) {
+    if (startEpochSec) {
+      const epoch = startEpochSec + Math.round((msFromStart || 0) / 1000);
+      return fmtEpochTime(epoch);
+    }
+    return fmtUptime((startMs || 0) + (msFromStart || 0));
   }
 
   const CALIB_T_MIN = 0;
@@ -3104,7 +3520,7 @@
     `;
   }
 
-  function buildCalibTimeTicks(samples, intervalMs, startMs) {
+  function buildCalibTimeTicks(samples, intervalMs, startMs, startEpochSec) {
     let s = `<g>`;
     const tickEverySamples = Math.max(
       1,
@@ -3112,8 +3528,8 @@
     );
     for (let i = 0; i < samples.length; i += tickEverySamples) {
       const x = CALIB_PLOT_PAD_LEFT + i * CALIB_DX;
-      const tAbs = (startMs || 0) + (samples[i]?.t_ms || 0);
-      const label = fmtUptime(tAbs);
+      const tMs = samples[i]?.t_ms || 0;
+      const label = fmtCalibTime(tMs, startEpochSec, startMs);
       s += `<line class="tick" x1="${x}" y1="${CALIB_Y0}" x2="${x}" y2="${CALIB_Y0 + 6}"></line>`;
       s += `<text class="subtext" x="${x - 18}" y="${CALIB_Y0 + 22}">${label}</text>`;
     }
@@ -3129,14 +3545,14 @@
     return `<polyline class="temp-line" points="${pts}"></polyline>`;
   }
 
-  function buildCalibLatestMarker(samples, xMax, startMs) {
+  function buildCalibLatestMarker(samples, xMax, startMs, startEpochSec) {
     if (samples.length === 0) return "";
     const i = samples.length - 1;
     const p = samples[i];
     const x = CALIB_PLOT_PAD_LEFT + i * CALIB_DX;
     const y = yFromTemp(p.temp_c);
 
-    const timeLabel = fmtUptime((startMs || 0) + (p.t_ms || 0));
+    const timeLabel = fmtCalibTime(p.t_ms || 0, startEpochSec, startMs);
     const tempLabel = `${Number(p.temp_c).toFixed(1)}C`;
     const timeTagX = clamp(x + 8, 8, xMax - 110);
 
@@ -3180,6 +3596,8 @@
       500;
     const startMs =
       (calibLastMeta && (calibLastMeta.start_ms ?? calibLastMeta.startMs)) || 0;
+    const startEpochSec =
+      (calibLastMeta && (calibLastMeta.start_epoch ?? calibLastMeta.startEpoch)) || 0;
 
     const xMax =
       CALIB_PLOT_PAD_LEFT + Math.max(1, samples.length - 1) * CALIB_DX + CALIB_RIGHT_PAD;
@@ -3192,17 +3610,17 @@
     plotSvg.innerHTML = `
       ${buildCalibGrid(xMax, intervalMs, samples.length)}
       ${buildCalibXAxis(xMax)}
-      ${buildCalibTimeTicks(samples, intervalMs, startMs)}
+      ${buildCalibTimeTicks(samples, intervalMs, startMs, startEpochSec)}
       <text class="subtext" x="8" y="18">Latest point: dot + dotted guides</text>
       ${buildCalibPolyline(samples)}
-      ${buildCalibLatestMarker(samples, xMax, startMs)}
+      ${buildCalibLatestMarker(samples, xMax, startMs, startEpochSec)}
     `;
 
     const last = samples[samples.length - 1];
     const tEl = document.getElementById("calibNowTempPill");
     const tsEl = document.getElementById("calibNowTimePill");
     if (tEl) tEl.textContent = Number(last.temp_c).toFixed(1);
-    if (tsEl) tsEl.textContent = fmtUptime(startMs + (last.t_ms || 0));
+    if (tsEl) tsEl.textContent = fmtCalibTime(last.t_ms || 0, startEpochSec, startMs);
 
     if (!calibChartPaused && nearEnd) {
       scrollCalibToLatest();
@@ -3369,10 +3787,11 @@
         for (let i = 0; i < 12; i++) {
           const id = "temp" + (i + 1) + "Value";
           const t = temps[i];
-          if (t === -127 || t === undefined) {
+          const num = Number(t);
+          if (t === undefined || t === null || Number.isNaN(num) || num === -127) {
             updateGauge(id, "Off", "\u00B0C", 150);
           } else {
-            updateGauge(id, Number(t), "\u00B0C", 150);
+            updateGauge(id, num, "\u00B0C", 150);
           }
         }
 
@@ -3452,6 +3871,7 @@
     startHeartbeat(4000);
     loadControls();
     bindSessionHistoryButton();
+    bindErrorButton();
     bindCalibrationButton();
     updateSessionStatsUI(null);
     // Disconnect button
@@ -3509,6 +3929,7 @@
   window.loadControls = loadControls;
   window.openSessionHistory = openSessionHistory;
   window.closeSessionHistory = closeSessionHistory;
+  window.closeErrorModal = closeErrorModal;
   window.openCalibrationModal = openCalibrationModal;
   window.closeCalibrationModal = closeCalibrationModal;
   window.updateSessionStatsUI = updateSessionStatsUI; // for backend to call later

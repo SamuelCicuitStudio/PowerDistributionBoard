@@ -21,18 +21,18 @@ class CalibrationRecorder;
 class ThermalEstimator {
 public:
     struct Result {
-        float tauSec        = NAN;
-        float kLoss         = NAN; // W/K
-        float thermalC      = NAN; // J/K
-        float maxPowerW     = NAN;
-        float wireKpSuggest = NAN;
-        float wireKiSuggest = NAN;
-        float floorKpSuggest = NAN;
-        float floorKiSuggest = NAN;
-        float wireKpCurrent = NAN;
-        float wireKiCurrent = NAN;
-        float floorKpCurrent = NAN;
-        float floorKiCurrent = NAN;
+        double tauSec         = NAN;
+        double kLoss          = NAN; // W/K
+        double thermalC       = NAN; // J/K
+        double maxPowerW      = NAN;
+        double wireKpSuggest  = NAN;
+        double wireKiSuggest  = NAN;
+        double floorKpSuggest = NAN;
+        double floorKiSuggest = NAN;
+        double wireKpCurrent  = NAN;
+        double wireKiCurrent  = NAN;
+        double floorKpCurrent = NAN;
+        double floorKiCurrent = NAN;
     };
 
     static ThermalEstimator* Get();
@@ -51,7 +51,7 @@ public:
 
 private:
     ThermalEstimator() = default;
-    float estimateMaxPowerW(const CalibrationRecorder* calib) const;
+    double estimateMaxPowerW(const CalibrationRecorder* calib) const;
 };
 
 #define THERMAL_EST ThermalEstimator::Get()

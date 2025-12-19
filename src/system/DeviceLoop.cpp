@@ -4,6 +4,7 @@
 #include "control/Buzzer.h"
 #include "services/SleepTimer.h"
 #include <math.h>
+#include <stdio.h>
 
 // ============================================================================
 // Helper: allowed[] -> bitmask
@@ -57,31 +58,31 @@ static bool _runMaskedPulse(Device* self,
     if (self->discharger && self->relayControl) {
         const float capF = self->getCapBankCapF();
         if (isfinite(capF) && capF > 0.0f) {
-            float Gtot = 0.0f;
+            double Gtot = 0.0;
             for (uint8_t i = 0; i < HeaterManager::kWireCount; ++i) {
                 if (!(mask & (1u << i))) continue;
                 float R = WIRE->getWireInfo(i + 1).resistanceOhm;
                 if (R > 0.01f && isfinite(R)) {
-                    Gtot += 1.0f / R;
+                    Gtot += 1.0 / R;
                 }
             }
-            const float Rload = (Gtot > 0.0f) ? (1.0f / Gtot) : INFINITY;
+            const double Rload = (Gtot > 0.0) ? (1.0 / Gtot) : INFINITY;
 
-            float vSrc = DEFAULT_DC_VOLTAGE;
-            float rChg = DEFAULT_CHARGE_RESISTOR_OHMS;
+            double vSrc = DEFAULT_DC_VOLTAGE;
+            double rChg = DEFAULT_CHARGE_RESISTOR_OHMS;
             if (CONF) {
                 rChg = CONF->GetFloat(CHARGE_RESISTOR_KEY, DEFAULT_CHARGE_RESISTOR_OHMS);
             }
-            if (!isfinite(vSrc) || vSrc <= 0.0f) vSrc = DEFAULT_DC_VOLTAGE;
-            if (!isfinite(rChg) || rChg <= 0.0f) rChg = DEFAULT_CHARGE_RESISTOR_OHMS;
+            if (!isfinite(vSrc) || vSrc <= 0.0) vSrc = DEFAULT_DC_VOLTAGE;
+            if (!isfinite(rChg) || rChg <= 0.0) rChg = DEFAULT_CHARGE_RESISTOR_OHMS;
 
             // If input relay is open, model "no source".
-            const float rChargeEff = self->relayControl->isOn() ? rChg : INFINITY;
+            const double rChargeEff = self->relayControl->isOn() ? rChg : INFINITY;
 
-            const float v0 = self->discharger->sampleVoltageNow();
-            const float dtS = (float)onTimeMs * 0.001f;
-            const float v1 = CapModel::predictVoltage(v0, dtS, capF, Rload, vSrc, rChargeEff);
-            const float eJ = CapModel::energyToLoadJ(v0, dtS, capF, Rload, vSrc, rChargeEff);
+            const double v0 = self->discharger->sampleVoltageNow();
+            const double dtS = onTimeMs * 0.001;
+            const double v1 = CapModel::predictVoltage(v0, dtS, capF, Rload, vSrc, rChargeEff);
+            const double eJ = CapModel::energyToLoadJ(v0, dtS, capF, Rload, vSrc, rChargeEff);
 
             DEBUG_PRINTF("[Pulse] pre: mask=0x%03X V0=%.2fV -> V1(pred)=%.2fV  E(pred)=%.2fJ  C=%.6fF\n",
                          (unsigned)mask,
@@ -268,6 +269,7 @@ void Device::loopTask() {
 
                 if (got & EVT_STOP_REQ) {
                     DEBUG_PRINTLN("[Device] STOP in IDLE -> full OFF");
+                    setLastStopReason("Stop requested");
                     RGB->postOverlay(OverlayEvent::RELAY_OFF);
                     relayControl->turnOff();
                     if (WIRE)      WIRE->disableAll();
@@ -445,6 +447,16 @@ void Device::loopTask() {
                 if (WIRE)      WIRE->disableAll();
                 if (indicator) indicator->clearAll();
                 RGB->setOff();
+                char reason[96] = {0};
+                if (abortCode) {
+                    snprintf(reason, sizeof(reason),
+                             "Run prep aborted (cat=%u code=%u)",
+                             static_cast<unsigned>(abortCat),
+                             static_cast<unsigned>(abortCode));
+                    setLastErrorReason(reason);
+                } else {
+                    setLastErrorReason("Run preparation aborted");
+                }
                 setState(DeviceState::Error);
                 continue; // back to OFF state
             }
@@ -602,6 +614,7 @@ void Device::StartLoop() {
             if (bits & EVT_STOP_REQ) {
                 DEBUG_PRINTLN("[Device] STOP -> exit SEQ loop");
                 xEventGroupClearBits(gEvt, EVT_STOP_REQ);
+                setLastStopReason("Stop requested");
                 setState(DeviceState::Idle);
                 break;
             }
@@ -709,6 +722,7 @@ void Device::StartLoop() {
             if (bits & EVT_STOP_REQ) {
                 DEBUG_PRINTLN("[Device] STOP -> exit MIXED loop");
                 xEventGroupClearBits(gEvt, EVT_STOP_REQ);
+                setLastStopReason("Stop requested");
                 setState(DeviceState::Idle);
                 break;
             }
@@ -827,6 +841,7 @@ void Device::StartLoop() {
             if (bits & EVT_STOP_REQ) {
                 DEBUG_PRINTLN("[Device] STOP -> exit ADV loop");
                 xEventGroupClearBits(gEvt, EVT_STOP_REQ);
+                setLastStopReason("Stop requested");
                 setState(DeviceState::Idle);
                 break;
             }
@@ -857,6 +872,15 @@ void Device::StartLoop() {
             }
             if (BUZZ) BUZZ->bipFault();
             if (StateLock()) {
+                uint8_t presentCount = 0;
+                for (uint8_t i = 0; i < HeaterManager::kWireCount; ++i) {
+                    if (wireStateModel.wire(i + 1).present) ++presentCount;
+                }
+                char reason[96] = {0};
+                snprintf(reason, sizeof(reason),
+                         "No connected wires (present=%u)",
+                         static_cast<unsigned>(presentCount));
+                setLastErrorReason(reason);
                 setState(DeviceState::Error);
                 StateUnlock();
             }

@@ -43,25 +43,25 @@
 // ======================================================================
 namespace CapModel {
 
-static inline float _safeResOhm(float r) {
-    if (!isfinite(r) || r <= 0.0f) return INFINITY;
+static inline double _safeResOhm(double r) {
+    if (!isfinite(r) || r <= 0.0) return INFINITY;
     return r;
 }
 
-static inline float predictVoltage(float v0,
-                                   float dtS,
-                                   float capF,
-                                   float rLoadOhm,
-                                   float vSrc,
-                                   float rChargeOhm)
+static inline double predictVoltage(double v0,
+                                    double dtS,
+                                    double capF,
+                                    double rLoadOhm,
+                                    double vSrc,
+                                    double rChargeOhm)
 {
-    if (!isfinite(v0)) v0 = 0.0f;
-    if (!isfinite(dtS) || dtS <= 0.0f) return v0;
-    if (!isfinite(capF) || capF <= 0.0f) return v0;
+    if (!isfinite(v0)) v0 = 0.0;
+    if (!isfinite(dtS) || dtS <= 0.0) return v0;
+    if (!isfinite(capF) || capF <= 0.0) return v0;
 
-    const float rL = _safeResOhm(rLoadOhm);
-    const float rC = _safeResOhm(rChargeOhm);
-    float vS = (isfinite(vSrc) && vSrc > 0.0f) ? vSrc : 0.0f;
+    const double rL = _safeResOhm(rLoadOhm);
+    const double rC = _safeResOhm(rChargeOhm);
+    double vS = (isfinite(vSrc) && vSrc > 0.0) ? vSrc : 0.0;
 
     // No source + no load -> hold.
     if (isinf(rC) && isinf(rL)) {
@@ -71,45 +71,45 @@ static inline float predictVoltage(float v0,
     // No source -> pure discharge: V(t)=V0*exp(-t/(Rload*C))
     if (isinf(rC)) {
         if (isinf(rL)) return v0;
-        const float tau = rL * capF;
-        if (!isfinite(tau) || tau <= 0.0f) return v0;
-        return v0 * expf(-dtS / tau);
+        const double tau = rL * capF;
+        if (!isfinite(tau) || tau <= 0.0) return v0;
+        return v0 * exp(-dtS / tau);
     }
 
     // No load -> pure charge: V(t)=Vsrc + (V0-Vsrc)*exp(-t/(Rcharge*C))
     if (isinf(rL)) {
-        const float tau = rC * capF;
-        if (!isfinite(tau) || tau <= 0.0f) return v0;
-        return vS + (v0 - vS) * expf(-dtS / tau);
+        const double tau = rC * capF;
+        if (!isfinite(tau) || tau <= 0.0) return v0;
+        return vS + (v0 - vS) * exp(-dtS / tau);
     }
 
     // Source + load -> first-order to V_inf with tau = (Rcharge||Rload)*C
-    const float rSum = rC + rL;
-    if (!isfinite(rSum) || rSum <= 0.0f) return v0;
+    const double rSum = rC + rL;
+    if (!isfinite(rSum) || rSum <= 0.0) return v0;
 
-    const float rEff = (rC * rL) / rSum;
-    const float tau  = rEff * capF;
-    if (!isfinite(tau) || tau <= 0.0f) return v0;
+    const double rEff = (rC * rL) / rSum;
+    const double tau  = rEff * capF;
+    if (!isfinite(tau) || tau <= 0.0) return v0;
 
-    const float vInf = vS * (rL / rSum);
-    return vInf + (v0 - vInf) * expf(-dtS / tau);
+    const double vInf = vS * (rL / rSum);
+    return vInf + (v0 - vInf) * exp(-dtS / tau);
 }
 
 // Energy delivered to the load resistor over dt (Joules).
-static inline float energyToLoadJ(float v0,
-                                 float dtS,
-                                 float capF,
-                                 float rLoadOhm,
-                                 float vSrc,
-                                 float rChargeOhm)
+static inline double energyToLoadJ(double v0,
+                                   double dtS,
+                                   double capF,
+                                   double rLoadOhm,
+                                   double vSrc,
+                                   double rChargeOhm)
 {
-    if (!isfinite(v0)) v0 = 0.0f;
-    if (!isfinite(dtS) || dtS <= 0.0f) return 0.0f;
-    if (!isfinite(capF) || capF <= 0.0f) return 0.0f;
+    if (!isfinite(v0)) v0 = 0.0;
+    if (!isfinite(dtS) || dtS <= 0.0) return 0.0;
+    if (!isfinite(capF) || capF <= 0.0) return 0.0;
 
-    const float rL = _safeResOhm(rLoadOhm);
-    const float rC = _safeResOhm(rChargeOhm);
-    float vS = (isfinite(vSrc) && vSrc > 0.0f) ? vSrc : 0.0f;
+    const double rL = _safeResOhm(rLoadOhm);
+    const double rC = _safeResOhm(rChargeOhm);
+    double vS = (isfinite(vSrc) && vSrc > 0.0) ? vSrc : 0.0;
 
     if (isinf(rL)) {
         return 0.0f; // no load -> no load energy
@@ -117,26 +117,26 @@ static inline float energyToLoadJ(float v0,
 
     // No source: use capacitor energy drop directly (stable numerically).
     if (isinf(rC)) {
-        const float v1 = predictVoltage(v0, dtS, capF, rL, 0.0f, INFINITY);
-        return 0.5f * capF * (v0 * v0 - v1 * v1);
+        const double v1 = predictVoltage(v0, dtS, capF, rL, 0.0, INFINITY);
+        return 0.5 * capF * (v0 * v0 - v1 * v1);
     }
 
-    const float rSum = rC + rL;
-    if (!isfinite(rSum) || rSum <= 0.0f) return 0.0f;
+    const double rSum = rC + rL;
+    if (!isfinite(rSum) || rSum <= 0.0) return 0.0;
 
-    const float rEff = (rC * rL) / rSum;
-    const float tau  = rEff * capF;
-    if (!isfinite(tau) || tau <= 0.0f) return 0.0f;
+    const double rEff = (rC * rL) / rSum;
+    const double tau  = rEff * capF;
+    if (!isfinite(tau) || tau <= 0.0) return 0.0;
 
-    const float vInf = vS * (rL / rSum);
-    const float A    = v0 - vInf;
+    const double vInf = vS * (rL / rSum);
+    const double A    = v0 - vInf;
 
-    const float e1 = expf(-dtS / tau);
-    const float e2 = expf(-2.0f * dtS / tau);
+    const double e1 = exp(-dtS / tau);
+    const double e2 = exp(-2.0 * dtS / tau);
 
-    const float term = vInf * vInf * dtS
-                     + 2.0f * vInf * A * tau * (1.0f - e1)
-                     + (A * A) * (tau * 0.5f) * (1.0f - e2);
+    const double term = vInf * vInf * dtS
+                      + 2.0 * vInf * A * tau * (1.0 - e1)
+                      + (A * A) * (tau * 0.5) * (1.0 - e2);
 
     return term / rL;
 }
@@ -153,8 +153,8 @@ struct WireRuntimeState {
     bool      locked          = false;  // locked out by thermal/safety policy
     bool      allowedByAccess = true;   // from config access flags
 
-    float     tempC           = NAN;    // latest virtual temperature
-    float     lastPowerW      = 0.0f;   // last computed power
+    double    tempC           = NAN;    // latest virtual temperature
+    double    lastPowerW      = 0.0;    // last computed power
     uint32_t  lastUpdateMs    = 0;      // last time temp/power were updated
     float     usageScore      = 0.0f;   // recent ON usage for fairness rotation
 };
@@ -214,65 +214,65 @@ private:
 
 class WireThermalModel {
 public:
-    void init(const HeaterManager& heater, float ambientC);
+    void init(const HeaterManager& heater, double ambientC);
 
     void integrate(const CurrentSensor::Sample* curBuf, size_t nCur,
                    const CpDischg::Sample*     voltBuf, size_t nVolt,
                    const HeaterManager::OutputEvent* outBuf, size_t nOut,
-                   float idleCurrentA, float ambientC,
+                   double idleCurrentA, double ambientC,
                    WireStateModel& runtime, HeaterManager& heater);
 
     // Variant that uses only current history (no voltage) to estimate
     // per-wire power and temperature rise.
     void integrateCurrentOnly(const CurrentSensor::Sample* curBuf, size_t nCur,
                               const HeaterManager::OutputEvent* outBuf, size_t nOut,
-                              float ambientC,
+                              double ambientC,
                               WireStateModel& runtime, HeaterManager& heater);
 
     // Variant that estimates heating from a capacitor + recharge resistor model.
     // Uses output-mask history and bus voltage snapshots (no per-sample current needed).
     void integrateCapModel(const CpDischg::Sample* voltBuf, size_t nVolt,
                            const HeaterManager::OutputEvent* outBuf, size_t nOut,
-                           float capF, float vSrc, float rChargeOhm,
-                           float ambientC,
+                           double capF, double vSrc, double rChargeOhm,
+                           double ambientC,
                            WireStateModel& runtime, HeaterManager& heater);
 
     // Cooling-only integration (no new history). Keeps temps decaying and
     // lockout timers advancing even when current/voltage samples are missing.
-    void coolingOnlyTick(float ambientC,
+    void coolingOnlyTick(double ambientC,
                          WireStateModel& runtime,
                          HeaterManager& heater);
 
-    float getWireTemp(uint8_t index) const;
-    void  setThermalParams(float tauSec, float kLoss, float thermalMassC);
-    bool  applyExternalWireTemp(uint8_t index, float tempC, uint32_t tsMs,
+    double getWireTemp(uint8_t index) const;
+    void   setThermalParams(double tauSec, double kLoss, double thermalMassC);
+    bool   applyExternalWireTemp(uint8_t index, double tempC, uint32_t tsMs,
                                 WireStateModel& runtime, HeaterManager& heater);
 
 private:
     struct WireThermalState {
-        float    R0              = 1.0f;
-        float    T               = 25.0f;
+        double   R0              = 1.0;
+        double   T               = 25.0;
         uint32_t lastUpdateMs    = 0;
         bool     locked          = false;
         uint32_t cooldownReleaseMs = 0;
     };
 
-    float wireResistanceAtTemp(uint8_t idx) const;
-    void  advanceWireTemp(WireThermalState& ws, float ambientC, float powerW, float dtS);
+    double wireResistanceAtTemp(uint8_t idx) const;
+    void   advanceWireTemp(WireThermalState& ws, double ambientC, double powerW, double dtS);
 
     WireThermalState _state[HeaterManager::kWireCount];
-    float            _ambientC      = 25.0f;
+    double           _ambientC      = 25.0;
     bool             _initialized   = false;
-    float            _tauSec        = DEFAULT_WIRE_TAU_SEC;
-    float            _heatLossK     = DEFAULT_WIRE_K_LOSS;
-    float            _thermalMassC  = DEFAULT_WIRE_THERMAL_C;
+    double           _tauSec        = DEFAULT_WIRE_TAU_SEC;
+    double           _heatLossK     = DEFAULT_WIRE_K_LOSS;
+    double           _thermalMassC  = DEFAULT_WIRE_THERMAL_C;
 
     // Pulse state for integrateCapModel()
     bool     _pulseActive   = false;
     uint16_t _pulseMask     = 0;
     uint32_t _pulseStartMs  = 0;
-    float    _pulseStartV   = NAN;
-    float    _lastBusV      = NAN;
+    double   _pulseStartV   = NAN;
+    double   _lastBusV      = NAN;
 };
 
 // ======================================================================

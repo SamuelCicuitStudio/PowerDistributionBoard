@@ -88,13 +88,13 @@
 #define TIMING_MODE_KEY                "TMMODE"    // int: 0=preset, 1=manual
 #define TIMING_PROFILE_KEY             "TMPROF"    // int: 0=hot, 1=medium, 2=gentle
 #define CURR_LIMIT_KEY                 "CURRLT"   // float: over-current trip threshold [A]
-#define WIRE_TAU_KEY                   "TAUSEC"   // float: thermal time constant tau [s]
-#define WIRE_K_LOSS_KEY                "WKLOS"    // float: heat loss coefficient k [W/K]
-#define WIRE_C_TH_KEY                  "WCTH"     // float: thermal mass C [J/K]
-#define WIRE_KP_KEY                    "WKP"      // float: wire PI Kp
-#define WIRE_KI_KEY                    "WKI"      // float: wire PI Ki
-#define FLOOR_KP_KEY                   "FKP"      // float: floor PI Kp
-#define FLOOR_KI_KEY                   "FKI"      // float: floor PI Ki
+#define WIRE_TAU_KEY                   "TAUSEC"   // double: thermal time constant tau [s]
+#define WIRE_K_LOSS_KEY                "WKLOS"    // double: heat loss coefficient k [W/K]
+#define WIRE_C_TH_KEY                  "WCTH"     // double: thermal mass C [J/K]
+#define WIRE_KP_KEY                    "WKP"      // double: wire PI Kp
+#define WIRE_KI_KEY                    "WKI"      // double: wire PI Ki
+#define FLOOR_KP_KEY                   "FKP"      // double: floor PI Kp
+#define FLOOR_KI_KEY                   "FKI"      // double: floor PI Ki
 #define TEMP_SENSOR_COUNT_KEY          "TMNT"    // Number of temperature sensors detected
 #define RTC_CURRENT_EPOCH_KEY          "RCUR"    // Last known epoch persisted
 #define RTC_PRESLEEP_EPOCH_KEY         "RSLP"   // Epoch saved before deep sleep
@@ -292,7 +292,10 @@ ASSERT_NVS_KEY_LEN(NICHROME_FINAL_TEMP_C_KEY);
 #define DEFAULT_FLOOR_MATERIAL         FLOOR_MAT_WOOD
 
 // Calibration data storage (model calibration history)
-#define CALIB_MODEL_BIN_FILE           "/CalibModel.bin"
+#define CALIB_MODEL_JSON_FILE          "/CalibModle.json"
+#define CALIB_HISTORY_DIR              "/calib_history"
+#define CALIB_HISTORY_PREFIX           "/calib_history/"
+#define CALIB_HISTORY_EXT              ".json"
 
 // ---------- Output Access Defaults ----------
 #define DEFAULT_OUT01_ACCESS           true

@@ -3,6 +3,7 @@
 #include "control/CpDischg.h"
 #include "sensing/NtcSensor.h"
 #include <math.h>
+#include <stdio.h>
 #ifndef THERMAL_TASK_STACK_SIZE
 #define THERMAL_TASK_STACK_SIZE 6144
 #endif
@@ -74,11 +75,11 @@ void Device::initWireThermalModelOnce() {
         ws.R0 = (wi.resistanceOhm > 0.01f) ? wi.resistanceOhm : 1.0f;
 
         // Thermal parameters (global first-order model)
-        float cTh = DEFAULT_WIRE_THERMAL_C;
-        float tau = DEFAULT_WIRE_TAU_SEC;
+        double cTh = DEFAULT_WIRE_THERMAL_C;
+        double tau = DEFAULT_WIRE_TAU_SEC;
         if (CONF) {
-            cTh = CONF->GetFloat(WIRE_C_TH_KEY, DEFAULT_WIRE_THERMAL_C);
-            tau = CONF->GetFloat(WIRE_TAU_KEY, DEFAULT_WIRE_TAU_SEC);
+            cTh = CONF->GetDouble(WIRE_C_TH_KEY, DEFAULT_WIRE_THERMAL_C);
+            tau = CONF->GetDouble(WIRE_TAU_KEY, DEFAULT_WIRE_TAU_SEC);
         }
         if (!isfinite(cTh) || cTh <= 0.0f) cTh = DEFAULT_WIRE_THERMAL_C;
         if (!isfinite(tau) || tau < 0.05f) tau = DEFAULT_WIRE_TAU_SEC;
@@ -327,6 +328,20 @@ void Device::updateWireThermalFromHistory() {
         float th = tempSensor->getHeatsinkTemp();
         if (overPhysical(t0) || overPhysical(t1) || overPhysical(th)) {
             DEBUG_PRINTLN("[Thermal] Physical sensor over-temp detected -> forcing Error");
+            float maxT = -INFINITY;
+            const char* label = "unknown";
+            if (isfinite(t0) && t0 > maxT) { maxT = t0; label = "board0"; }
+            if (isfinite(t1) && t1 > maxT) { maxT = t1; label = "board1"; }
+            if (isfinite(th) && th > maxT) { maxT = th; label = "heatsink"; }
+            if (isfinite(maxT)) {
+                char reason[96] = {0};
+                snprintf(reason, sizeof(reason),
+                         "Physical sensor over-temp (%s %.1fC)",
+                         label, static_cast<double>(maxT));
+                setLastErrorReason(reason);
+            } else {
+                setLastErrorReason("Physical sensor over-temp");
+            }
             WIRE->disableAll();
             setState(DeviceState::Error);
             if (BUZZ) BUZZ->bipFault();
@@ -409,6 +424,12 @@ void Device::updateWireThermalFromHistory() {
         #if   SAMPLINGSTALL
         if ((nowMs - lastCurrentSampleMs) > NO_CURRENT_SAMPLE_TIMEOUT_MS) {
             DEBUG_PRINTLN("[Thermal] Current sampling stalled -> forcing Error");
+            const uint32_t deltaMs = nowMs - lastCurrentSampleMs;
+            char reason[96] = {0};
+            snprintf(reason, sizeof(reason),
+                     "Current sampling stalled (%lu ms)",
+                     static_cast<unsigned long>(deltaMs));
+            setLastErrorReason(reason);
             WIRE->disableAll();
             setState(DeviceState::Error);
             if (BUZZ) BUZZ->bipFault();

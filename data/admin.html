@@ -1494,6 +1494,13 @@
                 >
                   Calibration
                 </button>
+                <button
+                  id="errorBtn"
+                  type="button"
+                  class="session-history-btn session-error-btn"
+                >
+                  Error
+                </button>
               </div>
             </div>
           </div>
@@ -1674,10 +1681,55 @@
                           >Hold a target temp and verify control (PI, no
                           logging).</span
                         >
-                      </p>
-                    </div>
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Error details modal -->
+          <div id="errorModal" class="error-modal">
+            <div class="error-backdrop" onclick="closeErrorModal()"></div>
+            <div class="error-content">
+              <div class="error-header">
+                <h3>Last Stop / Error</h3>
+                <button
+                  type="button"
+                  class="error-close"
+                  onclick="closeErrorModal()"
+                >
+                  x
+                </button>
+              </div>
+              <div class="error-body">
+                <div class="error-row">
+                  <span class="error-label">Current state</span>
+                  <span id="errorStateText">--</span>
+                </div>
+                <div class="error-section">
+                  <div class="error-title">Last error</div>
+                  <div class="error-row">
+                    <span class="error-label">Reason</span>
+                    <span id="errorReasonText">--</span>
+                  </div>
+                  <div class="error-row">
+                    <span class="error-label">Time</span>
+                    <span id="errorTimeText">--</span>
                   </div>
                 </div>
+                <div class="error-section">
+                  <div class="error-title">Last stop</div>
+                  <div class="error-row">
+                    <span class="error-label">Reason</span>
+                    <span id="stopReasonText">--</span>
+                  </div>
+                  <div class="error-row">
+                    <span class="error-label">Time</span>
+                    <span id="stopTimeText">--</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
 
                 <div class="calib-actionbar">
                   <div class="calib-action-group">
@@ -1737,6 +1789,25 @@
                   <div class="calib-stat">
                     Temp: <span id="calibTempText">--</span>
                   </div>
+                </div>
+
+                <div class="calib-history-picker">
+                  <label for="calibHistorySelect">Saved history</label>
+                  <select id="calibHistorySelect"></select>
+                  <button
+                    id="calibHistoryLoadBtn"
+                    type="button"
+                    class="calib-secondary"
+                  >
+                    Load Saved
+                  </button>
+                  <button
+                    id="calibHistoryRefreshBtn"
+                    type="button"
+                    class="calib-secondary"
+                  >
+                    Refresh List
+                  </button>
                 </div>
 
                 <div class="calibration-wire-test">
@@ -1824,6 +1895,13 @@
                         class="calib-secondary"
                       >
                         Refresh
+                      </button>
+                      <button
+                        id="calibSuggestFromHistory"
+                        type="button"
+                        class="calib-secondary"
+                      >
+                        Use Saved History
                       </button>
                       <button
                         id="calibPersistBtn"

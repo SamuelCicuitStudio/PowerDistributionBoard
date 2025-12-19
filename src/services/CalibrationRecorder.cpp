@@ -3,8 +3,9 @@
 #include "sensing/NtcSensor.h"
 #include "control/HeaterManager.h"
 #include "services/NVSManager.h"
+#include "services/RTCManager.h"
 #include <math.h>
-#include <limits.h>
+#include <stdio.h>
 #include <FS.h>
 #include <SPIFFS.h>
 
@@ -18,42 +19,6 @@ CalibrationRecorder* CalibrationRecorder::s_instance = nullptr;
 constexpr uint32_t CalibrationRecorder::kDefaultIntervalMs;
 constexpr uint16_t CalibrationRecorder::kDefaultMaxSamples;
 constexpr uint16_t CalibrationRecorder::kAbsoluteMaxSamples;
-
-static constexpr uint32_t CALIB_MAGIC = 0x31424C43; // "CLB1"
-static constexpr uint16_t CALIB_VERSION = 1;
-static constexpr float    TEMP_SCALE = 100.0f;
-static constexpr float    VOLT_SCALE = 10.0f;
-static constexpr float    CURR_SCALE = 100.0f;
-
-#pragma pack(push, 1)
-struct CalibBinHeader {
-    uint32_t magic;
-    uint16_t version;
-    uint16_t sampleCount;
-    uint16_t sampleSize;
-    uint16_t mode;
-    uint32_t intervalMs;
-    uint32_t startMs;
-    float    targetTempC;
-    uint8_t  wireIndex;
-    uint8_t  reserved[3];
-};
-
-struct CalibBinSample {
-    uint32_t tMs;
-    int16_t  tempCx100;
-    int16_t  voltVx10;
-    int16_t  currAx100;
-    uint8_t  flags;
-    uint8_t  reserved;
-};
-#pragma pack(pop)
-
-static inline int16_t clampToI16(float v) {
-    if (v > 32767.0f) return 32767;
-    if (v < -32768.0f) return -32768;
-    return static_cast<int16_t>(lroundf(v));
-}
 
 void CalibrationRecorder::Init() {
     if (!s_instance) {
@@ -123,7 +88,12 @@ bool CalibrationRecorder::start(Mode mode,
     _saveOnStop  = false;
     _lastSaveOk  = false;
     _lastSaveMs  = 0;
+    _lastSaveEpoch = 0;
     _startMs     = millis();
+    _startEpoch  = 0;
+    if (RTC) {
+        _startEpoch = static_cast<uint32_t>(RTC->getUnixTime());
+    }
     _intervalMs  = intervalMs;
     _targetTempC = targetTempC;
     _wireIndex   = wireIndex;
@@ -185,7 +155,7 @@ bool CalibrationRecorder::stopAndSave(uint32_t timeoutMs) {
         unlock();
     }
     if (!hasTask && !ok) {
-        ok = saveToFile();
+        ok = saveToHistoryFiles();
     }
     return ok;
 }
@@ -201,10 +171,12 @@ void CalibrationRecorder::clear() {
     _targetTempC = NAN;
     _wireIndex = 0;
     _startMs = 0;
+    _startEpoch = 0;
     _intervalMs = kDefaultIntervalMs;
     _saveOnStop = false;
     _lastSaveOk = false;
     _lastSaveMs = 0;
+    _lastSaveEpoch = 0;
     unlock();
 }
 
@@ -232,6 +204,7 @@ CalibrationRecorder::Meta CalibrationRecorder::getMeta() const {
         m.mode        = _mode;
         m.running     = _running;
         m.startMs     = _startMs;
+        m.startEpoch  = _startEpoch;
         m.intervalMs  = _intervalMs;
         m.count       = _count;
         m.capacity    = _capacity;
@@ -239,6 +212,7 @@ CalibrationRecorder::Meta CalibrationRecorder::getMeta() const {
         m.wireIndex   = _wireIndex;
         m.saved       = _lastSaveOk;
         m.savedMs     = _lastSaveMs;
+        m.savedEpoch  = _lastSaveEpoch;
         const_cast<CalibrationRecorder*>(this)->unlock();
     }
     return m;
@@ -279,53 +253,65 @@ bool CalibrationRecorder::saveToFile(const char* path) {
         return false;
     }
 
-    CalibBinHeader hdr{};
-    hdr.magic = CALIB_MAGIC;
-    hdr.version = CALIB_VERSION;
-    hdr.sampleCount = _count;
-    hdr.sampleSize = sizeof(CalibBinSample);
-    hdr.mode = static_cast<uint16_t>(_mode);
-    hdr.intervalMs = _intervalMs;
-    hdr.startMs = _startMs;
-    hdr.targetTempC = _targetTempC;
-    hdr.wireIndex = _wireIndex;
+    const char* modeStr =
+        (_mode == Mode::Ntc)   ? "ntc" :
+        (_mode == Mode::Model) ? "model" :
+        "none";
 
-    bool ok = true;
-    if (f.write(reinterpret_cast<const uint8_t*>(&hdr), sizeof(hdr)) != sizeof(hdr)) {
-        ok = false;
-    }
+    const bool saveOk = true;
 
-    auto encode = [](float v, float scale) -> int16_t {
-        if (!isfinite(v)) return INT16_MIN;
-        return clampToI16(v * scale);
+    auto writeFloat = [&](float v, uint8_t decimals) {
+        if (isfinite(v)) f.print(v, decimals);
+        else f.print("null");
     };
 
-    if (ok) {
-        for (uint16_t i = 0; i < _count; ++i) {
-            const Sample& s = _buf[i];
-            CalibBinSample b{};
-            b.tMs = s.tMs;
-            b.tempCx100 = encode(s.tempC, TEMP_SCALE);
-            b.voltVx10  = encode(s.voltageV, VOLT_SCALE);
-            b.currAx100 = encode(s.currentA, CURR_SCALE);
-            b.flags = 0;
-            if (s.ntcValid) b.flags |= 0x01;
-            if (s.pressed)  b.flags |= 0x02;
+    f.print("{\"meta\":{");
+    f.print("\"mode\":\""); f.print(modeStr); f.print("\"");
+    f.print(",\"running\":"); f.print(_running ? "true" : "false");
+    f.print(",\"count\":"); f.print(_count);
+    f.print(",\"capacity\":"); f.print(_capacity);
+    f.print(",\"interval_ms\":"); f.print(_intervalMs);
+    f.print(",\"start_ms\":"); f.print(_startMs);
+    if (_startEpoch > 0) {
+        f.print(",\"start_epoch\":");
+        f.print(_startEpoch);
+    }
+    if (isfinite(_targetTempC)) {
+        f.print(",\"target_c\":");
+        writeFloat(_targetTempC, 2);
+    }
+    if (_wireIndex > 0) {
+        f.print(",\"wire_index\":");
+        f.print(_wireIndex);
+    }
+    f.print(",\"saved\":"); f.print(saveOk ? "true" : "false");
+    f.print(",\"saved_ms\":"); f.print(_lastSaveMs);
+    if (_lastSaveEpoch > 0) {
+        f.print(",\"saved_epoch\":");
+        f.print(_lastSaveEpoch);
+    }
+    f.print("},\"samples\":[");
 
-            if (f.write(reinterpret_cast<const uint8_t*>(&b), sizeof(b)) != sizeof(b)) {
-                ok = false;
-                break;
-            }
-        }
+    for (uint16_t i = 0; i < _count; ++i) {
+        const Sample& s = _buf[i];
+        if (i > 0) f.print(",");
+        f.print("{\"t_ms\":"); f.print(s.tMs);
+        f.print(",\"v\":"); writeFloat(s.voltageV, 3);
+        f.print(",\"i\":"); writeFloat(s.currentA, 3);
+        f.print(",\"temp_c\":"); writeFloat(s.tempC, 2);
+        f.print(",\"ntc_v\":"); writeFloat(s.ntcVolts, 4);
+        f.print(",\"ntc_ohm\":"); writeFloat(s.ntcOhm, 2);
+        f.print(",\"ntc_adc\":"); f.print(s.ntcAdc);
+        f.print(",\"ntc_ok\":"); f.print(s.ntcValid ? "true" : "false");
+        f.print(",\"pressed\":"); f.print(s.pressed ? "true" : "false");
+        f.print("}");
     }
 
+    f.print("]}");
     f.close();
 
-    _lastSaveOk = ok;
-    _lastSaveMs = millis();
-
     unlock();
-    return ok;
+    return saveOk;
 }
 
 void CalibrationRecorder::taskThunk(void* param) {
@@ -352,7 +338,7 @@ void CalibrationRecorder::taskLoop() {
 
         if (!running) {
             if (saveOnStop) {
-                saveToFile();
+                saveToHistoryFiles();
                 if (lock()) {
                     _saveOnStop = false;
                     unlock();
@@ -400,6 +386,51 @@ void CalibrationRecorder::taskLoop() {
         _taskHandle = nullptr;
         unlock();
     }
+}
+
+bool CalibrationRecorder::saveToHistoryFiles() {
+    uint32_t saveEpoch = 0;
+    if (RTC) {
+        saveEpoch = static_cast<uint32_t>(RTC->getUnixTime());
+    }
+    const uint32_t saveMs = millis();
+    uint32_t startEpoch = _startEpoch;
+
+    if (lock()) {
+        if (saveEpoch > 0) {
+            const uint32_t elapsedMs = (saveMs >= _startMs) ? (saveMs - _startMs) : 0;
+            const uint32_t elapsedSec = elapsedMs / 1000;
+            if (saveEpoch > elapsedSec) {
+                _startEpoch = saveEpoch - elapsedSec;
+            }
+            _lastSaveEpoch = saveEpoch;
+        }
+        _lastSaveMs = saveMs;
+        startEpoch = _startEpoch;
+        unlock();
+    }
+
+    bool okLatest = saveToFile(CALIB_MODEL_JSON_FILE);
+    bool okHistory = true;
+
+    if (startEpoch > 0) {
+        if (SPIFFS.begin(false)) {
+            SPIFFS.mkdir(CALIB_HISTORY_DIR);
+        }
+        char path[64];
+        snprintf(path, sizeof(path), "%s%lu%s",
+                 CALIB_HISTORY_PREFIX,
+                 static_cast<unsigned long>(startEpoch),
+                 CALIB_HISTORY_EXT);
+        okHistory = saveToFile(path);
+    }
+
+    const bool okAll = okLatest && okHistory;
+    if (lock()) {
+        _lastSaveOk = okAll;
+        unlock();
+    }
+    return okAll;
 }
 
 void CalibrationRecorder::freeBufferLocked() {

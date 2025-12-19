@@ -28,7 +28,8 @@
 #define EP_CALIB_STOP        "/calib_stop"     // Stop calibration recorder
 #define EP_CALIB_CLEAR       "/calib_clear"    // Clear calibration recorder data
 #define EP_CALIB_DATA        "/calib_data"     // Calibration recorder data
-#define EP_CALIB_FILE        "/calib_file"     // Calibration recorder binary file
+#define EP_CALIB_FILE        "/calib_file"     // Calibration recorder JSON file
+#define EP_LAST_EVENT        "/last_event"     // Last stop/error details
 #define EP_FAVICON           "/favicon.ico"    // Favicon
 #define EP_ADMIN_PAGE        "/admin.html"     // Admin UI shell
 #define EP_USER_PAGE         "/user.html"      // User UI shell

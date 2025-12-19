@@ -34,71 +34,71 @@ PiController& ThermalPiControllers::floor() {
     return _floorPi;
 }
 
-float ThermalPiControllers::getWireKp() const {
+double ThermalPiControllers::getWireKp() const {
     return _wirePi.getKp();
 }
 
-float ThermalPiControllers::getWireKi() const {
+double ThermalPiControllers::getWireKi() const {
     return _wirePi.getKi();
 }
 
-float ThermalPiControllers::getFloorKp() const {
+double ThermalPiControllers::getFloorKp() const {
     return _floorPi.getKp();
 }
 
-float ThermalPiControllers::getFloorKi() const {
+double ThermalPiControllers::getFloorKi() const {
     return _floorPi.getKi();
 }
 
-void ThermalPiControllers::setWireKp(float kp, bool persist) {
+void ThermalPiControllers::setWireKp(double kp, bool persist) {
     setWireGains(kp, _wirePi.getKi(), persist);
 }
 
-void ThermalPiControllers::setWireKi(float ki, bool persist) {
+void ThermalPiControllers::setWireKi(double ki, bool persist) {
     setWireGains(_wirePi.getKp(), ki, persist);
 }
 
-void ThermalPiControllers::setFloorKp(float kp, bool persist) {
+void ThermalPiControllers::setFloorKp(double kp, bool persist) {
     setFloorGains(kp, _floorPi.getKi(), persist);
 }
 
-void ThermalPiControllers::setFloorKi(float ki, bool persist) {
+void ThermalPiControllers::setFloorKi(double ki, bool persist) {
     setFloorGains(_floorPi.getKp(), ki, persist);
 }
 
-void ThermalPiControllers::setWireGains(float kp, float ki, bool persist) {
+void ThermalPiControllers::setWireGains(double kp, double ki, bool persist) {
     if (!isfinite(kp) || kp < 0.0f) kp = DEFAULT_WIRE_KP;
     if (!isfinite(ki) || ki < 0.0f) ki = DEFAULT_WIRE_KI;
     _wirePi.setGains(kp, ki);
 
     if (persist && CONF) {
-        CONF->PutFloat(WIRE_KP_KEY, kp);
-        CONF->PutFloat(WIRE_KI_KEY, ki);
+        CONF->PutDouble(WIRE_KP_KEY, kp);
+        CONF->PutDouble(WIRE_KI_KEY, ki);
     }
 }
 
-void ThermalPiControllers::setFloorGains(float kp, float ki, bool persist) {
+void ThermalPiControllers::setFloorGains(double kp, double ki, bool persist) {
     if (!isfinite(kp) || kp < 0.0f) kp = DEFAULT_FLOOR_KP;
     if (!isfinite(ki) || ki < 0.0f) ki = DEFAULT_FLOOR_KI;
     _floorPi.setGains(kp, ki);
 
     if (persist && CONF) {
-        CONF->PutFloat(FLOOR_KP_KEY, kp);
-        CONF->PutFloat(FLOOR_KI_KEY, ki);
+        CONF->PutDouble(FLOOR_KP_KEY, kp);
+        CONF->PutDouble(FLOOR_KI_KEY, ki);
     }
 }
 
 void ThermalPiControllers::loadFromNvs() {
-    float wireKp = DEFAULT_WIRE_KP;
-    float wireKi = DEFAULT_WIRE_KI;
-    float floorKp = DEFAULT_FLOOR_KP;
-    float floorKi = DEFAULT_FLOOR_KI;
+    double wireKp = DEFAULT_WIRE_KP;
+    double wireKi = DEFAULT_WIRE_KI;
+    double floorKp = DEFAULT_FLOOR_KP;
+    double floorKi = DEFAULT_FLOOR_KI;
 
     if (CONF) {
-        wireKp = CONF->GetFloat(WIRE_KP_KEY, DEFAULT_WIRE_KP);
-        wireKi = CONF->GetFloat(WIRE_KI_KEY, DEFAULT_WIRE_KI);
-        floorKp = CONF->GetFloat(FLOOR_KP_KEY, DEFAULT_FLOOR_KP);
-        floorKi = CONF->GetFloat(FLOOR_KI_KEY, DEFAULT_FLOOR_KI);
+        wireKp = CONF->GetDouble(WIRE_KP_KEY, DEFAULT_WIRE_KP);
+        wireKi = CONF->GetDouble(WIRE_KI_KEY, DEFAULT_WIRE_KI);
+        floorKp = CONF->GetDouble(FLOOR_KP_KEY, DEFAULT_FLOOR_KP);
+        floorKi = CONF->GetDouble(FLOOR_KI_KEY, DEFAULT_FLOOR_KI);
     }
 
     setWireGains(wireKp, wireKi, false);

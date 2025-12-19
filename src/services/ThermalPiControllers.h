@@ -24,17 +24,17 @@ public:
     PiController& wire();
     PiController& floor();
 
-    float getWireKp() const;
-    float getWireKi() const;
-    float getFloorKp() const;
-    float getFloorKi() const;
+    double getWireKp() const;
+    double getWireKi() const;
+    double getFloorKp() const;
+    double getFloorKi() const;
 
-    void setWireKp(float kp, bool persist = true);
-    void setWireKi(float ki, bool persist = true);
-    void setFloorKp(float kp, bool persist = true);
-    void setFloorKi(float ki, bool persist = true);
-    void setWireGains(float kp, float ki, bool persist = true);
-    void setFloorGains(float kp, float ki, bool persist = true);
+    void setWireKp(double kp, bool persist = true);
+    void setWireKi(double ki, bool persist = true);
+    void setFloorKp(double kp, bool persist = true);
+    void setFloorKi(double ki, bool persist = true);
+    void setWireGains(double kp, double ki, bool persist = true);
+    void setFloorGains(double kp, double ki, bool persist = true);
 
 private:
     ThermalPiControllers() = default;

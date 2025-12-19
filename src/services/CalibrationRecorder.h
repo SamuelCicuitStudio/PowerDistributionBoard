@@ -33,6 +33,7 @@ public:
         Mode     mode        = Mode::None;
         bool     running     = false;
         uint32_t startMs     = 0;
+        uint32_t startEpoch  = 0;
         uint32_t intervalMs  = 0;
         uint16_t count       = 0;
         uint16_t capacity    = 0;
@@ -40,6 +41,7 @@ public:
         uint8_t  wireIndex   = 0;
         bool     saved       = false;
         uint32_t savedMs     = 0;
+        uint32_t savedEpoch  = 0;
     };
 
     static void Init();
@@ -52,7 +54,7 @@ public:
                uint8_t wireIndex);
     void stop();
     bool stopAndSave(uint32_t timeoutMs = 1500);
-    bool saveToFile(const char* path = CALIB_MODEL_BIN_FILE);
+    bool saveToFile(const char* path = CALIB_MODEL_JSON_FILE);
     void clear();
 
     bool isRunning() const;
@@ -79,6 +81,7 @@ private:
     }
 
     void freeBufferLocked();
+    bool saveToHistoryFiles();
 
     SemaphoreHandle_t _mutex = nullptr;
     TaskHandle_t _taskHandle = nullptr;
@@ -90,12 +93,14 @@ private:
     Mode     _mode        = Mode::None;
     bool     _running     = false;
     uint32_t _startMs     = 0;
+    uint32_t _startEpoch  = 0;
     uint32_t _intervalMs  = kDefaultIntervalMs;
     float    _targetTempC = NAN;
     uint8_t  _wireIndex   = 0;
     bool     _saveOnStop  = false;
     bool     _lastSaveOk  = false;
     uint32_t _lastSaveMs  = 0;
+    uint32_t _lastSaveEpoch = 0;
 
     static CalibrationRecorder* s_instance;
 };
