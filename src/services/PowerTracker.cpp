@@ -4,6 +4,7 @@
 #include <FS.h>
 #include <SPIFFS.h>
 #include <ArduinoJson.h>
+#include "sensing/BusSampler.h"
 
 // -----------------------------------------------------------------------------
 // NVS helpers
@@ -224,6 +225,7 @@ void PowerTracker::startSession(float nominalBusV, float idleCurrentA) {
     _sessionEnergy_Wh     = 0.0f;
     _sessionPeakPower_W   = 0.0f;
     _sessionPeakCurrent_A = 0.0f;
+    _lastBusSeq           = 0;
 
     DEBUG_PRINTLN("[PowerTracker] Session started");
 }
@@ -263,51 +265,90 @@ void PowerTracker::update(CurrentSensor& cs) {
         return;
     }
 
-    // Normal path: integrate from CurrentSensor rolling history.
+    // Prefer BusSampler V/I history if available for accurate power.
+    bool usedBusHistory = false;
+    if (BUS_SAMPLER) {
+        BusSampler::Sample vbuf[64];
+        uint32_t newBusSeq = _lastBusSeq;
+        size_t nv = BUS_SAMPLER->getHistorySince(_lastBusSeq, vbuf, (size_t)64, newBusSeq);
+        if (nv > 0) {
+            usedBusHistory = true;
+            for (size_t i = 0; i < nv; ++i) {
+                const uint32_t ts = vbuf[i].timestampMs;
+                float V = vbuf[i].voltageV;
+                float I = fabsf(vbuf[i].currentA);
+                if (!isfinite(V) || !isfinite(I)) continue;
+                if (ts < _startMs) { _lastSampleTsMs = 0; continue; }
+                if (_lastSampleTsMs == 0 || _lastSampleTsMs < _startMs) {
+                    _lastSampleTsMs = ts;
+                    if (I > _sessionPeakCurrent_A) _sessionPeakCurrent_A = I;
+                    continue;
+                }
+                float dt_s = (ts - _lastSampleTsMs) * 0.001f;
+                if (dt_s <= 0.0f) {
+                    if (I > _sessionPeakCurrent_A) _sessionPeakCurrent_A = I;
+                    continue;
+                }
+                _lastSampleTsMs = ts;
+                float netI = I - _idleCurrentA;
+                if (netI < 0.0f) netI = 0.0f;
+                if (netI <= 0.0f) continue;
+                const float P     = V * netI;
+                const float dE_Wh = (P * dt_s) / 3600.0f;
+                _sessionEnergy_Wh += dE_Wh;
+                if (I > _sessionPeakCurrent_A) _sessionPeakCurrent_A = I;
+                if (P > _sessionPeakPower_W)   _sessionPeakPower_W   = P;
+            }
+            _lastBusSeq = newBusSeq;
+        }
+    }
+
+    // Fallback: CurrentSensor-only integration with nominal bus voltage.
     CurrentSensor::Sample buf[64];
     uint32_t newSeq = _lastHistorySeq;
     size_t n = cs.getHistorySince(_lastHistorySeq, buf, (size_t)64, newSeq);
 
-    if (n == 0) {
+    if (!usedBusHistory && n == 0) {
+        _lastHistorySeq = newSeq;
         return;
     }
 
-    for (size_t i = 0; i < n; ++i) {
-        const uint32_t ts = buf[i].timestampMs;
-        float I = fabsf(buf[i].currentA);
+    if (!usedBusHistory) {
+        for (size_t i = 0; i < n; ++i) {
+            const uint32_t ts = buf[i].timestampMs;
+            float I = fabsf(buf[i].currentA);
 
-        // Skip any samples that occurred before this session started.
-        if (ts < _startMs) {
-            // Reset baseline so we don't integrate across the session boundary.
-            _lastSampleTsMs = 0;
-            continue;
-        }
+            if (ts < _startMs) {
+                _lastSampleTsMs = 0;
+                continue;
+            }
 
-        if (_lastSampleTsMs == 0 || _lastSampleTsMs < _startMs) {
+            if (_lastSampleTsMs == 0 || _lastSampleTsMs < _startMs) {
+                _lastSampleTsMs = ts;
+                if (I > _sessionPeakCurrent_A) _sessionPeakCurrent_A = I;
+                continue;
+            }
+
+            float dt_s = (ts - _lastSampleTsMs) * 0.001f;
+            if (dt_s <= 0.0f) {
+                if (I > _sessionPeakCurrent_A) _sessionPeakCurrent_A = I;
+                continue;
+            }
+
             _lastSampleTsMs = ts;
-            if (I > _sessionPeakCurrent_A) _sessionPeakCurrent_A = I;
-            continue;
-        }
 
-        float dt_s = (ts - _lastSampleTsMs) * 0.001f;
-        if (dt_s <= 0.0f) {
-            if (I > _sessionPeakCurrent_A) _sessionPeakCurrent_A = I;
-            continue;
-        }
+            float netI = I - _idleCurrentA;
+            if (netI < 0.0f) netI = 0.0f;
 
-        _lastSampleTsMs = ts;
+            if (_nominalBusV > 0.0f && netI > 0.0f) {
+                const float P     = _nominalBusV * netI;
+                const float dE_Wh = (P * dt_s) / 3600.0f;
 
-        float netI = I - _idleCurrentA;
-        if (netI < 0.0f) netI = 0.0f;
+                _sessionEnergy_Wh += dE_Wh;
 
-        if (_nominalBusV > 0.0f && netI > 0.0f) {
-            const float P     = _nominalBusV * netI;
-            const float dE_Wh = (P * dt_s) / 3600.0f;
-
-            _sessionEnergy_Wh += dE_Wh;
-
-            if (I > _sessionPeakCurrent_A) _sessionPeakCurrent_A = I;
-            if (P > _sessionPeakPower_W)   _sessionPeakPower_W   = P;
+                if (I > _sessionPeakCurrent_A) _sessionPeakCurrent_A = I;
+                if (P > _sessionPeakPower_W)   _sessionPeakPower_W   = P;
+            }
         }
     }
 

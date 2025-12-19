@@ -10,6 +10,7 @@
 // Thermal model constants (first-order)
 static constexpr float WIRE_T_MAX_C     = 150.0f;
 static constexpr float MAX_THERMAL_DT_S = 0.30f;  // cap per-step dt for stability
+static constexpr float MAX_THERMAL_DT_TOTAL_S = 10.0f; // guard against huge gaps that would spin watchdog
 
 // Helper: resolve ground-tie/charge resistor and sense-leak current
 static float _getGroundTieOhms() {
@@ -185,6 +186,8 @@ void WireThermalModel::advanceWireTemp(WireThermalState& ws, float ambientC, flo
     if (!(isfinite(dtS) && dtS > 0.0f)) return;
 
     float remaining = dtS;
+    // Prevent excessive sub-steps if timestamps jump (keeps task watchdog happy).
+    if (remaining > MAX_THERMAL_DT_TOTAL_S) remaining = MAX_THERMAL_DT_TOTAL_S;
     const float C = _thermalMassC;
     float k = _heatLossK;
     if (!isfinite(C) || C <= 0.0f) return;
@@ -207,7 +210,6 @@ void WireThermalModel::integrateCurrentOnly(const CurrentSensor::Sample* curBuf,
         init(heater, ambientC);
     }
     _ambientC = ambientC;
-    (void)idleCurrentA;
 
     uint16_t currentMask = runtime.getLastMask();
     size_t   outIndex    = 0;

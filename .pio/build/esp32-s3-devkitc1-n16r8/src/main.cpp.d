@@ -246,4 +246,6 @@
  src/system/WireSubsystem.h src/system/StatusSnapshot.h \
  src/sensing/BusSampler.h src/control/RGBLed.h src/control/RGBConfig.h \
  src/comms/SwitchManager.h src/system/DeviceTransport.h \
- src/system/Device.h src/services/SleepTimer.h
+ src/system/Device.h src/services/SleepTimer.h src/sensing/NtcSensor.h \
+ src/services/CalibrationRecorder.h src/services/ThermalPiControllers.h \
+ src/control/PiController.h

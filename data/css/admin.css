@@ -1854,6 +1854,113 @@ button.danger:hover {
   gap: 10px;
 }
 
+.calib-actionbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.calib-action-group {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.calib-inline-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.calib-inline-label {
+  font-size: 0.78rem;
+  opacity: 0.9;
+  color: rgba(255, 255, 255, 0.9);
+  white-space: nowrap;
+}
+
+.calib-inline-input {
+  width: 210px;
+  max-width: 100%;
+  height: 30px;
+  padding: 5px 10px;
+  font-size: 12px;
+  border-radius: 6px;
+  border: none;
+  outline: none;
+  background: rgba(10, 14, 18, 0.98);
+  color: #ffffff;
+  box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.85);
+}
+
+.calib-inline-status {
+  font-size: 0.78rem;
+  opacity: 0.9;
+  color: rgba(230, 255, 248, 0.85);
+  min-height: 1em;
+}
+
+.calib-model-card {
+  margin-top: 8px;
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.calib-model-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.calib-model-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.calib-stat-card {
+  padding: 10px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 120px;
+}
+
+.calib-stat-label {
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.9);
+  margin-bottom: 4px;
+}
+
+.calib-stat-row {
+  font-size: 0.82rem;
+  color: rgba(230, 235, 240, 0.9);
+}
+
+.calib-stat-row.muted {
+  color: rgba(220, 230, 230, 0.7);
+  font-size: 0.78rem;
+}
+
+.calib-model-note {
+  font-size: 0.78rem;
+  color: rgba(220, 230, 230, 0.72);
+}
+
 .calib-btn {
   padding: 6px 10px;
   border-radius: 10px;
@@ -2115,6 +2222,12 @@ button.danger:hover {
 .calib-secondary.calib-danger:hover {
   background: rgba(255, 80, 80, 0.2);
   box-shadow: 0 0 8px rgba(255, 80, 80, 0.3);
+}
+
+.calib-secondary.calib-save {
+  border-color: rgba(0, 255, 174, 0.4);
+  background: rgba(0, 255, 174, 0.12);
+  color: #00ffae;
 }
 
 /* Responsive: small screens */

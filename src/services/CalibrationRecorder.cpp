@@ -14,6 +14,11 @@
 
 CalibrationRecorder* CalibrationRecorder::s_instance = nullptr;
 
+// Static constexpr definitions (needed for this toolchain/linker)
+constexpr uint32_t CalibrationRecorder::kDefaultIntervalMs;
+constexpr uint16_t CalibrationRecorder::kDefaultMaxSamples;
+constexpr uint16_t CalibrationRecorder::kAbsoluteMaxSamples;
+
 static constexpr uint32_t CALIB_MAGIC = 0x31424C43; // "CLB1"
 static constexpr uint16_t CALIB_VERSION = 1;
 static constexpr float    TEMP_SCALE = 100.0f;

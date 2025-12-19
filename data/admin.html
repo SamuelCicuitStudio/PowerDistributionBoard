@@ -1546,12 +1546,12 @@
             <div class="calibration-content">
               <div class="calibration-header">
                 <h3>Calibration</h3>
-                <div style="display: flex; align-items: center; gap: 8px;">
+                <div style="display: flex; align-items: center; gap: 8px">
                   <button
                     id="calibrationInfoBtn"
                     type="button"
                     class="calib-btn"
-                    style="padding: 4px 8px; min-width: 32px;"
+                    style="padding: 4px 8px; min-width: 32px"
                   >
                     ?
                   </button>
@@ -1565,36 +1565,53 @@
                 </div>
               </div>
               <div class="calibration-body">
-                <div id="calibrationInfoPopover" class="calibration-info-popover" aria-hidden="true">
+                <div
+                  id="calibrationInfoPopover"
+                  class="calibration-info-popover"
+                  aria-hidden="true"
+                >
                   <div class="calibration-info-header">
                     <div class="calibration-info-title">Calibration help</div>
-                    <button id="calibrationInfoCloseBtn" type="button" class="calibration-info-close">x</button>
+                    <button
+                      id="calibrationInfoCloseBtn"
+                      type="button"
+                      class="calibration-info-close"
+                    >
+                      x
+                    </button>
                   </div>
                   <div class="calibration-info-content">
                     <div class="calibration-info-grid">
                       <div class="calibration-info-card">
                         <div class="calibration-info-icon">1</div>
-                        <div class="calibration-info-card-title">NTC calibration</div>
+                        <div class="calibration-info-card-title">
+                          NTC calibration
+                        </div>
                         <div class="calibration-info-card-text">
-                          Calibrates the NTC using a known reference temperature.
-                          Leave the field blank to use the heatsink temperature automatically.
-                          This does not heat the wire.
+                          Calibrates the NTC using a known reference
+                          temperature. Leave the field blank to use the heatsink
+                          temperature automatically. This does not heat the
+                          wire.
                         </div>
                       </div>
                       <div class="calibration-info-card">
                         <div class="calibration-info-icon">2</div>
-                        <div class="calibration-info-card-title">Temp model calibration</div>
+                        <div class="calibration-info-card-title">
+                          Temp model calibration
+                        </div>
                         <div class="calibration-info-card-text">
-                          Records temperature and time while the system drives a repeatable PWM profile.
-                          Use the resulting curve to fit τ/k/C so the model matches real measurements.
+                          Records temperature and time while the system drives a
+                          repeatable PWM profile. Use the resulting curve to fit
+                          τ/k/C so the model matches real measurements.
                         </div>
                       </div>
                       <div class="calibration-info-card">
                         <div class="calibration-info-icon">3</div>
                         <div class="calibration-info-card-title">Wire test</div>
                         <div class="calibration-info-card-text">
-                          Runs the PI controller to reach and hold a target temperature on the NTC-attached wire.
-                          This is a live test and does not save history.
+                          Runs the PI controller to reach and hold a target
+                          temperature on the NTC-attached wire. This is a live
+                          test and does not save history.
                         </div>
                       </div>
                     </div>
@@ -1602,11 +1619,26 @@
                     <div class="calibration-info-actions">
                       <div class="calibration-info-actions-title">Buttons</div>
                       <ul>
-                        <li><strong>NTC Calibration:</strong> Start NTC recording (optional) and use “Calibrate NTC” to compute R0.</li>
-                        <li><strong>Temp Model Calibration:</strong> Start/stop the model capture while PWM runs.</li>
-                        <li><strong>Start/Stop Wire Test:</strong> Hold target temperature (PI control).</li>
-                        <li><strong>Load History / Resume Live:</strong> View saved buffer or live feed.</li>
-                        <li><strong>Clear Data:</strong> Clears the buffer and removes the saved file.</li>
+                        <li>
+                          <strong>NTC Calibration:</strong> Start NTC recording
+                          (optional) and use “Calibrate NTC” to compute R0.
+                        </li>
+                        <li>
+                          <strong>Temp Model Calibration:</strong> Start/stop
+                          the model capture while PWM runs.
+                        </li>
+                        <li>
+                          <strong>Start/Stop Wire Test:</strong> Hold target
+                          temperature (PI control).
+                        </li>
+                        <li>
+                          <strong>Load History / Resume Live:</strong> View
+                          saved buffer or live feed.
+                        </li>
+                        <li>
+                          <strong>Clear Data:</strong> Clears the buffer and
+                          removes the saved file.
+                        </li>
                       </ul>
                     </div>
                   </div>
@@ -1619,44 +1651,74 @@
                       <span class="dot">1</span>
                       <p>
                         NTC calibrate<br />
-                        <span class="hint">Use heatsink temp or enter a ref; no heating.</span>
+                        <span class="hint"
+                          >Use heatsink temp or enter a ref; no heating.</span
+                        >
                       </p>
                     </div>
                     <div class="cal-step">
                       <span class="dot">2</span>
                       <p>
                         Model capture<br />
-                        <span class="hint">Start Temp Model Calibration to log heat/cool with PWM.</span>
+                        <span class="hint"
+                          >Start Temp Model Calibration to log heat/cool with
+                          PWM.</span
+                        >
                       </p>
                     </div>
                     <div class="cal-step">
                       <span class="dot">3</span>
                       <p>
                         Wire test<br />
-                        <span class="hint">Hold a target temp and verify control (PI, no logging).</span>
+                        <span class="hint"
+                          >Hold a target temp and verify control (PI, no
+                          logging).</span
+                        >
                       </p>
                     </div>
                   </div>
                 </div>
 
-                <div class="calibration-actions">
-                  <button id="startNtcCalibBtn" type="button" class="calib-btn">
-                    NTC Calibration
-                  </button>
-                  <button
-                    id="startModelCalibBtn"
-                    type="button"
-                    class="calib-btn"
-                  >
-                    Temp Model Calibration
-                  </button>
-                  <button
-                    id="stopCalibBtn"
-                    type="button"
-                    class="calib-btn calib-stop"
-                  >
-                    Stop &amp; Save
-                  </button>
+                <div class="calib-actionbar">
+                  <div class="calib-action-group">
+                    <button
+                      id="startNtcCalibBtn"
+                      type="button"
+                      class="calib-btn"
+                    >
+                      NTC Calibration
+                    </button>
+                    <button
+                      id="startModelCalibBtn"
+                      type="button"
+                      class="calib-btn"
+                    >
+                      Temp Model Calibration
+                    </button>
+                    <button
+                      id="stopCalibBtn"
+                      type="button"
+                      class="calib-btn calib-stop"
+                    >
+                      Stop &amp; Save
+                    </button>
+                  </div>
+                  <div class="calib-action-group">
+                    <button
+                      id="calibHistoryBtn"
+                      type="button"
+                      class="calib-secondary"
+                    >
+                      Load History
+                    </button>
+                    <button
+                      id="calibClearBtn"
+                      type="button"
+                      class="calib-secondary calib-danger"
+                    >
+                      Clear Data
+                    </button>
+                  </div>
                 </div>
 
                 <div class="calibration-status">
@@ -1719,27 +1781,106 @@
                     <span id="wireTestDuty">--</span> | On/Off:
                     <span id="wireTestOnOff">--</span>
                   </div>
-                  <div class="status-line wide">
-                    NTC Calibrate:
+                  <div class="calib-inline-row wide">
+                    <label for="ntcCalRef" class="calib-inline-label"
+                      >NTC Calibrate</label
+                    >
                     <input
                       type="number"
                       id="ntcCalRef"
                       step="0.1"
                       placeholder="Ref temp (blank = heatsink)"
-                      style="width: 210px; margin-left: 6px"
+                      class="calib-inline-input"
                     />
                     <button
                       id="ntcCalibrateBtn"
                       type="button"
                       class="calib-btn"
-                      style="margin-left: 8px"
                     >
                       Calibrate NTC
                     </button>
                     <span
                       id="ntcCalibrateStatus"
-                      style="margin-left: 8px; font-size: 0.78rem; opacity: 0.9"
+                      class="calib-inline-status"
                     ></span>
+                  </div>
+                </div>
+
+                <div class="calib-model-card">
+                  <div class="calib-model-header">
+                    <div>
+                      <div class="calib-chart-title">
+                        Model &amp; PI suggestions
+                      </div>
+                      <div class="calib-chart-sub">
+                        Based on last calibration samples (power) and current
+                        thermal params.
+                      </div>
+                    </div>
+                    <div class="calib-chart-controls">
+                      <button
+                        id="calibSuggestRefresh"
+                        type="button"
+                        class="calib-secondary"
+                      >
+                        Refresh
+                      </button>
+                      <button
+                        id="calibPersistBtn"
+                        type="button"
+                        class="calib-secondary calib-save"
+                      >
+                        Persist &amp; Reload
+                      </button>
+                    </div>
+                  </div>
+
+                  <div class="calib-model-grid">
+                    <div class="calib-stat-card">
+                      <div class="calib-stat-label">Thermal model</div>
+                      <div class="calib-stat-row">
+                        τ: <span id="calibTauText">--</span> s
+                      </div>
+                      <div class="calib-stat-row">
+                        k loss: <span id="calibKText">--</span> W/K
+                      </div>
+                      <div class="calib-stat-row">
+                        C: <span id="calibCText">--</span> J/K
+                      </div>
+                      <div class="calib-stat-row">
+                        Max P (calib): <span id="calibPmaxText">--</span> W
+                      </div>
+                    </div>
+                    <div class="calib-stat-card">
+                      <div class="calib-stat-label">Wire PI (suggested)</div>
+                      <div class="calib-stat-row">
+                        Kp: <span id="calibWireKpSug">--</span>
+                      </div>
+                      <div class="calib-stat-row">
+                        Ki: <span id="calibWireKiSug">--</span>
+                      </div>
+                      <div class="calib-stat-row muted">
+                        Current Kp/Ki: <span id="calibWireKpCur">--</span> /
+                        <span id="calibWireKiCur">--</span>
+                      </div>
+                    </div>
+                    <div class="calib-stat-card">
+                      <div class="calib-stat-label">Floor PI (suggested)</div>
+                      <div class="calib-stat-row">
+                        Kp: <span id="calibFloorKpSug">--</span>
+                      </div>
+                      <div class="calib-stat-row">
+                        Ki: <span id="calibFloorKiSug">--</span>
+                      </div>
+                      <div class="calib-stat-row muted">
+                        Current Kp/Ki: <span id="calibFloorKpCur">--</span> /
+                        <span id="calibFloorKiCur">--</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="calib-model-note">
+                    Click “Persist &amp; Reload” to save suggested values into
+                    NVS and reload settings.
                   </div>
                 </div>
 
@@ -1748,7 +1889,8 @@
                     <div>
                       <div class="calib-chart-title">Temperature vs Time</div>
                       <div class="calib-chart-sub">
-                        Drag the chart to pan horizontally. Y axis stays visible.
+                        Drag the chart to pan horizontally. Y axis stays
+                        visible.
                       </div>
                     </div>
 
@@ -1774,7 +1916,8 @@
                         Temp: <b id="calibNowTempPill">--</b>&nbsp;C
                       </div>
                       <div class="calib-pill">
-                        Time: <b id="calibNowTimePill" class="calib-mono">--:--</b>
+                        Time:
+                        <b id="calibNowTimePill" class="calib-mono">--:--</b>
                       </div>
                       <div class="calib-pill">Max: <b>150</b>&nbsp;C</div>
                     </div>
@@ -1798,22 +1941,7 @@
                   </div>
                 </div>
 
-                <div class="calibration-footer">
-                  <button
-                    id="calibHistoryBtn"
-                    type="button"
-                    class="calib-secondary"
-                  >
-                    Load History
-                  </button>
-                  <button
-                    id="calibClearBtn"
-                    type="button"
-                    class="calib-secondary calib-danger"
-                  >
-                    Clear Data
-                  </button>
-                </div>
+                <!-- Buttons moved to the action bar for a cleaner layout -->
               </div>
             </div>
           </div>
@@ -1829,7 +1957,6 @@
       window.USE_MOCK = false;
     </script>
     <script src="js/admin.js"></script>
-    <script src="js/mock.js"></script>
 
     <!-- Confirm dialog -->
     <div id="confirmModal" class="user-modal" style="display: none">

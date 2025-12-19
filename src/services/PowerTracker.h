@@ -112,6 +112,7 @@ private:
     uint32_t  _startMs           = 0;
     uint32_t  _lastSampleTsMs    = 0;
     uint32_t  _lastHistorySeq    = 0;
+    uint32_t  _lastBusSeq        = 0;
 
     float     _nominalBusV       = 0.0f;
     float     _idleCurrentA      = 0.0f;

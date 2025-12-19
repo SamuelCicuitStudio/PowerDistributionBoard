@@ -4,6 +4,7 @@
 #include "services/CalibrationRecorder.h"
 #include "sensing/NtcSensor.h"
 #include "services/ThermalPiControllers.h"
+#include "services/ThermalEstimator.h"
 #include "services/RTCManager.h"
 #include <SPIFFS.h>
 #include <ArduinoJson.h>
@@ -704,6 +705,76 @@ void WiFiManager::registerRoutes_() {
         }
     );
 
+    // ---- Calibration PI suggestions (compute) ----
+    server.on("/calib_pi_suggest", HTTP_GET,
+        [this](AsyncWebServerRequest* request) {
+            if (!isAuthenticated(request)) return;
+            if (lock()) { lastActivityMillis = millis(); unlock(); }
+
+            ThermalEstimator::Result r = THERMAL_EST->computeSuggestions(CALIB);
+            StaticJsonDocument<512> doc;
+            doc["wire_tau"]    = r.tauSec;
+            doc["wire_k_loss"] = r.kLoss;
+            doc["wire_c"]      = r.thermalC;
+            doc["max_power_w"] = r.maxPowerW;
+            doc["wire_kp_suggest"] = r.wireKpSuggest;
+            doc["wire_ki_suggest"] = r.wireKiSuggest;
+            doc["floor_kp_suggest"] = r.floorKpSuggest;
+            doc["floor_ki_suggest"] = r.floorKiSuggest;
+            doc["wire_kp_current"]  = r.wireKpCurrent;
+            doc["wire_ki_current"]  = r.wireKiCurrent;
+            doc["floor_kp_current"] = r.floorKpCurrent;
+            doc["floor_ki_current"] = r.floorKiCurrent;
+
+            String json;
+            serializeJson(doc, json);
+            request->send(200, "application/json", json);
+        }
+    );
+
+    // ---- Persist thermal model & PI gains ----
+    server.on("/calib_pi_save", HTTP_POST,
+        [this](AsyncWebServerRequest* request) {},
+        nullptr,
+        [this](AsyncWebServerRequest* request,
+               uint8_t* data,
+               size_t len,
+               size_t index,
+               size_t total)
+        {
+            if (!isAuthenticated(request)) return;
+            if (lock()) { lastActivityMillis = millis(); unlock(); }
+
+            static String body;
+            if (index == 0) body = "";
+            body += String((char*)data, len);
+            if (index + len != total) return;
+
+            DynamicJsonDocument doc(512);
+            if (deserializeJson(doc, body)) {
+                body = "";
+                request->send(400, "application/json",
+                              "{\"error\":\"Invalid JSON\"}");
+                return;
+            }
+            body = "";
+
+            ThermalEstimator::Result r{};
+            if (doc.containsKey("wire_tau"))    r.tauSec   = doc["wire_tau"].as<float>();
+            if (doc.containsKey("wire_k_loss")) r.kLoss    = doc["wire_k_loss"].as<float>();
+            if (doc.containsKey("wire_c"))      r.thermalC = doc["wire_c"].as<float>();
+            if (doc.containsKey("wire_kp"))     r.wireKpSuggest = doc["wire_kp"].as<float>();
+            if (doc.containsKey("wire_ki"))     r.wireKiSuggest = doc["wire_ki"].as<float>();
+            if (doc.containsKey("floor_kp"))    r.floorKpSuggest = doc["floor_kp"].as<float>();
+            if (doc.containsKey("floor_ki"))    r.floorKiSuggest = doc["floor_ki"].as<float>();
+
+            THERMAL_EST->persist(r);
+
+            request->send(200, "application/json",
+                          "{\"status\":\"ok\",\"applied\":true}");
+        }
+    );
+
     // ---- Wire target test status ----
     server.on("/wire_test_status", HTTP_GET,
         [this](AsyncWebServerRequest* request) {
@@ -1051,6 +1122,59 @@ void WiFiManager::registerRoutes_() {
                 else if (target == "wireOhmPerM")             { c.type = CTRL_WIRE_OHM_PER_M;    c.f1 = value.as<float>(); }
                 else if (target == "wireGauge")               { c.type = CTRL_WIRE_GAUGE;        c.i1 = value.as<int>(); }
                 else if (target == "currLimit")               { c.type = CTRL_CURR_LIMIT;        c.f1 = value.as<float>(); }
+                else if (target == "adminCredentials") {
+                    const String current = value["current"] | "";
+                    const String newUser = value["username"] | "";
+                    const String newPass = value["password"] | "";
+                    const String newSsid = value["wifiSSID"] | "";
+                    const String newWifiPass = value["wifiPassword"] | "";
+
+                    const String storedPass = CONF->GetString(ADMIN_PASS_KEY, DEFAULT_ADMIN_PASS);
+                    if (current.length() && current != storedPass) {
+                        request->send(403, "application/json",
+                                      "{\"error\":\"bad_password\"}");
+                        return;
+                    }
+
+                    if (newUser.length()) CONF->PutString(ADMIN_ID_KEY, newUser);
+                    if (newPass.length()) CONF->PutString(ADMIN_PASS_KEY, newPass);
+                    if (newSsid.length()) CONF->PutString(STA_SSID_KEY, newSsid);
+                    if (newWifiPass.length()) CONF->PutString(STA_PASS_KEY, newWifiPass);
+
+                    request->send(200, "application/json",
+                                  "{\"status\":\"ok\",\"applied\":true}");
+                    return;
+                }
+                else if (target == "userCredentials") {
+                    const String current = value["current"] | "";
+                    const String newPass = value["newPass"] | "";
+                    const String newId   = value["newId"]   | "";
+                    const String storedPass = CONF->GetString(USER_PASS_KEY, DEFAULT_USER_PASS);
+                    if (current.length() && current != storedPass) {
+                        request->send(403, "application/json",
+                                      "{\"error\":\"bad_password\"}");
+                        return;
+                    }
+                    if (newId.length())   CONF->PutString(USER_ID_KEY, newId);
+                    if (newPass.length()) CONF->PutString(USER_PASS_KEY, newPass);
+                    request->send(200, "application/json",
+                                  "{\"status\":\"ok\",\"applied\":true}");
+                    return;
+                }
+                else if (target == "wifiSSID") {
+                    const String ssid = value.as<String>();
+                    if (ssid.length()) CONF->PutString(STA_SSID_KEY, ssid);
+                    request->send(200, "application/json",
+                                  "{\"status\":\"ok\",\"applied\":true}");
+                    return;
+                }
+                else if (target == "wifiPassword") {
+                    const String pw = value.as<String>();
+                    if (pw.length()) CONF->PutString(STA_PASS_KEY, pw);
+                    request->send(200, "application/json",
+                                  "{\"status\":\"ok\",\"applied\":true}");
+                    return;
+                }
                 else if (target == "tempWarnC") {
                     float v = value.as<float>();
                     if (!isfinite(v) || v < 0.0f) v = 0.0f;

@@ -115,6 +115,8 @@
     wireTestStopBtn: "Stop the wire test immediately.",
     ntcCalRef: "Reference temperature for NTC calibration (blank = use heatsink).",
     ntcCalibrateBtn: "Calibrate NTC using the reference (or heatsink if blank).",
+    calibSuggestRefresh: "Compute suggested thermal model and PI gains from last calibration data.",
+    calibPersistBtn: "Persist suggested thermal/PI values and reload settings.",
 
     // Loop timing
     onTime: "Pulse ON duration (ms). Used in manual timing mode.",
@@ -2505,6 +2507,7 @@
     initCalibrationChartUi();
     startCalibrationPoll();
     startWireTestPoll();
+    fetchCalibPiSuggest();
   }
 
   function closeCalibrationModal() {
@@ -2535,6 +2538,14 @@
     const pauseBtn = document.getElementById("calibPauseBtn");
     if (pauseBtn) {
       pauseBtn.addEventListener("click", toggleCalibPause);
+    }
+    const refreshSug = document.getElementById("calibSuggestRefresh");
+    if (refreshSug) {
+      refreshSug.addEventListener("click", fetchCalibPiSuggest);
+    }
+    const persistSug = document.getElementById("calibPersistBtn");
+    if (persistSug) {
+      persistSug.addEventListener("click", saveCalibPiSuggest);
     }
 
     const startNtc = document.getElementById("startNtcCalibBtn");
@@ -2613,6 +2624,69 @@
     if (!pop) return;
     const show = !pop.classList.contains("show");
     setCalibrationInfoVisible(show);
+  }
+
+  async function fetchCalibPiSuggest() {
+    try {
+      const res = await fetch("/calib_pi_suggest", { cache: "no-store" });
+      if (!res.ok) return;
+      const d = await res.json();
+      const setTxt = (id, val, suffix = "") => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        if (val === undefined || val === null || Number.isNaN(val)) {
+          el.textContent = "--";
+        } else {
+          el.textContent = `${Number(val).toFixed(3)}${suffix}`;
+        }
+      };
+      setTxt("calibTauText", d.wire_tau, " ");
+      setTxt("calibKText", d.wire_k_loss, " ");
+      setTxt("calibCText", d.wire_c, " ");
+      setTxt("calibPmaxText", d.max_power_w, " ");
+      setTxt("calibWireKpSug", d.wire_kp_suggest, "");
+      setTxt("calibWireKiSug", d.wire_ki_suggest, "");
+      setTxt("calibFloorKpSug", d.floor_kp_suggest, "");
+      setTxt("calibFloorKiSug", d.floor_ki_suggest, "");
+      setTxt("calibWireKpCur", d.wire_kp_current, "");
+      setTxt("calibWireKiCur", d.wire_ki_current, "");
+      setTxt("calibFloorKpCur", d.floor_kp_current, "");
+      setTxt("calibFloorKiCur", d.floor_ki_current, "");
+      // Store for persist
+      window.__calibPiSuggestion = d;
+    } catch (err) {
+      console.warn("PI suggest fetch failed", err);
+    }
+  }
+
+  async function saveCalibPiSuggest() {
+    const d = window.__calibPiSuggestion || {};
+    const payload = {
+      wire_tau: d.wire_tau,
+      wire_k_loss: d.wire_k_loss,
+      wire_c: d.wire_c,
+      wire_kp: d.wire_kp_suggest,
+      wire_ki: d.wire_ki_suggest,
+      floor_kp: d.floor_kp_suggest,
+      floor_ki: d.floor_ki_suggest,
+    };
+    try {
+      const res = await fetch("/calib_pi_save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        openAlert("Calibration", "Persist failed.", "danger");
+        return;
+      }
+      openAlert("Calibration", "Model & PI values saved. Reloading settings...", "success");
+      await loadControls();
+      fetchCalibPiSuggest();
+    } catch (err) {
+      console.error("Persist PI failed:", err);
+      openAlert("Calibration", "Persist failed.", "danger");
+    }
   }
 
   async function startCalibration(mode) {
