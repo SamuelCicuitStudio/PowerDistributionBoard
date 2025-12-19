@@ -206,6 +206,27 @@
       <!-- Global User Icon / Menu -->
       <div class="user-status-global">
         <div class="status-dot" title="Auto Mode"></div>
+        <div id="wifiSignal" class="wifi-signal" title="WiFi signal">
+          <img id="wifiSignalIcon" src="icons/wifi-0-bars.png" alt="WiFi signal" />
+        </div>
+        <div id="boardTempChip" class="temp-chip" title="Board temperature">
+          <img src="icons/thermoBoard.png" alt="Board temp" />
+          <span id="boardTempText">--?C</span>
+        </div>
+        <div id="heatsinkTempChip" class="temp-chip" title="Heatsink temperature">
+          <img src="icons/thermoHeatsink.png" alt="Heatsink temp" />
+          <span id="heatsinkTempText">--?C</span>
+        </div>
+        <div id="eventBadge" class="event-badge" title="New warnings/errors">
+          <span id="eventWarnBtn" class="event-pill warn" role="button" tabindex="0">
+            <img src="icons/Warning.png" alt="Warning" />
+            <span id="eventWarnCount">0</span>
+          </span>
+          <span id="eventErrBtn" class="event-pill err" role="button" tabindex="0">
+            <img src="icons/Error.png" alt="Error" />
+            <span id="eventErrCount">0</span>
+          </span>
+        </div>
         <div class="user-icon" onclick="toggleUserMenu()">👤</div>
         <div class="user-menu" id="userMenu">
           <button id="disconnectBtn" type="button">Disconnect</button>
@@ -1691,7 +1712,7 @@
             <div class="error-backdrop" onclick="closeErrorModal()"></div>
             <div class="error-content">
               <div class="error-header">
-                <h3>Last Stop / Error</h3>
+                <h3 id="eventModalTitle">Last Stop / Error</h3>
                 <button
                   type="button"
                   class="error-close"
@@ -1701,11 +1722,11 @@
                 </button>
               </div>
               <div class="error-body">
-                <div class="error-row">
+                <div class="error-row" id="errorStateRow">
                   <span class="error-label">Current state</span>
                   <span id="errorStateText">--</span>
                 </div>
-                <div class="error-section">
+                <div class="error-section" id="lastErrorSection">
                   <div class="error-title">Last error</div>
                   <div class="error-row">
                     <span class="error-label">Reason</span>
@@ -1716,7 +1737,7 @@
                     <span id="errorTimeText">--</span>
                   </div>
                 </div>
-                <div class="error-section">
+                <div class="error-section" id="lastStopSection">
                   <div class="error-title">Last stop</div>
                   <div class="error-row">
                     <span class="error-label">Reason</span>
@@ -1725,6 +1746,18 @@
                   <div class="error-row">
                     <span class="error-label">Time</span>
                     <span id="stopTimeText">--</span>
+                  </div>
+                </div>
+                <div class="error-section" id="warningHistorySection">
+                  <div class="error-title">Warnings (last 10)</div>
+                  <div id="warningList" class="error-list">
+                    <div class="error-empty">No warnings logged yet.</div>
+                  </div>
+                </div>
+                <div class="error-section" id="errorHistorySection">
+                  <div class="error-title">Errors (last 10)</div>
+                  <div id="errorList" class="error-list">
+                    <div class="error-empty">No errors logged yet.</div>
                   </div>
                 </div>
               </div>

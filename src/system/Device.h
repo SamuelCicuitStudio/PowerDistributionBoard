@@ -188,6 +188,18 @@ public:
         char     stopReason[96] = {0};
     };
 
+    enum class EventKind : uint8_t {
+        Error = 1,
+        Warning = 2
+    };
+
+    struct EventEntry {
+        EventKind kind = EventKind::Error;
+        uint32_t  ms = 0;
+        uint32_t  epoch = 0;
+        char      reason[96] = {0};
+    };
+
     enum class DevCmdType : uint8_t {
         SET_LED_FEEDBACK,
         SET_ON_TIME_MS,
@@ -308,8 +320,14 @@ public:
     bool             waitForCommandAck(DevCommandAck& ack, TickType_t toTicks);
     void             prepareForDeepSleep();
     void             setLastErrorReason(const char* reason);
+    void             addWarningReason(const char* reason);
     void             setLastStopReason(const char* reason);
     LastEventInfo     getLastEventInfo() const;
+    size_t           getEventHistory(EventEntry* out, size_t maxOut) const;
+    size_t           getErrorHistory(EventEntry* out, size_t maxOut) const;
+    size_t           getWarningHistory(EventEntry* out, size_t maxOut) const;
+    void             getUnreadEventCounts(uint8_t& warnCount, uint8_t& errCount) const;
+    void             markEventHistoryRead();
 
     // -------------------------------------------------------------------------
     // Thermal Model Interface (history-based)
@@ -491,6 +509,19 @@ private:
     char                  lastStopReason[96] = {0};
     uint32_t              lastStopMs     = 0;
     uint32_t              lastStopEpoch  = 0;
+    static constexpr size_t kEventHistorySize = 10;
+    EventEntry            eventHistory[kEventHistorySize]{};
+    uint8_t               eventHead = 0;
+    uint8_t               eventCount = 0;
+    EventEntry            errorHistory[kEventHistorySize]{};
+    uint8_t               errorHistoryHead = 0;
+    uint8_t               errorHistoryCount = 0;
+    EventEntry            warnHistory[kEventHistorySize]{};
+    uint8_t               warnHistoryHead = 0;
+    uint8_t               warnHistoryCount = 0;
+    uint8_t               unreadWarn = 0;
+    uint8_t               unreadErr = 0;
+    bool                  tempWarnLatched = false;
 
     // Last known heater mask (for continuity between thermal updates).
     uint16_t lastHeaterMask      = 0;
@@ -518,6 +549,11 @@ private:
     void waitForWiresNearAmbient(float tolC, uint32_t maxWaitMs = 0);
     void loadRuntimeSettings();
     void refreshThermalParams();
+    static void pushEventUnlocked(Device* self,
+                                  EventKind kind,
+                                  const char* reason,
+                                  uint32_t nowMs,
+                                  uint32_t epoch);
 };
 
 // -----------------------------------------------------------------------------

@@ -187,5 +187,6 @@ void setup() {
 //                           Loop()
 // **************************************************************
 void loop() {
-  DEVICE->StartLoop();
+  // Device state machine runs in its own FreeRTOS task; keep Arduino loop idle.
+  vTaskDelay(pdMS_TO_TICKS(50));
 }

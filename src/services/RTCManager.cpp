@@ -1,4 +1,4 @@
-﻿/**************************************************************
+/**************************************************************
  *  Author      : Tshibangu Samuel
  *  Role        : Freelance Embedded Systems Engineer
  *  Expertise   : Secure IoT Systems, Embedded C++, RTOS, Control Logic
@@ -19,6 +19,11 @@ inline T clampVal(T v, T lo, T hi) {
 }
 
 static tm g_fallbackTm{};
+static constexpr uint64_t kMinValidEpoch = 1609459200ULL; // 2021-01-01
+
+inline bool isValidEpoch(uint64_t epoch) {
+    return epoch >= kMinValidEpoch;
+}
 
 inline void persistEpoch(uint64_t epoch, const char* key) {
     if (!CONF || !key) {
@@ -108,10 +113,16 @@ void RTCManager::setUnixTime(unsigned long timestamp) {
         return;
     }
 
+    if (!isValidEpoch(static_cast<uint64_t>(timestamp))) {
+        DEBUG_PRINTF("[RTC] Ignoring invalid epoch: %lu\n",
+                     static_cast<unsigned long>(timestamp));
+        return;
+    }
+
     DEBUGGSTART();
     DEBUG_PRINT("[RTC] Setting system time from Unix timestamp: ");
     DEBUG_PRINT(timestamp);
-    DEBUG_PRINTLN(" ðŸ•’");
+    DEBUG_PRINTLN("");
     DEBUGGSTOP();
 
     struct timeval tv;
@@ -124,7 +135,7 @@ void RTCManager::setUnixTime(unsigned long timestamp) {
     DEBUGGSTART();
     DEBUG_PRINT("[RTC] System time set to: ");
     DEBUG_PRINT(timestamp);
-    DEBUG_PRINTLN(" âœ…");
+    DEBUG_PRINTLN("");
     DEBUGGSTOP();
 }
 
@@ -133,17 +144,25 @@ unsigned long RTCManager::getUnixTime() {
     if (!g.ok()) {
         // Fallback without touching shared state
         const time_t now = time(nullptr);
-        return (now > 0) ? static_cast<unsigned long>(now) : 0;
+        return (now > 0 && isValidEpoch(static_cast<uint64_t>(now)))
+                   ? static_cast<unsigned long>(now)
+                   : 0;
     }
 
     tm snapshot{};
     if (safeGetLocalTime(&snapshot)) {
         const time_t now = mktime(&snapshot);
 
+        if (!isValidEpoch(static_cast<uint64_t>(now))) {
+            DEBUG_PRINTLN("[RTC] Time not set; returning 0");
+            *timeinfo = snapshot;
+            return 0;
+        }
+
         DEBUGGSTART();
         DEBUG_PRINT("[RTC] Current Unix time: ");
         DEBUG_PRINT(static_cast<unsigned long>(now));
-        DEBUG_PRINTLN(" ðŸ•“");
+        DEBUG_PRINTLN("");
         DEBUGGSTOP();
 
         // Keep working buffer in sync
@@ -153,16 +172,16 @@ unsigned long RTCManager::getUnixTime() {
     }
 
     const time_t now = time(nullptr);
-    if (now > 0) {
+    if (now > 0 && isValidEpoch(static_cast<uint64_t>(now))) {
         DEBUGGSTART();
         DEBUG_PRINT("[RTC] Current Unix time (fallback): ");
         DEBUG_PRINT(static_cast<unsigned long>(now));
-        DEBUG_PRINTLN(" â±ï¸");
+        DEBUG_PRINTLN("");
         DEBUGGSTOP();
         return static_cast<unsigned long>(now);
     }
 
-    DEBUG_PRINTLN("[RTC] Failed to get current Unix time. âŒ");
+    DEBUG_PRINTLN("[RTC] Failed to get current Unix time.");
     return 0;
 }
 
@@ -191,12 +210,27 @@ void RTCManager::update() {
 
     tm tmp{};
     if (!safeGetLocalTime(&tmp)) {
-        DEBUG_PRINTLN("[RTC] Failed to get local time. âŒ");
+        DEBUG_PRINTLN("[RTC] Failed to get local time.");
         return;
     }
 
     // Keep working tm in sync
     *timeinfo = tmp;
+
+    const time_t epoch = mktime(&tmp);
+    if (!isValidEpoch(static_cast<uint64_t>(epoch))) {
+        const char* invalidTime = "--:--";
+        const char* invalidDate = "---- -- --";
+        if (formattedTime != invalidTime) {
+            formattedTime = String(invalidTime);
+            DEBUG_PRINTLN("[RTC] Time not set");
+        }
+        if (formattedDate != invalidDate) {
+            formattedDate = String(invalidDate);
+            DEBUG_PRINTLN("[RTC] Date not set");
+        }
+        return;
+    }
 
     char timeString[6];   // "HH:MM"
     char dateString[11];  // "YYYY-MM-DD"
@@ -219,7 +253,7 @@ void RTCManager::update() {
         DEBUGGSTART();
         DEBUG_PRINT("[RTC] Updated time: ");
         DEBUG_PRINT(formattedTime);
-        DEBUG_PRINTLN(" âœ…");
+        DEBUG_PRINTLN("");
         DEBUGGSTOP();
     }
 
@@ -228,7 +262,7 @@ void RTCManager::update() {
         DEBUGGSTART();
         DEBUG_PRINT("[RTC] Updated date: ");
         DEBUG_PRINT(formattedDate);
-        DEBUG_PRINTLN(" ðŸ“…");
+        DEBUG_PRINTLN("");
         DEBUGGSTOP();
     }
 }
@@ -253,7 +287,7 @@ void RTCManager::setRTCTime(int year,
     DEBUG_PRINT(", Hour: ");  DEBUG_PRINT(hour);
     DEBUG_PRINT(", Minute: ");DEBUG_PRINT(minute);
     DEBUG_PRINT(", Second: ");DEBUG_PRINT(second);
-    DEBUG_PRINTLN(" ðŸ“");
+    DEBUG_PRINTLN("");
     DEBUGGSTOP();
 
     year   = clampVal(year,   1970, 2099);

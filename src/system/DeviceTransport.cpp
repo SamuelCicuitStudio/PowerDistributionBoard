@@ -117,19 +117,28 @@ bool DeviceTransport::getTelemetry(StatusSnapshot& out) const {
   return true;
 }
 
-bool DeviceTransport::setRelay(bool on) {
-  return sendCommandAndWait(Device::DevCmdType::SET_RELAY, 0, 0.0f, on);
+bool DeviceTransport::setRelay(bool on, bool waitAck) {
+  if (waitAck) {
+    return sendCommandAndWait(Device::DevCmdType::SET_RELAY, 0, 0.0f, on);
+  }
+  return sendCommandNoWait(Device::DevCmdType::SET_RELAY, 0, 0.0f, on);
 }
 
-bool DeviceTransport::setOutput(uint8_t idx, bool on, bool allowUser) {
+bool DeviceTransport::setOutput(uint8_t idx, bool on, bool allowUser, bool waitAck) {
   if (idx < 1 || idx > HeaterManager::kWireCount) return false;
   // allowUser currently unused; Device decides safety
-  return sendCommandAndWait(Device::DevCmdType::SET_OUTPUT, idx, 0.0f, on);
+  if (waitAck) {
+    return sendCommandAndWait(Device::DevCmdType::SET_OUTPUT, idx, 0.0f, on);
+  }
+  return sendCommandNoWait(Device::DevCmdType::SET_OUTPUT, idx, 0.0f, on);
 }
 
-bool DeviceTransport::setFanSpeedPercent(int pct) {
+bool DeviceTransport::setFanSpeedPercent(int pct, bool waitAck) {
   pct = constrain(pct, 0, 100);
-  return sendCommandAndWait(Device::DevCmdType::SET_FAN_SPEED, pct);
+  if (waitAck) {
+    return sendCommandAndWait(Device::DevCmdType::SET_FAN_SPEED, pct);
+  }
+  return sendCommandNoWait(Device::DevCmdType::SET_FAN_SPEED, pct);
 }
 
 // -------------------- Config setters --------------------
@@ -254,4 +263,16 @@ bool DeviceTransport::sendCommandAndWait(Device::DevCmdType t, int32_t i1, float
                static_cast<int>(ack.type), static_cast<unsigned long>(ack.id),
                ack.success ? 1 : 0);
   return ack.success;
+}
+
+bool DeviceTransport::sendCommandNoWait(Device::DevCmdType t, int32_t i1, float f1, bool b1) {
+  if (!DEVICE) return false;
+  Device::DevCommand cmd{};
+  cmd.type = t;
+  cmd.i1   = i1;
+  cmd.f1   = f1;
+  cmd.b1   = b1;
+  DEBUG_PRINTF("[Transport] Cmd enqueue (no-wait) type=%d i1=%ld f1=%.3f b1=%d\n",
+               static_cast<int>(t), static_cast<long>(i1), static_cast<double>(f1), b1 ? 1 : 0);
+  return DEVICE->submitCommand(cmd);
 }

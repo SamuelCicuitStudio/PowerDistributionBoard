@@ -121,6 +121,7 @@ private:
     TaskHandle_t      snapshotTaskHandle = nullptr;
     SemaphoreHandle_t _snapMtx           = nullptr;
     StatusSnapshot    _snap; // guarded by _snapMtx
+    String            _monitorJson;
 
     // ===== State streaming (SSE) =====
     AsyncEventSource stateSse{"/state_stream"};
@@ -154,6 +155,7 @@ private:
     static void snapshotTask(void* param);
     void startSnapshotTask(uint32_t periodMs = 250);
     bool getSnapshot(StatusSnapshot& out);
+    bool getMonitorJson(String& out);
 
     // ================= Control command queue =================
     enum CtrlType : uint8_t {

@@ -1456,6 +1456,87 @@ button.danger:hover {
   box-shadow: 0 0 8px rgba(255, 90, 90, 0.35);
 }
 
+.event-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.72rem;
+  padding: 4px 8px;
+  border-radius: 999px;
+  color: #f1f5f9;
+  background: rgba(10, 14, 20, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 0 12px rgba(0, 0, 0, 0.35);
+}
+
+.wifi-signal {
+  display: none;
+  align-items: center;
+  padding: 4px 6px;
+  border-radius: 999px;
+  background: rgba(10, 14, 20, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 0 12px rgba(0, 0, 0, 0.35);
+}
+
+.wifi-signal img {
+  width: 18px;
+  height: 18px;
+}
+
+.temp-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(10, 14, 20, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 0 12px rgba(0, 0, 0, 0.35);
+  font-size: 0.72rem;
+  color: #e5e7eb;
+}
+
+.temp-chip img {
+  width: 16px;
+  height: 16px;
+}
+
+.event-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+}
+
+.event-pill img {
+  width: 14px;
+  height: 14px;
+}
+
+.event-pill:hover,
+.event-pill:focus {
+  background: rgba(255, 255, 255, 0.1);
+  outline: none;
+}
+
+.event-pill.warn {
+  color: #ffdc93;
+}
+
+.event-pill.err {
+  color: #ff9e9e;
+}
+
+.event-badge.active {
+  border-color: rgba(255, 120, 120, 0.5);
+  box-shadow: 0 0 12px rgba(255, 120, 120, 0.35);
+}
+
 /* Session history modal */
 
 .session-history-modal {
@@ -1562,6 +1643,18 @@ button.danger:hover {
   display: flex;
 }
 
+.error-modal.view-warning #errorStateRow,
+.error-modal.view-warning #lastErrorSection,
+.error-modal.view-warning #lastStopSection,
+.error-modal.view-warning #errorHistorySection {
+  display: none;
+}
+
+.error-modal.view-error #warningHistorySection,
+.error-modal.view-error #lastStopSection {
+  display: none;
+}
+
 .error-backdrop {
   position: absolute;
   inset: 0;
@@ -1635,6 +1728,60 @@ button.danger:hover {
 .error-label {
   opacity: 0.75;
   font-size: 0.75rem;
+}
+
+.error-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.error-empty {
+  opacity: 0.7;
+  font-size: 0.75rem;
+}
+
+.event-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  font-size: 0.74rem;
+  line-height: 1.2;
+}
+
+.event-item.warning {
+  border-color: rgba(255, 176, 32, 0.35);
+  background: rgba(255, 176, 32, 0.08);
+  color: rgba(255, 235, 200, 0.95);
+}
+
+.event-item.error {
+  border-color: rgba(255, 90, 90, 0.4);
+  background: rgba(255, 90, 90, 0.08);
+  color: rgba(255, 215, 215, 0.95);
+}
+
+.event-kind {
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  min-width: 64px;
+}
+
+.event-reason {
+  flex: 1 1 auto;
+}
+
+.event-time {
+  opacity: 0.8;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 /* Calibration modal */

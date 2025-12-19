@@ -11,7 +11,30 @@
 #include <ESPmDNS.h>
 #include <WiFiUdp.h>
 #include <NTPClient.h>
+#include <time.h>
 #include <string.h>
+
+namespace {
+static bool syncTimeFromNtp(uint32_t timeoutMs = 2500) {
+    configTime(0, 0, "pool.ntp.org", "time.nist.gov", "time.google.com");
+    const uint32_t start = millis();
+    tm info{};
+    while ((millis() - start) < timeoutMs) {
+        if (getLocalTime(&info, 500)) {
+            const time_t now = mktime(&info);
+            if (RTC) {
+                RTC->setUnixTime(static_cast<unsigned long>(now));
+            }
+            DEBUG_PRINTF("[WiFi] NTP sync ok (epoch=%lu)\n",
+                         static_cast<unsigned long>(now));
+            return true;
+        }
+        vTaskDelay(pdMS_TO_TICKS(200));
+    }
+    DEBUG_PRINTLN("[WiFi] NTP sync failed");
+    return false;
+}
+} // namespace
 
 static const char* floorMaterialToString(int code) {
     switch (code) {
@@ -303,6 +326,8 @@ bool WiFiManager::StartWifiSTA() {
     DEBUG_PRINTF("[WiFi] STA Connected. SSID=%s, IP=%s\n",
                  ssid.c_str(),
                  ip.toString().c_str());
+
+    syncTimeFromNtp();
 
     // ---- mDNS: expose http://powerboard.local on this LAN ----
     MDNS.end(); // ensure clean
@@ -1179,94 +1204,37 @@ void WiFiManager::registerRoutes_() {
             if (!isAuthenticated(request)) return;
             if (lock()) { lastActivityMillis = millis(); keepAlive = true; unlock(); }
 
-            StatusSnapshot s;
-            if (!getSnapshot(s)) {
+            String json;
+            if (!getMonitorJson(json)) {
                 request->send(503, "application/json",
                               "{\"error\":\"snapshot_busy\"}");
                 return;
             }
-
-            StaticJsonDocument<768> doc;
-
-            const Device::StateSnapshot snap = DEVTRAN->getStateSnapshot();
-            doc["capVoltage"] = s.capVoltage;
-            doc["capAdcRaw"]  = s.capAdcScaled;
-            doc["current"]    = s.current;
-            doc["capacitanceF"] = DEVICE ? DEVICE->getCapBankCapF() : 0.0f;
-
-            JsonArray temps = doc.createNestedArray("temperatures");
-            for (uint8_t i = 0; i < MAX_TEMP_SENSORS; ++i) {
-                temps.add(s.temps[i]);
-            }
-
-            JsonArray wireTemps = doc.createNestedArray("wireTemps");
-            for (uint8_t i = 0; i < HeaterManager::kWireCount; ++i) {
-                const double t = s.wireTemps[i];
-                wireTemps.add(isfinite(t) ? (int)lround(t) : -127);
-            }
-
-            doc["ready"] = (snap.state == DeviceState::Idle);
-            doc["off"]   = (snap.state == DeviceState::Shutdown);
-            doc["ac"]    = s.acPresent;
-            doc["relay"] = s.relayOn;
-
-            JsonObject outputs = doc.createNestedObject("outputs");
-            for (int i = 0; i < HeaterManager::kWireCount; ++i) {
-                outputs["output" + String(i + 1)] = s.outputs[i];
-            }
-
-            doc["fanSpeed"] = FAN->getSpeedPercent();
-
-            // Totals + session snapshot
-            {
-                JsonObject totals = doc.createNestedObject("sessionTotals");
-                totals["totalEnergy_Wh"]  = POWER_TRACKER->getTotalEnergy_Wh();
-                totals["totalSessions"]   = POWER_TRACKER->getTotalSessions();
-                totals["totalSessionsOk"] = POWER_TRACKER->getTotalSuccessful();
-            }
-            {
-                JsonObject sess = doc.createNestedObject("session");
-                PowerTracker::SessionStats cur =
-                    POWER_TRACKER->getCurrentSessionSnapshot();
-                const auto& last = POWER_TRACKER->getLastSession();
-
-                if (cur.valid) {
-                    sess["valid"]         = true;
-                    sess["running"]       = true;
-                    sess["energy_Wh"]     = cur.energy_Wh;
-                    sess["duration_s"]    = cur.duration_s;
-                    sess["peakPower_W"]   = cur.peakPower_W;
-                    sess["peakCurrent_A"] = cur.peakCurrent_A;
-                } else if (last.valid) {
-                    sess["valid"]         = true;
-                    sess["running"]       = false;
-                    sess["energy_Wh"]     = last.energy_Wh;
-                    sess["duration_s"]    = last.duration_s;
-                    sess["peakPower_W"]   = last.peakPower_W;
-                    sess["peakCurrent_A"] = last.peakCurrent_A;
-                } else {
-                    sess["valid"]   = false;
-                    sess["running"] = false;
-                }
-            }
-
-            String json;
-            serializeJson(doc, json);
             request->send(200, "application/json", json);
         }
     );
 
-    // ---- Last stop/error event ----
+    // ---- Last stop/error + recent events ----
     server.on("/last_event", HTTP_GET,
         [this](AsyncWebServerRequest* request) {
             if (!isAuthenticated(request)) return;
             if (lock()) { lastActivityMillis = millis(); unlock(); }
 
-            StaticJsonDocument<512> doc;
+            bool markRead = false;
+            if (request->hasParam("mark_read")) {
+                const String v = request->getParam("mark_read")->value();
+                markRead = (v.length() == 0) ? true : (v.toInt() != 0);
+            }
+
+            StaticJsonDocument<3072> doc;
             const Device::StateSnapshot snap = DEVTRAN->getStateSnapshot();
             doc["state"] = stateName(snap.state);
 
             if (DEVICE) {
+                if (markRead) {
+                    DEVICE->markEventHistoryRead();
+                }
+
                 Device::LastEventInfo info = DEVICE->getLastEventInfo();
                 JsonObject err = doc.createNestedObject("last_error");
                 if (info.hasError) {
@@ -1279,6 +1247,36 @@ void WiFiManager::registerRoutes_() {
                     stop["reason"] = info.stopReason;
                     if (info.stopMs) stop["ms"] = info.stopMs;
                     if (info.stopEpoch) stop["epoch"] = info.stopEpoch;
+                }
+
+                uint8_t warnCount = 0;
+                uint8_t errCount = 0;
+                DEVICE->getUnreadEventCounts(warnCount, errCount);
+                JsonObject unread = doc.createNestedObject("unread");
+                unread["warn"] = warnCount;
+                unread["error"] = errCount;
+
+                Device::EventEntry warnEntries[10]{};
+                Device::EventEntry errEntries[10]{};
+                const size_t warnHistory = DEVICE->getWarningHistory(warnEntries, 10);
+                const size_t errHistory = DEVICE->getErrorHistory(errEntries, 10);
+
+                JsonArray warnings = doc.createNestedArray("warnings");
+                for (size_t i = 0; i < warnHistory; ++i) {
+                    const Device::EventEntry& e = warnEntries[i];
+                    JsonObject item = warnings.createNestedObject();
+                    item["reason"] = e.reason;
+                    if (e.ms) item["ms"] = e.ms;
+                    if (e.epoch) item["epoch"] = e.epoch;
+                }
+
+                JsonArray errors = doc.createNestedArray("errors");
+                for (size_t i = 0; i < errHistory; ++i) {
+                    const Device::EventEntry& e = errEntries[i];
+                    JsonObject item = errors.createNestedObject();
+                    item["reason"] = e.reason;
+                    if (e.ms) item["ms"] = e.ms;
+                    if (e.epoch) item["epoch"] = e.epoch;
                 }
             }
 
@@ -1320,6 +1318,10 @@ void WiFiManager::registerRoutes_() {
             const String action = doc["action"] | "";
             const String target = doc["target"] | "";
             JsonVariant value   = doc["value"];
+            uint32_t epoch = doc["epoch"] | 0;
+            if (epoch > 0 && RTC) {
+                RTC->setUnixTime(epoch);
+            }
 
             if (action == "set") {
                 String valStr = value.isNull() ? String("null") : value.as<String>();
@@ -1707,13 +1709,13 @@ void WiFiManager::registerRoutes_() {
                     return;
                 }
 
-                const bool ok = handleControl(c);
+                const bool ok = sendCmd(c);
                 if (ok) {
                     request->send(200, "application/json",
-                                  "{\"status\":\"ok\",\"applied\":true}");
+                                  "{\"status\":\"ok\",\"queued\":true}");
                 } else {
-                    request->send(400, "application/json",
-                                  "{\"error\":\"apply_failed\"}");
+                    request->send(503, "application/json",
+                                  "{\"error\":\"ctrl_queue_full\"}");
                 }
             } else if (action == "get" && target == "status") {
                 const Device::StateSnapshot snap = DEVTRAN->getStateSnapshot();
@@ -2126,7 +2128,7 @@ bool WiFiManager::handleControl(const ControlCmd& c) {
 
         case CTRL_RELAY_BOOL:
             BUZZ->bip();
-            ok = DEVTRAN->setRelay(c.b1);
+            ok = DEVTRAN->setRelay(c.b1, false);
             RGB->postOverlay(c.b1 ? OverlayEvent::RELAY_ON : OverlayEvent::RELAY_OFF);
             break;
 
@@ -2134,7 +2136,7 @@ bool WiFiManager::handleControl(const ControlCmd& c) {
             if (c.i1 >= 1 && c.i1 <= 10) {
                 BUZZ->bip();
                 if (isAdminConnected()) {
-                    ok = DEVTRAN->setOutput(c.i1, c.b1, true);
+                    ok = DEVTRAN->setOutput(c.i1, c.b1, true, false);
                     if (ok) RGB->postOutputEvent(c.i1, c.b1);
                 } else if (isUserConnected()) {
                     const char* accessKeys[10] = {
@@ -2146,7 +2148,7 @@ bool WiFiManager::handleControl(const ControlCmd& c) {
                     bool allowed =
                         CONF->GetBool(accessKeys[c.i1 - 1], false);
                     if (allowed) {
-                        ok = DEVTRAN->setOutput(c.i1, c.b1, true);
+                        ok = DEVTRAN->setOutput(c.i1, c.b1, true, false);
                         if (ok) RGB->postOutputEvent(c.i1, c.b1);
                     } else {
                         ok = false;
@@ -2200,7 +2202,7 @@ bool WiFiManager::handleControl(const ControlCmd& c) {
 
         case CTRL_FAN_SPEED: {
             int pct = constrain(c.i1, 0, 100);
-            ok = DEVTRAN->setFanSpeedPercent(pct);
+            ok = DEVTRAN->setFanSpeedPercent(pct, false);
             if (ok) {
                 if (pct <= 0) RGB->postOverlay(OverlayEvent::FAN_OFF);
                 else          RGB->postOverlay(OverlayEvent::FAN_ON);
@@ -2327,6 +2329,7 @@ void WiFiManager::startSnapshotTask(uint32_t periodMs) {
     if (_snapMtx == nullptr) {
         _snapMtx = xSemaphoreCreateMutex();
     }
+    _monitorJson.reserve(1024);
     if (snapshotTaskHandle == nullptr) {
         xTaskCreate(
             WiFiManager::snapshotTask,
@@ -2351,6 +2354,9 @@ void WiFiManager::snapshotTask(void* param) {
     }
 
     StatusSnapshot local{};
+    StaticJsonDocument<1024> doc;
+    String monitorJson;
+    monitorJson.reserve(1024);
 
     for (;;) {
         // Cap voltage & current (these should be cheap / cached)
@@ -2363,7 +2369,11 @@ void WiFiManager::snapshotTask(void* param) {
         }
 
         if (DEVICE && DEVICE->currentSensor) {
-            local.current = DEVICE->currentSensor->readCurrent();
+            if (DEVICE->currentSensor->isContinuousRunning()) {
+                local.current = DEVICE->currentSensor->getLastCurrent();
+            } else {
+                local.current = DEVICE->currentSensor->readCurrent();
+            }
         } else {
             local.current = 0.0f;
         }
@@ -2381,6 +2391,19 @@ void WiFiManager::snapshotTask(void* param) {
         for (uint8_t i = n; i < MAX_TEMP_SENSORS; ++i) {
             local.temps[i] = -127.0f; // show as "off" when absent
         }
+
+        float board0 = NAN;
+        float board1 = NAN;
+        float heatsink = NAN;
+        if (DEVICE && DEVICE->tempSensor) {
+            board0 = DEVICE->tempSensor->getBoardTemp(0);
+            board1 = DEVICE->tempSensor->getBoardTemp(1);
+            heatsink = DEVICE->tempSensor->getHeatsinkTemp();
+        }
+        float boardTemp = NAN;
+        if (isfinite(board0) && isfinite(board1)) boardTemp = (board0 > board1) ? board0 : board1;
+        else if (isfinite(board0)) boardTemp = board0;
+        else if (isfinite(board1)) boardTemp = board1;
 
         // Virtual wire temps + outputs
         for (uint8_t i = 1; i <= HeaterManager::kWireCount; ++i) {
@@ -2402,11 +2425,98 @@ void WiFiManager::snapshotTask(void* param) {
 
         local.updatedMs = millis();
 
+        // Prebuild the /monitor JSON once per snapshot.
+        doc.clear();
+        doc["capVoltage"]   = local.capVoltage;
+        doc["capAdcRaw"]    = local.capAdcScaled;
+        doc["current"]      = local.current;
+        doc["capacitanceF"] = DEVICE ? DEVICE->getCapBankCapF() : 0.0f;
+
+        JsonArray temps = doc.createNestedArray("temperatures");
+        for (uint8_t i = 0; i < MAX_TEMP_SENSORS; ++i) {
+            temps.add(local.temps[i]);
+        }
+        doc["boardTemp"] = isfinite(boardTemp) ? boardTemp : -127.0f;
+        doc["heatsinkTemp"] = isfinite(heatsink) ? heatsink : -127.0f;
+
+        JsonArray wireTemps = doc.createNestedArray("wireTemps");
+        for (uint8_t i = 0; i < HeaterManager::kWireCount; ++i) {
+            const double t = local.wireTemps[i];
+            wireTemps.add(isfinite(t) ? (int)lround(t) : -127);
+        }
+
+        const Device::StateSnapshot snap = DEVTRAN->getStateSnapshot();
+        doc["ready"] = (snap.state == DeviceState::Idle);
+        doc["off"]   = (snap.state == DeviceState::Shutdown);
+        doc["ac"]    = local.acPresent;
+        doc["relay"] = local.relayOn;
+        if (DEVICE) {
+            uint8_t warnCount = 0;
+            uint8_t errCount = 0;
+            DEVICE->getUnreadEventCounts(warnCount, errCount);
+            JsonObject unread = doc.createNestedObject("eventUnread");
+            unread["warn"] = warnCount;
+            unread["error"] = errCount;
+        }
+
+        JsonObject outputs = doc.createNestedObject("outputs");
+        for (uint8_t i = 0; i < HeaterManager::kWireCount; ++i) {
+            char key[12];
+            snprintf(key, sizeof(key), "output%u", (unsigned)(i + 1));
+            outputs[key] = local.outputs[i];
+        }
+
+        doc["fanSpeed"] = FAN->getSpeedPercent();
+        const wifi_mode_t mode = WiFi.getMode();
+        const bool staMode = (mode == WIFI_STA || mode == WIFI_AP_STA);
+        const bool staConnected = (WiFi.status() == WL_CONNECTED);
+        doc["wifiSta"] = staMode;
+        doc["wifiConnected"] = staConnected;
+        if (staMode && staConnected) {
+            doc["wifiRssi"] = WiFi.RSSI();
+        }
+
+        {
+            JsonObject totals = doc.createNestedObject("sessionTotals");
+            totals["totalEnergy_Wh"]  = POWER_TRACKER->getTotalEnergy_Wh();
+            totals["totalSessions"]   = POWER_TRACKER->getTotalSessions();
+            totals["totalSessionsOk"] = POWER_TRACKER->getTotalSuccessful();
+        }
+        {
+            JsonObject sess = doc.createNestedObject("session");
+            PowerTracker::SessionStats cur =
+                POWER_TRACKER->getCurrentSessionSnapshot();
+            const auto& last = POWER_TRACKER->getLastSession();
+
+            if (cur.valid) {
+                sess["valid"]         = true;
+                sess["running"]       = true;
+                sess["energy_Wh"]     = cur.energy_Wh;
+                sess["duration_s"]    = cur.duration_s;
+                sess["peakPower_W"]   = cur.peakPower_W;
+                sess["peakCurrent_A"] = cur.peakCurrent_A;
+            } else if (last.valid) {
+                sess["valid"]         = true;
+                sess["running"]       = false;
+                sess["energy_Wh"]     = last.energy_Wh;
+                sess["duration_s"]    = last.duration_s;
+                sess["peakPower_W"]   = last.peakPower_W;
+                sess["peakCurrent_A"] = last.peakCurrent_A;
+            } else {
+                sess["valid"]   = false;
+                sess["running"] = false;
+            }
+        }
+
+        monitorJson.remove(0);
+        serializeJson(doc, monitorJson);
+
         // Commit snapshot under lock
         if (self->_snapMtx &&
             xSemaphoreTake(self->_snapMtx, portMAX_DELAY) == pdTRUE)
         {
             self->_snap = local;
+            self->_monitorJson = monitorJson;
             self->pushLiveSample(local);
             xSemaphoreGive(self->_snapMtx);
         }
@@ -2421,6 +2531,20 @@ bool WiFiManager::getSnapshot(StatusSnapshot& out) {
         return false;
     }
     out = _snap;
+    xSemaphoreGive(_snapMtx);
+    return true;
+}
+
+bool WiFiManager::getMonitorJson(String& out) {
+    if (_snapMtx == nullptr) return false;
+    if (xSemaphoreTake(_snapMtx, pdMS_TO_TICKS(25)) != pdTRUE) {
+        return false;
+    }
+    if (_monitorJson.length() == 0) {
+        xSemaphoreGive(_snapMtx);
+        return false;
+    }
+    out = _monitorJson;
     xSemaphoreGive(_snapMtx);
     return true;
 }

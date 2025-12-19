@@ -19,6 +19,7 @@ static inline uint16_t _allowedMaskFrom(const bool allowed[10]) {
 }
 
 static constexpr uint32_t CAL_TIMEOUT_MS = 10000; // max time for pre-loop charge + calibrations
+static constexpr uint32_t WAIT_12V_TIMEOUT_MS = 10000;
 
 static inline const char* _loopModeName(LoopMode m) {
     switch (m) {
@@ -227,8 +228,26 @@ void Device::loopTask() {
         BUZZ->bip();
         DEBUG_PRINTLN("[Device] Waiting for 12V input...");
 
+        const uint32_t wait12vStart = millis();
+        bool wait12vTimedOut = false;
         while (!digitalRead(DETECT_12V_PIN)) {
+            if ((millis() - wait12vStart) >= WAIT_12V_TIMEOUT_MS) {
+                wait12vTimedOut = true;
+                break;
+            }
             vTaskDelay(pdMS_TO_TICKS(100));
+        }
+        if (wait12vTimedOut) {
+            DEBUG_PRINTLN("[Device] 12V not detected within timeout");
+            setLastErrorReason("12V not detected within 10s of start");
+            RGB->setFault();
+            RGB->showError(ErrorCategory::POWER, 2);
+            BUZZ->bipFault();
+            if (WIRE)      WIRE->disableAll();
+            if (indicator) indicator->clearAll();
+            relayControl->turnOff();
+            setState(DeviceState::Error);
+            continue; // back to OFF state
         }
 
         DEBUG_PRINTLN("[Device] 12V detected -> enabling relay");

@@ -33,6 +33,7 @@
   let lastState = "Shutdown"; // Device state from backend
   let pendingConfirm = null; // For confirm modal
   let lastLoadedControls = null; // Snapshot from /load_controls
+  let lastMonitor = null; // Snapshot from /monitor
   let isMuted = false; // Buzzer mute cached state
   let stateStream = null; // EventSource for zero-lag state
   let statePollTimer = null; // Fallback polling timer
@@ -555,10 +556,12 @@
   }
 
   function onPowerClick() {
-    if (lastState === "Shutdown") {
-      startSystem();
-    } else {
+    if (lastState === "Running") {
       shutdownSystem();
+    } else if (lastState === "Error") {
+      shutdownSystem();
+    } else {
+      startSystem();
     }
   }
 
@@ -775,15 +778,28 @@
   // ========================================================
 
   async function handleOutputToggle(index, checkbox) {
-    await ensureManualTakeover("output" + index);
     const isOn = !!checkbox.checked;
-    const led = checkbox.parentElement.nextElementSibling;
-    if (led) led.classList.toggle("active", isOn);
+    checkbox.disabled = true;
+
+    const pre = lastMonitor || (await fetchMonitorSnapshot());
+    if (pre) applyMonitorSnapshot(pre);
+
+    await ensureManualTakeover("output" + index);
+
     const resp = await sendControlCommand("set", "output" + index, isOn);
     if (resp && resp.error) {
-      if (led) led.classList.toggle("active", !isOn);
-      checkbox.checked = !isOn;
+      checkbox.disabled = false;
+      await pollLiveOnce();
+      return;
     }
+
+    const mon = await waitForMonitorMatch(
+      (m) => m && m.outputs && m.outputs["output" + index] === isOn
+    );
+    if (mon) applyMonitorSnapshot(mon);
+    else await pollLiveOnce();
+
+    checkbox.disabled = false;
   }
 
   function updateOutputAccess(index, newState) {
@@ -896,6 +912,9 @@
   async function sendControlCommand(action, target, value) {
     const payload = { action, target };
     if (value !== undefined) payload.value = value;
+    if (action === "set") {
+      payload.epoch = Math.floor(Date.now() / 1000);
+    }
 
     try {
       const res = await fetch("/control", {
@@ -2011,138 +2030,185 @@
     c.classList.toggle("off", !on);
   }
 
+  async function fetchMonitorSnapshot() {
+    const res = await fetch("/monitor", { cache: "no-store" });
+    if (res.status === 403) {
+      window.location.href = "http://powerboard.local/login";
+      return null;
+    }
+    if (!res.ok) return null;
+    try {
+      return await res.json();
+    } catch {
+      return null;
+    }
+  }
+
+  function applyMonitorSnapshot(mon) {
+    if (!mon) return;
+    lastMonitor = mon;
+    // --- Session stats (Live tab headline) ---
+    if (mon.session) {
+      updateSessionStatsUI(mon.session);
+    }
+
+    // --- Lifetime counters ---
+    if (mon.sessionTotals) {
+      const t = mon.sessionTotals;
+      const totalEnergyEl = document.getElementById("totalEnergy");
+      const totalSessionsEl = document.getElementById("totalSessions");
+      const totalOkEl = document.getElementById("totalSessionsOk");
+
+      if (totalEnergyEl)
+        totalEnergyEl.textContent = (t.totalEnergy_Wh || 0).toFixed(2) + " Wh";
+      if (totalSessionsEl)
+        totalSessionsEl.textContent = (t.totalSessions || 0).toString();
+      if (totalOkEl)
+        totalOkEl.textContent = (t.totalSessionsOk || 0).toString();
+    }
+
+    const outs = mon.outputs || {};
+    for (let i = 1; i <= 10; i++) {
+      setDot("o" + i, !!outs["output" + i]);
+    }
+    for (let i = 1; i <= 10; i++) {
+      const itemSel = "#manualOutputs .manual-item:nth-child(" + i + ")";
+      const checkbox = document.querySelector(
+        itemSel + ' input[type="checkbox"]'
+      );
+      const led = document.querySelector(itemSel + " .led");
+      const on = !!outs["output" + i];
+      if (checkbox) checkbox.checked = on;
+      if (led) led.classList.toggle("active", on);
+    }
+
+    // Per-wire temps
+    const wireTemps = mon.wireTemps || [];
+    if (LIVE.svg) {
+      for (const cfg of LIVE.tempMarkers) {
+        const badge = LIVE.svg.querySelector(
+          'g.temp-badge[data-wire="' + cfg.wire + '"]'
+        );
+        if (!badge) continue;
+
+        const label = badge.querySelector("text.temp-label");
+        if (!label) continue;
+
+        const t = wireTemps[cfg.wire - 1];
+        let txt = "--";
+
+        badge.classList.remove("warn", "hot");
+
+        if (typeof t === "number" && t > -100) {
+          const rounded = Math.round(t);
+          txt = String(rounded);
+
+          if (t >= 400) badge.classList.add("hot");
+          else if (t >= 250) badge.classList.add("warn");
+
+          badge.setAttribute(
+            "title",
+            "Wire " + cfg.wire + ": " + t.toFixed(1) + "degC"
+          );
+        } else {
+          badge.removeAttribute("title");
+        }
+
+        label.textContent = txt;
+      }
+    }
+
+    // Relay + AC
+    const serverRelay = mon.relay === true;
+    const ac = mon.ac === true;
+    setDot("relay", serverRelay);
+    setDot("ac", ac);
+
+    const relayToggle = document.getElementById("relayToggle");
+    if (relayToggle) relayToggle.checked = serverRelay;
+
+    // Voltage gauge (cap voltage or fallback)
+    const fallback = 325;
+    let shownV = fallback;
+    if (ac) {
+      const v = parseFloat(mon.capVoltage);
+      if (Number.isFinite(v)) shownV = v;
+    }
+    updateGauge("voltageValue", shownV, "V", 400);
+
+    // Raw ADC display (scaled /100, e.g., 4095 -> 40.95)
+    const adcEl = document.getElementById("adcRawValue");
+    if (adcEl) {
+      const rawScaled = parseFloat(mon.capAdcRaw);
+      adcEl.textContent = Number.isFinite(rawScaled)
+        ? rawScaled.toFixed(2)
+        : "--";
+    }
+
+    // Current gauge
+    let rawCurrent = parseFloat(mon.current);
+    if (!ac || !Number.isFinite(rawCurrent)) rawCurrent = 0;
+    rawCurrent = Math.max(0, Math.min(100, rawCurrent));
+    updateGauge("currentValue", rawCurrent, "A", 100);
+
+    // Temperatures (up to 12 sensors)
+    const temps = mon.temperatures || [];
+    for (let i = 0; i < 12; i++) {
+      const id = "temp" + (i + 1) + "Value";
+      const t = temps[i];
+      const num = Number(t);
+      if (t === undefined || t === null || Number.isNaN(num) || num === -127) {
+        updateGauge(id, "Off", "°C", 150);
+      } else {
+        updateGauge(id, num, "°C", 150);
+      }
+    }
+
+    // Capacitance (F -> mF)
+    const capF = parseFloat(mon.capacitanceF);
+    renderCapacitance(capF);
+
+    // Ready / Off LEDs
+    const readyLed = document.getElementById("readyLed");
+    const offLed = document.getElementById("offLed");
+    if (readyLed) readyLed.style.backgroundColor = mon.ready ? "limegreen" : "gray";
+    if (offLed) offLed.style.backgroundColor = mon.off ? "red" : "gray";
+
+    // Fan slider reflect
+    const fanSlider = document.getElementById("fanSlider");
+    if (fanSlider && typeof mon.fanSpeed === "number") {
+      fanSlider.value = mon.fanSpeed;
+    }
+
+    if (mon.eventUnread) {
+      updateEventBadge(mon.eventUnread.warn, mon.eventUnread.error);
+    }
+
+    updateWifiSignal(mon);
+    updateTopTemps(mon);
+  }
+
+  async function waitForMonitorMatch(predicate, opts = {}) {
+    const timeoutMs = opts.timeoutMs || 1500;
+    const intervalMs = opts.intervalMs || 120;
+    const start = Date.now();
+    let last = null;
+    while (Date.now() - start < timeoutMs) {
+      const mon = await fetchMonitorSnapshot();
+      if (mon) {
+        last = mon;
+        if (predicate(mon)) return mon;
+      }
+      await sleep(intervalMs);
+    }
+    return last;
+  }
+
   async function pollLiveOnce() {
     try {
-      const res = await fetch("/monitor", { cache: "no-store" });
-      if (res.status === 403) {
-        window.location.href = "http://powerboard.local/login";
-        return;
-      }
-      if (!res.ok) return;
-      const mon = await res.json();
-      // --- Session stats (Live tab headline) ---
-      if (mon.session) {
-        updateSessionStatsUI(mon.session);
-      }
-
-      // --- Lifetime counters ---
-      if (mon.sessionTotals) {
-        const t = mon.sessionTotals;
-        const totalEnergyEl = document.getElementById("totalEnergy");
-        const totalSessionsEl = document.getElementById("totalSessions");
-        const totalOkEl = document.getElementById("totalSessionsOk");
-
-        if (totalEnergyEl)
-          totalEnergyEl.textContent =
-            (t.totalEnergy_Wh || 0).toFixed(2) + " Wh";
-        if (totalSessionsEl)
-          totalSessionsEl.textContent = (t.totalSessions || 0).toString();
-        if (totalOkEl)
-          totalOkEl.textContent = (t.totalSessionsOk || 0).toString();
-      }
-
-      const outs = mon.outputs || {};
-      for (let i = 1; i <= 10; i++) {
-        setDot("o" + i, !!outs["output" + i]);
-      }
-
-      // Per-wire temps
-      const wireTemps = mon.wireTemps || [];
-      if (LIVE.svg) {
-        for (const cfg of LIVE.tempMarkers) {
-          const badge = LIVE.svg.querySelector(
-            'g.temp-badge[data-wire="' + cfg.wire + '"]'
-          );
-          if (!badge) continue;
-
-          const label = badge.querySelector("text.temp-label");
-          if (!label) continue;
-
-          const t = wireTemps[cfg.wire - 1];
-          let txt = "--";
-
-          badge.classList.remove("warn", "hot");
-
-          if (typeof t === "number" && t > -100) {
-            const rounded = Math.round(t);
-            txt = String(rounded);
-
-            if (t >= 400) badge.classList.add("hot");
-            else if (t >= 250) badge.classList.add("warn");
-
-            badge.setAttribute(
-              "title",
-              "Wire " + cfg.wire + ": " + t.toFixed(1) + "°C"
-            );
-          } else {
-            badge.removeAttribute("title");
-          }
-
-          label.textContent = txt;
-        }
-      }
-
-      // Relay + AC
-      const serverRelay = mon.relay === true;
-      const ac = mon.ac === true;
-      setDot("relay", serverRelay);
-      setDot("ac", ac);
-
-      const relayToggle = document.getElementById("relayToggle");
-      if (relayToggle) relayToggle.checked = serverRelay;
-
-      // Voltage gauge (cap voltage or fallback)
-      const fallback = 325;
-      let shownV = fallback;
-      if (ac) {
-        const v = parseFloat(mon.capVoltage);
-        if (Number.isFinite(v)) shownV = v;
-      }
-      updateGauge("voltageValue", shownV, "V", 400);
-
-      // Raw ADC display (scaled /100, e.g., 4095 -> 40.95)
-      const adcEl = document.getElementById("adcRawValue");
-      if (adcEl) {
-        const rawScaled = parseFloat(mon.capAdcRaw);
-        adcEl.textContent = Number.isFinite(rawScaled)
-          ? rawScaled.toFixed(2)
-          : "--";
-      }
-
-      // Current gauge
-      let rawCurrent = parseFloat(mon.current);
-      if (!ac || !Number.isFinite(rawCurrent)) rawCurrent = 0;
-      rawCurrent = Math.max(0, Math.min(100, rawCurrent));
-      updateGauge("currentValue", rawCurrent, "A", 100);
-
-      // Temperatures (up to 12 sensors)
-      const temps = mon.temperatures || [];
-      for (let i = 0; i < 12; i++) {
-        const id = "temp" + (i + 1) + "Value";
-        const t = temps[i];
-        const num = Number(t);
-        if (t === undefined || t === null || Number.isNaN(num) || num === -127) {
-          updateGauge(id, "Off", "\u00B0C", 150);
-        } else {
-          updateGauge(id, num, "\u00B0C", 150);
-        }
-      }
-
-      // Capacitance (F -> mF)
-      const capF = parseFloat(mon.capacitanceF);
-      renderCapacitance(capF);
-
-      // Ready / Off LEDs
-      const readyLed = document.getElementById("readyLed");
-      const offLed = document.getElementById("offLed");
-      if (readyLed) readyLed.style.backgroundColor = mon.ready ? "limegreen" : "gray";
-      if (offLed) offLed.style.backgroundColor = mon.off ? "red" : "gray";
-
-      // Fan slider reflect
-      const fanSlider = document.getElementById("fanSlider");
-      if (fanSlider && typeof mon.fanSpeed === "number") {
-        fanSlider.value = mon.fanSpeed;
-      }
+      const mon = await fetchMonitorSnapshot();
+      if (!mon) return;
+      applyMonitorSnapshot(mon);
     } catch (err) {
       console.warn("live poll failed:", err);
     }
@@ -2410,10 +2476,97 @@
     m.classList.remove("show");
   }
 
+  function updateEventBadge(warnCount, errCount) {
+    const badge = document.getElementById("eventBadge");
+    if (!badge) return;
+    const w = Math.max(0, Number(warnCount) || 0);
+    const e = Math.max(0, Number(errCount) || 0);
+    const warnEl = document.getElementById("eventWarnCount");
+    const errEl = document.getElementById("eventErrCount");
+    if (warnEl) warnEl.textContent = String(w);
+    if (errEl) errEl.textContent = String(e);
+    if (!warnEl || !errEl) {
+      badge.textContent = "warn " + w + " err " + e;
+    }
+    badge.classList.toggle("active", w > 0 || e > 0);
+  }
+
+  function rssiToBars(rssi) {
+    if (!Number.isFinite(rssi)) return 0;
+    if (rssi >= -55) return 4;
+    if (rssi >= -67) return 3;
+    if (rssi >= -75) return 2;
+    if (rssi >= -85) return 1;
+    return 0;
+  }
+
+  function updateWifiSignal(mon) {
+    const wrap = document.getElementById("wifiSignal");
+    const icon = document.getElementById("wifiSignalIcon");
+    if (!wrap || !icon) return;
+    if (!mon || !mon.wifiSta) {
+      wrap.style.display = "none";
+      return;
+    }
+    const connected = mon.wifiConnected !== false;
+    const rssi = Number(mon.wifiRssi);
+    const bars = connected ? rssiToBars(rssi) : 0;
+    icon.src = "icons/wifi-" + bars + "-bars.png";
+    wrap.style.display = "inline-flex";
+    if (!connected) {
+      wrap.title = "WiFi not connected";
+    } else {
+      wrap.title = Number.isFinite(rssi)
+        ? "WiFi signal (" + rssi + " dBm)"
+        : "WiFi signal";
+    }
+  }
+
+  function formatTopTemp(val) {
+    if (typeof val === "number" && val > -100) {
+      return Math.round(val) + "°C";
+    }
+    return "Off";
+  }
+
+  function updateTopTemps(mon) {
+    const boardEl = document.getElementById("boardTempText");
+    const hsEl = document.getElementById("heatsinkTempText");
+    if (!boardEl || !hsEl) return;
+    if (!mon) return;
+    boardEl.textContent = formatTopTemp(mon.boardTemp);
+    hsEl.textContent = formatTopTemp(mon.heatsinkTemp);
+  }
+
   function bindErrorButton() {
     const btn = document.getElementById("errorBtn");
     if (!btn) return;
     btn.addEventListener("click", loadLastEventAndOpen);
+  }
+
+  function bindEventBadge() {
+    const warnBtn = document.getElementById("eventWarnBtn");
+    const errBtn = document.getElementById("eventErrBtn");
+    if (warnBtn) {
+      warnBtn.addEventListener("click", () =>
+        loadLastEventAndOpen("warning")
+      );
+      warnBtn.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          loadLastEventAndOpen("warning");
+        }
+      });
+    }
+    if (errBtn) {
+      errBtn.addEventListener("click", () => loadLastEventAndOpen("error"));
+      errBtn.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          loadLastEventAndOpen("error");
+        }
+      });
+    }
   }
 
   function formatEventTime(epochSec, ms) {
@@ -2422,9 +2575,70 @@
     return "--";
   }
 
-  async function loadLastEventAndOpen() {
+  function renderEventList(listId, events, emptyText, kindLabel) {
+    const list = document.getElementById(listId);
+    if (!list) return;
+    list.innerHTML = "";
+    if (!Array.isArray(events) || events.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "error-empty";
+      empty.textContent = emptyText || "No events logged yet.";
+      list.appendChild(empty);
+      return;
+    }
+
+    events.forEach((ev) => {
+      const item = document.createElement("div");
+      item.className =
+        "event-item " + (kindLabel === "Warning" ? "warning" : "error");
+
+      const kindEl = document.createElement("span");
+      kindEl.className = "event-kind";
+      kindEl.textContent = kindLabel;
+
+      const reasonEl = document.createElement("span");
+      reasonEl.className = "event-reason";
+      reasonEl.textContent = ev.reason || "--";
+
+      const timeEl = document.createElement("span");
+      timeEl.className = "event-time";
+      timeEl.textContent = formatEventTime(ev.epoch, ev.ms);
+
+      item.appendChild(kindEl);
+      item.appendChild(reasonEl);
+      item.appendChild(timeEl);
+      list.appendChild(item);
+    });
+  }
+
+  function focusEventSection(sectionId) {
+    const section = document.getElementById(sectionId);
+    if (!section) return;
+    section.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function setEventView(mode) {
+    const modal = document.getElementById("errorModal");
+    const title = document.getElementById("eventModalTitle");
+    if (!modal) return;
+    modal.classList.remove("view-warning", "view-error");
+    if (mode === "warning") {
+      modal.classList.add("view-warning");
+      if (title) title.textContent = "Warnings";
+    } else if (mode === "error") {
+      modal.classList.add("view-error");
+      if (title) title.textContent = "Errors";
+    } else {
+      if (title) title.textContent = "Last Stop / Error";
+    }
+  }
+
+  async function loadLastEventAndOpen(focus) {
+    setEventView(focus || "all");
     try {
-      const res = await fetch("/last_event", { cache: "no-store" });
+      const res = await fetch("/last_event?mark_read=1", {
+        cache: "no-store",
+      });
       if (!res.ok) {
         console.error("Failed to load last_event:", res.status);
         openErrorModal();
@@ -2447,9 +2661,30 @@
       const stopTime = document.getElementById("stopTimeText");
       if (stopTime) stopTime.textContent = formatEventTime(stop.epoch, stop.ms);
 
+      renderEventList(
+        "warningList",
+        data.warnings || [],
+        "No warnings logged yet.",
+        "Warning"
+      );
+      renderEventList(
+        "errorList",
+        data.errors || [],
+        "No errors logged yet.",
+        "Error"
+      );
+      if (data.unread) {
+        updateEventBadge(data.unread.warn, data.unread.error);
+      } else {
+        updateEventBadge(0, 0);
+      }
+
       openErrorModal();
+      if (focus === "warning") focusEventSection("warningHistorySection");
+      else if (focus === "error") focusEventSection("errorHistorySection");
     } catch (err) {
       console.error("Last event load failed", err);
+      setEventView(focus || "all");
       openErrorModal();
     }
   }
@@ -3872,6 +4107,7 @@
     loadControls();
     bindSessionHistoryButton();
     bindErrorButton();
+    bindEventBadge();
     bindCalibrationButton();
     updateSessionStatsUI(null);
     // Disconnect button
@@ -3884,8 +4120,26 @@
     const relayToggle = document.getElementById("relayToggle");
     if (relayToggle) {
       relayToggle.addEventListener("change", async () => {
+        const desired = relayToggle.checked;
+        relayToggle.disabled = true;
+
+        const pre = lastMonitor || (await fetchMonitorSnapshot());
+        if (pre) applyMonitorSnapshot(pre);
+
         await ensureManualTakeover("relay");
-        sendControlCommand("set", "relay", relayToggle.checked);
+
+        const resp = await sendControlCommand("set", "relay", desired);
+        if (resp && resp.error) {
+          relayToggle.disabled = false;
+          await pollLiveOnce();
+          return;
+        }
+
+        const mon = await waitForMonitorMatch((m) => m && m.relay === desired);
+        if (mon) applyMonitorSnapshot(mon);
+        else await pollLiveOnce();
+
+        relayToggle.disabled = false;
       });
     }
 

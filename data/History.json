@@ -6,69 +6,6 @@
       "energy_Wh": 12.35,
       "peakPower_W": 310.5,
       "peakCurrent_A": 1.42
-    },
-    {
-      "start_ms": 480000,
-      "duration_s": 95,
-      "energy_Wh": 4.88,
-      "peakPower_W": 260.2,
-      "peakCurrent_A": 1.18
-    },
-    {
-      "start_ms": 900000,
-      "duration_s": 240,
-      "energy_Wh": 18.72,
-      "peakPower_W": 330.0,
-      "peakCurrent_A": 1.53
-    },
-    {
-      "start_ms": 1500000,
-      "duration_s": 300,
-      "energy_Wh": 22.11,
-      "peakPower_W": 345.7,
-      "peakCurrent_A": 1.61
-    },
-    {
-      "start_ms": 2300000,
-      "duration_s": 60,
-      "energy_Wh": 2.95,
-      "peakPower_W": 210.3,
-      "peakCurrent_A": 0.96
-    },
-    {
-      "start_ms": 3100000,
-      "duration_s": 410,
-      "energy_Wh": 27.44,
-      "peakPower_W": 355.9,
-      "peakCurrent_A": 1.68
-    },
-    {
-      "start_ms": 4000000,
-      "duration_s": 200,
-      "energy_Wh": 10.27,
-      "peakPower_W": 295.0,
-      "peakCurrent_A": 1.31
-    },
-    {
-      "start_ms": 4700000,
-      "duration_s": 130,
-      "energy_Wh": 6.14,
-      "peakPower_W": 250.8,
-      "peakCurrent_A": 1.09
-    },
-    {
-      "start_ms": 5400000,
-      "duration_s": 520,
-      "energy_Wh": 33.89,
-      "peakPower_W": 370.4,
-      "peakCurrent_A": 1.77
-    },
-    {
-      "start_ms": 6300000,
-      "duration_s": 75,
-      "energy_Wh": 3.21,
-      "peakPower_W": 220.6,
-      "peakCurrent_A": 1.01
     }
   ]
 }

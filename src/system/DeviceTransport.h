@@ -34,9 +34,9 @@ public:
   bool isManualMode() const;
 
   // Output / relay helpers for UI control paths
-  bool setRelay(bool on);
-  bool setOutput(uint8_t idx, bool on, bool allowUser);
-  bool setFanSpeedPercent(int pct);
+  bool setRelay(bool on, bool waitAck = true);
+  bool setOutput(uint8_t idx, bool on, bool allowUser, bool waitAck = true);
+  bool setFanSpeedPercent(int pct, bool waitAck = true);
 
   // Config/NVS setters (centralized)
   bool setLedFeedback(bool on);
@@ -67,6 +67,7 @@ public:
 
 private:
   bool sendCommandAndWait(Device::DevCmdType t, int32_t i1 = 0, float f1 = 0.0f, bool b1 = false, TickType_t to = pdMS_TO_TICKS(500));
+  bool sendCommandNoWait(Device::DevCmdType t, int32_t i1 = 0, float f1 = 0.0f, bool b1 = false);
 
 private:
   static DeviceTransport* s_inst;
