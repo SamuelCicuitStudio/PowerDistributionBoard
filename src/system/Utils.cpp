@@ -50,6 +50,13 @@ TaskHandle_t      s_dbgTask     = nullptr; // Background writer task
 SemaphoreHandle_t s_serialMtx   = nullptr; // Mutex guarding Serial writes
 bool              s_started     = false;   // Debug system started flag
 
+SemaphoreHandle_t s_logMtx      = nullptr;
+bool              s_logEnabled  = false;
+char*             s_logBuf      = nullptr;
+size_t            s_logCap      = 0;
+size_t            s_logHead     = 0;
+size_t            s_logLen      = 0;
+
 // Grouping (atomic bursts)
 SemaphoreHandle_t s_groupGate   = nullptr; // Gate protecting group state
 TaskHandle_t      s_groupOwner  = nullptr; // Current owner task handle
@@ -127,6 +134,45 @@ inline void freeMsg_(DebugMsg* m) {
 #endif
 }
 
+inline void logBufAppend_(const char* data, size_t n) {
+    if (!s_logBuf || s_logCap == 0 || n == 0) return;
+    if (n >= s_logCap) {
+        data += (n - s_logCap);
+        n = s_logCap;
+        s_logHead = 0;
+        s_logLen = 0;
+    }
+    if (s_logLen + n > s_logCap) {
+        const size_t overflow = (s_logLen + n) - s_logCap;
+        s_logHead = (s_logHead + overflow) % s_logCap;
+        s_logLen -= overflow;
+    }
+    const size_t tail = (s_logHead + s_logLen) % s_logCap;
+    const size_t first = (n <= (s_logCap - tail)) ? n : (s_logCap - tail);
+    memcpy(s_logBuf + tail, data, first);
+    if (n > first) {
+        memcpy(s_logBuf, data + first, n - first);
+    }
+    s_logLen += n;
+}
+
+void appendToLogBuffer_(const char* data, size_t len, bool addNewline) {
+    if (!s_logEnabled || !data || !s_logBuf || s_logCap == 0) return;
+    if (s_logMtx) {
+        xSemaphoreTake(s_logMtx, portMAX_DELAY);
+    }
+    if (len) {
+        logBufAppend_(data, len);
+    }
+    if (addNewline) {
+        const char nl = '\n';
+        logBufAppend_(&nl, 1);
+    }
+    if (s_logMtx) {
+        xSemaphoreGive(s_logMtx);
+    }
+}
+
 // Enqueue pointer; if full, drop oldest (never block writers).
 void enqueuePtr_(DebugMsg* m) {
     if (!s_dbgQ) {
@@ -183,6 +229,7 @@ void ensureDebugStart_(unsigned long baud = 115200) {
                                 Serial.write(
                                     reinterpret_cast<const uint8_t*>("\n"), 1);
                             }
+                            appendToLogBuffer_(p->text, p->len, p->addNewline);
 
                             if (s_serialMtx) {
                                 xSemaphoreGive(s_serialMtx);
@@ -457,6 +504,129 @@ namespace Debug {
 
 void begin(unsigned long baud) {
     ensureDebugStart_(baud);
+}
+
+void enableMemoryLog(size_t maxBytes) {
+    if (maxBytes == 0) {
+        disableMemoryLog();
+        return;
+    }
+    if (!s_logMtx) {
+        s_logMtx = xSemaphoreCreateMutex();
+    }
+    if (s_logMtx) {
+        xSemaphoreTake(s_logMtx, portMAX_DELAY);
+    }
+    if (s_logBuf && s_logCap != maxBytes) {
+    #if defined(ESP32)
+        heap_caps_free(s_logBuf);
+    #else
+        free(s_logBuf);
+    #endif
+        s_logBuf = nullptr;
+        s_logCap = 0;
+        s_logHead = 0;
+        s_logLen = 0;
+    }
+    if (!s_logBuf) {
+    #if defined(ESP32)
+        s_logBuf = reinterpret_cast<char*>(
+            heap_caps_malloc(maxBytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+        if (!s_logBuf) {
+            s_logBuf = reinterpret_cast<char*>(
+                heap_caps_malloc(maxBytes, MALLOC_CAP_8BIT));
+        }
+    #else
+        s_logBuf = reinterpret_cast<char*>(malloc(maxBytes));
+    #endif
+        if (s_logBuf) {
+            s_logCap = maxBytes;
+            s_logHead = 0;
+            s_logLen = 0;
+            s_logBuf[0] = '\0';
+        }
+    }
+    s_logEnabled = (s_logBuf != nullptr);
+    if (s_logMtx) {
+        xSemaphoreGive(s_logMtx);
+    }
+}
+
+void disableMemoryLog() {
+    s_logEnabled = false;
+}
+
+void clearMemoryLog() {
+    if (!s_logBuf || s_logCap == 0) return;
+    if (s_logMtx) {
+        xSemaphoreTake(s_logMtx, portMAX_DELAY);
+    }
+    s_logHead = 0;
+    s_logLen = 0;
+    s_logBuf[0] = '\0';
+    if (s_logMtx) {
+        xSemaphoreGive(s_logMtx);
+    }
+}
+
+bool readMemoryLog(String& out, size_t maxBytes) {
+    out = "";
+    if (!s_logBuf || s_logCap == 0 || s_logLen == 0) return false;
+    if (s_logMtx) {
+        xSemaphoreTake(s_logMtx, portMAX_DELAY);
+    }
+    size_t len = s_logLen;
+    size_t head = s_logHead;
+    if (maxBytes > 0 && maxBytes < len) {
+        const size_t skip = len - maxBytes;
+        head = (head + skip) % s_logCap;
+        len = maxBytes;
+    }
+    out.reserve(len + 1);
+    const size_t first = (len <= (s_logCap - head)) ? len : (s_logCap - head);
+    if (first) {
+        out.concat(s_logBuf + head, first);
+    }
+    if (len > first) {
+        out.concat(s_logBuf, len - first);
+    }
+    if (s_logMtx) {
+        xSemaphoreGive(s_logMtx);
+    }
+    return true;
+}
+
+bool writeMemoryLog(Print& out, size_t maxBytes) {
+    if (!s_logBuf || s_logCap == 0 || s_logLen == 0) return false;
+    if (s_logMtx) {
+        xSemaphoreTake(s_logMtx, portMAX_DELAY);
+    }
+    size_t len = s_logLen;
+    size_t head = s_logHead;
+    if (maxBytes > 0 && maxBytes < len) {
+        const size_t skip = len - maxBytes;
+        head = (head + skip) % s_logCap;
+        len = maxBytes;
+    }
+    const size_t first = (len <= (s_logCap - head)) ? len : (s_logCap - head);
+    if (first) {
+        out.write(reinterpret_cast<const uint8_t*>(s_logBuf + head), first);
+    }
+    if (len > first) {
+        out.write(reinterpret_cast<const uint8_t*>(s_logBuf), len - first);
+    }
+    if (s_logMtx) {
+        xSemaphoreGive(s_logMtx);
+    }
+    return true;
+}
+
+size_t memoryLogSize() {
+    return s_logLen;
+}
+
+size_t memoryLogCapacity() {
+    return s_logCap;
 }
 
 // Strings

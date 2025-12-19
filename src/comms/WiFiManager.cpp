@@ -526,6 +526,29 @@ void WiFiManager::registerRoutes_() {
         }
     );
 
+    // ---- Device log ----
+    server.on("/device_log", HTTP_GET,
+        [this](AsyncWebServerRequest* request) {
+            if (!isAuthenticated(request)) return;
+            if (lock()) { lastActivityMillis = millis(); unlock(); }
+
+            AsyncResponseStream* response =
+                request->beginResponseStream("text/plain");
+            Debug::writeMemoryLog(*response);
+            request->send(response);
+        }
+    );
+
+    server.on("/device_log_clear", HTTP_POST,
+        [this](AsyncWebServerRequest* request) {
+            if (!isAuthenticated(request)) return;
+            if (lock()) { lastActivityMillis = millis(); unlock(); }
+
+            Debug::clearMemoryLog();
+            request->send(200, "application/json", "{\"ok\":true}");
+        }
+    );
+
     // ---- Calibration recorder status ----
     server.on("/calib_status", HTTP_GET,
         [this](AsyncWebServerRequest* request) {

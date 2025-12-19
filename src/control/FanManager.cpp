@@ -27,7 +27,7 @@ void FanManager::begin() {
 
     DEBUGGSTART();
     DEBUG_PRINTLN("###########################################################");
-    DEBUG_PRINTLN("#             Starting Dual-Fan Manager ðŸŒ€ðŸŒ€              #");
+    DEBUG_PRINTLN("#             Starting Dual-Fan Manager               #");
     DEBUG_PRINTLN("###########################################################");
     DEBUGGSTOP();
 
@@ -58,7 +58,7 @@ void FanManager::begin() {
     sendCmd({CMD_STOP, 0, FanSel::Cap});
     sendCmd({CMD_STOP, 0, FanSel::Heatsink});
 
-    DEBUG_PRINTLN("[Fan] Dual-fan initialized; both STOP queued ðŸ›‘");
+    DEBUG_PRINTLN("[Fan] Dual-fan initialized; both STOP queued");
 }
 
 // ======================================================================
@@ -152,9 +152,9 @@ void FanManager::hwApplySpeedPercent(FanSel which, uint8_t pct) {
 
     // Print after unlock to keep critical section minimal
     if (which == FanSel::Cap) {
-        DEBUG_PRINTF("[Fan] CAP speed -> %u%% (duty %u) ðŸŒ€\n", pct, duty);
+        DEBUG_PRINTF("[Fan] CAP speed -> %u%% (duty %u)\n", pct, duty);
     } else {
-        DEBUG_PRINTF("[Fan] HS  speed -> %u%% (duty %u) ðŸŒ€\n", pct, duty);
+        DEBUG_PRINTF("[Fan] HS  speed -> %u%% (duty %u)\n", pct, duty);
     }
 }
 
@@ -172,8 +172,8 @@ void FanManager::hwApplyStop(FanSel which) {
     unlock();
 
     if (which == FanSel::Cap) {
-        DEBUG_PRINTLN("[Fan] CAP stopped â›”");
+        DEBUG_PRINTLN("[Fan] CAP stopped");
     } else {
-        DEBUG_PRINTLN("[Fan] HS  stopped â›”");
+        DEBUG_PRINTLN("[Fan] HS  stopped");
     }
 }

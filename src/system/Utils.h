@@ -37,6 +37,13 @@
 namespace Debug {
     // Initialization (usually auto-called on first print)
     void begin(unsigned long baud = SERIAL_BAUD_RATE);
+    void enableMemoryLog(size_t maxBytes = 1048576);
+    void disableMemoryLog();
+    void clearMemoryLog();
+    bool readMemoryLog(String& out, size_t maxBytes = 0);
+    bool writeMemoryLog(Print& out, size_t maxBytes = 0);
+    size_t memoryLogSize();
+    size_t memoryLogCapacity();
 
     // String output
     void print(const char* s);

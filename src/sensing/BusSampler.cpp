@@ -44,10 +44,14 @@ bool BusSampler::sampleNow(SyncSample& out) {
     out.timestampMs = millis();
 
     if (cpDischg) {
-        out.voltageV = cpDischg->sampleVoltageNow();
+        out.voltageV = cpDischg->readCapVoltage();
     }
     if (currentSensor) {
-        out.currentA = currentSensor->readCurrent();
+        if (currentSensor->isContinuousRunning()) {
+            out.currentA = currentSensor->getLastCurrent();
+        } else {
+            out.currentA = currentSensor->readCurrent();
+        }
     }
 
     if (ntcSensor) {
@@ -81,10 +85,14 @@ void BusSampler::taskLoop(uint32_t periodMs) {
         float i = NAN;
 
         if (cpDischg) {
-            v = cpDischg->sampleVoltageNow();
+            v = cpDischg->readCapVoltage();
         }
         if (currentSensor) {
-            i = currentSensor->readCurrent(); // uses existing averaging; acceptable for sync window
+            if (currentSensor->isContinuousRunning()) {
+                i = currentSensor->getLastCurrent();
+            } else {
+                i = currentSensor->readCurrent();
+            }
         }
 
         pushSample(ts, v, i);

@@ -1530,6 +1530,13 @@
                 >
                   Error
                 </button>
+                <button
+                  id="logBtn"
+                  type="button"
+                  class="session-history-btn session-log-btn"
+                >
+                  Log
+                </button>
               </div>
             </div>
           </div>
@@ -1769,6 +1776,32 @@
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
+
+          <!-- Log modal -->
+          <div id="logModal" class="log-modal">
+            <div class="log-backdrop" onclick="closeLogModal()"></div>
+            <div class="log-content">
+              <div class="log-header">
+                <h3>Device Log</h3>
+                <button
+                  type="button"
+                  class="log-close"
+                  onclick="closeLogModal()"
+                >
+                  x
+                </button>
+              </div>
+              <div class="log-actions">
+                <button id="logRefreshBtn" type="button" class="log-btn">
+                  Refresh
+                </button>
+                <button id="logClearBtn" type="button" class="log-btn log-clear">
+                  Clear
+                </button>
+              </div>
+              <pre id="logContent" class="log-body">Loading...</pre>
             </div>
           </div>
 

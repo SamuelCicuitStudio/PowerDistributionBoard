@@ -79,6 +79,7 @@ void setup() {
     }
   }
   DEBUG_PRINTLN("[Setup] SPIFFS mounted.");
+  Debug::enableMemoryLog(1024 * 1024);
 
   NVS::Init();
   CONF->begin();

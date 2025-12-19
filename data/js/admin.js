@@ -143,6 +143,9 @@
     // Calibration + nichrome
     calibrationBtn: "Open calibration tools and live temperature trace.",
     errorBtn: "Show the last stop/error details.",
+    logBtn: "Open device log (latest debug output).",
+    logRefreshBtn: "Reload log file from the device.",
+    logClearBtn: "Clear the saved log file.",
     startNtcCalibBtn: "Start NTC calibration recording.",
     startModelCalibBtn: "Start temperature model calibration recording.",
     stopCalibBtn: "Stop recording and save calibration data.",
@@ -2556,6 +2559,84 @@
     btn.addEventListener("click", loadLastEventAndOpen);
   }
 
+  function openLogModal() {
+    const m = document.getElementById("logModal");
+    if (!m) return;
+    m.classList.add("show");
+  }
+
+  function closeLogModal() {
+    const m = document.getElementById("logModal");
+    if (!m) return;
+    m.classList.remove("show");
+  }
+
+  async function loadDeviceLog() {
+    const body = document.getElementById("logContent");
+    if (!body) return;
+    body.textContent = "Loading...";
+    try {
+      const res = await fetch("/device_log", { cache: "no-store" });
+      if (!res.ok) {
+        body.textContent = "Failed to load log (" + res.status + ")";
+        return;
+      }
+      const text = await res.text();
+      body.textContent = text && text.trim().length ? text : "No log data.";
+    } catch (err) {
+      body.textContent = "Failed to load log.";
+      console.error("Log load failed:", err);
+    }
+  }
+
+  async function clearDeviceLog() {
+    const body = document.getElementById("logContent");
+    if (body) body.textContent = "Clearing...";
+    try {
+      const res = await fetch("/device_log_clear", {
+        method: "POST",
+      });
+      if (!res.ok) {
+        if (body) body.textContent = "Clear failed (" + res.status + ")";
+        return;
+      }
+      await loadDeviceLog();
+    } catch (err) {
+      if (body) body.textContent = "Clear failed.";
+      console.error("Log clear failed:", err);
+    }
+  }
+
+  function bindLogButton() {
+    const btn = document.getElementById("logBtn");
+    if (btn) {
+      btn.addEventListener("click", async () => {
+        openLogModal();
+        await loadDeviceLog();
+      });
+    }
+    const refreshBtn = document.getElementById("logRefreshBtn");
+    if (refreshBtn) {
+      refreshBtn.addEventListener("click", loadDeviceLog);
+    }
+    const clearBtn = document.getElementById("logClearBtn");
+    if (clearBtn) {
+      clearBtn.addEventListener("click", clearDeviceLog);
+    }
+
+    const modal = document.getElementById("logModal");
+    if (modal) {
+      const closeBtn = modal.querySelector(".log-close");
+      const backdrop = modal.querySelector(".log-backdrop");
+      if (closeBtn) closeBtn.addEventListener("click", closeLogModal);
+      if (backdrop) backdrop.addEventListener("click", closeLogModal);
+    }
+  }
+
+  // Expose for inline onclick handlers in HTML.
+  window.closeLogModal = closeLogModal;
+  window.openLogModal = openLogModal;
+
   function bindEventBadge() {
     const warnBtn = document.getElementById("eventWarnBtn");
     const errBtn = document.getElementById("eventErrBtn");
@@ -2818,6 +2899,7 @@
     mountOverlayInsideUiContainer("sessionHistoryModal");
     mountOverlayInsideUiContainer("calibrationModal");
     mountOverlayInsideUiContainer("errorModal");
+    mountOverlayInsideUiContainer("logModal");
     const shClose = document.querySelector(
       "#sessionHistoryModal .session-history-close"
     );
@@ -4139,6 +4221,7 @@
     loadControls();
     bindSessionHistoryButton();
     bindErrorButton();
+    bindLogButton();
     bindEventBadge();
     bindCalibrationButton();
     updateSessionStatsUI(null);
