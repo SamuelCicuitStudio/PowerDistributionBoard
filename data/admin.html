@@ -15,7 +15,7 @@
         right: 20px;
         display: flex;
         align-items: center;
-        gap: 10px;
+        gap: 16px;
         z-index: 1000;
       }
       .user-menu {
@@ -216,6 +216,14 @@
         <div id="heatsinkTempChip" class="temp-chip" title="Heatsink temperature">
           <img src="icons/thermoHeatsink.png" alt="Heatsink temp" />
           <span id="heatsinkTempText">--?C</span>
+        </div>
+        <div id="dcVoltageChip" class="temp-chip" title="DC bus voltage">
+          <span class="chip-label">DC</span>
+          <span id="dcVoltageText">--V</span>
+        </div>
+        <div id="dcCurrentChip" class="temp-chip" title="DC current">
+          <span class="chip-label">I</span>
+          <span id="dcCurrentText">--A</span>
         </div>
         <div id="eventBadge" class="event-badge" title="New warnings/errors">
           <span id="eventWarnBtn" class="event-pill warn" role="button" tabindex="0">

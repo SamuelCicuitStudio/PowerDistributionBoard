@@ -1502,6 +1502,30 @@ button.danger:hover {
   height: 16px;
 }
 
+.temp-chip .chip-label {
+  font-weight: 700;
+  opacity: 0.8;
+  font-size: 0.7rem;
+}
+
+.temp-chip span {
+  font-variant-numeric: tabular-nums;
+}
+
+#boardTempText,
+#heatsinkTempText {
+  display: inline-block;
+  min-width: 5ch;
+  text-align: right;
+}
+
+#dcVoltageText,
+#dcCurrentText {
+  display: inline-block;
+  min-width: 6ch;
+  text-align: right;
+}
+
 .event-pill {
   display: inline-flex;
   align-items: center;

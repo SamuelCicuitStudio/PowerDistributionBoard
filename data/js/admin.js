@@ -2186,6 +2186,7 @@
 
     updateWifiSignal(mon);
     updateTopTemps(mon);
+    updateTopPower(mon);
   }
 
   async function waitForMonitorMatch(predicate, opts = {}) {
@@ -2538,6 +2539,17 @@
     hsEl.textContent = formatTopTemp(mon.heatsinkTemp);
   }
 
+  function updateTopPower(mon) {
+    const vEl = document.getElementById("dcVoltageText");
+    const iEl = document.getElementById("dcCurrentText");
+    if (!vEl || !iEl) return;
+    if (!mon) return;
+    const v = Number(mon.capVoltage);
+    const i = Number(mon.current);
+    vEl.textContent = Number.isFinite(v) ? v.toFixed(1) + "V" : "--V";
+    iEl.textContent = Number.isFinite(i) ? i.toFixed(2) + "A" : "--A";
+  }
+
   function bindErrorButton() {
     const btn = document.getElementById("errorBtn");
     if (!btn) return;
@@ -2620,16 +2632,36 @@
   function setEventView(mode) {
     const modal = document.getElementById("errorModal");
     const title = document.getElementById("eventModalTitle");
+    const warnSection = document.getElementById("warningHistorySection");
+    const errSection = document.getElementById("errorHistorySection");
+    const lastErrorSection = document.getElementById("lastErrorSection");
+    const lastStopSection = document.getElementById("lastStopSection");
+    const stateRow = document.getElementById("errorStateRow");
     if (!modal) return;
     modal.classList.remove("view-warning", "view-error");
     if (mode === "warning") {
       modal.classList.add("view-warning");
       if (title) title.textContent = "Warnings";
+      if (warnSection) warnSection.style.display = "";
+      if (errSection) errSection.style.display = "none";
+      if (lastErrorSection) lastErrorSection.style.display = "none";
+      if (lastStopSection) lastStopSection.style.display = "none";
+      if (stateRow) stateRow.style.display = "none";
     } else if (mode === "error") {
       modal.classList.add("view-error");
       if (title) title.textContent = "Errors";
+      if (warnSection) warnSection.style.display = "none";
+      if (errSection) errSection.style.display = "";
+      if (lastErrorSection) lastErrorSection.style.display = "";
+      if (lastStopSection) lastStopSection.style.display = "none";
+      if (stateRow) stateRow.style.display = "";
     } else {
       if (title) title.textContent = "Last Stop / Error";
+      if (warnSection) warnSection.style.display = "";
+      if (errSection) errSection.style.display = "";
+      if (lastErrorSection) lastErrorSection.style.display = "";
+      if (lastStopSection) lastStopSection.style.display = "";
+      if (stateRow) stateRow.style.display = "";
     }
   }
 
