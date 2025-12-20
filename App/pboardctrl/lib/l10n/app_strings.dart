@@ -5,7 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class AppLanguageController extends ChangeNotifier {
   AppLanguageController({Locale? initialLocale})
-      : _locale = _normalize(initialLocale);
+    : _locale = _normalize(initialLocale);
 
   static const _prefsKey = 'language_code';
 
@@ -55,8 +55,8 @@ class AppLanguageScope extends InheritedNotifier<AppLanguageController> {
   }) : super(notifier: controller, child: child);
 
   static AppLanguageController of(BuildContext context) {
-    final scope =
-        context.dependOnInheritedWidgetOfExactType<AppLanguageScope>();
+    final scope = context
+        .dependOnInheritedWidgetOfExactType<AppLanguageScope>();
     if (scope == null) {
       throw StateError('AppLanguageScope not found in widget tree.');
     }
@@ -139,7 +139,8 @@ class AppStrings {
     'Errors': 'Errori',
     'Change Connection': 'Cambia connessione',
     'Reset device?': 'Reset dispositivo?',
-    'This performs a full system reset.': 'Esegue un reset completo del sistema.',
+    'This performs a full system reset.':
+        'Esegue un reset completo del sistema.',
     'Cancel': 'Annulla',
     'Reset': 'Reset',
     'Dismiss': 'Chiudi',
@@ -157,10 +158,10 @@ class AppStrings {
     'ERROR': 'ERRORE',
     'RUN': 'MARCIA',
     'Dashboard': 'Dashboard',
-    'User Settings': 'Impostazioni utente',
-    'Manual Control': 'Controllo manuale',
-    'Admin Settings': 'Impostazioni admin',
-    'Device Settings': 'Impostazioni dispositivo',
+    'User Settings': 'Utente',
+    'Manual Control': 'Manuale',
+    'Admin Settings': 'Admin',
+    'Device Settings': 'Dispositivo',
     'Live': 'Live',
     'Voltage': 'Tensione',
     'Current': 'Corrente',
@@ -225,8 +226,7 @@ class AppStrings {
     'Keep-warm Pulse (others)': 'Impulso mantenimento (altri)',
     'Frame Period': 'Periodo frame',
     'Timing Settings': 'Impostazioni timing',
-    'Normal (Hot / Medium / Gentle)':
-        'Normale (Caldo / Medio / Delicato)',
+    'Normal (Hot / Medium / Gentle)': 'Normale (Caldo / Medio / Delicato)',
     'Advanced (manual ON/OFF)': 'Avanzato (manuale ON/OFF)',
     'Heat Profile': 'Profilo calore',
     'Hot / Fast': 'Caldo / Veloce',
