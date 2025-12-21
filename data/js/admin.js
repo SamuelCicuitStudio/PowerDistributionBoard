@@ -39,6 +39,7 @@
   let statePollTimer = null; // Fallback polling timer
   let monitorPollTimer = null; // /monitor polling timer (UI snapshot)
   let heartbeatTimer = null; // /heartbeat keepalive timer
+  let dashboardClockTimer = null; // dashboard clock updater timer
   let calibrationBusy = false; // prevent overlapping manual calibrations
   let calibAutoApplyPending = false; // auto-apply model after calibration stops
   let calibAutoApplyInFlight = false;
@@ -320,6 +321,77 @@
 
       if (tip) el.title = tip;
     }
+  }
+
+  // ========================================================
+  // ===============       DASHBOARD CLOCK      =============
+  // ========================================================
+
+  function initDashboardClock() {
+    const hourHand = document.getElementById("dashboardClockHourHand");
+    const minuteHand = document.getElementById("dashboardClockMinuteHand");
+    const secondHand = document.getElementById("dashboardClockSecondHand");
+    const dayEl = document.getElementById("dashboardClockDay");
+    const dateEl = document.getElementById("dashboardClockDate");
+    const timeEl = document.getElementById("dashboardClockTime");
+
+    if (!hourHand || !minuteHand || !secondHand) return;
+
+    const pad2 = (n) => String(n).padStart(2, "0");
+    const cX = 60;
+    const cY = 60;
+
+    function render() {
+      const now = new Date();
+      const seconds = now.getSeconds() + now.getMilliseconds() / 1000;
+      const minutes = now.getMinutes() + seconds / 60;
+      const hours = (now.getHours() % 12) + minutes / 60;
+
+      hourHand.setAttribute("transform", `rotate(${hours * 30} ${cX} ${cY})`);
+      minuteHand.setAttribute(
+        "transform",
+        `rotate(${minutes * 6} ${cX} ${cY})`
+      );
+      secondHand.setAttribute(
+        "transform",
+        `rotate(${seconds * 6} ${cX} ${cY})`
+      );
+
+      if (dayEl) {
+        try {
+          dayEl.textContent = now.toLocaleDateString(undefined, {
+            weekday: "long",
+          });
+        } catch (e) {
+          dayEl.textContent = now.toDateString();
+        }
+      }
+
+      if (dateEl) {
+        try {
+          dateEl.textContent = now.toLocaleDateString(undefined, {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+          });
+        } catch (e) {
+          dateEl.textContent = now.toDateString();
+        }
+      }
+
+      if (timeEl) {
+        timeEl.textContent =
+          pad2(now.getHours()) +
+          ":" +
+          pad2(now.getMinutes()) +
+          ":" +
+          pad2(now.getSeconds());
+      }
+    }
+
+    render();
+    if (dashboardClockTimer) clearInterval(dashboardClockTimer);
+    dashboardClockTimer = setInterval(render, 250);
   }
 
   function isManualMode() {
@@ -4978,6 +5050,7 @@
     initPowerButton();
     bindNtcModelUi();
     bindDeviceSettingsSubtabs();
+    initDashboardClock();
     liveRender();
     scheduleLiveInterval();
 
