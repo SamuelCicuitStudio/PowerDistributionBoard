@@ -635,6 +635,108 @@
   }
 
   // ========================================================
+  // ===============       SAFETY INTERLOCKS     ============
+  // ========================================================
+
+  function isAutoLoopRunning() {
+    return lastState === "Running" && !isManualMode();
+  }
+
+  function isCalibrationActive() {
+    const wireActive = !!(lastWireTestStatus && lastWireTestStatus.running);
+    const calibRunning = !!(calibLastMeta && calibLastMeta.running);
+    return (
+      !!(testModeState && testModeState.active) ||
+      ntcCalRunning ||
+      wireActive ||
+      calibRunning
+    );
+  }
+
+  function guardUnsafeAction(actionLabel, opts = {}) {
+    if (opts.blockCalib && isCalibrationActive()) {
+      openAlert(
+        "Calibration active",
+        `Stop the active calibration/test before ${actionLabel}.`,
+        "warning"
+      );
+      return true;
+    }
+    if (opts.blockAuto && isAutoLoopRunning()) {
+      openAlert(
+        "Auto loop running",
+        `Stop the loop or switch to Manual before ${actionLabel}.`,
+        "warning"
+      );
+      return true;
+    }
+    return false;
+  }
+
+  function applySafetyLocks() {
+    const autoRunning = isAutoLoopRunning();
+    const calibActive = isCalibrationActive();
+    const blockSettings = autoRunning || calibActive;
+
+    const powerBtn = powerEl();
+    if (powerBtn) {
+      powerBtn.disabled = calibActive;
+      powerBtn.classList.toggle("action-locked", calibActive);
+      powerBtn.setAttribute("aria-disabled", calibActive ? "true" : "false");
+    }
+
+    document.querySelectorAll(".round-button.reset").forEach((btn) => {
+      btn.classList.toggle("action-locked", calibActive);
+      btn.setAttribute("aria-disabled", calibActive ? "true" : "false");
+    });
+
+    const forceBtn = document.getElementById("forceCalibrationBtn");
+    if (forceBtn) forceBtn.disabled = blockSettings;
+
+    const saveSelector =
+      "#deviceSettingsTab .settings-btn-primary," +
+      " #adminSettingsTab .settings-btn-primary," +
+      " #userSettingsTab .settings-btn-primary";
+    document.querySelectorAll(saveSelector).forEach((btn) => {
+      btn.disabled = blockSettings;
+    });
+
+    document
+      .querySelectorAll(
+        "#deviceSettingsTab input, #deviceSettingsTab select, #deviceSettingsTab textarea"
+      )
+      .forEach((el) => {
+        el.disabled = blockSettings;
+      });
+
+    document
+      .querySelectorAll("#deviceSettingsTab .settings-btn")
+      .forEach((btn) => {
+        btn.disabled = blockSettings;
+      });
+
+    document
+      .querySelectorAll("#userAccessGrid input[type=\"checkbox\"]")
+      .forEach((cb) => {
+        cb.disabled = blockSettings;
+      });
+
+    const lockIds = [
+      "startModelCalibBtn",
+      "wireTestStartBtn",
+      "ntcCalibrateBtn",
+      "ntcBetaCalBtn",
+      "calibSuggestRefresh",
+      "calibSuggestFromHistory",
+      "calibPersistBtn",
+    ];
+    lockIds.forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.disabled = blockSettings;
+    });
+  }
+
+  // ========================================================
   // ===============        POWER BUTTON UI      ============
   // ========================================================
 
@@ -927,6 +1029,15 @@
   }
 
   function updateOutputAccess(index, newState) {
+    if (
+      guardUnsafeAction("changing output access", {
+        blockAuto: true,
+        blockCalib: true,
+      })
+    ) {
+      loadControls();
+      return;
+    }
     sendControlCommand("set", "Access" + index, !!newState);
   }
 
@@ -939,6 +1050,9 @@
   // ========================================================
 
   async function startSystem() {
+    if (guardUnsafeAction("starting the loop", { blockCalib: true })) {
+      return;
+    }
     if (isManualMode()) {
       openAlert(
         "Manual mode is ON",
@@ -951,10 +1065,21 @@
   }
 
   async function shutdownSystem() {
+    if (guardUnsafeAction("stopping the loop", { blockCalib: true })) {
+      return;
+    }
     await sendControlCommand("set", "systemShutdown", true);
   }
 
   async function forceCalibration() {
+    if (
+      guardUnsafeAction("starting calibration", {
+        blockAuto: true,
+        blockCalib: true,
+      })
+    ) {
+      return;
+    }
     if (calibrationBusy) {
       openAlert(
         "Calibration",
@@ -985,10 +1110,16 @@
   }
 
   async function resetSystem() {
+    if (guardUnsafeAction("resetting the device", { blockCalib: true })) {
+      return;
+    }
     await sendControlCommand("set", "systemReset", true);
   }
 
   async function rebootSystem() {
+    if (guardUnsafeAction("rebooting the device", { blockCalib: true })) {
+      return;
+    }
     await sendControlCommand("set", "reboot", true);
   }
 
@@ -1242,6 +1373,14 @@
   }
 
   async function saveDeviceAndNichrome() {
+    if (
+      guardUnsafeAction("saving device settings", {
+        blockAuto: true,
+        blockCalib: true,
+      })
+    ) {
+      return;
+    }
     const cmds = [];
     const expected = { wireRes: {} };
     const cur = lastLoadedControls || {};
@@ -1794,6 +1933,8 @@
 
       // Apply power button look from LEDs if desired
       applyReadyOffFlagsToPower(data.ready, data.off);
+
+      applySafetyLocks();
     } catch (err) {
       console.error("Failed to load controls:", err);
     }
@@ -1812,6 +1953,14 @@
   // ========================================================
 
   function saveUserSettings() {
+    if (
+      guardUnsafeAction("saving user settings", {
+        blockAuto: true,
+        blockCalib: true,
+      })
+    ) {
+      return;
+    }
     const current = document.getElementById("userCurrentPassword").value;
     const newPass = document.getElementById("userNewPassword").value;
     const newId = document.getElementById("userDeviceId").value;
@@ -1843,6 +1992,14 @@
   }
 
   function saveAdminSettings(scope = "all") {
+    if (
+      guardUnsafeAction("saving admin settings", {
+        blockAuto: true,
+        blockCalib: true,
+      })
+    ) {
+      return;
+    }
     const section = scope === "admin" || scope === "wifi" ? scope : "all";
 
     const current = (document.getElementById("adminCurrentPassword") || {})
@@ -3231,6 +3388,14 @@
   }
 
   async function saveCalibModelSuggest() {
+    if (
+      guardUnsafeAction("saving model values", {
+        blockAuto: true,
+        blockCalib: true,
+      })
+    ) {
+      return;
+    }
     const d = window.__calibModelSuggestion || {};
     const payload = buildCalibModelPayload(d);
     if (!Object.keys(payload).length) {
@@ -3420,6 +3585,14 @@
   }
 
   async function startCalibration(mode) {
+    if (
+      guardUnsafeAction("starting calibration", {
+        blockAuto: true,
+        blockCalib: true,
+      })
+    ) {
+      return;
+    }
     const payload = {
       mode,
       interval_ms: 500,
@@ -3522,6 +3695,14 @@
   }
 
   async function startWireTest() {
+    if (
+      guardUnsafeAction("starting the wire test", {
+        blockAuto: true,
+        blockCalib: true,
+      })
+    ) {
+      return;
+    }
     const target = parseFloat(
       (document.getElementById("wireTestTargetC") || {}).value
     );
@@ -3734,6 +3915,8 @@
       if (textEl) textEl.textContent = "Stop";
       stopBtn.disabled = !testModeState.active;
     }
+
+    applySafetyLocks();
   }
 
   async function stopActiveTestMode() {
@@ -3845,6 +4028,14 @@
   }
 
   async function ntcCalibrate() {
+    if (
+      guardUnsafeAction("starting NTC calibration", {
+        blockAuto: true,
+        blockCalib: true,
+      })
+    ) {
+      return;
+    }
     const refVal = (document.getElementById("ntcCalRef") || {}).value;
     const payload = {};
     if (refVal != null && String(refVal).trim().length > 0) {
@@ -3882,6 +4073,14 @@
   }
 
   async function ntcBetaCalibrate() {
+    if (
+      guardUnsafeAction("starting NTC beta calibration", {
+        blockAuto: true,
+        blockCalib: true,
+      })
+    ) {
+      return;
+    }
     const refVal = (document.getElementById("ntcCalRef") || {}).value;
     const payload = {};
     if (refVal != null && String(refVal).trim().length > 0) {
