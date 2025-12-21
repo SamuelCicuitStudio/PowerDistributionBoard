@@ -7,6 +7,7 @@ import '../models/control_snapshot.dart';
 import '../models/monitor_snapshot.dart';
 import '../widgets/info_card.dart';
 import '../widgets/output_tile.dart';
+import '../widgets/smooth_scroll_controller.dart';
 import 'login_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -38,6 +39,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Timer? _monitorTimer;
   Timer? _statusTimer;
   int _fanSpeed = 0;
+  final SmoothScrollController _scrollController = SmoothScrollController();
 
   @override
   void initState() {
@@ -52,6 +54,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _monitorTimer?.cancel();
     _statusTimer?.cancel();
     _api.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -352,6 +355,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Stack(
       children: [
         ListView(
+          controller: _scrollController,
           padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + bottomPad),
           children: [
             if (_error != null)

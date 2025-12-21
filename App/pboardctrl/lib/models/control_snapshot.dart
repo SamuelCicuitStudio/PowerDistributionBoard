@@ -24,10 +24,6 @@ class ControlSnapshot {
     required this.wireTauSec,
     required this.wireKLoss,
     required this.wireThermalC,
-    required this.wireKp,
-    required this.wireKi,
-    required this.floorKp,
-    required this.floorKi,
     required this.ntcBeta,
     required this.ntcR0,
     required this.ntcFixedRes,
@@ -78,10 +74,6 @@ class ControlSnapshot {
   final double wireTauSec;
   final double wireKLoss;
   final double wireThermalC;
-  final double wireKp;
-  final double wireKi;
-  final double floorKp;
-  final double floorKi;
   final double ntcBeta;
   final double ntcR0;
   final double ntcFixedRes;
@@ -163,10 +155,6 @@ class ControlSnapshot {
       wireTauSec: (json['wireTauSec'] as num?)?.toDouble() ?? 0.0,
       wireKLoss: (json['wireKLoss'] as num?)?.toDouble() ?? 0.0,
       wireThermalC: (json['wireThermalC'] as num?)?.toDouble() ?? 0.0,
-      wireKp: (json['wireKp'] as num?)?.toDouble() ?? 0.0,
-      wireKi: (json['wireKi'] as num?)?.toDouble() ?? 0.0,
-      floorKp: (json['floorKp'] as num?)?.toDouble() ?? 0.0,
-      floorKi: (json['floorKi'] as num?)?.toDouble() ?? 0.0,
       ntcBeta: (json['ntcBeta'] as num?)?.toDouble() ?? 0.0,
       ntcR0: (json['ntcR0'] as num?)?.toDouble() ?? 0.0,
       ntcFixedRes: (json['ntcFixedRes'] as num?)?.toDouble() ?? 0.0,

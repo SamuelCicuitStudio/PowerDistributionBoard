@@ -15,6 +15,11 @@
 
 class NtcSensor {
 public:
+    enum class Model : uint8_t {
+        Beta = 0,
+        Steinhart = 1
+    };
+
     struct Sample {
         uint32_t timestampMs = 0;
         uint16_t adcRaw      = 0;
@@ -43,11 +48,16 @@ public:
     void setSampleCount(uint8_t samples, bool persist = true);
     void setTempLimits(float minC, float maxC, bool persist = true);
     void setButtonThresholdsMv(float pressMv, float releaseMv, uint32_t debounceMs, bool persist = true);
+    bool setSteinhartCoefficients(float a, float b, float c, bool persist = true);
+    void setModel(Model model, bool persist = true);
     bool calibrateAtTempC(float refTempC);
 
     float getBeta() const;
     float getR0() const;
     float getFixedRes() const;
+    Model getModel() const;
+    bool getSteinhartCoefficients(float& a, float& b, float& c) const;
+    bool hasSteinhartCoefficients() const;
 
 private:
     NtcSensor() = default;
@@ -57,6 +67,7 @@ private:
     float    computeResistance(float volts) const;
     float    computeTempC(float rNtcOhm) const;
     void     updateButtonState(float volts, uint32_t nowMs);
+    bool     isSteinhartValid(float a, float b, float c) const;
 
     inline bool lock(TickType_t timeoutTicks = portMAX_DELAY) const {
         if (_mutex == nullptr) return true;
@@ -76,6 +87,11 @@ private:
     float _rFixedOhm = DEFAULT_NTC_FIXED_RES_OHMS;
     float _r0Ohm     = DEFAULT_NTC_R0_OHMS;
     float _beta      = DEFAULT_NTC_BETA;
+    float _shA       = DEFAULT_NTC_SH_A;
+    float _shB       = DEFAULT_NTC_SH_B;
+    float _shC       = DEFAULT_NTC_SH_C;
+    bool  _shValid   = false;
+    Model _model     = static_cast<Model>(DEFAULT_NTC_MODEL);
     float _t0K       = DEFAULT_NTC_T0_C + 273.15f;
     float _minTempC  = DEFAULT_NTC_MIN_C;
     float _maxTempC  = DEFAULT_NTC_MAX_C;

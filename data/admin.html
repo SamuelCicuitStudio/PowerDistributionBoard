@@ -207,13 +207,21 @@
       <div class="user-status-global">
         <div class="status-dot" title="Auto Mode"></div>
         <div id="wifiSignal" class="wifi-signal" title="WiFi signal">
-          <img id="wifiSignalIcon" src="icons/wifi-0-bars.png" alt="WiFi signal" />
+          <img
+            id="wifiSignalIcon"
+            src="icons/wifi-0-bars.png"
+            alt="WiFi signal"
+          />
         </div>
         <div id="boardTempChip" class="temp-chip" title="Board temperature">
           <img src="icons/thermoBoard.png" alt="Board temp" />
           <span id="boardTempText">--?C</span>
         </div>
-        <div id="heatsinkTempChip" class="temp-chip" title="Heatsink temperature">
+        <div
+          id="heatsinkTempChip"
+          class="temp-chip"
+          title="Heatsink temperature"
+        >
           <img src="icons/thermoHeatsink.png" alt="Heatsink temp" />
           <span id="heatsinkTempText">--?C</span>
         </div>
@@ -226,14 +234,54 @@
           <span id="dcCurrentText">--A</span>
         </div>
         <div id="eventBadge" class="event-badge" title="New warnings/errors">
-          <span id="eventWarnBtn" class="event-pill warn" role="button" tabindex="0">
+          <span
+            id="eventWarnBtn"
+            class="event-pill warn"
+            role="button"
+            tabindex="0"
+          >
             <img src="icons/Warning.png" alt="Warning" />
             <span id="eventWarnCount">0</span>
           </span>
-          <span id="eventErrBtn" class="event-pill err" role="button" tabindex="0">
+          <span
+            id="eventErrBtn"
+            class="event-pill err"
+            role="button"
+            tabindex="0"
+          >
             <img src="icons/Error.png" alt="Error" />
             <span id="eventErrCount">0</span>
           </span>
+        </div>
+        <div
+          id="testModeBadge"
+          class="test-mode-badge"
+          title="Test mode active"
+        >
+          TEST MODE
+        </div>
+        <div id="statusActions" class="status-actions">
+          <button
+            id="topStopTestBtn"
+            type="button"
+            class="status-action-btn status-stop-btn"
+          >
+            Stop Test
+          </button>
+          <button
+            id="topCalibBtn"
+            type="button"
+            class="status-action-btn status-calib-btn"
+          >
+            Calibration
+          </button>
+          <button
+            id="topLiveControlBtn"
+            type="button"
+            class="status-action-btn status-live-btn"
+          >
+            Live Control
+          </button>
         </div>
         <div class="user-icon" onclick="toggleUserMenu()">👤</div>
         <div class="user-menu" id="userMenu">
@@ -1015,31 +1063,17 @@
                   </div>
                 </div>
 
-                <div class="ds-group-title ds-control">PI Control</div>
-
-                <div class="ds-field">
-                  <label for="wireKp">Wire Kp</label>
-                  <input type="number" id="wireKp" step="0.001" />
-                </div>
-
-                <div class="ds-field">
-                  <label for="wireKi">Wire Ki</label>
-                  <input type="number" id="wireKi" step="0.001" />
-                </div>
-
-                <div class="ds-field">
-                  <label for="floorKp">Floor Kp</label>
-                  <input type="number" id="floorKp" step="0.001" />
-                </div>
-
-                <div class="ds-field">
-                  <label for="floorKi">Floor Ki</label>
-                  <input type="number" id="floorKi" step="0.001" />
-                </div>
-
                 <div class="ds-group-title ds-ntc">NTC Input</div>
 
                 <div class="ds-field">
+                  <label for="ntcModel">NTC Model</label>
+                  <select id="ntcModel">
+                    <option value="beta">Beta at T0</option>
+                    <option value="steinhart">Steinhart-Hart (A, B, C)</option>
+                  </select>
+                </div>
+
+                <div class="ds-field ntc-model-beta">
                   <label for="ntcBeta">NTC Beta</label>
                   <div class="input-with-unit">
                     <input type="number" id="ntcBeta" step="1" />
@@ -1047,12 +1081,27 @@
                   </div>
                 </div>
 
-                <div class="ds-field">
+                <div class="ds-field ntc-model-beta">
                   <label for="ntcR0">NTC R0</label>
                   <div class="input-with-unit">
                     <input type="number" id="ntcR0" step="1" />
                     <span class="unit-label">Ohm</span>
                   </div>
+                </div>
+
+                <div class="ds-field ntc-model-steinhart">
+                  <label for="ntcShA">NTC SH A</label>
+                  <input type="number" id="ntcShA" step="0.000001" />
+                </div>
+
+                <div class="ds-field ntc-model-steinhart">
+                  <label for="ntcShB">NTC SH B</label>
+                  <input type="number" id="ntcShB" step="0.000001" />
+                </div>
+
+                <div class="ds-field ntc-model-steinhart">
+                  <label for="ntcShC">NTC SH C</label>
+                  <input type="number" id="ntcShC" step="0.000001" />
                 </div>
 
                 <div class="ds-field">
@@ -1125,127 +1174,97 @@
                   </div>
                 </div>
 
-                <div class="ds-group-title ds-loop-timing">Loop Timing</div>
+                <div class="ds-group-title ds-loop-timing">Energy Control</div>
 
-                <div class="ds-field" id="onTimeField" style="display: none">
-                  <label for="onTime">ON Time</label>
+                <div class="ds-field" id="mixFrameField">
+                  <label for="mixFrameMs">Energy Frame</label>
                   <div class="input-with-unit">
-                    <input type="number" id="onTime" />
-                    <span class="unit-label">ms</span>
-                  </div>
-                </div>
-
-                <div class="ds-field" id="offTimeField" style="display: none">
-                  <label for="offTime">OFF Time</label>
-                  <div class="input-with-unit">
-                    <input type="number" id="offTime" />
+                    <input type="number" id="mixFrameMs" min="10" max="300" />
                     <span class="unit-label">ms</span>
                   </div>
                 </div>
 
                 <div class="ds-field">
-                  <label for="loopModeSelect">Loop Mode</label>
-                  <select id="loopModeSelect">
-                    <option value="advanced">Advanced (grouped)</option>
-                    <option value="sequential">
-                      Sequential (coolest-first)
-                    </option>
-                    <option value="mixed">
-                      Mixed (preheat + keep-warm, sequential pulses)
-                    </option>
-                  </select>
-                </div>
-
-                <div class="ds-field mixed-only" id="mixPreheatField">
-                  <label
-                    for="mixPreheatMs"
-                    title="Bulk preheat duration before holding temperature"
-                    >Mixed Preheat Duration</label
-                  >
+                  <label for="mixRefOnMs">Reference On-Time</label>
                   <div class="input-with-unit">
-                    <input
-                      type="number"
-                      id="mixPreheatMs"
-                      min="0"
-                      title="How long to bulk-preheat all allowed wires before settling into hold"
-                    />
-                    <span class="unit-label">ms</span>
-                  </div>
-                </div>
-
-                <div class="ds-field mixed-only" id="mixPreheatOnField">
-                  <label
-                    for="mixPreheatOnMs"
-                    title="Primary wire pulse width during preheat frames"
-                    >Preheat Pulse (primary)</label
-                  >
-                  <div class="input-with-unit">
-                    <input
-                      type="number"
-                      id="mixPreheatOnMs"
-                      min="1"
-                      title="Pulse length for the active wire while preheating (sequential)"
-                    />
-                    <span class="unit-label">ms</span>
-                  </div>
-                </div>
-
-                <div class="ds-field mixed-only" id="mixKeepField">
-                  <label
-                    for="mixKeepMs"
-                    title="Keep-warm pulse for the other wires in each frame"
-                    >Keep-warm Pulse (others)</label
-                  >
-                  <div class="input-with-unit">
-                    <input
-                      type="number"
-                      id="mixKeepMs"
-                      min="0"
-                      title="Small serialized pulse for non-primary wires to reduce cooldown"
-                    />
-                    <span class="unit-label">ms</span>
-                  </div>
-                </div>
-
-                <div class="ds-field mixed-only" id="mixFrameField">
-                  <label
-                    for="mixFrameMs"
-                    title="Frame period that contains all serialized pulses"
-                    >Frame Period</label
-                  >
-                  <div class="input-with-unit">
-                    <input
-                      type="number"
-                      id="mixFrameMs"
-                      min="10"
-                      title="Total frame length; all mixed pulses are serialized within this window"
-                    />
+                    <input type="number" id="mixRefOnMs" min="1" />
                     <span class="unit-label">ms</span>
                   </div>
                 </div>
 
                 <div class="ds-field">
-                  <label for="timingModeSelect">Timing Settings</label>
-                  <select id="timingModeSelect">
-                    <option value="preset">
-                      Normal (Hot / Medium / Gentle)
-                    </option>
-                    <option value="manual">Advanced (manual ON/OFF)</option>
-                  </select>
+                  <label for="mixRefResOhm">Reference Resistance</label>
+                  <div class="input-with-unit">
+                    <input type="number" id="mixRefResOhm" step="0.1" />
+                    <span class="unit-label">Ohm</span>
+                  </div>
                 </div>
 
-                <div class="ds-field" id="timingProfileField">
-                  <label for="timingProfileSelect">Heat Profile</label>
-                  <select id="timingProfileSelect">
-                    <option value="hot">Hot / Fast</option>
-                    <option value="medium">Medium</option>
-                    <option value="gentle">Gentle / Cool</option>
-                  </select>
+                <div class="ds-field">
+                  <label for="mixBoostK">Boost Gain</label>
+                  <input type="number" id="mixBoostK" step="0.01" min="0" />
                 </div>
 
-                <div class="ds-field" id="timingResolvedField">
-                  <label for="timingResolved">Resolved Timing</label>
-                  <input id="timingResolved" type="text" readonly />
+                <div class="ds-field">
+                  <label for="mixBoostMs">Boost Duration</label>
+                  <div class="input-with-unit">
+                    <input type="number" id="mixBoostMs" min="0" />
+                    <span class="unit-label">ms</span>
+                  </div>
+                </div>
+
+                <div class="ds-field">
+                  <label for="mixPreDeltaC">Boost Exit Delta</label>
+                  <div class="input-with-unit">
+                    <input type="number" id="mixPreDeltaC" step="0.1" min="0" />
+                    <span class="unit-label">C</span>
+                  </div>
+                </div>
+
+                <div class="ds-field">
+                  <label for="mixHoldUpdateSec">Thermal Update</label>
+                  <div class="input-with-unit">
+                    <input
+                      type="number"
+                      id="mixHoldUpdateSec"
+                      min="0.5"
+                      max="5"
+                      step="0.1"
+                    />
+                    <span class="unit-label">s</span>
+                  </div>
+                </div>
+
+                <div class="ds-field">
+                  <label for="mixHoldGain">Hold Gain</label>
+                  <div class="input-with-unit">
+                    <input type="number" id="mixHoldGain" step="0.01" min="0" />
+                    <span class="unit-label">ms/C</span>
+                  </div>
+                </div>
+
+                <div class="ds-field">
+                  <label for="mixMinOnMs">Min Packet</label>
+                  <div class="input-with-unit">
+                    <input type="number" id="mixMinOnMs" min="0" />
+                    <span class="unit-label">ms</span>
+                  </div>
+                </div>
+
+                <div class="ds-field">
+                  <label for="mixMaxOnMs">Max Packet</label>
+                  <div class="input-with-unit">
+                    <input type="number" id="mixMaxOnMs" min="1" />
+                    <span class="unit-label">ms</span>
+                  </div>
+                </div>
+
+                <div class="ds-field">
+                  <label for="mixMaxAvgMs">Max Avg / sec</label>
+                  <div class="input-with-unit">
+                    <input type="number" id="mixMaxAvgMs" min="0" />
+                    <span class="unit-label">ms</span>
+                  </div>
                 </div>
 
                 <div class="ds-field">
@@ -1412,17 +1431,6 @@
                       inputmode="decimal"
                     />
                   </div>
-
-                  <!-- Target for all -->
-                  <div class="field target">
-                    <label for="rTarget">Target Resistance (Ω)</label>
-                    <input
-                      id="rTarget"
-                      type="number"
-                      step="0.1"
-                      inputmode="decimal"
-                    />
-                  </div>
                 </div>
               </section>
             </div>
@@ -1522,6 +1530,13 @@
                   class="session-history-btn session-calib-btn"
                 >
                   Calibration
+                </button>
+                <button
+                  id="liveControlBtn"
+                  type="button"
+                  class="session-history-btn session-live-btn"
+                >
+                  Live Control
                 </button>
                 <button
                   id="errorBtn"
@@ -1631,10 +1646,9 @@
                           NTC calibration
                         </div>
                         <div class="calibration-info-card-text">
-                          Calibrates the NTC using a known reference
-                          temperature. Leave the field blank to use the heatsink
-                          temperature automatically. This does not heat the
-                          wire.
+                          Heats the NTC wire using energy packets until the
+                          heatsink target is reached, then fits A/B/C for
+                          accurate temperature estimation.
                         </div>
                       </div>
                       <div class="calibration-info-card">
@@ -1643,18 +1657,20 @@
                           Temp model calibration
                         </div>
                         <div class="calibration-info-card-text">
-                          Records temperature and time while the system drives a
-                          repeatable PWM profile. Use the resulting curve to fit
-                          τ/k/C so the model matches real measurements.
+                          Records temperature and time while the energy-based
+                          loop heats and cools the NTC wire. Use the resulting
+                          curve to fit tau/k/C so the model matches real
+                          measurements.
                         </div>
                       </div>
                       <div class="calibration-info-card">
                         <div class="calibration-info-icon">3</div>
                         <div class="calibration-info-card-title">Wire test</div>
                         <div class="calibration-info-card-text">
-                          Runs the PI controller to reach and hold a target
-                          temperature on the NTC-attached wire. This is a live
-                          test and does not save history.
+                          Runs the energy-based sequential loop across all
+                          allowed outputs to reach and hold the target
+                          temperature. This is a live test and does not save
+                          history.
                         </div>
                       </div>
                     </div>
@@ -1663,16 +1679,17 @@
                       <div class="calibration-info-actions-title">Buttons</div>
                       <ul>
                         <li>
-                          <strong>NTC Calibration:</strong> Start NTC recording
-                          (optional) and use “Calibrate NTC” to compute R0.
+                          <strong>NTC Calibration:</strong> Heat the NTC wire
+                          with energy packets to the target and fit A/B/C from
+                          heatsink temperature.
                         </li>
                         <li>
                           <strong>Temp Model Calibration:</strong> Start/stop
-                          the model capture while PWM runs.
+                          the model capture while the energy loop runs.
                         </li>
                         <li>
-                          <strong>Start/Stop Wire Test:</strong> Hold target
-                          temperature (PI control).
+                          <strong>Start/Stop Wire Test:</strong> Run the energy
+                          loop across all allowed outputs to hold the target.
                         </li>
                         <li>
                           <strong>Load History / Resume Live:</strong> View
@@ -1695,7 +1712,8 @@
                       <p>
                         NTC calibrate<br />
                         <span class="hint"
-                          >Use heatsink temp or enter a ref; no heating.</span
+                          >Beta: enter a reference temp. A/B/C: run NTC
+                          calibration to the target.</span
                         >
                       </p>
                     </div>
@@ -1705,7 +1723,7 @@
                         Model capture<br />
                         <span class="hint"
                           >Start Temp Model Calibration to log heat/cool with
-                          PWM.</span
+                          energy packets.</span
                         >
                       </p>
                     </div>
@@ -1714,106 +1732,103 @@
                       <p>
                         Wire test<br />
                         <span class="hint"
-                          >Hold a target temp and verify control (PI, no
+                          >Hold a target temp and verify the energy loop (no
                           logging).</span
                         >
-                </p>
-              </div>
-            </div>
-          </div>
+                      </p>
+                    </div>
+                  </div>
+                </div>
 
-          <!-- Error details modal -->
-          <div id="errorModal" class="error-modal">
-            <div class="error-backdrop" onclick="closeErrorModal()"></div>
-            <div class="error-content">
-              <div class="error-header">
-                <h3 id="eventModalTitle">Last Stop / Error</h3>
-                <button
-                  type="button"
-                  class="error-close"
-                  onclick="closeErrorModal()"
-                >
-                  x
-                </button>
-              </div>
-              <div class="error-body">
-                <div class="error-row" id="errorStateRow">
-                  <span class="error-label">Current state</span>
-                  <span id="errorStateText">--</span>
+                <!-- Error details modal -->
+                <div id="errorModal" class="error-modal">
+                  <div class="error-backdrop" onclick="closeErrorModal()"></div>
+                  <div class="error-content">
+                    <div class="error-header">
+                      <h3 id="eventModalTitle">Last Stop / Error</h3>
+                      <button
+                        type="button"
+                        class="error-close"
+                        onclick="closeErrorModal()"
+                      >
+                        x
+                      </button>
+                    </div>
+                    <div class="error-body">
+                      <div class="error-row" id="errorStateRow">
+                        <span class="error-label">Current state</span>
+                        <span id="errorStateText">--</span>
+                      </div>
+                      <div class="error-section" id="lastErrorSection">
+                        <div class="error-title">Last error</div>
+                        <div class="error-row">
+                          <span class="error-label">Reason</span>
+                          <span id="errorReasonText">--</span>
+                        </div>
+                        <div class="error-row">
+                          <span class="error-label">Time</span>
+                          <span id="errorTimeText">--</span>
+                        </div>
+                      </div>
+                      <div class="error-section" id="lastStopSection">
+                        <div class="error-title">Last stop</div>
+                        <div class="error-row">
+                          <span class="error-label">Reason</span>
+                          <span id="stopReasonText">--</span>
+                        </div>
+                        <div class="error-row">
+                          <span class="error-label">Time</span>
+                          <span id="stopTimeText">--</span>
+                        </div>
+                      </div>
+                      <div class="error-section" id="warningHistorySection">
+                        <div class="error-title">Warnings (last 10)</div>
+                        <div id="warningList" class="error-list">
+                          <div class="error-empty">No warnings logged yet.</div>
+                        </div>
+                      </div>
+                      <div class="error-section" id="errorHistorySection">
+                        <div class="error-title">Errors (last 10)</div>
+                        <div id="errorList" class="error-list">
+                          <div class="error-empty">No errors logged yet.</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <div class="error-section" id="lastErrorSection">
-                  <div class="error-title">Last error</div>
-                  <div class="error-row">
-                    <span class="error-label">Reason</span>
-                    <span id="errorReasonText">--</span>
-                  </div>
-                  <div class="error-row">
-                    <span class="error-label">Time</span>
-                    <span id="errorTimeText">--</span>
-                  </div>
-                </div>
-                <div class="error-section" id="lastStopSection">
-                  <div class="error-title">Last stop</div>
-                  <div class="error-row">
-                    <span class="error-label">Reason</span>
-                    <span id="stopReasonText">--</span>
-                  </div>
-                  <div class="error-row">
-                    <span class="error-label">Time</span>
-                    <span id="stopTimeText">--</span>
-                  </div>
-                </div>
-                <div class="error-section" id="warningHistorySection">
-                  <div class="error-title">Warnings (last 10)</div>
-                  <div id="warningList" class="error-list">
-                    <div class="error-empty">No warnings logged yet.</div>
-                  </div>
-                </div>
-                <div class="error-section" id="errorHistorySection">
-                  <div class="error-title">Errors (last 10)</div>
-                  <div id="errorList" class="error-list">
-                    <div class="error-empty">No errors logged yet.</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
 
-          <!-- Log modal -->
-          <div id="logModal" class="log-modal">
-            <div class="log-backdrop" onclick="closeLogModal()"></div>
-            <div class="log-content">
-              <div class="log-header">
-                <h3>Device Log</h3>
-                <button
-                  type="button"
-                  class="log-close"
-                  onclick="closeLogModal()"
-                >
-                  x
-                </button>
-              </div>
-              <div class="log-actions">
-                <button id="logRefreshBtn" type="button" class="log-btn">
-                  Refresh
-                </button>
-                <button id="logClearBtn" type="button" class="log-btn log-clear">
-                  Clear
-                </button>
-              </div>
-              <pre id="logContent" class="log-body">Loading...</pre>
-            </div>
-          </div>
+                <!-- Log modal -->
+                <div id="logModal" class="log-modal">
+                  <div class="log-backdrop" onclick="closeLogModal()"></div>
+                  <div class="log-content">
+                    <div class="log-header">
+                      <h3>Device Log</h3>
+                      <button
+                        type="button"
+                        class="log-close"
+                        onclick="closeLogModal()"
+                      >
+                        x
+                      </button>
+                    </div>
+                    <div class="log-actions">
+                      <button id="logRefreshBtn" type="button" class="log-btn">
+                        Refresh
+                      </button>
+                      <button
+                        id="logClearBtn"
+                        type="button"
+                        class="log-btn log-clear"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                    <pre id="logContent" class="log-body">Loading...</pre>
+                  </div>
+                </div>
 
                 <div class="calib-actionbar">
                   <div class="calib-action-group">
-                    <button
-                      id="startNtcCalibBtn"
-                      type="button"
-                      class="calib-btn"
-                    >
-                      NTC Calibration
-                    </button>
                     <button
                       id="startModelCalibBtn"
                       type="button"
@@ -1863,6 +1878,15 @@
                   <div class="calib-stat">
                     Temp: <span id="calibTempText">--</span>
                   </div>
+                  <div class="calib-stat">
+                    Wire: <span id="calibWireText">--</span>
+                  </div>
+                  <div class="calib-stat">
+                    Target: <span id="calibTargetText">--</span>
+                  </div>
+                  <div class="calib-stat">
+                    Elapsed: <span id="calibElapsedText">--</span>
+                  </div>
                 </div>
 
                 <div class="calib-history-picker">
@@ -1886,21 +1910,11 @@
 
                 <div class="calibration-wire-test">
                   <div class="ds-field">
-                    <label for="wireTestTargetC">Wire Target Temp</label>
+                    <label for="wireTestTargetC">Target Temp</label>
                     <div class="input-with-unit">
                       <input type="number" id="wireTestTargetC" step="0.1" />
                       <span class="unit-label">C</span>
                     </div>
-                  </div>
-                  <div class="ds-field">
-                    <label for="wireTestWireIndex">Wire Index</label>
-                    <input
-                      type="number"
-                      id="wireTestWireIndex"
-                      min="1"
-                      max="10"
-                      step="1"
-                    />
                   </div>
                   <div class="ds-field">
                     <button
@@ -1921,42 +1935,60 @@
                     </button>
                   </div>
                   <div class="status-line wide">
-                    Wire Test: <span id="wireTestState">Idle</span> | Temp:
-                    <span id="wireTestTemp">--</span> | Duty:
-                    <span id="wireTestDuty">--</span> | On/Off:
-                    <span id="wireTestOnOff">--</span>
+                    Energy Loop: <span id="wireTestState">Idle</span> | Mode:
+                    <span id="wireTestMode">--</span> | Purpose:
+                    <span id="wireTestPurpose">--</span> | Active:
+                    <span id="wireTestActiveWire">--</span> | NTC:
+                    <span id="wireTestNtcTemp">--</span> | Model:
+                    <span id="wireTestModelTemp">--</span> | Packet:
+                    <span id="wireTestPacket">--</span> | Frame:
+                    <span id="wireTestFrame">--</span>
                   </div>
                   <div class="calib-inline-row wide">
                     <label for="ntcCalRef" class="calib-inline-label"
-                      >NTC Calibrate</label
+                      >NTC Calibration</label
                     >
                     <input
                       type="number"
                       id="ntcCalRef"
                       step="0.1"
-                      placeholder="Ref temp (blank = heatsink)"
+                      placeholder="Reference/target C (blank = 100)"
                       class="calib-inline-input"
                     />
+                    <button id="ntcBetaCalBtn" type="button" class="calib-btn">
+                      Calibrate (Beta)
+                    </button>
                     <button
                       id="ntcCalibrateBtn"
                       type="button"
                       class="calib-btn"
                     >
-                      Calibrate NTC
+                      Start NTC Cal
+                    </button>
+                    <button
+                      id="ntcCalStopBtn"
+                      type="button"
+                      class="calib-btn calib-stop"
+                    >
+                      Stop NTC
                     </button>
                     <span
                       id="ntcCalibrateStatus"
                       class="calib-inline-status"
                     ></span>
                   </div>
+                  <div class="status-line wide">
+                    NTC Fit: <span id="ntcCalibCoeffText">--</span> | Beta/R0:
+                    <span id="ntcCalibBetaText">--</span> | Heatsink:
+                    <span id="ntcCalibTempText">--</span> | Samples:
+                    <span id="ntcCalibCountText">0</span>
+                  </div>
                 </div>
 
                 <div class="calib-model-card">
                   <div class="calib-model-header">
                     <div>
-                      <div class="calib-chart-title">
-                        Model &amp; PI suggestions
-                      </div>
+                      <div class="calib-chart-title">Model suggestions</div>
                       <div class="calib-chart-sub">
                         Based on last calibration samples (power) and current
                         thermal params.
@@ -2003,36 +2035,10 @@
                         Max P (calib): <span id="calibPmaxText">--</span> W
                       </div>
                     </div>
-                    <div class="calib-stat-card">
-                      <div class="calib-stat-label">Wire PI (suggested)</div>
-                      <div class="calib-stat-row">
-                        Kp: <span id="calibWireKpSug">--</span>
-                      </div>
-                      <div class="calib-stat-row">
-                        Ki: <span id="calibWireKiSug">--</span>
-                      </div>
-                      <div class="calib-stat-row muted">
-                        Current Kp/Ki: <span id="calibWireKpCur">--</span> /
-                        <span id="calibWireKiCur">--</span>
-                      </div>
-                    </div>
-                    <div class="calib-stat-card">
-                      <div class="calib-stat-label">Floor PI (suggested)</div>
-                      <div class="calib-stat-row">
-                        Kp: <span id="calibFloorKpSug">--</span>
-                      </div>
-                      <div class="calib-stat-row">
-                        Ki: <span id="calibFloorKiSug">--</span>
-                      </div>
-                      <div class="calib-stat-row muted">
-                        Current Kp/Ki: <span id="calibFloorKpCur">--</span> /
-                        <span id="calibFloorKiCur">--</span>
-                      </div>
-                    </div>
                   </div>
                   <div class="calib-model-note">
-                    Click “Persist &amp; Reload” to save suggested values into
-                    NVS and reload settings.
+                    Click Persist &amp; Reload to save suggested values into NVS
+                    and reload settings.
                   </div>
                 </div>
 
@@ -2100,15 +2106,102 @@
         </div>
       </div>
 
+      <!-- Live control view modal -->
+      <div id="liveControlModal" class="live-control-modal">
+        <div
+          class="live-control-backdrop"
+          onclick="closeLiveControlModal()"
+        ></div>
+        <div class="live-control-content">
+          <div class="live-control-header">
+            <h3>Live Control View</h3>
+            <button
+              type="button"
+              class="live-control-close"
+              onclick="closeLiveControlModal()"
+            >
+              x
+            </button>
+          </div>
+          <div class="live-control-body">
+            <div class="calibration-chart live-control-chart">
+              <div class="calib-chart-top">
+                <div>
+                  <div class="calib-chart-title">Temperature vs Time</div>
+                  <div class="calib-chart-sub">
+                    Live trace of allowed outputs with the setpoint line.
+                  </div>
+                </div>
+                <div class="calib-chart-controls">
+                  <button
+                    id="liveControlLatestBtn"
+                    type="button"
+                    class="calib-secondary"
+                  >
+                    Latest
+                  </button>
+                  <button
+                    id="liveControlPauseBtn"
+                    type="button"
+                    class="calib-secondary"
+                  >
+                    Pause
+                  </button>
+                  <button
+                    id="liveControlClearBtn"
+                    type="button"
+                    class="calib-secondary calib-danger"
+                  >
+                    Clear
+                  </button>
+                </div>
+                <div class="calib-chart-stats">
+                  <div class="calib-pill">
+                    Setpoint: <b id="liveControlSetpointPill">--</b>&nbsp;C
+                  </div>
+                  <div class="calib-pill">
+                    Mode: <b id="liveControlModePill">--</b>
+                  </div>
+                  <div class="calib-pill">
+                    Time:
+                    <b id="liveControlNowTimePill" class="calib-mono">--:--</b>
+                  </div>
+                </div>
+              </div>
+
+              <div id="liveControlLegend" class="live-control-legend"></div>
+
+              <div class="calib-chart-shell">
+                <div class="calib-axis-col">
+                  <svg
+                    id="liveControlYAxis"
+                    role="img"
+                    aria-label="Y axis"
+                  ></svg>
+                </div>
+                <div id="liveControlScrollWrap" class="calib-scroll-wrap">
+                  <svg
+                    id="liveControlPlot"
+                    role="img"
+                    aria-label="Live control chart"
+                  ></svg>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Footer -->
       <div class="footer">&copy; 2025 Power Distribution Admin Interface</div>
     </div>
 
     <!-- enable/disable: set window.USE_MOCK=true/false before mock.js -->
     <script>
-      window.USE_MOCK = false;
+      window.USE_MOCK = true;
     </script>
     <script src="js/admin.js"></script>
+    <script src="js/mock.js"></script>
 
     <!-- Confirm dialog -->
     <div id="confirmModal" class="user-modal" style="display: none">

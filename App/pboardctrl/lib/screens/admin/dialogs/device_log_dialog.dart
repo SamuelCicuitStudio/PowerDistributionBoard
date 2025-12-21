@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../api/powerboard_api.dart';
 import '../../../l10n/app_strings.dart';
+import '../../../widgets/smooth_scroll_controller.dart';
 
 class DeviceLogDialog extends StatefulWidget {
   const DeviceLogDialog({super.key, required this.api});
@@ -16,6 +17,13 @@ class _DeviceLogDialogState extends State<DeviceLogDialog> {
   bool _loading = true;
   String? _error;
   String _log = '';
+  final SmoothScrollController _scrollController = SmoothScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -56,13 +64,14 @@ class _DeviceLogDialogState extends State<DeviceLogDialog> {
         width: 820,
         child: _loading
             ? const Center(child: CircularProgressIndicator())
-            : _error != null
-                ? Text(_error!)
-                : SingleChildScrollView(
-                    child: SelectableText(
-                      _log.isEmpty ? strings.t('(empty)') : _log,
-                    ),
-                  ),
+                : _error != null
+                    ? Text(_error!)
+                    : SingleChildScrollView(
+                        controller: _scrollController,
+                        child: SelectableText(
+                          _log.isEmpty ? strings.t('(empty)') : _log,
+                        ),
+                      ),
       ),
       actions: [
         TextButton(

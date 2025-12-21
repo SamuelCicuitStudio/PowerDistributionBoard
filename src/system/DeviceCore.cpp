@@ -313,26 +313,6 @@ void Device::handleCommand(const DevCommand& cmd) {
 
             break;
 
-        case DevCmdType::SET_ON_TIME_MS:
-
-            if (CONF->GetInt(ON_TIME_KEY, 500) != cmd.i1) {
-
-                CONF->PutInt(ON_TIME_KEY, cmd.i1);
-
-            }
-
-            break;
-
-        case DevCmdType::SET_OFF_TIME_MS:
-
-            if (CONF->GetInt(OFF_TIME_KEY, 500) != cmd.i1) {
-
-                CONF->PutInt(OFF_TIME_KEY, cmd.i1);
-
-            }
-
-            break;
-
         case DevCmdType::SET_AC_FREQ:
 
             {
@@ -441,24 +421,6 @@ void Device::handleCommand(const DevCommand& cmd) {
 
         }
 
-        case DevCmdType::SET_TARGET_RES:
-
-            if (!floatEq(CONF->GetFloat(R0XTGT_KEY, DEFAULT_TARG_RES_OHMS), cmd.f1)) {
-
-                CONF->PutFloat(R0XTGT_KEY, cmd.f1);
-
-            }
-
-            wireConfigStore.setTargetResOhm(cmd.f1);
-
-            if (WIRE) {
-
-                WIRE->setTargetResistanceAll(cmd.f1);
-
-            }
-
-            break;
-
         case DevCmdType::SET_WIRE_OHM_PER_M:
 
             if (!floatEq(CONF->GetFloat(WIRE_OHM_PER_M_KEY, DEFAULT_WIRE_OHM_PER_M), cmd.f1)) {
@@ -510,27 +472,6 @@ void Device::handleCommand(const DevCommand& cmd) {
             }
 
             break;
-
-        case DevCmdType::SET_LOOP_MODE: {
-
-            int mode = cmd.i1;
-            if (mode < 0 || mode > 2) {
-                mode = DEFAULT_LOOP_MODE;
-            }
-
-            loopModeSetting = (mode == 1)
-                                  ? LoopMode::Sequential
-                                  : (mode == 2 ? LoopMode::Mixed : LoopMode::Advanced);
-
-            if (CONF && CONF->GetInt(LOOP_MODE_KEY, DEFAULT_LOOP_MODE) != mode) {
-
-                CONF->PutInt(LOOP_MODE_KEY, mode);
-
-            }
-
-            break;
-
-        }
 
         case DevCmdType::SET_CURR_LIMIT: {
 
@@ -961,7 +902,6 @@ void Device::prepareForDeepSleep() {
     DEBUG_PRINTLN("[Device] Preparing for deep sleep (power down paths)");
 
     stopWireTargetTest();
-    stopCalibrationPwm();
     stopTemperatureMonitor();
 
     stopFanControlTask();
@@ -1268,6 +1208,15 @@ void Device::checkAllowedOutputs() {
 
     }
 
+    const uint16_t overrideMask = allowedOverrideMask;
+    if (overrideMask != 0) {
+        for (uint8_t i = 0; i < 10; ++i) {
+            if (allowedOutputs[i] && !(overrideMask & (1u << i))) {
+                allowedOutputs[i] = false;
+            }
+        }
+    }
+
 }
 
 
@@ -1291,7 +1240,6 @@ void Device::shutdown() {
     BUZZ->bipSystemShutdown();
 
     stopWireTargetTest();
-    stopCalibrationPwm();
     stopTemperatureMonitor();
 
 
@@ -2336,10 +2284,7 @@ void Device::refreshThermalParams() {
 }
 
 void Device::loadRuntimeSettings() {
-    int mode = DEFAULT_LOOP_MODE;
-
     if (CONF) {
-        mode = CONF->GetInt(LOOP_MODE_KEY, DEFAULT_LOOP_MODE);
         capBankCapF = CONF->GetFloat(CAP_BANK_CAP_F_KEY, DEFAULT_CAP_BANK_CAP_F);
     }
 
@@ -2348,11 +2293,4 @@ void Device::loadRuntimeSettings() {
     }
 
     refreshThermalParams();
-
-    if (mode < 0 || mode > 2) {
-        mode = DEFAULT_LOOP_MODE;
-    }
-    loopModeSetting = (mode == 1)
-                          ? LoopMode::Sequential
-                          : (mode == 2 ? LoopMode::Mixed : LoopMode::Advanced);
 }

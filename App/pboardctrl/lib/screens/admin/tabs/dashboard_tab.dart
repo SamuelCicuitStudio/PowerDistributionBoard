@@ -37,14 +37,14 @@ class DashboardTab extends StatelessWidget {
           'ADC raw (/100): {value}',
           {'value': m == null ? '--' : m.capAdcRaw.toStringAsFixed(2)},
         ),
-        color: const Color(0xFF00E5FF),
+        color: theme.colorScheme.tertiary,
         progress: m == null ? 0.0 : (m.capVoltage / 400.0),
         muted: isMuted,
       ),
       RadialGaugeCard(
         title: strings.t('Current'),
         valueText: m == null ? '--A' : '${m.current.toStringAsFixed(1)}A',
-        color: const Color(0xFFFFC800),
+        color: theme.colorScheme.primary,
         progress: m == null ? 0.0 : (m.current / 100.0),
         muted: isMuted,
       ),
@@ -64,7 +64,7 @@ class DashboardTab extends StatelessWidget {
         RadialGaugeCard(
           title: label,
           valueText: t == null ? strings.t('Off') : '${t.toStringAsFixed(0)}C',
-          color: const Color(0xFFFF3B30),
+          color: theme.colorScheme.error,
           progress: t == null ? 0.0 : (t / 150.0),
           muted: isMuted,
         ),
@@ -77,7 +77,7 @@ class DashboardTab extends StatelessWidget {
             valueText: m == null
                 ? '--mF'
                 : '${(m.capacitanceF * 1000).toStringAsFixed(0)}mF',
-            color: const Color(0xFF6BE2FF),
+            color: theme.colorScheme.secondary,
             progress: m == null ? 0.0 : (m.capacitanceF / 2.0),
             muted: isMuted,
           ),
@@ -109,9 +109,16 @@ class DashboardTab extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surface.withAlpha(38),
+        color: theme.colorScheme.surface.withAlpha(235),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: theme.colorScheme.onSurface.withAlpha(20)),
+        border: Border.all(color: theme.colorScheme.outline.withAlpha(179)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha(18),
+            blurRadius: 16,
+            offset: const Offset(0, 10),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -138,7 +145,7 @@ class DashboardTab extends StatelessWidget {
               _ledDot(theme, ready),
               const SizedBox(width: 10),
               Text(strings.t('OFF')),
-              _ledDot(theme, off, onColor: const Color(0xFFFF3B30)),
+              _ledDot(theme, off, onColor: theme.colorScheme.error),
             ],
           ),
           const SizedBox(height: 10),

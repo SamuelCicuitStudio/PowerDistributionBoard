@@ -34,7 +34,6 @@ bool DeviceTransport::waitForStateEvent(Device::StateSnapshot& out, TickType_t t
 bool DeviceTransport::requestRun() {
   if (!DEVICE || !gEvt) return false;
   DEVICE->stopWireTargetTest();
-  DEVICE->stopCalibrationPwm();
   ensureLoopTask();
   xEventGroupSetBits(gEvt, EVT_WAKE_REQ | EVT_RUN_REQ);
   return true;
@@ -43,7 +42,6 @@ bool DeviceTransport::requestRun() {
 bool DeviceTransport::requestStop() {
   if (!DEVICE || !gEvt) return false;
   DEVICE->stopWireTargetTest();
-  DEVICE->stopCalibrationPwm();
   DEVICE->setLastStopReason("Stop requested");
   xEventGroupSetBits(gEvt, EVT_STOP_REQ);
   return true;
@@ -65,7 +63,6 @@ bool DeviceTransport::ensureLoopTask() {
 bool DeviceTransport::requestIdle() {
   if (!DEVICE || !gEvt) return false;
   DEVICE->stopWireTargetTest();
-  DEVICE->stopCalibrationPwm();
   DEVICE->setLastStopReason("Idle requested");
   xEventGroupSetBits(gEvt, EVT_STOP_REQ);
   return true;
@@ -143,8 +140,6 @@ bool DeviceTransport::setFanSpeedPercent(int pct, bool waitAck) {
 
 // -------------------- Config setters --------------------
 bool DeviceTransport::setLedFeedback(bool on)           { return sendCommandAndWait(Device::DevCmdType::SET_LED_FEEDBACK, 0, 0.0f, on); }
-bool DeviceTransport::setOnTimeMs(int v)                { return sendCommandAndWait(Device::DevCmdType::SET_ON_TIME_MS, v); }
-bool DeviceTransport::setOffTimeMs(int v)               { return sendCommandAndWait(Device::DevCmdType::SET_OFF_TIME_MS, v); }
 bool DeviceTransport::setAcFrequency(int v)             { return sendCommandAndWait(Device::DevCmdType::SET_AC_FREQ, v); }
 bool DeviceTransport::setChargeResistor(float v)        { return sendCommandAndWait(Device::DevCmdType::SET_CHARGE_RES, 0, v); }
 bool DeviceTransport::setAccessFlag(uint8_t idx, bool on) {
@@ -153,7 +148,6 @@ bool DeviceTransport::setAccessFlag(uint8_t idx, bool on) {
 bool DeviceTransport::setWireRes(uint8_t idx, float ohms) {
   return sendCommandAndWait(Device::DevCmdType::SET_WIRE_RES, idx, ohms);
 }
-bool DeviceTransport::setTargetRes(float ohms)          { return sendCommandAndWait(Device::DevCmdType::SET_TARGET_RES, 0, ohms); }
 bool DeviceTransport::setWireOhmPerM(float ohmsPerM)    { return sendCommandAndWait(Device::DevCmdType::SET_WIRE_OHM_PER_M, 0, ohmsPerM); }
 bool DeviceTransport::setWireGaugeAwg(int awg) {
   awg = constrain(awg, 1, 60);
@@ -161,7 +155,6 @@ bool DeviceTransport::setWireGaugeAwg(int awg) {
 }
 bool DeviceTransport::setBuzzerMute(bool on)            { return sendCommandAndWait(Device::DevCmdType::SET_BUZZER_MUTE, 0, 0.0f, on); }
 bool DeviceTransport::setManualMode(bool manual)        { return sendCommandAndWait(Device::DevCmdType::SET_MANUAL_MODE, 0, 0.0f, manual); }
-bool DeviceTransport::setLoopMode(uint8_t mode)         { return sendCommandAndWait(Device::DevCmdType::SET_LOOP_MODE, static_cast<int32_t>(mode)); }
 bool DeviceTransport::setCurrentLimitA(float limitA)    { return sendCommandAndWait(Device::DevCmdType::SET_CURR_LIMIT, 0, limitA); }
 bool DeviceTransport::requestResetFlagAndRestart() {
   return sendCommandAndWait(Device::DevCmdType::REQUEST_RESET);
@@ -218,21 +211,9 @@ bool DeviceTransport::getFloorControlStatus(Device::FloorControlStatus& out) con
   return true;
 }
 
-bool DeviceTransport::startCalibrationPwm(uint8_t wireIndex, uint32_t onMs, uint32_t offMs) {
+bool DeviceTransport::startEnergyCalibration(float targetC, uint8_t wireIndex, Device::EnergyRunPurpose purpose) {
   if (!DEVICE) return false;
-  return DEVICE->startCalibrationPwm(wireIndex, onMs, offMs);
-}
-
-void DeviceTransport::stopCalibrationPwm() {
-  if (DEVICE) {
-    DEVICE->stopCalibrationPwm();
-  }
-}
-
-bool DeviceTransport::getCalibrationPwmStatus(Device::CalibPwmStatus& out) const {
-  if (!DEVICE) return false;
-  out = DEVICE->getCalibrationPwmStatus();
-  return true;
+  return DEVICE->startEnergyCalibration(targetC, wireIndex, purpose);
 }
 
 bool DeviceTransport::sendCommandAndWait(Device::DevCmdType t, int32_t i1, float f1, bool b1, TickType_t to) {

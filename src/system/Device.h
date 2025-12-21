@@ -15,10 +15,7 @@
  * @brief Main heating loop & RTOS-oriented coordination.
  *
  * Once the device enters DeviceState::Running, the Device class coordinates
- * nichrome heater drive in one of two compile-time modes:
- *
- *  - DEVICE_LOOP_MODE_SEQUENTIAL
- *  - DEVICE_LOOP_MODE_ADVANCED
+ * nichrome heater drive using an energy-based sequential scheduler.
  *
  * The responsibilities are cleanly split:
  *
@@ -42,17 +39,11 @@
  *          - clamping at 150Â°C and re-enable hysteresis.
  *      - Publishes results via HeaterManager::setWireEstimatedTemp().
  *
- *  - Device loop (sequential / advanced):
+ *  - Device loop (energy-based sequential):
  *      - Uses checkAllowedOutputs() (config + thermal lockout) to determine
  *        eligible wires.
- *      - In SEQUENTIAL mode:
- *          - Picks the coolest eligible wire (virtual temperature),
- *            drives it alone for onTime, idles for offTime.
- *      - In ADVANCED mode:
- *          - Syncs WireStateModel with HeaterManager + WireConfigStore.
- *          - Chooses a mask via WirePlanner (target resistance) and applies it
- *            through WireActuator/WireSafetyPolicy.
- *          - Pulses the applied mask for onTime / offTime.
+ *      - Allocates one energy packet per wire per frame (full voltage when ON).
+ *      - Boost phase breaks plateaus, hold phase maintains the target.
  *      - All timings use delayWithPowerWatch() to react immediately to:
  *          - 12V supply loss (handle12VDrop()),
  *          - STOP requests (event group).
@@ -93,17 +84,6 @@
 #define SAMPLINGSTALL false
 // Set to 1 to bypass presence checks and treat all wires as available.
 #define DEVICE_FORCE_ALL_WIRES_PRESENT 0
-
-// -----------------------------------------------------------------------------
-// Loop Mode Selection (compile-time)
-// -----------------------------------------------------------------------------
-
-// Runtime-selectable loop mode (persisted in NVS; see LOOP_MODE_KEY)
-enum class LoopMode : uint8_t {
-    Advanced   = 0,
-    Sequential = 1,
-    Mixed      = 2
-};
 
 // -----------------------------------------------------------------------------
 // Global Synchronization Objects
@@ -202,18 +182,14 @@ public:
 
     enum class DevCmdType : uint8_t {
         SET_LED_FEEDBACK,
-        SET_ON_TIME_MS,
-        SET_OFF_TIME_MS,
         SET_AC_FREQ,
         SET_CHARGE_RES,
         SET_ACCESS_FLAG,
         SET_WIRE_RES,
-        SET_TARGET_RES,
         SET_WIRE_OHM_PER_M,
         SET_WIRE_GAUGE,
         SET_BUZZER_MUTE,
         SET_MANUAL_MODE,
-        SET_LOOP_MODE,
         SET_CURR_LIMIT,
         SET_RELAY,
         SET_OUTPUT,
@@ -366,14 +342,22 @@ public:
     void stopFanControlTask();
     static void fanControlTask(void* param);
 
+    enum class EnergyRunPurpose : uint8_t {
+        None = 0,
+        WireTest = 1,
+        ModelCal = 2,
+        NtcCal = 3
+    };
+
     struct WireTargetStatus {
         bool     active      = false;
-        uint8_t  wireIndex   = 0;
+        EnergyRunPurpose purpose = EnergyRunPurpose::None;
         float    targetC     = NAN;
-        float    tempC       = NAN;
-        float    duty        = 0.0f;
-        uint32_t onMs        = 0;
-        uint32_t offMs       = 0;
+        float    ntcTempC    = NAN;
+        float    activeTempC = NAN;
+        uint8_t  activeWire  = 0;
+        uint32_t packetMs    = 0;
+        uint32_t frameMs     = 0;
         uint32_t updatedMs   = 0;
     };
 
@@ -385,22 +369,19 @@ public:
         uint32_t updatedMs   = 0;
     };
 
-    struct CalibPwmStatus {
-        bool     active    = false;
-        uint8_t  wireIndex = 0;
-        uint32_t onMs      = 0;
-        uint32_t offMs     = 0;
+    struct LoopTargetStatus {
+        bool     active      = false;
+        float    targetC     = NAN;
+        uint32_t updatedMs   = 0;
     };
 
     bool startWireTargetTest(float targetC, uint8_t wireIndex = 0);
     void stopWireTargetTest();
     WireTargetStatus getWireTargetStatus() const;
     FloorControlStatus getFloorControlStatus() const;
+    LoopTargetStatus getLoopTargetStatus() const;
 
-    bool startCalibrationPwm(uint8_t wireIndex, uint32_t onMs, uint32_t offMs);
-    void stopCalibrationPwm();
-    CalibPwmStatus getCalibrationPwmStatus() const;
-
+    bool startEnergyCalibration(float targetC, uint8_t wireIndex, EnergyRunPurpose purpose);
     void startControlTask();
     static void controlTaskWrapper(void* param);
     void controlTask();
@@ -422,7 +403,6 @@ public:
     WireStateModel&       getWireStateModel()       { return wireStateModel; }
     WireThermalModel&     getWireThermalModel()     { return wireThermalModel; }
     WirePresenceManager&  getWirePresenceManager()  { return wirePresenceManager; }
-    WirePlanner&          getWirePlanner()          { return wirePlanner; }
     WireTelemetryAdapter& getWireTelemetryAdapter() { return wireTelemetryAdapter; }
     float                 getCapBankCapF() const    { return capBankCapF; }
 
@@ -445,7 +425,7 @@ private:
     TaskHandle_t thermalTaskHandle      = nullptr;
     TaskHandle_t fanTaskHandle          = nullptr;
     TaskHandle_t controlTaskHandle      = nullptr;
-    TaskHandle_t calibPwmTaskHandle     = nullptr;
+    TaskHandle_t wireTestTaskHandle     = nullptr;
     // ---------------------------------------------------------------------
     // Virtual Wire Thermal Model
     // ---------------------------------------------------------------------
@@ -497,6 +477,7 @@ private:
     uint32_t              stateSinceMs   = 0;
     uint32_t              cmdSeq         = 0;
     bool                  allowedOutputs[10] = { false };
+    uint16_t              allowedOverrideMask = 0;
     QueueHandle_t         stateEvtQueue  = nullptr;
     QueueHandle_t         cmdQueue       = nullptr;
     QueueHandle_t         ackQueue       = nullptr;
@@ -527,7 +508,6 @@ private:
     uint16_t lastHeaterMask      = 0;
     uint8_t lastCapFanPct = 0;
     uint8_t lastHsFanPct  = 0;
-    LoopMode loopModeSetting     = LoopMode::Advanced;
     // ---------------------------------------------------------------------
     // Wire subsystem helpers (config + runtime + planner + telemetry)
     // ---------------------------------------------------------------------
@@ -535,14 +515,16 @@ private:
     WireStateModel       wireStateModel;
     WireThermalModel     wireThermalModel;
     WirePresenceManager  wirePresenceManager;
-    WirePlanner          wirePlanner;
     WireTelemetryAdapter wireTelemetryAdapter;
     BusSampler*          busSampler = nullptr;
 
     SemaphoreHandle_t    controlMtx = nullptr;
     WireTargetStatus     wireTargetStatus{};
     FloorControlStatus   floorControlStatus{};
-    CalibPwmStatus       calibPwmStatus{};
+    LoopTargetStatus     loopTargetStatus{};
+    void updateWireTestStatus(uint8_t wireIndex,
+                              uint32_t packetMs,
+                              uint32_t frameMs);
     // Internal helpers
     void syncWireRuntimeFromHeater();
     void updateAmbientFromSensors(bool force = false);

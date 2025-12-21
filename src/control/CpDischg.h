@@ -148,6 +148,7 @@ private:
     float        lastMinBusVoltage = 0.0f;
     uint16_t     lastRawAdc        = 0;
     TickType_t   lastSampleTick    = 0;
+    TickType_t   lastStaleWarnTick = 0;
 
     // Rolling history
     static constexpr size_t VOLT_HISTORY_SAMPLES = 256;

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../api/powerboard_api.dart';
 import '../../../l10n/app_strings.dart';
+import '../../../widgets/smooth_scroll_controller.dart';
 
 class SessionHistoryDialog extends StatefulWidget {
   const SessionHistoryDialog({super.key, required this.api});
@@ -16,11 +17,18 @@ class _SessionHistoryDialogState extends State<SessionHistoryDialog> {
   bool _loading = true;
   String? _error;
   List<Map<String, dynamic>> _rows = const [];
+  final SmoothScrollController _scrollController = SmoothScrollController();
 
   @override
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -62,6 +70,7 @@ class _SessionHistoryDialogState extends State<SessionHistoryDialog> {
                 : _rows.isEmpty
                     ? Text(strings.t('No sessions recorded yet.'))
                     : SingleChildScrollView(
+                        controller: _scrollController,
                         child: DataTable(
                           columns: [
                             DataColumn(label: Text(strings.t('Start (ms)'))),

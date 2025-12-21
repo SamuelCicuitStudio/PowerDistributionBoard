@@ -97,13 +97,14 @@ class AdminSettingsTab extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surface.withAlpha(26),
+        color: theme.colorScheme.surface.withAlpha(235),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: theme.colorScheme.onSurface.withAlpha(20)),
+        border: Border.all(color: theme.colorScheme.outline.withAlpha(179)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withAlpha(51),
-            blurRadius: 24,
+            color: Colors.black.withAlpha(26),
+            blurRadius: 18,
+            offset: const Offset(0, 10),
           ),
         ],
       ),

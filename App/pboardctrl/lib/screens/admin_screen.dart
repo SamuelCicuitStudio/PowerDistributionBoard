@@ -21,13 +21,14 @@ import 'admin/tabs/user_settings_tab.dart';
 import 'admin/widgets/top_status_bar.dart';
 import 'connection_screen.dart';
 import 'login_screen.dart';
+import '../widgets/smooth_scroll_controller.dart';
 
 enum AdminTab {
   dashboard('Dashboard', Icons.dashboard_outlined),
-  userSettings('User Settings', Icons.group_outlined),
-  manualControl('Manual Control', Icons.tune_outlined),
-  adminSettings('Admin Settings', Icons.admin_panel_settings_outlined),
-  deviceSettings('Device Settings', Icons.settings_outlined),
+  userSettings('User ', Icons.group_outlined),
+  manualControl('Manual', Icons.tune_outlined),
+  adminSettings('Admin', Icons.admin_panel_settings_outlined),
+  deviceSettings('Device', Icons.settings_outlined),
   live('Live', Icons.bubble_chart_outlined);
 
   const AdminTab(this.labelKey, this.icon);
@@ -44,9 +45,11 @@ class AdminScreen extends StatefulWidget {
   State<AdminScreen> createState() => _AdminScreenState();
 }
 
-class _AdminScreenState extends State<AdminScreen> with TickerProviderStateMixin {
+class _AdminScreenState extends State<AdminScreen>
+    with TickerProviderStateMixin {
   late final PowerBoardApi _api;
   AdminTab _tab = AdminTab.dashboard;
+  AdminTab? _hoveredTab;
 
   MonitorSnapshot? _monitor;
   ControlSnapshot? _controls;
@@ -79,6 +82,10 @@ class _AdminScreenState extends State<AdminScreen> with TickerProviderStateMixin
 
   late final AnimationController _idlePulse;
   late final AnimationController _errorBlink;
+  final SmoothScrollController _contentScrollController =
+      SmoothScrollController();
+  final SmoothScrollController _sidebarScrollController =
+      SmoothScrollController();
 
   @override
   void initState() {
@@ -104,6 +111,8 @@ class _AdminScreenState extends State<AdminScreen> with TickerProviderStateMixin
     _api.dispose();
     _idlePulse.dispose();
     _errorBlink.dispose();
+    _contentScrollController.dispose();
+    _sidebarScrollController.dispose();
     _userCurrentPw.dispose();
     _userNewPw.dispose();
     _userNewId.dispose();
@@ -224,7 +233,9 @@ class _AdminScreenState extends State<AdminScreen> with TickerProviderStateMixin
   void _handleUnauthorized() {
     if (!mounted) return;
     Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (context) => LoginScreen(baseUrl: widget.baseUrl)),
+      MaterialPageRoute(
+        builder: (context) => LoginScreen(baseUrl: widget.baseUrl),
+      ),
       (route) => false,
     );
   }
@@ -275,7 +286,9 @@ class _AdminScreenState extends State<AdminScreen> with TickerProviderStateMixin
     } catch (_) {}
     if (!mounted) return;
     Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (context) => LoginScreen(baseUrl: widget.baseUrl)),
+      MaterialPageRoute(
+        builder: (context) => LoginScreen(baseUrl: widget.baseUrl),
+      ),
       (route) => false,
     );
   }
@@ -379,27 +392,35 @@ class _AdminScreenState extends State<AdminScreen> with TickerProviderStateMixin
                           padding: const EdgeInsets.fromLTRB(18, 12, 18, 12),
                           child: Container(
                             decoration: BoxDecoration(
-                              color: theme.colorScheme.surface.withAlpha(16),
+                              color: theme.colorScheme.surface.withAlpha(235),
                               borderRadius: BorderRadius.circular(18),
                               border: Border.all(
-                                color: theme.colorScheme.onSurface.withAlpha(20),
+                                color: theme.colorScheme.outline.withAlpha(179),
                               ),
                             ),
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(18),
                               child: Scrollbar(
+                                controller: _contentScrollController,
                                 thumbVisibility: true,
                                 child: ListView(
+                                  controller: _contentScrollController,
                                   padding: const EdgeInsets.all(18),
                                   children: [
                                     if (_error != null)
                                       Padding(
-                                        padding: const EdgeInsets.only(bottom: 12),
+                                        padding: const EdgeInsets.only(
+                                          bottom: 12,
+                                        ),
                                         child: MaterialBanner(
                                           content: Text(_error!),
-                                          leading: const Icon(Icons.warning_amber),
-                                          backgroundColor:
-                                              theme.colorScheme.error.withAlpha(38),
+                                          leading: const Icon(
+                                            Icons.warning_amber,
+                                          ),
+                                          backgroundColor: theme
+                                              .colorScheme
+                                              .error
+                                              .withAlpha(38),
                                           actions: [
                                             TextButton(
                                               onPressed: () =>
@@ -409,7 +430,31 @@ class _AdminScreenState extends State<AdminScreen> with TickerProviderStateMixin
                                           ],
                                         ),
                                       ),
-                                    _buildTab(theme),
+                                    AnimatedSwitcher(
+                                      duration: const Duration(
+                                        milliseconds: 220,
+                                      ),
+                                      switchInCurve: Curves.easeOutCubic,
+                                      switchOutCurve: Curves.easeInCubic,
+                                      transitionBuilder: (child, animation) {
+                                        final fade = FadeTransition(
+                                          opacity: animation,
+                                          child: child,
+                                        );
+                                        final slide = Tween<Offset>(
+                                          begin: const Offset(0.02, 0),
+                                          end: Offset.zero,
+                                        ).animate(animation);
+                                        return SlideTransition(
+                                          position: slide,
+                                          child: fade,
+                                        );
+                                      },
+                                      child: KeyedSubtree(
+                                        key: ValueKey(_tab),
+                                        child: _buildTab(theme),
+                                      ),
+                                    ),
                                   ],
                                 ),
                               ),
@@ -442,12 +487,15 @@ class _AdminScreenState extends State<AdminScreen> with TickerProviderStateMixin
           radius: 1.4,
           colors: [
             theme.colorScheme.primary.withAlpha(18),
-            theme.scaffoldBackgroundColor.withAlpha(250),
+            theme.colorScheme.surface.withAlpha(252),
           ],
         ),
-        border: Border(right: BorderSide(color: theme.colorScheme.primary.withAlpha(31))),
+        border: Border(
+          right: BorderSide(color: theme.colorScheme.primary.withAlpha(31)),
+        ),
       ),
       child: SingleChildScrollView(
+        controller: _sidebarScrollController,
         padding: const EdgeInsets.all(12),
         child: Column(
           children: [
@@ -466,71 +514,76 @@ class _AdminScreenState extends State<AdminScreen> with TickerProviderStateMixin
   Widget _tabButton(ThemeData theme, AdminTab tab) {
     final strings = context.strings;
     final active = _tab == tab;
+    final hovered = _hoveredTab == tab;
     final accent = theme.colorScheme.primary;
+    final bg = active
+        ? accent.withAlpha(18)
+        : (hovered
+              ? theme.colorScheme.surface.withAlpha(235)
+              : Colors.transparent);
+    final borderColor = active
+        ? accent.withAlpha(160)
+        : (hovered
+              ? theme.colorScheme.outline.withAlpha(200)
+              : theme.colorScheme.outline);
+    final contentColor = active ? accent : theme.colorScheme.onSurface;
+
     return InkWell(
       borderRadius: BorderRadius.circular(14),
+      onHover: (v) => setState(() => _hoveredTab = v ? tab : null),
       onTap: () => setState(() => _tab = tab),
-      child: Container(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        curve: Curves.easeOutCubic,
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         margin: const EdgeInsets.symmetric(vertical: 4),
         decoration: BoxDecoration(
-          gradient: RadialGradient(
-            center: Alignment.topLeft,
-            radius: 1.2,
-            colors: [
-              accent.withAlpha(active ? 41 : 15),
-              theme.scaffoldBackgroundColor.withAlpha(active ? 250 : 230),
-            ],
-          ),
+          color: bg,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: active
-                ? accent.withAlpha(107)
-                : theme.colorScheme.onSurface.withAlpha(13),
-          ),
-          boxShadow: active
+          border: Border.all(color: borderColor, width: active ? 2 : 1),
+          boxShadow: hovered || active
               ? [
                   BoxShadow(
-                    color: accent.withAlpha(102),
-                    blurRadius: 20,
+                    color: Colors.black.withAlpha(active ? 18 : 12),
+                    blurRadius: active ? 18 : 14,
+                    offset: const Offset(0, 10),
                   ),
                 ]
               : null,
         ),
-        child: Stack(
+        child: Row(
           children: [
-            Align(
-              alignment: Alignment.centerLeft,
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 160),
+              curve: Curves.easeOutCubic,
+              width: 4,
+              height: 28,
+              decoration: BoxDecoration(
+                color: active ? accent : Colors.transparent,
+                borderRadius: BorderRadius.circular(6),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Icon(
+              tab.icon,
+              size: 18,
+              color: active
+                  ? accent
+                  : theme.colorScheme.onSurface.withAlpha(153),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
               child: Text(
                 strings.t(tab.labelKey),
                 style: theme.textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: active ? accent : theme.colorScheme.onSurface,
+                  fontWeight: FontWeight.w700,
+                  color: contentColor,
                 ),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-            if (active)
-              Positioned(
-                left: 10,
-                right: 10,
-                bottom: 4,
-                child: Container(
-                  height: 2,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(2),
-                    gradient: RadialGradient(
-                      radius: 2,
-                      colors: [
-                        accent.withAlpha(230),
-                        accent.withAlpha(41),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
           ],
         ),
       ),
@@ -542,10 +595,10 @@ class _AdminScreenState extends State<AdminScreen> with TickerProviderStateMixin
     final state = _stateLabel;
     final running = state == 'Running' || state == 'Error';
     final color = switch (state) {
-      'Shutdown' => const Color(0xFFFF3B3B),
-      'Idle' => const Color(0xFFFFB000),
+      'Shutdown' => theme.colorScheme.error,
+      'Idle' => theme.colorScheme.secondary,
       'Running' => theme.colorScheme.primary,
-      'Error' => const Color(0xFFFF3B3B),
+      'Error' => theme.colorScheme.error,
       _ => theme.colorScheme.primary,
     };
 
@@ -614,12 +667,15 @@ class _AdminScreenState extends State<AdminScreen> with TickerProviderStateMixin
               radius: 1.2,
               colors: [
                 theme.colorScheme.primary.withAlpha(20),
-                const Color(0xFF050709).withAlpha(250),
+                theme.colorScheme.surfaceContainerHighest.withAlpha(230),
               ],
             ),
             border: Border.all(color: color.withAlpha(41), width: 2),
             boxShadow: [
-              BoxShadow(color: theme.colorScheme.primary.withAlpha(64), blurRadius: 12),
+              BoxShadow(
+                color: theme.colorScheme.primary.withAlpha(64),
+                blurRadius: 12,
+              ),
             ],
           ),
           child: Icon(icon, color: color, size: 28),
@@ -643,17 +699,15 @@ class _AdminScreenState extends State<AdminScreen> with TickerProviderStateMixin
         onTap: _busy
             ? null
             : () {
-                _sendControl(
-                  running ? 'systemShutdown' : 'systemStart',
-                  true,
-                );
+                _sendControl(running ? 'systemShutdown' : 'systemStart', true);
               },
         child: AnimatedBuilder(
           animation: Listenable.merge([_idlePulse, _errorBlink]),
           builder: (context, _) {
             final isIdle = state == 'Idle';
             final isError = state == 'Error';
-            final idlePulse = 0.5 + 0.5 * math.sin(2 * math.pi * _idlePulse.value);
+            final idlePulse =
+                0.5 + 0.5 * math.sin(2 * math.pi * _idlePulse.value);
             final blinkOn = _errorBlink.value < 0.5;
             final glowStrength = isIdle ? idlePulse : 1.0;
             final visible = isError ? blinkOn : true;
@@ -670,7 +724,7 @@ class _AdminScreenState extends State<AdminScreen> with TickerProviderStateMixin
                     radius: 0.95,
                     colors: [
                       theme.colorScheme.primary.withAlpha(46),
-                      const Color(0xFF050709).withAlpha(250),
+                      theme.colorScheme.surfaceContainerHighest.withAlpha(230),
                     ],
                   ),
                   boxShadow: [
@@ -678,8 +732,8 @@ class _AdminScreenState extends State<AdminScreen> with TickerProviderStateMixin
                       color: color.withAlpha((64 + 96 * glowStrength).round()),
                       blurRadius: 16 + (10 * glowStrength),
                     ),
-                    const BoxShadow(
-                      color: Color(0xC0000000),
+                    BoxShadow(
+                      color: Colors.black.withAlpha(50),
                       blurRadius: 16,
                       offset: Offset(0, 4),
                     ),

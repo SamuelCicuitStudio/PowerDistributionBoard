@@ -14,10 +14,10 @@ This document explains how the firmware is organized around the `Device` class: 
   - `CurrentSensor` (`src/sensing/CurrentSensor.*`): continuous current sampling + safety limit.
   - `BusSampler` (`src/sensing/BusSampler.*`): synchronized V/I history at a fixed period (default 5 ms); can include NTC fields when requested.
 - Thermal model: `DeviceThermal` (`src/system/DeviceThermal.cpp`, `src/system/WireSubsystem.h`) maintains virtual wire temperatures using first-order parameters `tau` / `kLoss` / `Cth`.
-- Control loop: `DeviceControl` (`src/system/DeviceControl.cpp`) runs PI controllers at 3 Hz for "wire test" and floor target mapping.
+- Control loop: `DeviceControl` (`src/system/DeviceControl.cpp`) runs the energy-based sequential controller and wire target test logic.
 - Calibration:
   - `CalibrationRecorder` (`src/services/CalibrationRecorder.*`): captures a time series of `{V, I, NTC}` samples with a single time base.
-  - `ThermalEstimator` (`src/services/ThermalEstimator.*`): provides conservative suggestions for thermal parameters and PI gains (and can persist them).
+  - `ThermalEstimator` (`src/services/ThermalEstimator.*`): provides conservative suggestions for thermal parameters (tau/k/C) and can persist them.
 - Energy tracking: `PowerTracker` (`src/services/PowerTracker.*`) integrates energy (Wh) and records session history.
 
 ## State machine (high level)
@@ -49,16 +49,14 @@ File: `src/system/DeviceThermal.cpp`
   - persisted thermal parameters (`WIRE_TAU_KEY`, `WIRE_K_LOSS_KEY`, `WIRE_C_TH_KEY`).
 - Publishes estimated wire temperature back into `HeaterManager` (`WireInfo.temperatureC`), so all other code reads a single "wire temp" source.
 
-### Control task (PI controllers at 3 Hz)
+### Control task (energy-based adjustment loop)
 
 File: `src/system/DeviceControl.cpp`
 - Started in `Device::begin()` and runs continuously, but it only drives outputs in specific modes.
-- Two PI controllers exist:
-  - **Wire PI**: input = NTC temperature (if valid), output = PWM duty (0..1) for a single selected wire.
-  - **Floor PI**: input = heatsink temperature ("floor proxy"), output = a wire target temperature suggestion (mapping).
+- The controller allocates energy packets per wire in a sequential frame and adjusts packet sizes slowly based on temperature error (no PID/PI loop).
 - Output driving rules (important):
-  - PI will only energize heaters when `DeviceState::Idle` and a "wire test" is active.
-  - Calibration PWM and wire test are mutually exclusive.
+  - The energy-based controller only energizes heaters in `DeviceState::Running` or when an Idle wire-target test is active.
+  - Calibration energy runs and wire tests are mutually exclusive.
 
 ## Temperature sources (what is used when)
 
@@ -67,7 +65,7 @@ File: `src/system/DeviceControl.cpp`
 - Source: DS18B20 readings in `TempSensor`.
 - Used for: UI display, ambient estimate, floor proxy, safety.
 
-### Wire temperature during normal RUN (Sequential / Mixed / Advanced)
+### Wire temperature during normal RUN (energy-based sequential)
 
 - Source: virtual temperature computed by the thermal task and stored in `HeaterManager` (`WireInfo.temperatureC`).
 - Reason: only one wire has a physical NTC; other wires must be estimated.
@@ -88,18 +86,18 @@ File: `src/system/DeviceControl.cpp`
 
 File: `src/system/DeviceLoop.cpp`
 - Entered only from the state machine when transitioning to `DeviceState::Running`.
-- The loop selects heater masks according to `LoopMode` (Sequential / Mixed / Advanced), but all output pulses are guarded:
+- The loop allocates sequential energy packets across allowed wires; all output pulses are guarded:
   - outputs are forced off after every pulse,
   - delays use `delayWithPowerWatch()` so STOP/power-loss/faults abort quickly.
 - The thermal task continues updating wire temperature estimates while RUN is active.
 - `PowerTracker` session runs to compute energy (Wh), peaks, and session history.
 
-### 2) Wire Test (Idle-only PI hold)
+### 2) Wire Test (Idle-only energy target)
 
-Files: `src/system/DeviceControl.cpp`, `src/services/ThermalPiControllers.*`
+File: `src/system/DeviceControl.cpp`
 - Triggered by HTTP endpoints (`/wire_test_start`, `/wire_test_stop`, `/wire_test_status`).
 - Runs only in `DeviceState::Idle`.
-- Uses the **Wire PI** controller to hold a target temperature on the selected wire (defaults to the NTC-attached gate index).
+- Uses the energy-based controller to hold a target temperature across allowed wires.
 - Does not create a logged calibration buffer.
 
 ### 3) NTC calibration (no heating)
@@ -107,16 +105,16 @@ Files: `src/system/DeviceControl.cpp`, `src/services/ThermalPiControllers.*`
 - Triggered by HTTP endpoint `/ntc_calibrate`.
 - Intended behavior: recompute NTC calibration parameters using heatsink temp as the reference (or a user-entered reference), without energizing heaters.
 
-### 4) Thermal model capture (logged PWM drive)
+### 4) Thermal model capture (logged energy-based drive)
 
 - Triggered by HTTP endpoints:
   - `/calib_start`, `/calib_stop`, `/calib_status`, `/calib_data`, `/calib_file`, `/calib_clear`
 - Behavior:
   - Starts `CalibrationRecorder` to capture `{V, I, NTC}` at the requested interval into a bounded buffer.
-  - In "model capture" mode it also starts a dedicated PWM drive via `DeviceTransport::startCalibrationPwm(...)` (Idle-only).
+  - In "model capture" mode it also starts an energy-based calibration run (Idle-only).
 - What the data is used for:
   - Plotting the temperature curve in the UI.
-  - Feeding `ThermalEstimator` for conservative parameter and PI-gain suggestions.
+  - Feeding `ThermalEstimator` for conservative tau/k/C suggestions.
 
 ## UI/HTTP data flow (admin page)
 
@@ -128,8 +126,8 @@ Files: `src/system/DeviceControl.cpp`, `src/services/ThermalPiControllers.*`
   - `/control` applies changes (queued in WiFiManager and forwarded to DeviceTransport).
 - Calibration:
   - `GET /calib_data` returns captured samples (for the chart).
-  - `GET /calib_pi_suggest` returns suggested (and current) PI gains and thermal parameters.
-  - `POST /calib_pi_save` persists the shown values and the UI reloads settings.
+  - `GET /calib_pi_suggest` returns suggested (and current) thermal parameters.
+  - `POST /calib_pi_save` persists the shown thermal values and the UI reloads settings.
 
 ## Where control loops are activated
 
@@ -141,7 +139,7 @@ Files: `src/system/DeviceControl.cpp`, `src/services/ThermalPiControllers.*`
 - Orchestration/task startup: `src/system/DeviceCore.cpp`
 - State machine + RUN loop: `src/system/DeviceLoop.cpp`
 - Thermal integration + virtual temps: `src/system/DeviceThermal.cpp`, `src/system/WireSubsystem.h`
-- PI control + wire test + calibration PWM: `src/system/DeviceControl.cpp`
+- Energy-based control + wire test + calibration runs: `src/system/DeviceControl.cpp`
 - UI transport facade: `src/system/DeviceTransport.cpp`
 - HTTP routes and snapshots: `src/comms/WiFiManager.cpp`
 - Calibration capture: `src/services/CalibrationRecorder.cpp`

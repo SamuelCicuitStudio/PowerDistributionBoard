@@ -6,6 +6,7 @@ const contents = document.querySelectorAll(".content");
 let lastState = "Shutdown";
 let stateStream = null;
 let statePollTimer = null;
+let heartbeatTimer = null;
 
 // Hide Manual tab by default (index 1)
 document.querySelector(".sidebar .tab:nth-child(2)").style.display = "none";
@@ -295,7 +296,19 @@ function startMonitorPolling(intervalMs = 1000) {
 // ❤️ HEARTBEAT PINGER — Ensures server connection is alive
 // ───────────────────────────────────────────────────────────────
 function startHeartbeat(intervalMs = 1500) {
-  // Heartbeat disabled: session stays active while page is open.
+  if (heartbeatTimer) clearInterval(heartbeatTimer);
+  const tick = async () => {
+    try {
+      const res = await fetch("/heartbeat", { cache: "no-store" });
+      if (res.status === 403) {
+        window.location.href = "http://powerboard.local/login";
+      }
+    } catch (err) {
+      console.warn("Heartbeat failed:", err);
+    }
+  };
+  tick();
+  heartbeatTimer = setInterval(tick, intervalMs);
 }
 
 async function pollDeviceState() {

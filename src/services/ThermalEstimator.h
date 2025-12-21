@@ -15,7 +15,7 @@
 class CalibrationRecorder;
 
 /**
- * ThermalEstimator centralizes model and PI gain suggestions based on
+ * ThermalEstimator centralizes model parameter suggestions based on
  * current configuration and the last calibration buffer.
  */
 class ThermalEstimator {
@@ -25,14 +25,6 @@ public:
         double kLoss          = NAN; // W/K
         double thermalC       = NAN; // J/K
         double maxPowerW      = NAN;
-        double wireKpSuggest  = NAN;
-        double wireKiSuggest  = NAN;
-        double floorKpSuggest = NAN;
-        double floorKiSuggest = NAN;
-        double wireKpCurrent  = NAN;
-        double wireKiCurrent  = NAN;
-        double floorKpCurrent = NAN;
-        double floorKiCurrent = NAN;
     };
 
     static ThermalEstimator* Get();
@@ -44,8 +36,7 @@ public:
     Result computeSuggestions(const CalibrationRecorder* calib) const;
 
     /**
-     * Persist thermal parameters (tau, kLoss, C) and optionally PI gains.
-     * Any NAN field is ignored.
+     * Persist thermal parameters (tau, kLoss, C). Any NAN field is ignored.
      */
     void persist(const Result& r);
 

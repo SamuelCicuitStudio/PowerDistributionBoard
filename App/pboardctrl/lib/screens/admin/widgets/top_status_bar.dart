@@ -38,7 +38,8 @@ class TopStatusBar extends StatelessWidget {
     final language = context.language;
     final m = monitor;
     final manual = controls?.manualMode == true;
-    final dotColor = manual ? const Color(0xFFFFA500) : theme.colorScheme.primary;
+    final dotColor =
+        manual ? theme.colorScheme.secondary : theme.colorScheme.primary;
     final bars = _wifiBars(m?.wifiRssi);
     final wifiIcon = m == null
         ? Icons.wifi_off
@@ -95,7 +96,7 @@ class TopStatusBar extends StatelessWidget {
     final actionItems = <Widget>[
       _eventPill(
         theme,
-        color: const Color(0xFFFFC800),
+        color: theme.colorScheme.secondary,
         icon: Icons.warning_amber_rounded,
         count: m?.eventWarnUnread ?? 0,
         tooltip: strings.t('Warnings'),
@@ -103,7 +104,7 @@ class TopStatusBar extends StatelessWidget {
       ),
       _eventPill(
         theme,
-        color: const Color(0xFFFF3B30),
+        color: theme.colorScheme.error,
         icon: Icons.error_outline,
         count: m?.eventErrorUnread ?? 0,
         tooltip: strings.t('Errors'),
@@ -143,10 +144,10 @@ class TopStatusBar extends StatelessWidget {
           width: 34,
           height: 34,
           decoration: BoxDecoration(
-            color: theme.colorScheme.surface.withAlpha(102),
+            color: theme.colorScheme.surface.withAlpha(235),
             shape: BoxShape.circle,
             border: Border.all(
-              color: theme.colorScheme.onSurface.withAlpha(26),
+              color: theme.colorScheme.outline.withAlpha(179),
             ),
           ),
           alignment: Alignment.center,
@@ -219,9 +220,9 @@ class TopStatusBar extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: theme.colorScheme.surface.withAlpha(102),
+          color: theme.colorScheme.surface.withAlpha(235),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: theme.colorScheme.onSurface.withAlpha(26)),
+          border: Border.all(color: theme.colorScheme.outline.withAlpha(179)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -263,7 +264,7 @@ class TopStatusBar extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
           decoration: BoxDecoration(
-            color: theme.colorScheme.surface.withAlpha(102),
+            color: theme.colorScheme.surface.withAlpha(235),
             borderRadius: BorderRadius.circular(18),
             border: Border.all(color: color.withAlpha(76)),
           ),

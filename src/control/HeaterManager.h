@@ -108,7 +108,6 @@ public:
      * - Load:
      *      - global Ω/m (WIRE_OHM_PER_M_KEY)
      *      - per-wire resistance R01..R10
-     *      - target resistance (R0XTGT_KEY)
      * - Precompute geometry for each wire
      */
     void begin();
@@ -185,7 +184,7 @@ public:
                                  uint32_t& newSeq) const;
 
     // ---------------------------------------------------------------------
-    // Wire resistance / target configuration
+    // Wire resistance configuration
     // ---------------------------------------------------------------------
 
     /** Cache + persist a single wire resistance (Ω) for channel 1..10. Thread-safe. */
@@ -195,10 +194,8 @@ public:
     float getWireResistance(uint8_t index) const;
 
     /** Set global target resistance (Ω) for all outputs. Thread-safe. */
-    void setTargetResistanceAll(float ohms);
 
     /** Get current global target resistance (Ω). */
-    float getTargetResistance() const { return targetResOhms; }
 
     /** Get current global wire resistivity in Ω/m. */
     float getWireOhmPerM() const { return wireOhmPerM; }
@@ -316,7 +313,6 @@ private:
     WireInfo          wires[kWireCount];   ///< Per-channel wire info.
     float             wireOhmPerM;         ///< Ω/m from NVS.
     int               wireGaugeAwg;        ///< AWG gauge from NVS (global)
-    float             targetResOhms;       ///< Global target resistance.
     bool              _initialized;        ///< begin() completed.
     SemaphoreHandle_t _mutex;              ///< Protects ENA pins + caches.
 

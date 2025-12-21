@@ -37,11 +37,9 @@ static float _senseLeakCurrent(float busVoltage) {
 
 void WireConfigStore::loadFromNvs() {
     _wireOhmPerM  = CONF->GetFloat(WIRE_OHM_PER_M_KEY,  DEFAULT_WIRE_OHM_PER_M);
-    _targetResOhm = CONF->GetFloat(R0XTGT_KEY,          DEFAULT_TARG_RES_OHMS);
     _wireGaugeAwg = CONF->GetInt(WIRE_GAUGE_KEY,        DEFAULT_WIRE_GAUGE);
 
     if (!isfinite(_wireOhmPerM)  || _wireOhmPerM  <= 0.0f) _wireOhmPerM  = DEFAULT_WIRE_OHM_PER_M;
-    if (!isfinite(_targetResOhm) || _targetResOhm <= 0.0f) _targetResOhm = DEFAULT_TARG_RES_OHMS;
     if (_wireGaugeAwg <= 0 || _wireGaugeAwg > 60) _wireGaugeAwg = DEFAULT_WIRE_GAUGE;
 
     static const char* WIRE_RES_KEYS[HeaterManager::kWireCount] = {
@@ -73,7 +71,6 @@ void WireConfigStore::saveToNvs() const {
     };
 
     CONF->PutFloat(WIRE_OHM_PER_M_KEY, _wireOhmPerM);
-    CONF->PutFloat(R0XTGT_KEY,         _targetResOhm);
     CONF->PutInt  (WIRE_GAUGE_KEY,     _wireGaugeAwg);
 
     for (uint8_t i = 0; i < HeaterManager::kWireCount; ++i) {
@@ -101,14 +98,6 @@ bool WireConfigStore::getAccessFlag(uint8_t index) const {
 void WireConfigStore::setAccessFlag(uint8_t index, bool allowed) {
     if (index == 0 || index > HeaterManager::kWireCount) return;
     _access[index - 1] = allowed;
-}
-
-float WireConfigStore::getTargetResOhm() const {
-    return _targetResOhm;
-}
-
-void WireConfigStore::setTargetResOhm(float ohms) {
-    if (isfinite(ohms) && ohms > 0.0f) _targetResOhm = ohms;
 }
 
 float WireConfigStore::getWireOhmPerM() const {
@@ -741,163 +730,6 @@ bool WirePresenceManager::hasAnyConnected(const WireStateModel& state) const {
         if (state.wire(i + 1).present) return true;
     }
     return false;
-}
-
-// ======================================================================
-// WirePlanner
-// ======================================================================
-
-uint16_t WirePlanner::chooseMask(const WireConfigStore& cfg,
-                                 const WireStateModel&  state,
-                                 float targetResOhm) const {
-    if (!isfinite(targetResOhm) || targetResOhm <= 0.0f) {
-        targetResOhm = cfg.getTargetResOhm();
-    }
-
-    const uint16_t FULL = (1u << HeaterManager::kWireCount);
-    const bool forcePresence = (DEVICE_FORCE_ALL_WIRES_PRESENT != 0);
-
-    // Build allowed mask from access flags + presence (planner-level gating).
-    uint16_t allowedMask = 0;
-    for (uint8_t i = 0; i < HeaterManager::kWireCount; ++i) {
-        const WireRuntimeState& rt = state.wire(i + 1);
-        if (cfg.getAccessFlag(i + 1) && (forcePresence || rt.present)) {
-            allowedMask |= (1u << i);
-        }
-    }
-    if (allowedMask == 0) {
-        return 0;
-    }
-
-    uint16_t chosen = 0;
-
-    // Only consider masks reasonably close to the target (cold).
-    const float tol = max(targetResOhm * 0.15f, 1.0f); // 15% or 1 ohm
-
-    // Fairness weight: penalize masks that use recently used wires.
-    const float fairnessK = max(targetResOhm * 0.05f, 0.5f);
-
-    float bestScore = INFINITY;
-    float bestErr   = INFINITY;
-
-    for (uint16_t m = 1; m < FULL; ++m) {
-        if ((m & ~allowedMask) != 0) continue; // uses disallowed wire
-
-        float Req = equivalentResistance(cfg, state, m);
-        if (!isfinite(Req) || Req <= 0.0f) continue;
-
-        float err = fabsf(Req - targetResOhm);
-
-        // Skip masks far from target; if none meet tolerance we'll fall back later.
-        if (err > tol) continue;
-
-        float usageSum = 0.0f;
-        for (uint8_t i = 0; i < HeaterManager::kWireCount; ++i) {
-            if (m & (1u << i)) {
-                usageSum += state.wire(i + 1).usageScore;
-            }
-        }
-
-        float score = err + fairnessK * usageSum;
-        if (score < bestScore || (fabsf(score - bestScore) <= 1e-6f && err < bestErr)) {
-            bestScore = score;
-            bestErr   = err;
-            chosen    = m;
-        }
-    }
-
-    // If no mask satisfied tolerance, fall back to best score across all.
-    if (chosen == 0) {
-        for (uint16_t m = 1; m < FULL; ++m) {
-            if ((m & ~allowedMask) != 0) continue;
-            float Req = equivalentResistance(cfg, state, m);
-            if (!isfinite(Req) || Req <= 0.0f) continue;
-            float err = fabsf(Req - targetResOhm);
-            float usageSum = 0.0f;
-            for (uint8_t i = 0; i < HeaterManager::kWireCount; ++i) {
-                if (m & (1u << i)) {
-                    usageSum += state.wire(i + 1).usageScore;
-                }
-            }
-            float score = err + fairnessK * usageSum;
-            if (score < bestScore || (fabsf(score - bestScore) <= 1e-6f && err < bestErr)) {
-                bestScore = score;
-                bestErr   = err;
-                chosen    = m;
-            }
-        }
-    }
-
-    _lastChosenMask = chosen;
-    return chosen;
-}
-
-float WirePlanner::equivalentResistance(const WireConfigStore& cfg,
-                                         const WireStateModel&  state,
-                                         uint16_t mask) const {
-    const bool forcePresence = (DEVICE_FORCE_ALL_WIRES_PRESENT != 0);
-    float G = 0.0f;
-    for (uint8_t i = 0; i < HeaterManager::kWireCount; ++i) {
-        if (!(mask & (1u << i))) continue;
-        const WireRuntimeState& rt = state.wire(i + 1);
-        if (!forcePresence && !rt.present) {
-            return INFINITY; // mask relies on a missing wire
-        }
-        float R = cfg.getWireResistance(i + 1);
-        if (R <= 0.01f || !isfinite(R)) {
-            continue;
-        }
-        G += 1.0f / R;
-    }
-    if (G <= 0.0f) return INFINITY;
-    return 1.0f / G;
-}
-
-// ======================================================================
-// WireSafetyPolicy
-// ======================================================================
-
-uint16_t WireSafetyPolicy::filterMask(uint16_t requestedMask,
-                                      const WireConfigStore& cfg,
-                                      const WireStateModel&  state,
-                                      DeviceState            devState) const {
-    uint16_t mask = requestedMask & ((1u << HeaterManager::kWireCount) - 1u);
-
-    if (devState != DeviceState::Running) {
-        return 0;
-    }
-
-    for (uint8_t i = 0; i < HeaterManager::kWireCount; ++i) {
-        uint16_t bit = (1u << i);
-        if (!(mask & bit)) continue;
-
-        const WireRuntimeState& rt = state.wire(i + 1);
-        bool access = cfg.getAccessFlag(i + 1);
-        bool presentOk = (DEVICE_FORCE_ALL_WIRES_PRESENT != 0) ? true : rt.present;
-
-        // Presence/thermal gating enforced unless override is on.
-        if (!access || rt.overTemp || rt.locked || !presentOk) {
-            mask &= ~bit;
-        }
-    }
-    return mask;
-}
-
-// ======================================================================
-// WireActuator
-// ======================================================================
-
-uint16_t WireActuator::applyRequestedMask(uint16_t requestedMask,
-                                          const WireConfigStore& cfg,
-                                          WireStateModel&        state,
-                                          DeviceState            devState) {
-    WireSafetyPolicy policy;
-    uint16_t safeMask = policy.filterMask(requestedMask, cfg, state, devState);
-    if (WIRE) {
-        WIRE->setOutputMask(safeMask);
-    }
-    state.setLastMask(safeMask);
-    return safeMask;
 }
 
 // ======================================================================

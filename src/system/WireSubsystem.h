@@ -6,9 +6,6 @@
  *  - Runtime wire state
  *  - Thermal integration (virtual temperatures)
  *  - Presence detection
- *  - Planner (target resistance)
- *  - Safety policy
- *  - Actuator (mask -> HeaterManager)
  *  - Telemetry adapter (StatusSnapshot / JSON)
  *
  * NOTE: This header is designed to be integrated gradually.
@@ -174,9 +171,6 @@ public:
     bool  getAccessFlag(uint8_t index) const;
     void  setAccessFlag(uint8_t index, bool allowed);
 
-    float getTargetResOhm() const;
-    void  setTargetResOhm(float ohms);
-
     float getWireOhmPerM() const;
     void  setWireOhmPerM(float v);
 
@@ -187,7 +181,6 @@ private:
     float _wireR[HeaterManager::kWireCount]  = { DEFAULT_WIRE_RES_OHMS };
     bool  _access[HeaterManager::kWireCount] = { false };
     float _wireOhmPerM  = DEFAULT_WIRE_OHM_PER_M;
-    float _targetResOhm = DEFAULT_TARG_RES_OHMS;
     int   _wireGaugeAwg = DEFAULT_WIRE_GAUGE;
 };
 
@@ -298,50 +291,6 @@ public:
                                 float minValidRatio = 0.20f);
 
     bool hasAnyConnected(const WireStateModel& state) const;
-};
-
-// ======================================================================
-// WirePlanner – target resistance planner
-// ======================================================================
-
-class WirePlanner {
-public:
-    uint16_t chooseMask(const WireConfigStore& cfg,
-                        const WireStateModel&  state,
-                        float targetResOhm) const;
-
-private:
-    // Remember last chosen mask to enable round‑robin across calls,
-    // independent of the hardware's current output mask.
-    mutable uint16_t _lastChosenMask = 0;
-
-    float equivalentResistance(const WireConfigStore& cfg,
-                               const WireStateModel&  state,
-                               uint16_t mask) const;
-};
-
-// ======================================================================
-// WireSafetyPolicy – safety gating
-// ======================================================================
-
-class WireSafetyPolicy {
-public:
-    uint16_t filterMask(uint16_t requestedMask,
-                        const WireConfigStore& cfg,
-                        const WireStateModel&  state,
-                        DeviceState            devState) const;
-};
-
-// ======================================================================
-// WireActuator – requested → safe → HeaterManager
-// ======================================================================
-
-class WireActuator {
-public:
-    uint16_t applyRequestedMask(uint16_t requestedMask,
-                                const WireConfigStore& cfg,
-                                WireStateModel&        state,
-                                DeviceState            devState);
 };
 
 // ======================================================================

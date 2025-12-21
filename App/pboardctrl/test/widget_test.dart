@@ -5,15 +5,22 @@
 // gestures. You can also use WidgetTester to find child widgets in the widget
 // tree, read text, and verify that the values of widget properties are correct.
 
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:pboardctrl/l10n/app_strings.dart';
 import 'package:pboardctrl/main.dart';
+import 'package:pboardctrl/screens/splash_screen.dart';
 
 void main() {
-  testWidgets('Onboarding screen shows app title', (WidgetTester tester) async {
-    await tester.pumpWidget(const PowerBoardApp());
+  testWidgets('App shows splash screen', (WidgetTester tester) async {
+    final languageController = AppLanguageController(
+      initialLocale: const Locale('en'),
+    );
+    await tester.pumpWidget(
+      PowerBoardApp(languageController: languageController),
+    );
 
-    expect(find.text('PowerBoard Admin'), findsOneWidget);
-    expect(find.text('Continue'), findsOneWidget);
+    expect(find.byType(SplashScreen), findsOneWidget);
   });
 }

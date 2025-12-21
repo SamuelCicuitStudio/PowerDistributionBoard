@@ -40,18 +40,14 @@ public:
 
   // Config/NVS setters (centralized)
   bool setLedFeedback(bool on);
-  bool setOnTimeMs(int v);
-  bool setOffTimeMs(int v);
   bool setAcFrequency(int v);
   bool setChargeResistor(float v);
   bool setAccessFlag(uint8_t idx, bool on);
   bool setWireRes(uint8_t idx, float ohms);
-  bool setTargetRes(float ohms);
   bool setWireOhmPerM(float ohmsPerM);
   bool setWireGaugeAwg(int awg);
   bool setBuzzerMute(bool on);
   bool setManualMode(bool manual);
-  bool setLoopMode(uint8_t mode);
   bool setCurrentLimitA(float limitA);
   bool requestResetFlagAndRestart();
   bool startCalibrationTask(uint32_t timeoutMs = 10000);
@@ -60,10 +56,7 @@ public:
   void stopWireTargetTest();
   bool getWireTargetStatus(Device::WireTargetStatus& out) const;
   bool getFloorControlStatus(Device::FloorControlStatus& out) const;
-
-  bool startCalibrationPwm(uint8_t wireIndex, uint32_t onMs, uint32_t offMs);
-  void stopCalibrationPwm();
-  bool getCalibrationPwmStatus(Device::CalibPwmStatus& out) const;
+  bool startEnergyCalibration(float targetC, uint8_t wireIndex, Device::EnergyRunPurpose purpose);
 
 private:
   bool sendCommandAndWait(Device::DevCmdType t, int32_t i1 = 0, float f1 = 0.0f, bool b1 = false, TickType_t to = pdMS_TO_TICKS(500));

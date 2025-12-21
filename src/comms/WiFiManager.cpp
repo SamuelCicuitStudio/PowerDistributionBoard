@@ -2,8 +2,8 @@
 #include "system/Utils.h"
 #include "system/DeviceTransport.h"
 #include "services/CalibrationRecorder.h"
+#include "sensing/BusSampler.h"
 #include "sensing/NtcSensor.h"
-#include "services/ThermalPiControllers.h"
 #include "services/ThermalEstimator.h"
 #include "services/RTCManager.h"
 #include <SPIFFS.h>
@@ -13,6 +13,7 @@
 #include <NTPClient.h>
 #include <time.h>
 #include <string.h>
+#include <math.h>
 
 namespace {
 static bool syncTimeFromNtp(uint32_t timeoutMs = 2500) {
@@ -76,6 +77,478 @@ static int parseFloorMaterialCode(const String& raw, int fallback) {
 
     return fallback;
 }
+
+namespace {
+constexpr float kNtcCalTargetDefaultC = 100.0f;
+constexpr uint32_t kNtcCalSampleMsDefault = 500;
+constexpr uint32_t kNtcCalTimeoutMs = 20 * 60 * 1000;
+constexpr uint32_t kNtcCalMinSamples = 6;
+constexpr uint32_t kModelCalPollMs = 500;
+constexpr uint32_t kModelCalTimeoutMs = 30 * 60 * 1000;
+
+struct NtcCalStatus {
+    bool     running   = false;
+    bool     done      = false;
+    bool     error     = false;
+    char     errorMsg[96] = {0};
+    uint32_t startMs   = 0;
+    uint32_t elapsedMs = 0;
+    float    targetC   = NAN;
+    float    heatsinkC = NAN;
+    float    ntcOhm    = NAN;
+    uint32_t sampleMs  = 0;
+    uint32_t samples   = 0;
+    float    shA       = NAN;
+    float    shB       = NAN;
+    float    shC       = NAN;
+    uint8_t  wireIndex = 0;
+};
+
+struct NtcCalTaskArgs {
+    float    targetC   = kNtcCalTargetDefaultC;
+    uint8_t  wireIndex = 1;
+    uint32_t sampleMs  = kNtcCalSampleMsDefault;
+    uint32_t timeoutMs = kNtcCalTimeoutMs;
+    uint32_t startMs   = 0;
+};
+
+static SemaphoreHandle_t s_ntcCalMtx = nullptr;
+static TaskHandle_t s_ntcCalTask = nullptr;
+static NtcCalStatus s_ntcCalStatus{};
+static bool s_ntcCalAbort = false;
+static TaskHandle_t s_modelCalTask = nullptr;
+static bool s_modelCalAbort = false;
+
+struct ModelCalTaskArgs {
+    float    targetC   = NAN;
+    uint8_t  wireIndex = 1;
+    uint32_t timeoutMs = kModelCalTimeoutMs;
+    uint32_t startMs   = 0;
+};
+
+static void ntcCalEnsureMutex() {
+    if (!s_ntcCalMtx) {
+        s_ntcCalMtx = xSemaphoreCreateMutex();
+    }
+}
+
+static bool ntcCalLock(TickType_t timeoutTicks = portMAX_DELAY) {
+    ntcCalEnsureMutex();
+    if (!s_ntcCalMtx) return true;
+    return (xSemaphoreTake(s_ntcCalMtx, timeoutTicks) == pdTRUE);
+}
+
+static void ntcCalUnlock() {
+    if (s_ntcCalMtx) xSemaphoreGive(s_ntcCalMtx);
+}
+
+static void ntcCalStartStatus(const NtcCalTaskArgs& args) {
+    if (!ntcCalLock(pdMS_TO_TICKS(50))) return;
+    s_ntcCalStatus.running = true;
+    s_ntcCalStatus.done = false;
+    s_ntcCalStatus.error = false;
+    s_ntcCalStatus.errorMsg[0] = '\0';
+    s_ntcCalAbort = false;
+    s_ntcCalStatus.startMs = args.startMs;
+    s_ntcCalStatus.elapsedMs = 0;
+    s_ntcCalStatus.targetC = args.targetC;
+    s_ntcCalStatus.heatsinkC = NAN;
+    s_ntcCalStatus.ntcOhm = NAN;
+    s_ntcCalStatus.sampleMs = args.sampleMs;
+    s_ntcCalStatus.samples = 0;
+    s_ntcCalStatus.shA = NAN;
+    s_ntcCalStatus.shB = NAN;
+    s_ntcCalStatus.shC = NAN;
+    s_ntcCalStatus.wireIndex = args.wireIndex;
+    ntcCalUnlock();
+}
+
+static void ntcCalUpdateProgress(float heatsinkC, float ntcOhm, uint32_t samples, uint32_t elapsedMs) {
+    if (!ntcCalLock(pdMS_TO_TICKS(25))) return;
+    s_ntcCalStatus.heatsinkC = heatsinkC;
+    s_ntcCalStatus.ntcOhm = ntcOhm;
+    s_ntcCalStatus.samples = samples;
+    s_ntcCalStatus.elapsedMs = elapsedMs;
+    ntcCalUnlock();
+}
+
+static void ntcCalSetError(const char* msg, uint32_t elapsedMs) {
+    if (!ntcCalLock(pdMS_TO_TICKS(50))) return;
+    s_ntcCalStatus.running = false;
+    s_ntcCalStatus.done = false;
+    s_ntcCalStatus.error = true;
+    s_ntcCalStatus.elapsedMs = elapsedMs;
+    if (msg && msg[0]) {
+        strlcpy(s_ntcCalStatus.errorMsg, msg, sizeof(s_ntcCalStatus.errorMsg));
+    } else {
+        s_ntcCalStatus.errorMsg[0] = '\0';
+    }
+    ntcCalUnlock();
+}
+
+static void ntcCalFinish(float a, float b, float c, uint32_t samples, uint32_t elapsedMs) {
+    if (!ntcCalLock(pdMS_TO_TICKS(50))) return;
+    s_ntcCalStatus.running = false;
+    s_ntcCalStatus.done = true;
+    s_ntcCalStatus.error = false;
+    s_ntcCalStatus.errorMsg[0] = '\0';
+    s_ntcCalStatus.shA = a;
+    s_ntcCalStatus.shB = b;
+    s_ntcCalStatus.shC = c;
+    s_ntcCalStatus.samples = samples;
+    s_ntcCalStatus.elapsedMs = elapsedMs;
+    ntcCalUnlock();
+}
+
+static NtcCalStatus ntcCalGetStatus() {
+    NtcCalStatus out{};
+    if (ntcCalLock(pdMS_TO_TICKS(25))) {
+        out = s_ntcCalStatus;
+        ntcCalUnlock();
+    } else {
+        out = s_ntcCalStatus;
+    }
+    return out;
+}
+
+static void ntcCalRequestAbort() {
+    if (!ntcCalLock(pdMS_TO_TICKS(50))) return;
+    s_ntcCalAbort = true;
+    ntcCalUnlock();
+}
+
+static bool ntcCalAbortRequested() {
+    bool abort = false;
+    if (ntcCalLock(pdMS_TO_TICKS(25))) {
+        abort = s_ntcCalAbort;
+        ntcCalUnlock();
+    } else {
+        abort = s_ntcCalAbort;
+    }
+    return abort;
+}
+
+static bool modelCalAbortRequested() {
+    return s_modelCalAbort;
+}
+
+static void modelCalRequestAbort() {
+    s_modelCalAbort = true;
+}
+
+static bool solve3x3(const double a[3][3], const double b[3], double out[3]) {
+    double m[3][4] = {
+        {a[0][0], a[0][1], a[0][2], b[0]},
+        {a[1][0], a[1][1], a[1][2], b[1]},
+        {a[2][0], a[2][1], a[2][2], b[2]}
+    };
+
+    for (int i = 0; i < 3; ++i) {
+        int pivot = i;
+        double maxAbs = fabs(m[i][i]);
+        for (int r = i + 1; r < 3; ++r) {
+            const double v = fabs(m[r][i]);
+            if (v > maxAbs) {
+                maxAbs = v;
+                pivot = r;
+            }
+        }
+        if (maxAbs < 1e-12) {
+            return false;
+        }
+        if (pivot != i) {
+            for (int c = i; c < 4; ++c) {
+                const double tmp = m[i][c];
+                m[i][c] = m[pivot][c];
+                m[pivot][c] = tmp;
+            }
+        }
+        const double div = m[i][i];
+        for (int c = i; c < 4; ++c) {
+            m[i][c] /= div;
+        }
+        for (int r = 0; r < 3; ++r) {
+            if (r == i) continue;
+            const double factor = m[r][i];
+            if (factor == 0.0) continue;
+            for (int c = i; c < 4; ++c) {
+                m[r][c] -= factor * m[i][c];
+            }
+        }
+    }
+
+    out[0] = m[0][3];
+    out[1] = m[1][3];
+    out[2] = m[2][3];
+    return true;
+}
+
+static void readNtcShCoeffs(float& a, float& b, float& c) {
+    a = DEFAULT_NTC_SH_A;
+    b = DEFAULT_NTC_SH_B;
+    c = DEFAULT_NTC_SH_C;
+    float ta = NAN;
+    float tb = NAN;
+    float tc = NAN;
+    if (NTC && NTC->getSteinhartCoefficients(ta, tb, tc)) {
+        a = ta;
+        b = tb;
+        c = tc;
+    } else if (CONF) {
+        a = CONF->GetFloat(NTC_SH_A_KEY, DEFAULT_NTC_SH_A);
+        b = CONF->GetFloat(NTC_SH_B_KEY, DEFAULT_NTC_SH_B);
+        c = CONF->GetFloat(NTC_SH_C_KEY, DEFAULT_NTC_SH_C);
+    }
+    if (!isfinite(a)) a = 0.0f;
+    if (!isfinite(b)) b = 0.0f;
+    if (!isfinite(c)) c = 0.0f;
+}
+
+static void ntcCalTask(void* param) {
+    NtcCalTaskArgs args{};
+    if (param) {
+        args = *static_cast<NtcCalTaskArgs*>(param);
+        delete static_cast<NtcCalTaskArgs*>(param);
+    }
+
+    const uint32_t startMs = args.startMs ? args.startMs : millis();
+    uint32_t lastUpdateMs = startMs;
+
+    double s00 = 0.0;
+    double s01 = 0.0;
+    double s02 = 0.0;
+    double s11 = 0.0;
+    double s12 = 0.0;
+    double s22 = 0.0;
+    double b0 = 0.0;
+    double b1 = 0.0;
+    double b2 = 0.0;
+    uint32_t samples = 0;
+
+    bool failed = false;
+    const char* failReason = nullptr;
+    bool heating = true;
+    float baseTempC = NAN;
+
+    while (true) {
+        const uint32_t nowMs = millis();
+        const uint32_t elapsedMs = (nowMs >= startMs) ? (nowMs - startMs) : 0;
+
+        if (ntcCalAbortRequested()) {
+            failed = true;
+            failReason = "stopped";
+            break;
+        }
+
+        if (elapsedMs >= args.timeoutMs) {
+            failed = true;
+            failReason = "timeout";
+            break;
+        }
+
+        if (!DEVICE || !DEVICE->tempSensor || !NTC) {
+            failed = true;
+            failReason = "sensor_missing";
+            break;
+        }
+
+        Device::WireTargetStatus run{};
+        if (!DEVTRAN || !DEVTRAN->getWireTargetStatus(run)) {
+            failed = true;
+            failReason = "status_unavailable";
+            break;
+        }
+        if (heating &&
+            (!run.active || run.purpose != Device::EnergyRunPurpose::NtcCal))
+        {
+            failed = true;
+            failReason = "energy_stopped";
+            break;
+        }
+
+        const float hsC = DEVICE->tempSensor->getHeatsinkTemp();
+        NTC->update();
+        NtcSensor::Sample s = NTC->getLastSample();
+
+        if (!isfinite(baseTempC) && isfinite(hsC)) {
+            baseTempC = hsC;
+        }
+
+        bool sampleOk = false;
+        if (isfinite(hsC) && isfinite(s.rNtcOhm) && s.rNtcOhm > 0.0f && !s.pressed) {
+            const double tK = static_cast<double>(hsC) + 273.15;
+            if (tK > 0.0) {
+                const double lnR = log(static_cast<double>(s.rNtcOhm));
+                if (isfinite(lnR)) {
+                    const double lnR2 = lnR * lnR;
+                    const double lnR3 = lnR2 * lnR;
+                    const double lnR4 = lnR2 * lnR2;
+                    const double lnR6 = lnR3 * lnR3;
+                    const double invT = 1.0 / tK;
+
+                    s00 += 1.0;
+                    s01 += lnR;
+                    s02 += lnR3;
+                    s11 += lnR2;
+                    s12 += lnR4;
+                    s22 += lnR6;
+                    b0 += invT;
+                    b1 += invT * lnR;
+                    b2 += invT * lnR3;
+                    samples++;
+                    sampleOk = true;
+                }
+            }
+        }
+
+        if (sampleOk || (nowMs - lastUpdateMs) >= args.sampleMs) {
+            ntcCalUpdateProgress(hsC, s.rNtcOhm, samples, elapsedMs);
+            lastUpdateMs = nowMs;
+        }
+
+        if (heating && isfinite(hsC) && hsC >= args.targetC) {
+            heating = false;
+            if (DEVTRAN) {
+                DEVTRAN->stopWireTargetTest();
+            }
+        } else if (!heating && isfinite(hsC)) {
+            float coolTargetC = isfinite(baseTempC) ? (baseTempC + 2.0f) : (args.targetC - 10.0f);
+            if (hsC <= coolTargetC) {
+                break;
+            }
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(args.sampleMs));
+    }
+
+    if (DEVTRAN) {
+        DEVTRAN->stopWireTargetTest();
+    }
+
+    const uint32_t endMs = millis();
+    const uint32_t elapsedMs = (endMs >= startMs) ? (endMs - startMs) : 0;
+
+    if (!failed && samples < kNtcCalMinSamples) {
+        failed = true;
+        failReason = "not_enough_samples";
+    }
+
+    if (failed) {
+        ntcCalSetError(failReason ? failReason : "failed", elapsedMs);
+    } else {
+        const double mat[3][3] = {
+            {s00, s01, s02},
+            {s01, s11, s12},
+            {s02, s12, s22}
+        };
+        const double vec[3] = {b0, b1, b2};
+        double out[3] = {0.0, 0.0, 0.0};
+        bool ok = solve3x3(mat, vec, out);
+        float a = static_cast<float>(out[0]);
+        float b = static_cast<float>(out[1]);
+        float c = static_cast<float>(out[2]);
+
+        if (!ok || !isfinite(a) || !isfinite(b) || !isfinite(c)) {
+            ntcCalSetError("fit_failed", elapsedMs);
+        } else if (!NTC || !NTC->setSteinhartCoefficients(a, b, c, true)) {
+            ntcCalSetError("persist_failed", elapsedMs);
+        } else {
+            NTC->setModel(NtcSensor::Model::Steinhart, true);
+            ntcCalFinish(a, b, c, samples, elapsedMs);
+        }
+    }
+
+    if (ntcCalLock(pdMS_TO_TICKS(50))) {
+        s_ntcCalTask = nullptr;
+        ntcCalUnlock();
+    } else {
+        s_ntcCalTask = nullptr;
+    }
+
+    vTaskDelete(nullptr);
+}
+
+static void modelCalTask(void* param) {
+    ModelCalTaskArgs args{};
+    if (param) {
+        args = *static_cast<ModelCalTaskArgs*>(param);
+        delete static_cast<ModelCalTaskArgs*>(param);
+    }
+
+    const uint32_t startMs = args.startMs ? args.startMs : millis();
+    bool failed = false;
+    const char* failReason = nullptr;
+    bool heating = true;
+    float baseTempC = NAN;
+
+    while (true) {
+        const uint32_t nowMs = millis();
+        const uint32_t elapsedMs = (nowMs >= startMs) ? (nowMs - startMs) : 0;
+
+        if (modelCalAbortRequested()) {
+            failed = true;
+            failReason = "stopped";
+            break;
+        }
+
+        if (elapsedMs >= args.timeoutMs) {
+            failed = true;
+            failReason = "timeout";
+            break;
+        }
+
+        if (!DEVICE || !DEVTRAN || !NTC) {
+            failed = true;
+            failReason = "device_missing";
+            break;
+        }
+
+        Device::WireTargetStatus st{};
+        if (!DEVTRAN->getWireTargetStatus(st) ||
+            !st.active ||
+            st.purpose != Device::EnergyRunPurpose::ModelCal)
+        {
+            if (heating) {
+                failed = true;
+                failReason = "energy_stopped";
+            }
+            break;
+        }
+
+        NTC->update();
+        const float t = NTC->getLastTempC();
+        if (!isfinite(baseTempC) && isfinite(t)) {
+            baseTempC = t;
+        }
+
+        if (heating && isfinite(t) && isfinite(args.targetC) && t >= args.targetC) {
+            heating = false;
+            DEVTRAN->stopWireTargetTest();
+        } else if (!heating) {
+            if (isfinite(t) && isfinite(baseTempC) && t <= (baseTempC + 2.0f)) {
+                break;
+            }
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(kModelCalPollMs));
+    }
+
+    if (DEVTRAN) {
+        DEVTRAN->stopWireTargetTest();
+    }
+
+    if (CALIB) {
+        if (failed) {
+            CALIB->stop();
+        } else {
+            CALIB->stopAndSave(5000);
+        }
+    }
+
+    s_modelCalTask = nullptr;
+    vTaskDelete(nullptr);
+}
+} // namespace
 
 static bool normalizeHistoryPath(const String& rawName,
                                  String& fullName,
@@ -582,14 +1055,6 @@ void WiFiManager::registerRoutes_() {
             if (meta.wireIndex > 0) {
                 doc["wire_index"] = meta.wireIndex;
             }
-            Device::CalibPwmStatus pwm{};
-            if (DEVTRAN && DEVTRAN->getCalibrationPwmStatus(pwm)) {
-                doc["pwm_running"] = pwm.active;
-                if (pwm.wireIndex > 0) doc["pwm_wire_index"] = pwm.wireIndex;
-                if (pwm.onMs > 0) doc["pwm_on_ms"] = pwm.onMs;
-                if (pwm.offMs > 0) doc["pwm_off_ms"] = pwm.offMs;
-            }
-
             String json;
             serializeJson(doc, json);
             request->send(200, "application/json", json);
@@ -623,6 +1088,19 @@ void WiFiManager::registerRoutes_() {
             }
             body = "";
 
+            auto sendCalibError = [&](int status,
+                                      const char* error,
+                                      const String& detail,
+                                      const char* state) {
+                StaticJsonDocument<192> err;
+                err["error"] = error;
+                if (detail.length() > 0) err["detail"] = detail;
+                if (state) err["state"] = state;
+                String json;
+                serializeJson(err, json);
+                request->send(status, "application/json", json);
+            };
+
             String modeStr = doc["mode"] | "";
             modeStr.toLowerCase();
             CalibrationRecorder::Mode mode = CalibrationRecorder::Mode::None;
@@ -630,8 +1108,15 @@ void WiFiManager::registerRoutes_() {
             else if (modeStr == "model") mode = CalibrationRecorder::Mode::Model;
 
             if (mode == CalibrationRecorder::Mode::None) {
-                request->send(400, "application/json",
-                              "{\"error\":\"Invalid mode\"}");
+                sendCalibError(400, "invalid_mode", "", nullptr);
+                return;
+            }
+            if (!BUS_SAMPLER) {
+                sendCalibError(503, "bus_sampler_missing", "", nullptr);
+                return;
+            }
+            if (CALIB && CALIB->isRunning()) {
+                sendCalibError(409, "already_running", "", nullptr);
                 return;
             }
 
@@ -655,19 +1140,93 @@ void WiFiManager::registerRoutes_() {
 
             const bool ok = CALIB->start(mode, intervalMs, maxSamples, targetC, wireIndex);
             if (!ok) {
-                request->send(400, "application/json",
-                              "{\"error\":\"start_failed\"}");
+                sendCalibError(500, "start_failed", "", nullptr);
                 return;
             }
 
             if (mode == CalibrationRecorder::Mode::Model) {
-                uint32_t pwmOnMs = doc["pwm_on_ms"] | CONF->GetInt(ON_TIME_KEY, 500);
-                uint32_t pwmOffMs = doc["pwm_off_ms"] | CONF->GetInt(OFF_TIME_KEY, 500);
-                uint8_t pwmWire = doc["pwm_wire_index"] | wireIndex;
-                if (!DEVTRAN || !DEVTRAN->startCalibrationPwm(pwmWire, pwmOnMs, pwmOffMs)) {
+                float runTargetC = targetC;
+                if (!isfinite(runTargetC) || runTargetC <= 0.0f) {
+                    float fallback = WIRE_T_MAX_C;
+                    if (CONF) {
+                        float v = CONF->GetFloat(NICHROME_FINAL_TEMP_C_KEY,
+                                                 DEFAULT_NICHROME_FINAL_TEMP_C);
+                        if (isfinite(v) && v > 0.0f) fallback = v;
+                    }
+                    runTargetC = fallback;
+                }
+
+                if (!DEVTRAN) {
                     CALIB->stop();
-                    request->send(400, "application/json",
-                                  "{\"error\":\"pwm_start_failed\"}");
+                    sendCalibError(503, "device_transport_missing", "", nullptr);
+                    return;
+                }
+                const Device::StateSnapshot snap = DEVTRAN->getStateSnapshot();
+                if (snap.state != DeviceState::Idle) {
+                    CALIB->stop();
+                    sendCalibError(409, "device_not_idle", "", stateName(snap.state));
+                    return;
+                }
+                if (!WIRE) {
+                    CALIB->stop();
+                    sendCalibError(503, "wire_subsystem_missing", "", nullptr);
+                    return;
+                }
+                if (CONF && DEVICE) {
+                    if (!DEVICE->getWireConfigStore().getAccessFlag(wireIndex)) {
+                        CALIB->stop();
+                        sendCalibError(403, "wire_access_blocked",
+                                       String("wire=") + String(wireIndex), nullptr);
+                        return;
+                    }
+                }
+                auto wi = WIRE->getWireInfo(wireIndex);
+                if (!wi.connected) {
+                    CALIB->stop();
+                    sendCalibError(400, "wire_not_connected",
+                                   String("wire=") + String(wireIndex), nullptr);
+                    return;
+                }
+                if (!DEVTRAN->startEnergyCalibration(runTargetC,
+                                                     wireIndex,
+                                                     Device::EnergyRunPurpose::ModelCal)) {
+                    CALIB->stop();
+                    sendCalibError(500, "energy_start_failed", "", nullptr);
+                    return;
+                }
+                if (s_modelCalTask != nullptr) {
+                    DEVTRAN->stopWireTargetTest();
+                    CALIB->stop();
+                    sendCalibError(409, "calibration_busy", "", nullptr);
+                    return;
+                }
+                s_modelCalAbort = false;
+                ModelCalTaskArgs* args = new ModelCalTaskArgs();
+                if (!args) {
+                    DEVTRAN->stopWireTargetTest();
+                    CALIB->stop();
+                    sendCalibError(500, "alloc_failed", "", nullptr);
+                    return;
+                }
+                args->targetC = runTargetC;
+                args->wireIndex = wireIndex;
+                args->timeoutMs = kModelCalTimeoutMs;
+                args->startMs = millis();
+
+                BaseType_t okTask = xTaskCreate(
+                    modelCalTask,
+                    "ModelCal",
+                    4096,
+                    args,
+                    2,
+                    &s_modelCalTask
+                );
+                if (okTask != pdPASS) {
+                    delete args;
+                    s_modelCalTask = nullptr;
+                    DEVTRAN->stopWireTargetTest();
+                    CALIB->stop();
+                    sendCalibError(500, "task_failed", "", nullptr);
                     return;
                 }
             }
@@ -705,8 +1264,9 @@ void WiFiManager::registerRoutes_() {
             body = "";
 
             const bool saved = CALIB->stopAndSave();
+            modelCalRequestAbort();
             if (DEVTRAN) {
-                DEVTRAN->stopCalibrationPwm();
+                DEVTRAN->stopWireTargetTest();
             }
             String json = String("{\"status\":\"ok\",\"running\":false,\"saved\":") +
                           (saved ? "true" : "false") + "}";
@@ -729,8 +1289,9 @@ void WiFiManager::registerRoutes_() {
 
             (void)data; (void)len; (void)index; (void)total;
             CALIB->clear();
+            modelCalRequestAbort();
             if (DEVTRAN) {
-                DEVTRAN->stopCalibrationPwm();
+                DEVTRAN->stopWireTargetTest();
             }
 
             bool removed = false;
@@ -946,7 +1507,7 @@ void WiFiManager::registerRoutes_() {
         }
     );
 
-    // ---- Calibration PI suggestions (compute) ----
+    // ---- Calibration model suggestions (compute) ----
     server.on("/calib_pi_suggest", HTTP_GET,
         [this](AsyncWebServerRequest* request) {
             if (!isAuthenticated(request)) return;
@@ -958,14 +1519,6 @@ void WiFiManager::registerRoutes_() {
             doc["wire_k_loss"] = r.kLoss;
             doc["wire_c"]      = r.thermalC;
             doc["max_power_w"] = r.maxPowerW;
-            doc["wire_kp_suggest"] = r.wireKpSuggest;
-            doc["wire_ki_suggest"] = r.wireKiSuggest;
-            doc["floor_kp_suggest"] = r.floorKpSuggest;
-            doc["floor_ki_suggest"] = r.floorKiSuggest;
-            doc["wire_kp_current"]  = r.wireKpCurrent;
-            doc["wire_ki_current"]  = r.wireKiCurrent;
-            doc["floor_kp_current"] = r.floorKpCurrent;
-            doc["floor_ki_current"] = r.floorKiCurrent;
 
             String json;
             serializeJson(doc, json);
@@ -973,7 +1526,7 @@ void WiFiManager::registerRoutes_() {
         }
     );
 
-    // ---- Persist thermal model & PI gains ----
+    // ---- Persist thermal model params ----
     server.on("/calib_pi_save", HTTP_POST,
         [this](AsyncWebServerRequest* request) {},
         nullptr,
@@ -1004,10 +1557,6 @@ void WiFiManager::registerRoutes_() {
             if (doc.containsKey("wire_tau"))    r.tauSec   = doc["wire_tau"].as<float>();
             if (doc.containsKey("wire_k_loss")) r.kLoss    = doc["wire_k_loss"].as<float>();
             if (doc.containsKey("wire_c"))      r.thermalC = doc["wire_c"].as<float>();
-            if (doc.containsKey("wire_kp"))     r.wireKpSuggest = doc["wire_kp"].as<float>();
-            if (doc.containsKey("wire_ki"))     r.wireKiSuggest = doc["wire_ki"].as<float>();
-            if (doc.containsKey("floor_kp"))    r.floorKpSuggest = doc["floor_kp"].as<float>();
-            if (doc.containsKey("floor_ki"))    r.floorKiSuggest = doc["floor_ki"].as<float>();
 
             THERMAL_EST->persist(r);
 
@@ -1031,13 +1580,22 @@ void WiFiManager::registerRoutes_() {
 
             StaticJsonDocument<256> doc;
             doc["running"] = st.active;
-            if (st.wireIndex > 0) doc["wire_index"] = st.wireIndex;
             if (isfinite(st.targetC)) doc["target_c"] = st.targetC;
-            if (isfinite(st.tempC)) doc["temp_c"] = st.tempC;
-            doc["duty"] = st.duty;
-            doc["on_ms"] = st.onMs;
-            doc["off_ms"] = st.offMs;
+            if (st.activeWire > 0) doc["active_wire"] = st.activeWire;
+            if (isfinite(st.ntcTempC)) doc["ntc_temp_c"] = st.ntcTempC;
+            if (isfinite(st.activeTempC)) doc["active_temp_c"] = st.activeTempC;
+            doc["packet_ms"] = st.packetMs;
+            doc["frame_ms"] = st.frameMs;
             doc["updated_ms"] = st.updatedMs;
+            doc["mode"] = "energy";
+            const char* purpose = "none";
+            switch (st.purpose) {
+                case Device::EnergyRunPurpose::WireTest: purpose = "wire_test"; break;
+                case Device::EnergyRunPurpose::ModelCal: purpose = "model_cal"; break;
+                case Device::EnergyRunPurpose::NtcCal:   purpose = "ntc_cal"; break;
+                default: break;
+            }
+            doc["purpose"] = purpose;
 
             String json;
             serializeJson(doc, json);
@@ -1073,9 +1631,13 @@ void WiFiManager::registerRoutes_() {
             body = "";
 
             float targetC = doc["target_c"].as<float>();
-            uint8_t wireIndex = doc["wire_index"] | 0;
+            if (!isfinite(targetC) || targetC <= 0.0f) {
+                request->send(400, "application/json",
+                              "{\"error\":\"invalid_target\"}");
+                return;
+            }
 
-            if (!DEVTRAN || !DEVTRAN->startWireTargetTest(targetC, wireIndex)) {
+            if (!DEVTRAN || !DEVTRAN->startWireTargetTest(targetC, 0)) {
                 request->send(400, "application/json",
                               "{\"error\":\"start_failed\"}");
                 return;
@@ -1108,7 +1670,7 @@ void WiFiManager::registerRoutes_() {
         }
     );
 
-    // ---- NTC calibrate (uses heatsink temp if no ref provided) ----
+    // ---- NTC calibrate (heat wire, fit Steinhart-Hart) ----
     server.on("/ntc_calibrate", HTTP_POST,
         [this](AsyncWebServerRequest* request) {},
         nullptr,
@@ -1135,33 +1697,249 @@ void WiFiManager::registerRoutes_() {
             }
             body = "";
 
-            float refTempC = NAN;
-            if (!doc["ref_temp_c"].isNull()) {
-                refTempC = doc["ref_temp_c"].as<float>();
-            } else if (DEVICE && DEVICE->tempSensor) {
-                refTempC = DEVICE->tempSensor->getHeatsinkTemp();
-            }
-
-            if (!isfinite(refTempC) || !NTC) {
+            if (!DEVICE || !DEVTRAN || !NTC) {
                 request->send(400, "application/json",
-                              "{\"error\":\"no_reference\"}");
+                              "{\"error\":\"device_missing\"}");
                 return;
             }
 
-            const bool ok = NTC->calibrateAtTempC(refTempC);
-            if (!ok) {
+            NtcCalStatus cur = ntcCalGetStatus();
+            if (cur.running || s_ntcCalTask != nullptr) {
+                request->send(409, "application/json",
+                              "{\"error\":\"calibration_busy\"}");
+                return;
+            }
+
+            float targetC = NAN;
+            if (!doc["target_c"].isNull()) {
+                targetC = doc["target_c"].as<float>();
+            } else if (!doc["ref_temp_c"].isNull()) {
+                targetC = doc["ref_temp_c"].as<float>();
+            }
+            if (!isfinite(targetC)) targetC = kNtcCalTargetDefaultC;
+            if (targetC < 40.0f) targetC = 40.0f;
+            if (targetC > 130.0f) targetC = 130.0f;
+
+            uint8_t wireIndex = doc["wire_index"] | 0;
+            if (wireIndex == 0 && CONF) {
+                int idx = CONF->GetInt(NTC_GATE_INDEX_KEY, DEFAULT_NTC_GATE_INDEX);
+                if (idx < 1) idx = 1;
+                if (idx > HeaterManager::kWireCount) idx = HeaterManager::kWireCount;
+                wireIndex = static_cast<uint8_t>(idx);
+            }
+            if (wireIndex < 1) wireIndex = 1;
+            if (wireIndex > HeaterManager::kWireCount) wireIndex = HeaterManager::kWireCount;
+
+            uint32_t sampleMs = doc["sample_ms"] | kNtcCalSampleMsDefault;
+            if (sampleMs < 200) sampleMs = 200;
+            if (sampleMs > 2000) sampleMs = 2000;
+
+            uint32_t timeoutMs = doc["timeout_ms"] | kNtcCalTimeoutMs;
+            if (timeoutMs < 60000) timeoutMs = 60000;
+            if (timeoutMs > 30 * 60 * 1000) timeoutMs = 30 * 60 * 1000;
+
+            if (DEVICE->getState() != DeviceState::Idle) {
                 request->send(400, "application/json",
-                              "{\"error\":\"calibration_failed\"}");
+                              "{\"error\":\"device_not_idle\"}");
+                return;
+            }
+
+            if (CONF && !DEVICE->getWireConfigStore().getAccessFlag(wireIndex)) {
+                request->send(400, "application/json",
+                              "{\"error\":\"wire_access_blocked\"}");
+                return;
+            }
+
+            if (!WIRE) {
+                request->send(400, "application/json",
+                              "{\"error\":\"wire_subsystem_missing\"}");
+                return;
+            }
+
+            WireInfo wi = WIRE->getWireInfo(wireIndex);
+            if (!wi.connected) {
+                request->send(400, "application/json",
+                              "{\"error\":\"wire_not_connected\"}");
+                return;
+            }
+
+            const float runTargetC = targetC;
+            if (!DEVTRAN->startEnergyCalibration(runTargetC,
+                                                 wireIndex,
+                                                 Device::EnergyRunPurpose::NtcCal)) {
+                request->send(400, "application/json",
+                              "{\"error\":\"start_failed\"}");
+                return;
+            }
+
+            NtcCalTaskArgs* args = new NtcCalTaskArgs();
+            if (!args) {
+                DEVTRAN->stopWireTargetTest();
+                request->send(500, "application/json",
+                              "{\"error\":\"alloc_failed\"}");
+                return;
+            }
+            args->targetC = targetC;
+            args->wireIndex = wireIndex;
+            args->sampleMs = sampleMs;
+            args->timeoutMs = timeoutMs;
+            args->startMs = millis();
+
+            ntcCalStartStatus(*args);
+
+            BaseType_t ok = xTaskCreate(
+                ntcCalTask,
+                "NtcCal",
+                4096,
+                args,
+                2,
+                &s_ntcCalTask
+            );
+            if (ok != pdPASS) {
+                delete args;
+                DEVTRAN->stopWireTargetTest();
+                ntcCalSetError("task_failed", 0);
+                request->send(500, "application/json",
+                              "{\"error\":\"task_failed\"}");
                 return;
             }
 
             StaticJsonDocument<256> out;
-            out["status"] = "ok";
-            out["ref_c"] = refTempC;
-            out["r0_ohm"] = NTC->getR0();
+            out["status"] = "running";
+            out["target_c"] = targetC;
+            out["wire_index"] = wireIndex;
+            out["sample_ms"] = sampleMs;
             String json;
             serializeJson(out, json);
             request->send(200, "application/json", json);
+        }
+    );
+
+    // ---- NTC beta calibration (single-point) ----
+    server.on("/ntc_beta_calibrate", HTTP_POST,
+        [this](AsyncWebServerRequest* request) {},
+        nullptr,
+        [this](AsyncWebServerRequest* request,
+               uint8_t* data,
+               size_t len,
+               size_t index,
+               size_t total)
+        {
+            if (!isAuthenticated(request)) return;
+            if (lock()) { lastActivityMillis = millis(); unlock(); }
+
+            static String body;
+            if (index == 0) body = "";
+            body += String((char*)data, len);
+            if (index + len != total) return;
+
+            DynamicJsonDocument doc(256);
+            if (deserializeJson(doc, body)) {
+                body = "";
+                request->send(400, "application/json",
+                              "{\"error\":\"Invalid JSON\"}");
+                return;
+            }
+            body = "";
+
+            if (!NTC) {
+                request->send(503, "application/json",
+                              "{\"error\":\"ntc_missing\"}");
+                return;
+            }
+
+            NtcCalStatus cur = ntcCalGetStatus();
+            if (cur.running || s_ntcCalTask != nullptr) {
+                request->send(409, "application/json",
+                              "{\"error\":\"calibration_busy\"}");
+                return;
+            }
+
+            float refTempC = NAN;
+            if (!doc["ref_temp_c"].isNull()) {
+                refTempC = doc["ref_temp_c"].as<float>();
+            } else if (!doc["target_c"].isNull()) {
+                refTempC = doc["target_c"].as<float>();
+            }
+            if (!isfinite(refTempC) && DEVICE && DEVICE->tempSensor) {
+                refTempC = DEVICE->tempSensor->getHeatsinkTemp();
+            }
+            if (!isfinite(refTempC)) {
+                request->send(400, "application/json",
+                              "{\"error\":\"invalid_ref_temp\"}");
+                return;
+            }
+            if (refTempC < -40.0f) refTempC = -40.0f;
+            if (refTempC > 200.0f) refTempC = 200.0f;
+
+            if (!NTC->calibrateAtTempC(refTempC)) {
+                request->send(400, "application/json",
+                              "{\"error\":\"calibration_failed\"}");
+                return;
+            }
+            NTC->setModel(NtcSensor::Model::Beta, true);
+
+            StaticJsonDocument<256> out;
+            out["status"] = "ok";
+            out["ref_temp_c"] = refTempC;
+            out["beta"] = NTC->getBeta();
+            out["r0"] = NTC->getR0();
+            String json;
+            serializeJson(out, json);
+            request->send(200, "application/json", json);
+        }
+    );
+
+    // ---- NTC calibration status ----
+    server.on("/ntc_cal_status", HTTP_GET,
+        [this](AsyncWebServerRequest* request) {
+            if (!isAuthenticated(request)) return;
+            if (lock()) { lastActivityMillis = millis(); unlock(); }
+
+            NtcCalStatus st = ntcCalGetStatus();
+            StaticJsonDocument<320> doc;
+            doc["running"] = st.running;
+            doc["done"] = st.done;
+            doc["error"] = st.error ? st.errorMsg : "";
+            if (isfinite(st.targetC)) doc["target_c"] = st.targetC;
+            if (isfinite(st.heatsinkC)) doc["heatsink_c"] = st.heatsinkC;
+            if (isfinite(st.ntcOhm)) doc["ntc_ohm"] = st.ntcOhm;
+            doc["samples"] = st.samples;
+            doc["sample_ms"] = st.sampleMs;
+            doc["elapsed_ms"] = st.elapsedMs;
+            doc["wire_index"] = st.wireIndex;
+            if (isfinite(st.shA)) doc["sh_a"] = st.shA;
+            if (isfinite(st.shB)) doc["sh_b"] = st.shB;
+            if (isfinite(st.shC)) doc["sh_c"] = st.shC;
+            String json;
+            serializeJson(doc, json);
+            request->send(200, "application/json", json);
+        }
+    );
+
+    // ---- NTC calibration stop ----
+    server.on("/ntc_cal_stop", HTTP_POST,
+        [this](AsyncWebServerRequest* request) {
+            if (!isAuthenticated(request)) return;
+            if (lock()) { lastActivityMillis = millis(); unlock(); }
+
+            if (!DEVTRAN) {
+                request->send(400, "application/json",
+                              "{\"error\":\"device_missing\"}");
+                return;
+            }
+
+            NtcCalStatus st = ntcCalGetStatus();
+            if (!st.running && s_ntcCalTask == nullptr) {
+                request->send(200, "application/json",
+                              "{\"status\":\"idle\"}");
+                return;
+            }
+
+            ntcCalRequestAbort();
+            DEVTRAN->stopWireTargetTest();
+            request->send(200, "application/json",
+                          "{\"status\":\"stopping\"}");
         }
     );
 
@@ -1355,8 +2133,6 @@ void WiFiManager::registerRoutes_() {
                 if (target == "reboot")                       c.type = CTRL_REBOOT;
                 else if (target == "systemReset")             c.type = CTRL_SYS_RESET;
                 else if (target == "ledFeedback")             { c.type = CTRL_LED_FEEDBACK_BOOL; c.b1 = value.as<bool>(); }
-                else if (target == "onTime")                  { c.type = CTRL_ON_TIME_MS;        c.i1 = value.as<int>(); }
-                else if (target == "offTime")                 { c.type = CTRL_OFF_TIME_MS;       c.i1 = value.as<int>(); }
                 else if (target == "relay")                   { c.type = CTRL_RELAY_BOOL;        c.b1 = value.as<bool>(); }
                 else if (target.startsWith("output"))         { c.type = CTRL_OUTPUT_BOOL;       c.i1 = target.substring(6).toInt(); c.b1 = value.as<bool>(); }
                 else if (target == "acFrequency")             { c.type = CTRL_AC_FREQ;           c.i1 = value.as<int>(); }
@@ -1368,7 +2144,6 @@ void WiFiManager::registerRoutes_() {
                 else if (target == "fanSpeed")                { c.type = CTRL_FAN_SPEED;         c.i1 = constrain(value.as<int>(), 0, 100); }
                 else if (target == "buzzerMute")              { c.type = CTRL_BUZZER_MUTE;       c.b1 = value.as<bool>(); }
                 else if (target.startsWith("wireRes"))        { c.type = CTRL_WIRE_RES;          c.i1 = target.substring(7).toInt(); c.f1 = value.as<float>(); }
-                else if (target == "targetRes")               { c.type = CTRL_TARGET_RES;        c.f1 = value.as<float>(); }
                 else if (target == "wireOhmPerM")             { c.type = CTRL_WIRE_OHM_PER_M;    c.f1 = value.as<float>(); }
                 else if (target == "wireGauge")               { c.type = CTRL_WIRE_GAUGE;        c.i1 = value.as<int>(); }
                 else if (target == "currLimit")               { c.type = CTRL_CURR_LIMIT;        c.f1 = value.as<float>(); }
@@ -1474,42 +2249,6 @@ void WiFiManager::registerRoutes_() {
                                   "{\"status\":\"ok\",\"applied\":true}");
                     return;
                 }
-                else if (target == "wireKp") {
-                    double v = value.as<double>();
-                    if (!isfinite(v) || v < 0.0) v = DEFAULT_WIRE_KP;
-                    if (THERMAL_PI) THERMAL_PI->setWireKp(v, true);
-                    else CONF->PutDouble(WIRE_KP_KEY, v);
-                    request->send(200, "application/json",
-                                  "{\"status\":\"ok\",\"applied\":true}");
-                    return;
-                }
-                else if (target == "wireKi") {
-                    double v = value.as<double>();
-                    if (!isfinite(v) || v < 0.0) v = DEFAULT_WIRE_KI;
-                    if (THERMAL_PI) THERMAL_PI->setWireKi(v, true);
-                    else CONF->PutDouble(WIRE_KI_KEY, v);
-                    request->send(200, "application/json",
-                                  "{\"status\":\"ok\",\"applied\":true}");
-                    return;
-                }
-                else if (target == "floorKp") {
-                    double v = value.as<double>();
-                    if (!isfinite(v) || v < 0.0) v = DEFAULT_FLOOR_KP;
-                    if (THERMAL_PI) THERMAL_PI->setFloorKp(v, true);
-                    else CONF->PutDouble(FLOOR_KP_KEY, v);
-                    request->send(200, "application/json",
-                                  "{\"status\":\"ok\",\"applied\":true}");
-                    return;
-                }
-                else if (target == "floorKi") {
-                    double v = value.as<double>();
-                    if (!isfinite(v) || v < 0.0) v = DEFAULT_FLOOR_KI;
-                    if (THERMAL_PI) THERMAL_PI->setFloorKi(v, true);
-                    else CONF->PutDouble(FLOOR_KI_KEY, v);
-                    request->send(200, "application/json",
-                                  "{\"status\":\"ok\",\"applied\":true}");
-                    return;
-                }
                 else if (target == "ntcBeta") {
                     float v = value.as<float>();
                     if (!isfinite(v) || v <= 0.0f) v = DEFAULT_NTC_BETA;
@@ -1530,6 +2269,95 @@ void WiFiManager::registerRoutes_() {
                     float v = value.as<float>();
                     if (!isfinite(v) || v <= 0.0f) v = DEFAULT_NTC_FIXED_RES_OHMS;
                     if (NTC) NTC->setFixedRes(v, true);
+                    request->send(200, "application/json",
+                                  "{\"status\":\"ok\",\"applied\":true}");
+                    return;
+                }
+                else if (target == "ntcModel") {
+                    int model = static_cast<int>(NtcSensor::Model::Beta);
+                    if (value.is<const char*>()) {
+                        String m = value.as<const char*>();
+                        m.toLowerCase();
+                        if (m.indexOf("stein") >= 0 || m.indexOf("sh") >= 0) {
+                            model = static_cast<int>(NtcSensor::Model::Steinhart);
+                        }
+                    } else if (value.is<String>()) {
+                        String m = value.as<String>();
+                        m.toLowerCase();
+                        if (m.indexOf("stein") >= 0 || m.indexOf("sh") >= 0) {
+                            model = static_cast<int>(NtcSensor::Model::Steinhart);
+                        }
+                    } else {
+                        model = value.as<int>();
+                    }
+                    if (model != static_cast<int>(NtcSensor::Model::Steinhart)) {
+                        model = static_cast<int>(NtcSensor::Model::Beta);
+                    }
+                    if (NTC) NTC->setModel(static_cast<NtcSensor::Model>(model), true);
+                    else if (CONF) CONF->PutInt(NTC_MODEL_KEY, model);
+                    request->send(200, "application/json",
+                                  "{\"status\":\"ok\",\"applied\":true}");
+                    return;
+                }
+                else if (target == "ntcShA") {
+                    float v = value.as<float>();
+                    if (!isfinite(v)) v = 0.0f;
+                    float a = 0.0f, b = 0.0f, c = 0.0f;
+                    readNtcShCoeffs(a, b, c);
+                    a = v;
+                    if (NTC) {
+                        if (!NTC->setSteinhartCoefficients(a, b, c, true)) {
+                            request->send(400, "application/json",
+                                          "{\"error\":\"invalid_coeffs\"}");
+                            return;
+                        }
+                    } else if (CONF) {
+                        CONF->PutFloat(NTC_SH_A_KEY, a);
+                        CONF->PutFloat(NTC_SH_B_KEY, b);
+                        CONF->PutFloat(NTC_SH_C_KEY, c);
+                    }
+                    request->send(200, "application/json",
+                                  "{\"status\":\"ok\",\"applied\":true}");
+                    return;
+                }
+                else if (target == "ntcShB") {
+                    float v = value.as<float>();
+                    if (!isfinite(v)) v = 0.0f;
+                    float a = 0.0f, b = 0.0f, c = 0.0f;
+                    readNtcShCoeffs(a, b, c);
+                    b = v;
+                    if (NTC) {
+                        if (!NTC->setSteinhartCoefficients(a, b, c, true)) {
+                            request->send(400, "application/json",
+                                          "{\"error\":\"invalid_coeffs\"}");
+                            return;
+                        }
+                    } else if (CONF) {
+                        CONF->PutFloat(NTC_SH_A_KEY, a);
+                        CONF->PutFloat(NTC_SH_B_KEY, b);
+                        CONF->PutFloat(NTC_SH_C_KEY, c);
+                    }
+                    request->send(200, "application/json",
+                                  "{\"status\":\"ok\",\"applied\":true}");
+                    return;
+                }
+                else if (target == "ntcShC") {
+                    float v = value.as<float>();
+                    if (!isfinite(v)) v = 0.0f;
+                    float a = 0.0f, b = 0.0f, c = 0.0f;
+                    readNtcShCoeffs(a, b, c);
+                    c = v;
+                    if (NTC) {
+                        if (!NTC->setSteinhartCoefficients(a, b, c, true)) {
+                            request->send(400, "application/json",
+                                          "{\"error\":\"invalid_coeffs\"}");
+                            return;
+                        }
+                    } else if (CONF) {
+                        CONF->PutFloat(NTC_SH_A_KEY, a);
+                        CONF->PutFloat(NTC_SH_B_KEY, b);
+                        CONF->PutFloat(NTC_SH_C_KEY, c);
+                    }
                     request->send(200, "application/json",
                                   "{\"status\":\"ok\",\"applied\":true}");
                     return;
@@ -1680,47 +2508,100 @@ void WiFiManager::registerRoutes_() {
                                   "{\"status\":\"ok\",\"applied\":true}");
                     return;
                 }
-                else if (target == "loopMode") {
-                    String modeStr = value.as<String>();
-                    modeStr.toLowerCase();
-                    int mode = 0;
-                    if (modeStr == "sequential" || value.as<int>() == 1) mode = 1;
-                    else if (modeStr == "mixed" || value.as<int>() == 2) mode = 2;
-                    c.type = CTRL_LOOP_MODE;
-                    c.i1   = mode;
-                }
-                else if (target == "mixPreheatMs") {
-                    int v = value.as<int>();
-                    if (v < 0) v = 0;
-                    if (v > 600000) v = 600000; // cap at 10 minutes
-                    CONF->PutInt(MIX_PREHEAT_MS_KEY, v);
-                    request->send(200, "application/json",
-                                  "{\"status\":\"ok\",\"applied\":true}");
-                    return;
-                }
-                else if (target == "mixPreheatOnMs") {
-                    int v = value.as<int>();
-                    if (v < 1) v = 1;
-                    if (v > 1000) v = 1000;
-                    CONF->PutInt(MIX_PREHEAT_ON_KEY, v);
-                    request->send(200, "application/json",
-                                  "{\"status\":\"ok\",\"applied\":true}");
-                    return;
-                }
-                else if (target == "mixKeepMs") {
-                    int v = value.as<int>();
-                    if (v < 0) v = 0;
-                    if (v > 1000) v = 1000;
-                    CONF->PutInt(MIX_KEEP_MS_KEY, v);
-                    request->send(200, "application/json",
-                                  "{\"status\":\"ok\",\"applied\":true}");
-                    return;
-                }
                 else if (target == "mixFrameMs") {
                     int v = value.as<int>();
                     if (v < 10) v = 10;
-                    if (v > 2000) v = 2000;
+                    if (v > 300) v = 300;
                     CONF->PutInt(MIX_FRAME_MS_KEY, v);
+                    request->send(200, "application/json",
+                                  "{\"status\":\"ok\",\"applied\":true}");
+                    return;
+                }
+                else if (target == "mixRefOnMs") {
+                    int v = value.as<int>();
+                    if (v < 1) v = 1;
+                    if (v > 200) v = 200;
+                    CONF->PutInt(MIX_REF_ON_MS_KEY, v);
+                    request->send(200, "application/json",
+                                  "{\"status\":\"ok\",\"applied\":true}");
+                    return;
+                }
+                else if (target == "mixRefResOhm") {
+                    float v = value.as<float>();
+                    if (!isfinite(v) || v <= 0.0f) v = DEFAULT_MIX_REF_RES_OHM;
+                    CONF->PutFloat(MIX_REF_RES_OHM_KEY, v);
+                    request->send(200, "application/json",
+                                  "{\"status\":\"ok\",\"applied\":true}");
+                    return;
+                }
+                else if (target == "mixBoostK") {
+                    float v = value.as<float>();
+                    if (!isfinite(v) || v <= 0.0f) v = DEFAULT_MIX_BOOST_K;
+                    if (v > 5.0f) v = 5.0f;
+                    CONF->PutFloat(MIX_BOOST_K_KEY, v);
+                    request->send(200, "application/json",
+                                  "{\"status\":\"ok\",\"applied\":true}");
+                    return;
+                }
+                else if (target == "mixBoostMs") {
+                    int v = value.as<int>();
+                    if (v < 0) v = 0;
+                    if (v > 600000) v = 600000;
+                    CONF->PutInt(MIX_BOOST_MS_KEY, v);
+                    request->send(200, "application/json",
+                                  "{\"status\":\"ok\",\"applied\":true}");
+                    return;
+                }
+                else if (target == "mixPreDeltaC") {
+                    float v = value.as<float>();
+                    if (!isfinite(v) || v < 0.0f) v = DEFAULT_MIX_PRE_DELTA_C;
+                    if (v > 30.0f) v = 30.0f;
+                    CONF->PutFloat(MIX_PRE_DELTA_C_KEY, v);
+                    request->send(200, "application/json",
+                                  "{\"status\":\"ok\",\"applied\":true}");
+                    return;
+                }
+                else if (target == "mixHoldUpdateMs") {
+                    int v = value.as<int>();
+                    if (v < 200) v = 200;
+                    if (v > 5000) v = 5000;
+                    CONF->PutInt(MIX_HOLD_UPDATE_MS_KEY, v);
+                    request->send(200, "application/json",
+                                  "{\"status\":\"ok\",\"applied\":true}");
+                    return;
+                }
+                else if (target == "mixHoldGain") {
+                    float v = value.as<float>();
+                    if (!isfinite(v) || v < 0.0f) v = DEFAULT_MIX_HOLD_GAIN;
+                    if (v > 5.0f) v = 5.0f;
+                    CONF->PutFloat(MIX_HOLD_GAIN_KEY, v);
+                    request->send(200, "application/json",
+                                  "{\"status\":\"ok\",\"applied\":true}");
+                    return;
+                }
+                else if (target == "mixMinOnMs") {
+                    int v = value.as<int>();
+                    if (v < 0) v = 0;
+                    if (v > 200) v = 200;
+                    CONF->PutInt(MIX_MIN_ON_MS_KEY, v);
+                    request->send(200, "application/json",
+                                  "{\"status\":\"ok\",\"applied\":true}");
+                    return;
+                }
+                else if (target == "mixMaxOnMs") {
+                    int v = value.as<int>();
+                    if (v < 1) v = 1;
+                    if (v > 1000) v = 1000;
+                    CONF->PutInt(MIX_MAX_ON_MS_KEY, v);
+                    request->send(200, "application/json",
+                                  "{\"status\":\"ok\",\"applied\":true}");
+                    return;
+                }
+                else if (target == "mixMaxAvgMs") {
+                    int v = value.as<int>();
+                    if (v < 0) v = 0;
+                    if (v > 1000) v = 1000;
+                    CONF->PutInt(MIX_MAX_AVG_MS_KEY, v);
                     request->send(200, "application/json",
                                   "{\"status\":\"ok\",\"applied\":true}");
                     return;
@@ -1776,8 +2657,6 @@ void WiFiManager::registerRoutes_() {
 
             // Preferences (config only)
             doc["ledFeedback"]    = CONF->GetBool(LED_FEEDBACK_KEY, false);
-            doc["onTime"]         = CONF->GetInt(ON_TIME_KEY, 500);
-            doc["offTime"]        = CONF->GetInt(OFF_TIME_KEY, 500);
             doc["acFrequency"]    = CONF->GetInt(AC_FREQUENCY_KEY, DEFAULT_AC_FREQUENCY);
             doc["chargeResistor"] = CONF->GetFloat(CHARGE_RESISTOR_KEY, 0.0f);
             doc["deviceId"]       = CONF->GetString(DEV_ID_KEY, "");
@@ -1792,13 +2671,13 @@ void WiFiManager::registerRoutes_() {
             doc["wireTauSec"]      = CONF->GetDouble(WIRE_TAU_KEY, DEFAULT_WIRE_TAU_SEC);
             doc["wireKLoss"]       = CONF->GetDouble(WIRE_K_LOSS_KEY, DEFAULT_WIRE_K_LOSS);
             doc["wireThermalC"]    = CONF->GetDouble(WIRE_C_TH_KEY, DEFAULT_WIRE_THERMAL_C);
-            doc["wireKp"]          = CONF->GetDouble(WIRE_KP_KEY, DEFAULT_WIRE_KP);
-            doc["wireKi"]          = CONF->GetDouble(WIRE_KI_KEY, DEFAULT_WIRE_KI);
-            doc["floorKp"]         = CONF->GetDouble(FLOOR_KP_KEY, DEFAULT_FLOOR_KP);
-            doc["floorKi"]         = CONF->GetDouble(FLOOR_KI_KEY, DEFAULT_FLOOR_KI);
             doc["ntcBeta"]         = CONF->GetFloat(NTC_BETA_KEY, DEFAULT_NTC_BETA);
             doc["ntcR0"]           = CONF->GetFloat(NTC_R0_KEY, DEFAULT_NTC_R0_OHMS);
             doc["ntcFixedRes"]     = CONF->GetFloat(NTC_FIXED_RES_KEY, DEFAULT_NTC_FIXED_RES_OHMS);
+            doc["ntcModel"]        = CONF->GetInt(NTC_MODEL_KEY, DEFAULT_NTC_MODEL);
+            doc["ntcShA"]          = CONF->GetFloat(NTC_SH_A_KEY, DEFAULT_NTC_SH_A);
+            doc["ntcShB"]          = CONF->GetFloat(NTC_SH_B_KEY, DEFAULT_NTC_SH_B);
+            doc["ntcShC"]          = CONF->GetFloat(NTC_SH_C_KEY, DEFAULT_NTC_SH_C);
             doc["ntcPressMv"]      = CONF->GetFloat(NTC_PRESS_MV_KEY, DEFAULT_NTC_PRESS_MV);
             doc["ntcReleaseMv"]    = CONF->GetFloat(NTC_RELEASE_MV_KEY, DEFAULT_NTC_RELEASE_MV);
             doc["ntcDebounceMs"]   = CONF->GetInt(NTC_DEBOUNCE_MS_KEY, DEFAULT_NTC_DEBOUNCE_MS);
@@ -1812,15 +2691,17 @@ void WiFiManager::registerRoutes_() {
             doc["floorMaterialCode"] = floorMatCode;
             doc["floorMaxC"]         = CONF->GetFloat(FLOOR_MAX_C_KEY, DEFAULT_FLOOR_MAX_C);
             doc["nichromeFinalTempC"] = CONF->GetFloat(NICHROME_FINAL_TEMP_C_KEY, DEFAULT_NICHROME_FINAL_TEMP_C);
-            const int loopModeCfg = CONF->GetInt(LOOP_MODE_KEY, DEFAULT_LOOP_MODE);
-            const char* loopModeStr =
-                (loopModeCfg == 1) ? "sequential" :
-                (loopModeCfg == 2) ? "mixed" : "advanced";
-            doc["loopMode"]        = loopModeStr;
-            doc["mixPreheatMs"]    = CONF->GetInt(MIX_PREHEAT_MS_KEY, DEFAULT_MIX_PREHEAT_MS);
-            doc["mixPreheatOnMs"]  = CONF->GetInt(MIX_PREHEAT_ON_KEY, DEFAULT_MIX_PREHEAT_ON_MS);
-            doc["mixKeepMs"]       = CONF->GetInt(MIX_KEEP_MS_KEY, DEFAULT_MIX_KEEP_MS);
             doc["mixFrameMs"]      = CONF->GetInt(MIX_FRAME_MS_KEY, DEFAULT_MIX_FRAME_MS);
+            doc["mixRefOnMs"]      = CONF->GetInt(MIX_REF_ON_MS_KEY, DEFAULT_MIX_REF_ON_MS);
+            doc["mixRefResOhm"]    = CONF->GetFloat(MIX_REF_RES_OHM_KEY, DEFAULT_MIX_REF_RES_OHM);
+            doc["mixBoostK"]       = CONF->GetFloat(MIX_BOOST_K_KEY, DEFAULT_MIX_BOOST_K);
+            doc["mixBoostMs"]      = CONF->GetInt(MIX_BOOST_MS_KEY, DEFAULT_MIX_BOOST_MS);
+            doc["mixPreDeltaC"]    = CONF->GetFloat(MIX_PRE_DELTA_C_KEY, DEFAULT_MIX_PRE_DELTA_C);
+            doc["mixHoldUpdateMs"] = CONF->GetInt(MIX_HOLD_UPDATE_MS_KEY, DEFAULT_MIX_HOLD_UPDATE_MS);
+            doc["mixHoldGain"]     = CONF->GetFloat(MIX_HOLD_GAIN_KEY, DEFAULT_MIX_HOLD_GAIN);
+            doc["mixMinOnMs"]      = CONF->GetInt(MIX_MIN_ON_MS_KEY, DEFAULT_MIX_MIN_ON_MS);
+            doc["mixMaxOnMs"]      = CONF->GetInt(MIX_MAX_ON_MS_KEY, DEFAULT_MIX_MAX_ON_MS);
+            doc["mixMaxAvgMs"]     = CONF->GetInt(MIX_MAX_AVG_MS_KEY, DEFAULT_MIX_MAX_AVG_MS);
             const int timingModeCfg = CONF->GetInt(TIMING_MODE_KEY, DEFAULT_TIMING_MODE);
             doc["timingMode"]     = (timingModeCfg == 1) ? "manual" : "preset";
             const int timingProfileCfg = CONF->GetInt(TIMING_PROFILE_KEY, DEFAULT_TIMING_PROFILE);
@@ -1866,9 +2747,6 @@ void WiFiManager::registerRoutes_() {
                 wr[String(i + 1)] =
                     CONF->GetFloat(rkeys[i], DEFAULT_WIRE_RES_OHMS);
             }
-
-            doc["targetRes"] =
-                CONF->GetFloat(R0XTGT_KEY, DEFAULT_TARG_RES_OHMS);
 
             String json;
             serializeJson(doc, json);
@@ -2139,16 +3017,6 @@ bool WiFiManager::handleControl(const ControlCmd& c) {
             ok = DEVTRAN->setBuzzerMute(c.b1);
             break;
 
-        case CTRL_ON_TIME_MS:
-            BUZZ->bip();
-            ok = DEVTRAN->setOnTimeMs(c.i1);
-            break;
-
-        case CTRL_OFF_TIME_MS:
-            BUZZ->bip();
-            ok = DEVTRAN->setOffTimeMs(c.i1);
-            break;
-
         case CTRL_RELAY_BOOL:
             BUZZ->bip();
             ok = DEVTRAN->setRelay(c.b1, false);
@@ -2240,11 +3108,6 @@ bool WiFiManager::handleControl(const ControlCmd& c) {
             break;
         }
 
-        case CTRL_TARGET_RES:
-            BUZZ->bip();
-            ok = DEVTRAN->setTargetRes(c.f1);
-            break;
-
         case CTRL_WIRE_OHM_PER_M: {
             float ohmPerM = c.f1;
             if (ohmPerM <= 0.0f) {
@@ -2260,13 +3123,6 @@ bool WiFiManager::handleControl(const ControlCmd& c) {
             ok = DEVTRAN->setWireGaugeAwg(awg);
             break;
         }
-        case CTRL_LOOP_MODE: {
-            BUZZ->bip();
-            int mode = (c.i1 == 1) ? 1 : 0;
-            ok = DEVTRAN->setLoopMode(static_cast<uint8_t>(mode));
-            break;
-        }
-
         case CTRL_CURR_LIMIT: {
             BUZZ->bip();
             float limitA = c.f1;
@@ -2380,6 +3236,7 @@ void WiFiManager::snapshotTask(void* param) {
     StaticJsonDocument<1024> doc;
     String monitorJson;
     monitorJson.reserve(1024);
+    constexpr float kWireTargetMaxC = 150.0f;
 
     for (;;) {
         // Cap voltage & current (these should be cheap / cached)
@@ -2461,6 +3318,31 @@ void WiFiManager::snapshotTask(void* param) {
         }
         doc["boardTemp"] = isfinite(boardTemp) ? boardTemp : -127.0f;
         doc["heatsinkTemp"] = isfinite(heatsink) ? heatsink : -127.0f;
+
+        float targetC = NAN;
+        if (DEVICE) {
+            const Device::WireTargetStatus wt = DEVICE->getWireTargetStatus();
+            if (wt.active && isfinite(wt.targetC)) {
+                targetC = wt.targetC;
+            } else {
+                const Device::FloorControlStatus fc = DEVICE->getFloorControlStatus();
+                if (fc.active && isfinite(fc.wireTargetC)) {
+                    targetC = fc.wireTargetC;
+                } else {
+                    float v = DEFAULT_NICHROME_FINAL_TEMP_C;
+                    if (CONF) {
+                        v = CONF->GetFloat(NICHROME_FINAL_TEMP_C_KEY,
+                                           DEFAULT_NICHROME_FINAL_TEMP_C);
+                    }
+                    if (isfinite(v) && v > 0.0f) targetC = v;
+                }
+            }
+        }
+        if (isfinite(targetC)) {
+            if (targetC > kWireTargetMaxC) targetC = kWireTargetMaxC;
+            if (targetC < 0.0f) targetC = 0.0f;
+            doc["wireTargetC"] = targetC;
+        }
 
         JsonArray wireTemps = doc.createNestedArray("wireTemps");
         for (uint8_t i = 0; i < HeaterManager::kWireCount; ++i) {

@@ -79,10 +79,6 @@ class _DeviceSettingsTabState extends State<DeviceSettingsTab> {
     set('wireTauSec', s.wireTauSec.toStringAsFixed(3));
     set('wireKLoss', s.wireKLoss.toStringAsFixed(3));
     set('wireThermalC', s.wireThermalC.toStringAsFixed(3));
-    set('wireKp', s.wireKp.toStringAsFixed(3));
-    set('wireKi', s.wireKi.toStringAsFixed(3));
-    set('floorKp', s.floorKp.toStringAsFixed(3));
-    set('floorKi', s.floorKi.toStringAsFixed(3));
 
     set('ntcBeta', s.ntcBeta.toStringAsFixed(1));
     set('ntcR0', s.ntcR0.toStringAsFixed(1));
@@ -170,10 +166,6 @@ class _DeviceSettingsTabState extends State<DeviceSettingsTab> {
       ('wireTauSec', _d('wireTauSec') ?? 0.0),
       ('wireKLoss', _d('wireKLoss') ?? 0.0),
       ('wireThermalC', _d('wireThermalC') ?? 0.0),
-      ('wireKp', _d('wireKp') ?? 0.0),
-      ('wireKi', _d('wireKi') ?? 0.0),
-      ('floorKp', _d('floorKp') ?? 0.0),
-      ('floorKi', _d('floorKi') ?? 0.0),
       ('ntcBeta', _d('ntcBeta') ?? 0.0),
       ('ntcR0', _d('ntcR0') ?? 0.0),
       ('ntcFixedRes', _d('ntcFixedRes') ?? 0.0),
@@ -259,12 +251,6 @@ class _DeviceSettingsTabState extends State<DeviceSettingsTab> {
         _numField(strings.t('Wire Tau (time constant)'), 'wireTauSec', unit: 's'),
         _numField(strings.t('Heat Loss k'), 'wireKLoss', unit: 'W/K'),
         _numField(strings.t('Thermal Mass C'), 'wireThermalC', unit: 'J/K'),
-        const SizedBox(height: 10),
-        _groupTitle(theme, strings.t('PI Control')),
-        _numField(strings.t('Wire Kp'), 'wireKp'),
-        _numField(strings.t('Wire Ki'), 'wireKi'),
-        _numField(strings.t('Floor Kp'), 'floorKp'),
-        _numField(strings.t('Floor Ki'), 'floorKi'),
         const SizedBox(height: 10),
         _groupTitle(theme, strings.t('NTC Input')),
         _numField(strings.t('NTC Beta'), 'ntcBeta', unit: 'K'),
@@ -483,13 +469,14 @@ class _DeviceSettingsTabState extends State<DeviceSettingsTab> {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surface.withAlpha(26),
+        color: theme.colorScheme.surface.withAlpha(235),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: theme.colorScheme.onSurface.withAlpha(20)),
+        border: Border.all(color: theme.colorScheme.outline.withAlpha(179)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withAlpha(51),
-            blurRadius: 24,
+            color: Colors.black.withAlpha(26),
+            blurRadius: 18,
+            offset: const Offset(0, 10),
           ),
         ],
       ),

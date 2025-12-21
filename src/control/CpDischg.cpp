@@ -95,7 +95,29 @@ float CpDischg::readCapVoltage() {
     }
 
     if (age > pdMS_TO_TICKS(MONITOR_STALE_MS)) {
-        DEBUG_PRINTLN("[CpDischg] Stale voltage reading detected  ensure monitor running");
+        if ((now - lastStaleWarnTick) > pdMS_TO_TICKS(MONITOR_STALE_MS)) {
+            DEBUG_PRINTLN("[CpDischg] Stale voltage reading detected  ensure monitor running");
+            lastStaleWarnTick = now;
+        }
+
+        const uint16_t raw = analogRead(CAPACITOR_ADC_PIN);
+        const float freshV = adcCodeToBusVolts(raw);
+        const TickType_t sampleTick = xTaskGetTickCount();
+        if (isfinite(freshV)) {
+            if (voltageMutex &&
+                xSemaphoreTake(voltageMutex, pdMS_TO_TICKS(5)) == pdTRUE)
+            {
+                lastMinBusVoltage = freshV;
+                lastRawAdc        = raw;
+                lastSampleTick    = sampleTick;
+                xSemaphoreGive(voltageMutex);
+            } else {
+                lastMinBusVoltage = freshV;
+                lastRawAdc        = raw;
+                lastSampleTick    = sampleTick;
+            }
+            v = freshV;
+        }
         ensureMonitorTask();
     }
 

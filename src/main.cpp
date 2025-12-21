@@ -11,7 +11,6 @@
 #include "services/SleepTimer.h"
 #include "sensing/NtcSensor.h"
 #include "services/CalibrationRecorder.h"
-#include "services/ThermalPiControllers.h"
 
 // OneWire bus instance
 OneWire oneWire(ONE_WIRE_BUS);
@@ -145,8 +144,6 @@ void setup() {
   NtcSensor::Init();
   NTC->begin();
   CalibrationRecorder::Init();
-  ThermalPiControllers::Init();
-  THERMAL_PI->begin();
 
   // --------------------------------------------------
   // 6. Device Orchestrator

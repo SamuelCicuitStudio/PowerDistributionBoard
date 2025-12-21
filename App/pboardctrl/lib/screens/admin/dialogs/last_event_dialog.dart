@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../api/powerboard_api.dart';
 import '../../../l10n/app_strings.dart';
+import '../../../widgets/smooth_scroll_controller.dart';
 
 class LastEventDialog extends StatefulWidget {
   const LastEventDialog({super.key, required this.api, this.focus});
@@ -17,11 +18,18 @@ class _LastEventDialogState extends State<LastEventDialog> {
   bool _loading = true;
   String? _error;
   Map<String, dynamic> _data = const {};
+  final SmoothScrollController _scrollController = SmoothScrollController();
 
   @override
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -53,7 +61,7 @@ class _LastEventDialogState extends State<LastEventDialog> {
 
     Widget list(String title, List items) {
       final isErr = title.toLowerCase().contains('error');
-      final color = isErr ? theme.colorScheme.error : const Color(0xFFFFC800);
+      final color = isErr ? theme.colorScheme.error : theme.colorScheme.secondary;
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -90,13 +98,14 @@ class _LastEventDialogState extends State<LastEventDialog> {
         width: 820,
         child: _loading
             ? const Center(child: CircularProgressIndicator())
-            : _error != null
-                ? Text(_error!)
-                : SingleChildScrollView(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
+                : _error != null
+                    ? Text(_error!)
+                    : SingleChildScrollView(
+                        controller: _scrollController,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
                           strings.t(
                             'State: {state}',
                             {'state': (_data['state'] ?? '--').toString()},

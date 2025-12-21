@@ -162,8 +162,6 @@ private:
         CTRL_REBOOT,
         CTRL_SYS_RESET,
         CTRL_LED_FEEDBACK_BOOL,
-        CTRL_ON_TIME_MS,
-        CTRL_OFF_TIME_MS,
         CTRL_RELAY_BOOL,
         CTRL_OUTPUT_BOOL,       // i1=index(1..10), b1=state
         CTRL_AC_FREQ,           // i1
@@ -174,11 +172,9 @@ private:
         CTRL_SYSTEM_SHUTDOWN,
         CTRL_FAN_SPEED,         // i1=0..100
         CTRL_BUZZER_MUTE,       // b1
-        CTRL_TARGET_RES,        // f1
         CTRL_WIRE_RES,          // i1=index(1..10), f1=ohms
         CTRL_WIRE_OHM_PER_M,    // f1
         CTRL_WIRE_GAUGE,        // i1=awg gauge
-        CTRL_LOOP_MODE,         // i1: 0=advanced, 1=sequential
         CTRL_CURR_LIMIT,        // f1: over-current trip [A]
         CTRL_CALIBRATE,         // manual calibration sequence
     };

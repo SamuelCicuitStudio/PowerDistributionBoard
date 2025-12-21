@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../l10n/app_strings.dart';
 import '../platform/wifi_types.dart';
 import '../platform/wifi_windows.dart';
+import '../widgets/smooth_scroll_controller.dart';
 import 'login_screen.dart';
 
 enum ConnectionMode { ap, station }
@@ -21,6 +22,7 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
   final TextEditingController _customController = TextEditingController();
   final TextEditingController _passwordController =
       TextEditingController(text: '1234567890');
+  final SmoothScrollController _scrollController = SmoothScrollController();
 
   String? _customError;
   String? _error;
@@ -53,6 +55,7 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
     _customController.dispose();
     _passwordController.dispose();
     _statusTimer?.cancel();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -361,6 +364,7 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
         ],
       ),
       body: SingleChildScrollView(
+        controller: _scrollController,
         padding: const EdgeInsets.all(24),
         child: Center(
           child: ConstrainedBox(

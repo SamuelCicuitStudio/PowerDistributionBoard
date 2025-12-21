@@ -37,7 +37,6 @@ HeaterManager* HeaterManager::Get() {
 
 HeaterManager::HeaterManager()
     : wireOhmPerM(0.0f),
-      targetResOhms(0.0f),
       wireGaugeAwg(DEFAULT_WIRE_GAUGE),
       _initialized(false),
       _mutex(nullptr),
@@ -116,12 +115,6 @@ void HeaterManager::loadWireConfig() {
             wireOhmPerM = DEFAULT_WIRE_OHM_PER_M;
         }
 
-        // Global target resistance
-        targetResOhms = CONF->GetFloat(R0XTGT_KEY, DEFAULT_TARG_RES_OHMS);
-        if (!isfinite(targetResOhms) || targetResOhms <= 0.0f) {
-            targetResOhms = DEFAULT_TARG_RES_OHMS;
-        }
-
         // Global wire gauge (AWG)
         wireGaugeAwg = CONF->GetInt(WIRE_GAUGE_KEY, DEFAULT_WIRE_GAUGE);
         if (wireGaugeAwg <= 0 || wireGaugeAwg > kMaxAwg) {
@@ -139,7 +132,6 @@ void HeaterManager::loadWireConfig() {
     } else {
         // Fallback if NVS not ready
         wireOhmPerM   = DEFAULT_WIRE_OHM_PER_M;
-        targetResOhms = DEFAULT_TARG_RES_OHMS;
         wireGaugeAwg  = DEFAULT_WIRE_GAUGE;
         for (uint8_t i = 0; i < kWireCount; ++i) {
             wires[i].resistanceOhm = DEFAULT_WIRE_RES_OHMS;
@@ -151,8 +143,7 @@ void HeaterManager::loadWireConfig() {
         computeWireGeometry(wires[i]);
     }
 
-    DEBUG_PRINTF("[HeaterManager] O/m = %.4f | TargetR = %.3f O\n",
-                 wireOhmPerM, targetResOhms);
+    DEBUG_PRINTF("[HeaterManager] O/m = %.4f\n", wireOhmPerM);
 
     DEBUGGSTART();
     for (uint8_t i = 0; i < kWireCount; ++i) {
@@ -467,19 +458,6 @@ float HeaterManager::getWireResistance(uint8_t index) const {
 
     unlock();
     return r;
-}
-
-void HeaterManager::setTargetResistanceAll(float ohms) {
-    if (!isfinite(ohms) || ohms <= 0.0f) return;
-    if (!lock()) return;
-
-    targetResOhms = ohms;
-
-    if (CONF) {
-        CONF->PutFloat(R0XTGT_KEY, ohms);
-    }
-
-    unlock();
 }
 
 void HeaterManager::setWireGaugeAwg(int awg) {

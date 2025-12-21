@@ -69,8 +69,6 @@
 #define USER_PASS_KEY                  "USRPW"     // Single customer login password
 
 // ---------- Preference Keys ----------
-#define ON_TIME_KEY                    "ONTIM"     // ON time duration key
-#define OFF_TIME_KEY                   "OFFTIM"    // OFF time duration key
 #define INRUSH_DELAY_KEY               "INSHDY"    // Inrush delay duration key
 #define LED_FEEDBACK_KEY               "LEDFB"     // LED feedback toggle key
 #define TEMP_THRESHOLD_KEY             "TMPTH"     // Over-temperature shutdown key
@@ -80,21 +78,23 @@
 #define AC_VOLTAGE_KEY                 "ACVLT"     // AC line voltage key
 #define CP_EMP_GAIN_KEY                "CPEMGN"    // Empirical capacitor ADC gain key
 #define CAP_BANK_CAP_F_KEY             "CPCAPF"    // Capacitor bank capacitance [F] key
-#define LOOP_MODE_KEY                  "LPMODE"    // int: 0=advanced, 1=sequential
-#define MIX_PREHEAT_MS_KEY             "MXPHMS"    // int: total preheat duration for mixed mode [ms]
-#define MIX_PREHEAT_ON_KEY             "MXPHON"    // int: primary pulse during mixed-mode preheat [ms]
-#define MIX_KEEP_MS_KEY                "MXKEEP"    // int: keep-warm pulse for non-active wires [ms]
-#define MIX_FRAME_MS_KEY               "MXFRMS"    // int: frame period for mixed scheduler [ms]
+#define MIX_FRAME_MS_KEY               "MXFRM"    // int: frame length for mixed scheduling [ms]
+#define MIX_REF_ON_MS_KEY              "MXREF"    // int: reference on-time for R_ref [ms]
+#define MIX_REF_RES_OHM_KEY            "MXRRF"    // float: reference resistance [ohm]
+#define MIX_BOOST_K_KEY                "MXBSK"    // float: boost gain multiplier
+#define MIX_BOOST_MS_KEY               "MXBSMS"   // int: boost duration [ms]
+#define MIX_PRE_DELTA_C_KEY            "MXDTPR"   // float: preheat delta [C]
+#define MIX_HOLD_UPDATE_MS_KEY         "MXHUPD"   // int: hold control update interval [ms]
+#define MIX_HOLD_GAIN_KEY              "MXHGN"    // float: hold gain [ms per C]
+#define MIX_MIN_ON_MS_KEY              "MXMIN"    // int: min on-time per packet [ms]
+#define MIX_MAX_ON_MS_KEY              "MXMAX"    // int: max on-time per packet [ms]
+#define MIX_MAX_AVG_MS_KEY             "MXAVG"    // int: max average on-time per second [ms]
 #define TIMING_MODE_KEY                "TMMODE"    // int: 0=preset, 1=manual
 #define TIMING_PROFILE_KEY             "TMPROF"    // int: 0=hot, 1=medium, 2=gentle
 #define CURR_LIMIT_KEY                 "CURRLT"   // float: over-current trip threshold [A]
 #define WIRE_TAU_KEY                   "TAUSEC"   // double: thermal time constant tau [s]
 #define WIRE_K_LOSS_KEY                "WKLOS"    // double: heat loss coefficient k [W/K]
 #define WIRE_C_TH_KEY                  "WCTH"     // double: thermal mass C [J/K]
-#define WIRE_KP_KEY                    "WKP"      // double: wire PI Kp
-#define WIRE_KI_KEY                    "WKI"      // double: wire PI Ki
-#define FLOOR_KP_KEY                   "FKP"      // double: floor PI Kp
-#define FLOOR_KI_KEY                   "FKI"      // double: floor PI Ki
 #define TEMP_SENSOR_COUNT_KEY          "TMNT"    // Number of temperature sensors detected
 #define RTC_CURRENT_EPOCH_KEY          "RCUR"    // Last known epoch persisted
 #define RTC_PRESLEEP_EPOCH_KEY         "RSLP"   // Epoch saved before deep sleep
@@ -102,6 +102,10 @@
 #define NTC_BETA_KEY                   "NTCBET"  // float: NTC beta constant
 #define NTC_R0_KEY                     "NTCR0"   // float: NTC resistance at T0 [ohms]
 #define NTC_FIXED_RES_KEY              "NTCRFX"  // float: fixed divider resistor [ohms]
+#define NTC_MODEL_KEY                  "NTCMOD"  // int: 0=beta, 1=steinhart
+#define NTC_SH_A_KEY                   "NTCSA"   // float: Steinhart-Hart A
+#define NTC_SH_B_KEY                   "NTCSB"   // float: Steinhart-Hart B
+#define NTC_SH_C_KEY                   "NTCSC"   // float: Steinhart-Hart C
 #define NTC_PRESS_MV_KEY               "NTCPRS"  // float: press threshold [mV]
 #define NTC_RELEASE_MV_KEY             "NTCRLS"  // float: release threshold [mV]
 #define NTC_DEBOUNCE_MS_KEY            "NTCDBN"  // int: debounce time [ms]
@@ -130,22 +134,29 @@ ASSERT_NVS_KEY_LEN(DEV_SW_KEY);
 ASSERT_NVS_KEY_LEN(DEV_HW_KEY);
 ASSERT_NVS_KEY_LEN(TIMING_MODE_KEY);
 ASSERT_NVS_KEY_LEN(TIMING_PROFILE_KEY);
-ASSERT_NVS_KEY_LEN(MIX_PREHEAT_MS_KEY);
-ASSERT_NVS_KEY_LEN(MIX_PREHEAT_ON_KEY);
-ASSERT_NVS_KEY_LEN(MIX_KEEP_MS_KEY);
 ASSERT_NVS_KEY_LEN(MIX_FRAME_MS_KEY);
+ASSERT_NVS_KEY_LEN(MIX_REF_ON_MS_KEY);
+ASSERT_NVS_KEY_LEN(MIX_REF_RES_OHM_KEY);
+ASSERT_NVS_KEY_LEN(MIX_BOOST_K_KEY);
+ASSERT_NVS_KEY_LEN(MIX_BOOST_MS_KEY);
+ASSERT_NVS_KEY_LEN(MIX_PRE_DELTA_C_KEY);
+ASSERT_NVS_KEY_LEN(MIX_HOLD_UPDATE_MS_KEY);
+ASSERT_NVS_KEY_LEN(MIX_HOLD_GAIN_KEY);
+ASSERT_NVS_KEY_LEN(MIX_MIN_ON_MS_KEY);
+ASSERT_NVS_KEY_LEN(MIX_MAX_ON_MS_KEY);
+ASSERT_NVS_KEY_LEN(MIX_MAX_AVG_MS_KEY);
 ASSERT_NVS_KEY_LEN(CURR_LIMIT_KEY);
 ASSERT_NVS_KEY_LEN(TEMP_WARN_KEY);
 ASSERT_NVS_KEY_LEN(WIRE_TAU_KEY);
 ASSERT_NVS_KEY_LEN(WIRE_K_LOSS_KEY);
 ASSERT_NVS_KEY_LEN(WIRE_C_TH_KEY);
-ASSERT_NVS_KEY_LEN(WIRE_KP_KEY);
-ASSERT_NVS_KEY_LEN(WIRE_KI_KEY);
-ASSERT_NVS_KEY_LEN(FLOOR_KP_KEY);
-ASSERT_NVS_KEY_LEN(FLOOR_KI_KEY);
 ASSERT_NVS_KEY_LEN(NTC_BETA_KEY);
 ASSERT_NVS_KEY_LEN(NTC_R0_KEY);
 ASSERT_NVS_KEY_LEN(NTC_FIXED_RES_KEY);
+ASSERT_NVS_KEY_LEN(NTC_MODEL_KEY);
+ASSERT_NVS_KEY_LEN(NTC_SH_A_KEY);
+ASSERT_NVS_KEY_LEN(NTC_SH_B_KEY);
+ASSERT_NVS_KEY_LEN(NTC_SH_C_KEY);
 ASSERT_NVS_KEY_LEN(NTC_PRESS_MV_KEY);
 ASSERT_NVS_KEY_LEN(NTC_RELEASE_MV_KEY);
 ASSERT_NVS_KEY_LEN(NTC_DEBOUNCE_MS_KEY);
@@ -188,10 +199,6 @@ ASSERT_NVS_KEY_LEN(NICHROME_FINAL_TEMP_C_KEY);
 
 #define IDLE_CURR_KEY "IIDLE"
 #define DEFAULT_IDLE_CURR 0.0f
-// ---------- Target Resistance for all  Output (Ohms) ----------
-#define DEFAULT_TARG_RES_OHMS  14.0f  // default target for all outputs
-// 6-char NVS keys (one per output)
-#define R0XTGT_KEY  "R0XTGT"  // OUTXX target resistance
 #define WIRE_OHM_PER_M_KEY               "WOPERM"    // float: Ω per meter for installed nichrome
 #define DEFAULT_WIRE_OHM_PER_M           2.0f        // 2 Ω/m nichrome (your current wire)
 #define WIRE_GAUGE_KEY                   "WIREG"     // int: AWG gauge for installed nichrome
@@ -233,8 +240,6 @@ ASSERT_NVS_KEY_LEN(NICHROME_FINAL_TEMP_C_KEY);
 #define DEFAULT_STA_PASS               "nothing"       // Optional default station password (blank)
 
 // ---------- Timing & Behavior Defaults ----------
-#define DEFAULT_ON_TIME                10               // ms
-#define DEFAULT_OFF_TIME               9                // ms
 #define DEFAULT_INRUSH_DELAY           100              // ms
 #define DEFAULT_LED_FEEDBACK           true             // true = LED feedback enabled
 #define DEFAULT_TEMP_THRESHOLD         75.0f            // °C
@@ -246,21 +251,23 @@ ASSERT_NVS_KEY_LEN(NICHROME_FINAL_TEMP_C_KEY);
 #define DEFAULT_CAP_EMP_GAIN           (321.0f / 1.90f) // Default empirical ADC->bus gain
 #define DEFAULT_CAP_BANK_CAP_F         0.0f             // Farads (0 => unknown until calibrated)
 #define DEFAULT_TEMP_SENSOR_COUNT      12               // Default to 12 sensors unless discovered otherwise
-#define DEFAULT_LOOP_MODE              0                // 0=advanced, 1=sequential, 2=mixed
-#define DEFAULT_MIX_PREHEAT_MS         5000             // ms of bulk preheat in mixed mode
-#define DEFAULT_MIX_PREHEAT_ON_MS      15               // ms: primary pulse during preheat (mixed)
-#define DEFAULT_MIX_KEEP_MS            4                // ms: keep-warm pulse for non-active wires
-#define DEFAULT_MIX_FRAME_MS           120              // ms: frame period for mixed scheduler
+#define DEFAULT_MIX_FRAME_MS           120              // ms: mixed scheduling frame length
+#define DEFAULT_MIX_REF_ON_MS          12               // ms: reference on-time for R_ref
+#define DEFAULT_MIX_REF_RES_OHM        DEFAULT_WIRE_RES_OHMS // ohm: reference resistance
+#define DEFAULT_MIX_BOOST_K            1.7f             // boost gain multiplier
+#define DEFAULT_MIX_BOOST_MS           5000             // ms: boost duration
+#define DEFAULT_MIX_PRE_DELTA_C        5.0f             // C: boost exit delta
+#define DEFAULT_MIX_HOLD_UPDATE_MS     1000             // ms: hold control update interval
+#define DEFAULT_MIX_HOLD_GAIN          0.5f             // ms per C: hold adjustment gain
+#define DEFAULT_MIX_MIN_ON_MS          2                // ms: minimum on-time per packet
+#define DEFAULT_MIX_MAX_ON_MS          40               // ms: maximum on-time per packet
+#define DEFAULT_MIX_MAX_AVG_MS         200              // ms per second: max average on-time
 #define DEFAULT_TIMING_MODE            0                // 0=preset, 1=manual
 #define DEFAULT_TIMING_PROFILE         1                // 0=hot, 1=medium, 2=gentle
 #define DEFAULT_CURR_LIMIT_A           36.0f            // Default over-current trip [A]
 #define DEFAULT_WIRE_TAU_SEC           35.0f            // Default thermal time constant [s] (empirical)
 #define DEFAULT_WIRE_THERMAL_C         1.0f             // Default thermal mass [J/K]
 #define DEFAULT_WIRE_K_LOSS            (DEFAULT_WIRE_THERMAL_C / DEFAULT_WIRE_TAU_SEC) // Default k [W/K]
-#define DEFAULT_WIRE_KP                0.0f             // Default wire PI Kp (0 disables until tuned)
-#define DEFAULT_WIRE_KI                0.0f             // Default wire PI Ki (0 disables until tuned)
-#define DEFAULT_FLOOR_KP               0.0f             // Default floor PI Kp (0 disables until tuned)
-#define DEFAULT_FLOOR_KI               0.0f             // Default floor PI Ki (0 disables until tuned)
 #define DEFAULT_WIRE_GAUGE             20               // AWG number for installed nichrome
 // NTC / analog power button defaults
 #define NTC_ADC_REF_VOLTAGE            3.3f             // ADC reference [V]
@@ -268,6 +275,10 @@ ASSERT_NVS_KEY_LEN(NICHROME_FINAL_TEMP_C_KEY);
 #define DEFAULT_NTC_FIXED_RES_OHMS     10000.0f         // Divider fixed resistor [ohms]
 #define DEFAULT_NTC_R0_OHMS            10000.0f         // NTC R0 at T0 [ohms]
 #define DEFAULT_NTC_BETA               3950.0f          // Beta constant
+#define DEFAULT_NTC_MODEL              0                // 0=beta, 1=steinhart
+#define DEFAULT_NTC_SH_A               NAN              // Steinhart-Hart A (unset)
+#define DEFAULT_NTC_SH_B               NAN              // Steinhart-Hart B (unset)
+#define DEFAULT_NTC_SH_C               NAN              // Steinhart-Hart C (unset)
 #define DEFAULT_NTC_T0_C               25.0f            // Reference temperature [degC]
 #define DEFAULT_NTC_MIN_C              -40.0f           // Minimum valid temp [degC]
 #define DEFAULT_NTC_MAX_C              200.0f           // Maximum valid temp [degC]

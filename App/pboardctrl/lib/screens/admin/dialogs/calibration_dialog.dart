@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 
 import '../../../api/powerboard_api.dart';
 import '../../../l10n/app_strings.dart';
+import '../../../widgets/smooth_scroll_controller.dart';
 
 class CalibrationDialog extends StatefulWidget {
   const CalibrationDialog({super.key, required this.api});
@@ -31,7 +32,7 @@ class _CalibrationDialogState extends State<CalibrationDialog> {
   List<_HistoryItem> _historyItems = const [];
   String? _historySelected;
 
-  _CalibPiSuggestion? _piSuggest;
+  _CalibModelSuggestion? _modelSuggest;
   String? _ntcCalibrateStatus;
 
   Timer? _timer;
@@ -40,13 +41,13 @@ class _CalibrationDialogState extends State<CalibrationDialog> {
   final TextEditingController _ntcRef = TextEditingController();
   final TextEditingController _wireTestTarget =
       TextEditingController(text: '120');
-  final TextEditingController _wireTestIndex = TextEditingController(text: '1');
+  final SmoothScrollController _scrollController = SmoothScrollController();
 
   @override
   void initState() {
     super.initState();
     _refreshAll();
-    _fetchPiSuggest();
+    _fetchModelSuggest();
     _timer = Timer.periodic(const Duration(seconds: 1), (_) => _refreshAll());
   }
 
@@ -55,7 +56,7 @@ class _CalibrationDialogState extends State<CalibrationDialog> {
     _timer?.cancel();
     _ntcRef.dispose();
     _wireTestTarget.dispose();
-    _wireTestIndex.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -208,20 +209,20 @@ class _CalibrationDialogState extends State<CalibrationDialog> {
     }
   }
 
-  Future<_CalibPiSuggestion?> _fetchPiSuggest() async {
+  Future<_CalibModelSuggestion?> _fetchModelSuggest() async {
     try {
       final json = await widget.api.getJson('/calib_pi_suggest');
-      final d = _CalibPiSuggestion.fromJson(json);
+      final d = _CalibModelSuggestion.fromJson(json);
       if (!mounted) return d;
-      setState(() => _piSuggest = d);
+      setState(() => _modelSuggest = d);
       return d;
     } catch (err) {
-      _toast('PI suggest failed: $err');
+      _toast('Model suggest failed: $err');
       return null;
     }
   }
 
-  Future<void> _persistPiSuggest(_CalibPiSuggestion d) async {
+  Future<void> _persistModelSuggest(_CalibModelSuggestion d) async {
     final payload = d.toSavePayload();
     if (payload.isEmpty) {
       _toast('No valid model values to save.');
@@ -229,8 +230,8 @@ class _CalibrationDialogState extends State<CalibrationDialog> {
     }
     try {
       await widget.api.postJson('/calib_pi_save', payload);
-      _toast('Model & PI values saved.');
-      await _fetchPiSuggest();
+      _toast('Model values saved.');
+      await _fetchModelSuggest();
     } catch (err) {
       _toast('Persist failed: $err');
     }
@@ -245,8 +246,8 @@ class _CalibrationDialogState extends State<CalibrationDialog> {
 
     setState(() => _busy = true);
     try {
-      final fallback = _piSuggest ?? await _fetchPiSuggest();
-      final fb = fallback ?? _CalibPiSuggestion.empty();
+      final fallback = _modelSuggest ?? await _fetchModelSuggest();
+      final fb = fallback ?? _CalibModelSuggestion.empty();
 
       final json = await widget.api.getJson(
         '/calib_history_file?name=${Uri.encodeComponent(name)}',
@@ -268,8 +269,8 @@ class _CalibrationDialogState extends State<CalibrationDialog> {
       }
 
       if (!mounted) return;
-      setState(() => _piSuggest = computed);
-      await _persistPiSuggest(computed);
+      setState(() => _modelSuggest = computed);
+      await _persistModelSuggest(computed);
     } catch (err) {
       _toast('History model computation failed: $err');
     } finally {
@@ -344,16 +345,13 @@ class _CalibrationDialogState extends State<CalibrationDialog> {
   Future<void> _wireTestStart() async {
     if (_busy) return;
     final target = double.tryParse(_wireTestTarget.text.trim());
-    final idx = int.tryParse(_wireTestIndex.text.trim());
     if (target == null || !target.isFinite || target <= 0) {
       _toast('Enter a valid target temperature.');
       return;
     }
     setState(() => _busy = true);
     try {
-      final payload = <String, dynamic>{'target_c': target};
-      if (idx != null && idx > 0) payload['wire_index'] = idx;
-      await widget.api.postJson('/wire_test_start', payload);
+      await widget.api.postJson('/wire_test_start', {'target_c': target});
       await _refreshAll();
       _toast('Wire test started.');
     } catch (err) {
@@ -388,14 +386,16 @@ class _CalibrationDialogState extends State<CalibrationDialog> {
     final timeNowMs = _samples.isEmpty ? null : _samples.last.tMs;
 
     final wireRunning = _wireTestStatus?['running'] == true;
-    final wireTemp = (_wireTestStatus?['temp_c'] is num)
-        ? (_wireTestStatus?['temp_c'] as num).toDouble()
-        : null;
-    final wireDuty = (_wireTestStatus?['duty'] is num)
-        ? (_wireTestStatus?['duty'] as num).toDouble()
-        : null;
-    final wireOn = _wireTestStatus?['on_ms'];
-    final wireOff = _wireTestStatus?['off_ms'];
+    final wireTempRaw =
+        _wireTestStatus?['active_temp_c'] ?? _wireTestStatus?['ntc_temp_c'];
+    final wireTemp =
+        (wireTempRaw is num) ? wireTempRaw.toDouble() : null;
+    final wireActive =
+        (_wireTestStatus?['active_wire'] as num?)?.toInt();
+    final packetMs =
+        (_wireTestStatus?['packet_ms'] as num?)?.toInt();
+    final frameMs =
+        (_wireTestStatus?['frame_ms'] as num?)?.toInt();
 
     return AlertDialog(
       titlePadding: const EdgeInsets.fromLTRB(18, 14, 18, 10),
@@ -416,6 +416,7 @@ class _CalibrationDialogState extends State<CalibrationDialog> {
         child: _loading
             ? const Center(child: CircularProgressIndicator())
             : SingleChildScrollView(
+                controller: _scrollController,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -444,7 +445,7 @@ class _CalibrationDialogState extends State<CalibrationDialog> {
                     const SizedBox(height: 12),
                     _ntcCalibrateCard(theme),
                     const SizedBox(height: 12),
-                    _piSuggestCard(theme),
+                    _modelSuggestCard(theme),
                     const SizedBox(height: 12),
                     _chartCard(theme, tempNow: tempNow, timeNowMs: timeNowMs),
                     const SizedBox(height: 12),
@@ -452,9 +453,9 @@ class _CalibrationDialogState extends State<CalibrationDialog> {
                       theme,
                       running: wireRunning,
                       tempC: wireTemp,
-                      duty: wireDuty,
-                      onMs: wireOn,
-                      offMs: wireOff,
+                      activeWire: wireActive,
+                      packetMs: packetMs,
+                      frameMs: frameMs,
                     ),
                   ],
                 ),
@@ -614,12 +615,12 @@ class _CalibrationDialogState extends State<CalibrationDialog> {
           ),
           const SizedBox(height: 6),
           Text(
-            '2) Temp model calibration: records temperature/time while the system drives a repeatable PWM profile; then suggests tau/k/C and PI gains.',
+            '2) Temp model calibration: records temperature/time during an energy-based heatup/cooldown to suggest tau/k/C.',
             style: theme.textTheme.bodySmall,
           ),
           const SizedBox(height: 6),
           Text(
-            '3) Wire test: runs the PI controller to reach and hold a target temperature on the NTC-attached wire.',
+            '3) Wire test: runs the energy-based controller to reach and hold a target temperature.',
             style: theme.textTheme.bodySmall,
           ),
         ],
@@ -768,9 +769,9 @@ class _CalibrationDialogState extends State<CalibrationDialog> {
     );
   }
 
-  Widget _piSuggestCard(ThemeData theme) {
+  Widget _modelSuggestCard(ThemeData theme) {
     final strings = context.strings;
-    final d = _piSuggest;
+    final d = _modelSuggest;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -784,14 +785,14 @@ class _CalibrationDialogState extends State<CalibrationDialog> {
           Row(
             children: [
               Text(
-                strings.t('Temp model + PI'),
+                strings.t('Temp model'),
                 style: theme.textTheme.titleSmall?.copyWith(
                   fontWeight: FontWeight.w800,
                 ),
               ),
               const Spacer(),
               OutlinedButton(
-                onPressed: _busy ? null : _fetchPiSuggest,
+                onPressed: _busy ? null : _fetchModelSuggest,
                 child: Text(strings.t('Refresh')),
               ),
               const SizedBox(width: 10),
@@ -803,7 +804,7 @@ class _CalibrationDialogState extends State<CalibrationDialog> {
               const SizedBox(width: 10),
               OutlinedButton(
                 onPressed:
-                    (_busy || d == null) ? null : () => _persistPiSuggest(d),
+                    (_busy || d == null) ? null : () => _persistModelSuggest(d),
                 child: Text(strings.t('Persist & Reload')),
               ),
             ],
@@ -819,40 +820,6 @@ class _CalibrationDialogState extends State<CalibrationDialog> {
                 ('C', d?.wireC, 'J/K'),
                 ('Max P', d?.maxPowerW, 'W'),
               ]),
-              _statCard(
-                theme,
-                strings.t('Wire PI (suggested)'),
-                [
-                  ('Kp', d?.wireKpSuggest, ''),
-                  ('Ki', d?.wireKiSuggest, ''),
-                ],
-                footer: d == null
-                    ? '--'
-                    : strings.t(
-                        'Current: {kp} / {ki}',
-                        {
-                          'kp': _fmt(d.wireKpCurrent),
-                          'ki': _fmt(d.wireKiCurrent),
-                        },
-                      ),
-              ),
-              _statCard(
-                theme,
-                strings.t('Floor PI (suggested)'),
-                [
-                  ('Kp', d?.floorKpSuggest, ''),
-                  ('Ki', d?.floorKiSuggest, ''),
-                ],
-                footer: d == null
-                    ? '--'
-                    : strings.t(
-                        'Current: {kp} / {ki}',
-                        {
-                          'kp': _fmt(d.floorKpCurrent),
-                          'ki': _fmt(d.floorKiCurrent),
-                        },
-                      ),
-              ),
             ],
           ),
         ],
@@ -993,12 +960,11 @@ class _CalibrationDialogState extends State<CalibrationDialog> {
     ThemeData theme, {
     required bool running,
     required double? tempC,
-    required double? duty,
-    required dynamic onMs,
-    required dynamic offMs,
+    required int? activeWire,
+    required int? packetMs,
+    required int? frameMs,
   }) {
     final strings = context.strings;
-    final onOff = (onMs != null && offMs != null) ? '$onMs / $offMs ms' : '--';
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -1032,10 +998,19 @@ class _CalibrationDialogState extends State<CalibrationDialog> {
               ),
               _pill(
                 theme,
-                strings.t('Duty'),
-                duty == null ? '--' : '${(duty * 100).round()}%',
+                strings.t('Wire'),
+                activeWire == null ? '--' : activeWire.toString(),
               ),
-              _pill(theme, strings.t('ON/OFF'), onOff),
+              _pill(
+                theme,
+                strings.t('Packet'),
+                packetMs == null ? '--' : '${packetMs} ms',
+              ),
+              _pill(
+                theme,
+                strings.t('Frame'),
+                frameMs == null ? '--' : '${frameMs} ms',
+              ),
             ],
           ),
           const SizedBox(height: 10),
@@ -1050,18 +1025,6 @@ class _CalibrationDialogState extends State<CalibrationDialog> {
                   ),
                   keyboardType:
                       const TextInputType.numberWithOptions(decimal: true),
-                ),
-              ),
-              const SizedBox(width: 10),
-              SizedBox(
-                width: 140,
-                child: TextField(
-                  controller: _wireTestIndex,
-                  decoration: InputDecoration(
-                    labelText: strings.t('Wire'),
-                    border: OutlineInputBorder(),
-                  ),
-                  keyboardType: TextInputType.number,
                 ),
               ),
               const SizedBox(width: 10),
@@ -1127,66 +1090,34 @@ class _CalibSample {
   }
 }
 
-class _CalibPiSuggestion {
-  const _CalibPiSuggestion({
+class _CalibModelSuggestion {
+  const _CalibModelSuggestion({
     required this.wireTau,
     required this.wireKLoss,
     required this.wireC,
     required this.maxPowerW,
-    required this.wireKpSuggest,
-    required this.wireKiSuggest,
-    required this.floorKpSuggest,
-    required this.floorKiSuggest,
-    required this.wireKpCurrent,
-    required this.wireKiCurrent,
-    required this.floorKpCurrent,
-    required this.floorKiCurrent,
   });
 
   final double? wireTau;
   final double? wireKLoss;
   final double? wireC;
   final double? maxPowerW;
-  final double? wireKpSuggest;
-  final double? wireKiSuggest;
-  final double? floorKpSuggest;
-  final double? floorKiSuggest;
-  final double? wireKpCurrent;
-  final double? wireKiCurrent;
-  final double? floorKpCurrent;
-  final double? floorKiCurrent;
 
-  factory _CalibPiSuggestion.empty() => const _CalibPiSuggestion(
+  factory _CalibModelSuggestion.empty() => const _CalibModelSuggestion(
         wireTau: null,
         wireKLoss: null,
         wireC: null,
         maxPowerW: null,
-        wireKpSuggest: null,
-        wireKiSuggest: null,
-        floorKpSuggest: null,
-        floorKiSuggest: null,
-        wireKpCurrent: null,
-        wireKiCurrent: null,
-        floorKpCurrent: null,
-        floorKiCurrent: null,
       );
 
-  factory _CalibPiSuggestion.fromJson(Map<String, dynamic> json) {
+  factory _CalibModelSuggestion.fromJson(Map<String, dynamic> json) {
     double? d(String k) => (json[k] is num) ? (json[k] as num).toDouble() : null;
 
-    return _CalibPiSuggestion(
+    return _CalibModelSuggestion(
       wireTau: d('wire_tau'),
       wireKLoss: d('wire_k_loss'),
       wireC: d('wire_c'),
       maxPowerW: d('max_power_w'),
-      wireKpSuggest: d('wire_kp_suggest'),
-      wireKiSuggest: d('wire_ki_suggest'),
-      floorKpSuggest: d('floor_kp_suggest'),
-      floorKiSuggest: d('floor_ki_suggest'),
-      wireKpCurrent: d('wire_kp_current'),
-      wireKiCurrent: d('wire_ki_current'),
-      floorKpCurrent: d('floor_kp_current'),
-      floorKiCurrent: d('floor_ki_current'),
     );
   }
 
@@ -1195,51 +1126,27 @@ class _CalibPiSuggestion {
     if (wireTau != null && wireTau!.isFinite) payload['wire_tau'] = wireTau;
     if (wireKLoss != null && wireKLoss!.isFinite) payload['wire_k_loss'] = wireKLoss;
     if (wireC != null && wireC!.isFinite) payload['wire_c'] = wireC;
-    if (wireKpSuggest != null && wireKpSuggest!.isFinite) {
-      payload['wire_kp'] = wireKpSuggest;
-    }
-    if (wireKiSuggest != null && wireKiSuggest!.isFinite) {
-      payload['wire_ki'] = wireKiSuggest;
-    }
-    if (floorKpSuggest != null && floorKpSuggest!.isFinite) {
-      payload['floor_kp'] = floorKpSuggest;
-    }
-    if (floorKiSuggest != null && floorKiSuggest!.isFinite) {
-      payload['floor_ki'] = floorKiSuggest;
-    }
     return payload;
   }
 
-  _CalibPiSuggestion copyWith({
+  _CalibModelSuggestion copyWith({
     double? wireTau,
     double? wireKLoss,
     double? wireC,
     double? maxPowerW,
-    double? wireKpSuggest,
-    double? wireKiSuggest,
-    double? floorKpSuggest,
-    double? floorKiSuggest,
   }) {
-    return _CalibPiSuggestion(
+    return _CalibModelSuggestion(
       wireTau: wireTau ?? this.wireTau,
       wireKLoss: wireKLoss ?? this.wireKLoss,
       wireC: wireC ?? this.wireC,
       maxPowerW: maxPowerW ?? this.maxPowerW,
-      wireKpSuggest: wireKpSuggest ?? this.wireKpSuggest,
-      wireKiSuggest: wireKiSuggest ?? this.wireKiSuggest,
-      floorKpSuggest: floorKpSuggest ?? this.floorKpSuggest,
-      floorKiSuggest: floorKiSuggest ?? this.floorKiSuggest,
-      wireKpCurrent: wireKpCurrent,
-      wireKiCurrent: wireKiCurrent,
-      floorKpCurrent: floorKpCurrent,
-      floorKiCurrent: floorKiCurrent,
     );
   }
 }
 
-_CalibPiSuggestion? _computeModelFromSamples(
+_CalibModelSuggestion? _computeModelFromSamples(
   List<_CalibSample> samples,
-  _CalibPiSuggestion fallback,
+  _CalibModelSuggestion fallback,
 ) {
   if (samples.length < 5) return null;
 
@@ -1362,26 +1269,6 @@ _CalibPiSuggestion? _computeModelFromSamples(
   final thermalC =
       (kLoss.isFinite && tauSec.isFinite) ? (tauSec * kLoss) : double.nan;
 
-  final kEff = (kLoss.isFinite && kLoss > 1e-6) ? kLoss : double.nan;
-  final kWire = (kEff.isFinite && kEff > 0) ? (maxPower / kEff) : double.nan;
-
-  var wireKpSuggest = double.nan;
-  var wireKiSuggest = double.nan;
-  var floorKpSuggest = double.nan;
-  var floorKiSuggest = double.nan;
-
-  if (kWire.isFinite && kWire > 0 && tauSec.isFinite && tauSec > 0) {
-    final tcWire = tauSec * 3;
-    wireKpSuggest = tauSec / (kWire * tcWire);
-    wireKiSuggest = 1 / (kWire * tcWire);
-  }
-
-  if (tauSec.isFinite && tauSec > 0) {
-    final tcFloor = tauSec * 9;
-    floorKpSuggest = tauSec / tcFloor;
-    floorKiSuggest = 1 / tcFloor;
-  }
-
   double? pick(double v, double? fb) => v.isFinite ? v : fb;
 
   return fallback.copyWith(
@@ -1389,10 +1276,6 @@ _CalibPiSuggestion? _computeModelFromSamples(
     wireKLoss: pick(kLoss, fallback.wireKLoss),
     wireC: pick(thermalC, fallback.wireC),
     maxPowerW: pick(maxPower, fallback.maxPowerW),
-    wireKpSuggest: pick(wireKpSuggest, fallback.wireKpSuggest),
-    wireKiSuggest: pick(wireKiSuggest, fallback.wireKiSuggest),
-    floorKpSuggest: pick(floorKpSuggest, fallback.floorKpSuggest),
-    floorKiSuggest: pick(floorKiSuggest, fallback.floorKiSuggest),
   );
 }
 
