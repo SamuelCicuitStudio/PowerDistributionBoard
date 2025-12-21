@@ -753,13 +753,143 @@
 
           <div class="mode-toggle">
             <div class="mode-group mode-group-mode" aria-label="System mode">
-              <span
-                id="modeAutoPill"
-                class="mode-pill mode-pill-auto"
-                title="Auto mode"
+              <div class="mode-group-label">Mode</div>
+              <div class="mode-group-controls">
+                <span
+                  id="modeAutoPill"
+                  class="mode-pill mode-pill-auto"
+                  title="Auto mode"
+                >
+                  <svg
+                    class="mode-pill-icon"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M21 12a9 9 0 1 1-2.64-6.36"></path>
+                    <polyline points="21 3 21 9 15 9"></polyline>
+                  </svg>
+                  <span class="mode-pill-text">Auto</span>
+                </span>
+                <label class="switch">
+                  <input
+                    type="checkbox"
+                    id="modeToggle"
+                    onchange="toggleMode()"
+                  />
+                  <span class="slider"></span>
+                </label>
+                <span
+                  id="modeManualPill"
+                  class="mode-pill mode-pill-manual"
+                  title="Manual mode"
+                >
+                  <svg
+                    class="mode-pill-icon"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path
+                      d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"
+                    ></path>
+                    <circle cx="12" cy="7" r="4"></circle>
+                  </svg>
+                  <span class="mode-pill-text">Manual</span>
+                </span>
+              </div>
+            </div>
+
+            <div class="mode-group mode-group-feedback" aria-label="LED feedback">
+              <div class="mode-group-label">LED feedback</div>
+              <div class="mode-group-controls">
+                <span
+                  id="ltPill"
+                  class="mode-pill mode-pill-lt"
+                  title="LT (LED feedback)"
+                >
+                  <svg
+                    class="mode-pill-icon"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M9 18h6"></path>
+                    <path d="M10 22h4"></path>
+                    <path
+                      d="M12 2a7 7 0 0 0-4 12c.5.5 1 1.5 1 2h6c0-.5.5-1.5 1-2a7 7 0 0 0-4-12z"
+                    ></path>
+                  </svg>
+                  <span class="mode-pill-text">LT</span>
+                </span>
+                <label class="switch">
+                  <input type="checkbox" id="ltToggle" onchange="toggleLT()" />
+                  <span class="slider"></span>
+                </label>
+              </div>
+            </div>
+
+            <div class="mode-group mode-group-status" aria-label="Loop status">
+              <div class="mode-group-label">Loop status</div>
+              <div class="mode-group-controls">
+                <span class="mode-pill mode-pill-ready" title="Ready status">
+                  <svg
+                    class="mode-pill-icon"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <circle cx="12" cy="12" r="9"></circle>
+                    <path d="M9 12l2 2 4-4"></path>
+                  </svg>
+                  <span class="mode-pill-text">Ready</span>
+                  <span id="readyLed" class="led" aria-hidden="true"></span>
+                </span>
+                <span class="mode-pill mode-pill-off" title="Off status">
+                  <svg
+                    class="mode-pill-icon"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M12 2v10"></path>
+                    <path d="M6.36 6.36a9 9 0 1 0 11.28 0"></path>
+                  </svg>
+                  <span class="mode-pill-text">Off</span>
+                  <span id="offLed" class="led" aria-hidden="true"></span>
+                </span>
+              </div>
+            </div>
+
+            <div class="dashboard-system-actions">
+              <button
+                id="forceCalibrationBtn"
+                type="button"
+                class="settings-btn settings-btn-primary dashboard-action-btn"
+                onclick="forceCalibration()"
               >
                 <svg
-                  class="mode-pill-icon"
+                  class="settings-btn-icon"
                   viewBox="0 0 24 24"
                   aria-hidden="true"
                   fill="none"
@@ -770,132 +900,11 @@
                 >
                   <path d="M21 12a9 9 0 1 1-2.64-6.36"></path>
                   <polyline points="21 3 21 9 15 9"></polyline>
+                  <path d="M12 7v5l3 3"></path>
                 </svg>
-                <span class="mode-pill-text">Auto</span>
-              </span>
-              <label class="switch">
-                <input type="checkbox" id="modeToggle" onchange="toggleMode()" />
-                <span class="slider"></span>
-              </label>
-              <span
-                id="modeManualPill"
-                class="mode-pill mode-pill-manual"
-                title="Manual mode"
-              >
-                <svg
-                  class="mode-pill-icon"
-                  viewBox="0 0 24 24"
-                  aria-hidden="true"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path
-                    d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"
-                  ></path>
-                  <circle cx="12" cy="7" r="4"></circle>
-                </svg>
-                <span class="mode-pill-text">Manual</span>
-              </span>
+                <span>Force Calibration</span>
+              </button>
             </div>
-
-            <span class="mode-divider" aria-hidden="true"></span>
-
-            <div class="mode-group mode-group-feedback" aria-label="LED feedback">
-              <span
-                id="ltPill"
-                class="mode-pill mode-pill-lt"
-                title="LT (LED feedback)"
-              >
-                <svg
-                  class="mode-pill-icon"
-                  viewBox="0 0 24 24"
-                  aria-hidden="true"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path d="M9 18h6"></path>
-                  <path d="M10 22h4"></path>
-                  <path
-                    d="M12 2a7 7 0 0 0-4 12c.5.5 1 1.5 1 2h6c0-.5.5-1.5 1-2a7 7 0 0 0-4-12z"
-                  ></path>
-                </svg>
-                <span class="mode-pill-text">LT</span>
-              </span>
-              <label class="switch">
-                <input type="checkbox" id="ltToggle" onchange="toggleLT()" />
-                <span class="slider"></span>
-              </label>
-            </div>
-
-            <span class="mode-divider" aria-hidden="true"></span>
-
-            <div class="mode-group mode-group-status" aria-label="Loop status">
-              <span class="mode-pill mode-pill-ready" title="Ready status">
-                <svg
-                  class="mode-pill-icon"
-                  viewBox="0 0 24 24"
-                  aria-hidden="true"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <circle cx="12" cy="12" r="9"></circle>
-                  <path d="M9 12l2 2 4-4"></path>
-                </svg>
-                <span class="mode-pill-text">Ready</span>
-                <span id="readyLed" class="led" aria-hidden="true"></span>
-              </span>
-              <span class="mode-pill mode-pill-off" title="Off status">
-                <svg
-                  class="mode-pill-icon"
-                  viewBox="0 0 24 24"
-                  aria-hidden="true"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path d="M12 2v10"></path>
-                  <path d="M6.36 6.36a9 9 0 1 0 11.28 0"></path>
-                </svg>
-                <span class="mode-pill-text">Off</span>
-                <span id="offLed" class="led" aria-hidden="true"></span>
-              </span>
-            </div>
-          </div>
-
-          <div class="dashboard-system-actions">
-            <button
-              id="forceCalibrationBtn"
-              type="button"
-              class="settings-btn settings-btn-primary dashboard-action-btn"
-              onclick="forceCalibration()"
-            >
-              <svg
-                class="settings-btn-icon"
-                viewBox="0 0 24 24"
-                aria-hidden="true"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <path d="M21 12a9 9 0 1 1-2.64-6.36"></path>
-                <polyline points="21 3 21 9 15 9"></polyline>
-                <path d="M12 7v5l3 3"></path>
-              </svg>
-              <span>Force Calibration</span>
-            </button>
           </div>
         </section>
 

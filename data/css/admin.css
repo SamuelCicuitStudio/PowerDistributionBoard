@@ -550,12 +550,12 @@ body {
 #dashboardTab .dashboard-system .mode-toggle {
   margin-top: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   grid-template-areas:
     "mode feedback"
-    "status status";
+    "status action";
   gap: 10px;
-  align-items: center;
+  align-items: stretch;
 }
 
 #dashboardTab .dashboard-system .mode-toggle .mode-divider {
@@ -564,14 +564,29 @@ body {
 
 #dashboardTab .dashboard-system .mode-group {
   display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
   padding: 10px 10px;
   border-radius: 14px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   background: rgba(0, 0, 0, 0.22);
   box-shadow: inset 0 0 0 1px rgba(0, 255, 174, 0.04);
+}
+
+#dashboardTab .dashboard-system .mode-group-label {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+#dashboardTab .dashboard-system .mode-group-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-start;
 }
 
 #dashboardTab .dashboard-system .mode-group-mode {
@@ -580,13 +595,19 @@ body {
 
 #dashboardTab .dashboard-system .mode-group-feedback {
   grid-area: feedback;
+  justify-self: stretch;
+}
+
+#dashboardTab .dashboard-system .mode-group-feedback .mode-group-controls {
   justify-content: flex-end;
-  justify-self: end;
 }
 
 #dashboardTab .dashboard-system .mode-group-status {
   grid-area: status;
-  justify-content: flex-start;
+}
+
+#dashboardTab .dashboard-system .mode-group-status .mode-group-controls {
+  justify-content: space-between;
 }
 
 #dashboardTab .dashboard-system .mode-pill {
@@ -685,10 +706,16 @@ body {
 }
 
 #dashboardTab .dashboard-system-actions {
+  grid-area: action;
   display: flex;
   justify-content: flex-end;
-  margin-top: auto;
-  padding-top: 10px;
+  align-items: flex-end;
+  margin-top: 0;
+  padding-top: 0;
+}
+
+#dashboardTab .dashboard-system-actions .dashboard-action-btn {
+  width: 100%;
 }
 
 #dashboardTab .dashboard-action-btn {
