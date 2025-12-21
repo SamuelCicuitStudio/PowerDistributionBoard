@@ -794,18 +794,18 @@ body {
 }
 
 #dashboardTab .dashboard-panels-top .dashboard-clock-layout {
-  grid-template-columns: 112px minmax(0, 1fr);
+  grid-template-columns: 140px minmax(0, 1fr);
 }
 
 #dashboardTab .dashboard-panels-top .dashboard-clock-face {
-  width: 112px;
-  height: 112px;
-  border-radius: 16px;
+  width: 140px;
+  height: 140px;
+  border-radius: 18px;
 }
 
 #dashboardTab .dashboard-panels-top .dashboard-clock-svg {
-  width: 102px;
-  height: 102px;
+  width: 130px;
+  height: 130px;
 }
 
 #dashboardTab .dashboard-metrics {
