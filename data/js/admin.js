@@ -347,6 +347,28 @@
     dot.style.boxShadow = "0 0 6px " + color;
   }
 
+  function updateModePills() {
+    const modeToggle = document.getElementById("modeToggle");
+    const ltToggle = document.getElementById("ltToggle");
+    const autoPill = document.getElementById("modeAutoPill");
+    const manualPill = document.getElementById("modeManualPill");
+    const ltPill = document.getElementById("ltPill");
+
+    const isManual = !!(modeToggle && modeToggle.checked);
+    if (autoPill) autoPill.classList.toggle("is-active", !isManual);
+    if (manualPill) manualPill.classList.toggle("is-active", isManual);
+
+    const ltOn = !!(ltToggle && ltToggle.checked);
+    if (ltPill) ltPill.classList.toggle("is-active", ltOn);
+  }
+
+  function setFanSpeedValue(value) {
+    const el = document.getElementById("fanSpeedValue");
+    if (!el) return;
+    const v = Number(value);
+    el.textContent = Number.isFinite(v) ? `${Math.round(v)}%` : "--%";
+  }
+
   function setField(id, val) {
     const el = document.getElementById(id);
     if (!el) return;
@@ -524,6 +546,7 @@
       const t = document.getElementById("modeToggle");
       if (t) t.checked = true;
       setModeDot(true);
+      updateModePills();
       await sendControlCommand("set", "mode", true);
     }
 
@@ -784,6 +807,7 @@
   async function toggleMode() {
     const isManual = isManualMode();
     setModeDot(isManual);
+    updateModePills();
 
     await sendControlCommand("set", "mode", isManual);
 
@@ -797,6 +821,7 @@
   function toggleLT() {
     const ltToggle = document.getElementById("ltToggle");
     const isOn = !!(ltToggle && ltToggle.checked);
+    updateModePills();
     sendControlCommand("set", "ledFeedback", isOn);
   }
 
@@ -1052,6 +1077,59 @@
     if (!sel) return;
     sel.addEventListener("change", () => setNtcModelVisibility(sel.value));
     setNtcModelVisibility(sel.value);
+  }
+
+  function bindDeviceSettingsSubtabs() {
+    const root = document.getElementById("deviceSettingsTab");
+    if (!root) return;
+
+    const buttons = Array.from(
+      root.querySelectorAll(".device-subtab-btn[data-device-subtab]")
+    );
+    const panels = Array.from(
+      root.querySelectorAll(".device-subtab-panel[data-device-subtab-panel]")
+    );
+
+    if (!buttons.length || !panels.length) return;
+
+    const setActive = (name) => {
+      buttons.forEach((btn) => {
+        const active = btn.dataset.deviceSubtab === name;
+        btn.classList.toggle("is-active", active);
+        btn.setAttribute("aria-selected", active ? "true" : "false");
+      });
+
+      panels.forEach((panel) => {
+        const active = panel.dataset.deviceSubtabPanel === name;
+        panel.classList.toggle("is-active", active);
+        panel.hidden = !active;
+      });
+
+      try {
+        localStorage.setItem("deviceSettingsSubtab", name);
+      } catch (e) {
+        // ignore storage errors
+      }
+    };
+
+    buttons.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const name = btn.dataset.deviceSubtab;
+        if (name) setActive(name);
+      });
+    });
+
+    let initial = "nichrome";
+    try {
+      const saved = localStorage.getItem("deviceSettingsSubtab");
+      if (saved && buttons.some((btn) => btn.dataset.deviceSubtab === saved)) {
+        initial = saved;
+      }
+    } catch (e) {
+      // ignore storage errors
+    }
+
+    setActive(initial);
   }
 
   async function waitUntilApplied(expected, timeoutMs = 2000, stepMs = 120) {
@@ -1492,6 +1570,7 @@
         modeToggle.checked = !!data.manualMode;
       }
       setModeDot(isManualMode());
+      updateModePills();
 
       // Buzzer mute initial sync (accept bool, 0/1, "true"/"false")
       if (data.buzzerMute !== undefined) {
@@ -1564,6 +1643,7 @@
       const fanSlider = document.getElementById("fanSlider");
       if (fanSlider && typeof data.fanSpeed === "number") {
         fanSlider.value = data.fanSpeed;
+        setFanSpeedValue(data.fanSpeed);
       }
       setNtcModelVisibility(data.ntcModel);
       if (data.wireGauge !== undefined) {
@@ -1671,7 +1751,9 @@
     }).then((res) => {
       if (res && !res.error) {
         openAlert("User Settings", "User credentials updated.", "success");
+        if (lastLoadedControls) lastLoadedControls.deviceId = newId;
         resetUserSettings();
+        loadControls();
       } else if (res && res.error) {
         openAlert("User Settings", res.error, "danger");
       }
@@ -1681,38 +1763,94 @@
   function resetUserSettings() {
     setField("userCurrentPassword", "");
     setField("userNewPassword", "");
-    setField("userDeviceId", "");
+    if (lastLoadedControls && lastLoadedControls.deviceId !== undefined) {
+      setField("userDeviceId", lastLoadedControls.deviceId);
+    } else {
+      setField("userDeviceId", "");
+    }
   }
 
-  function saveAdminSettings() {
-    const current = document.getElementById("adminCurrentPassword").value;
-    const username = document.getElementById("adminUsername").value;
-    const password = document.getElementById("adminPassword").value;
-    const wifiSSID = document.getElementById("wifiSSID").value;
-    const wifiPassword = document.getElementById("wifiPassword").value;
+  function saveAdminSettings(scope = "all") {
+    const section = scope === "admin" || scope === "wifi" ? scope : "all";
 
-    sendControlCommand("set", "adminCredentials", {
-      current,
-      username,
-      password,
-      wifiSSID,
-      wifiPassword,
-    }).then((res) => {
+    const current = (document.getElementById("adminCurrentPassword") || {})
+      .value;
+    const username = (document.getElementById("adminUsername") || {}).value;
+    const password = (document.getElementById("adminPassword") || {}).value;
+    const wifiSSID = (document.getElementById("wifiSSID") || {}).value;
+    const wifiPassword = (document.getElementById("wifiPassword") || {}).value;
+
+    const payload = {};
+    const trimmedCurrent = String(current || "").trim();
+    if (trimmedCurrent) payload.current = trimmedCurrent;
+
+    let hasChanges = false;
+    if (section === "admin" || section === "all") {
+      const u = String(username || "").trim();
+      const p = String(password || "");
+      if (u) {
+        payload.username = u;
+        hasChanges = true;
+      }
+      if (p) {
+        payload.password = p;
+        hasChanges = true;
+      }
+    }
+    if (section === "wifi" || section === "all") {
+      const ssid = String(wifiSSID || "").trim();
+      const pw = String(wifiPassword || "");
+      if (ssid) {
+        payload.wifiSSID = ssid;
+        hasChanges = true;
+      }
+      if (pw) {
+        payload.wifiPassword = pw;
+        hasChanges = true;
+      }
+    }
+
+    if (!hasChanges) {
+      openAlert("Admin Settings", "Nothing to update.", "warning");
+      return;
+    }
+
+    if ((payload.username || payload.password) && !payload.current) {
+      openAlert("Admin Settings", "Current password is required.", "warning");
+      return;
+    }
+
+    sendControlCommand("set", "adminCredentials", payload).then((res) => {
       if (res && !res.error) {
         openAlert("Admin Settings", "Admin settings updated.", "success");
-        resetAdminSettings();
+        if (payload.wifiSSID && lastLoadedControls) {
+          lastLoadedControls.wifiSSID = payload.wifiSSID;
+        }
+        resetAdminSettings(section);
+        loadControls();
       } else if (res && res.error) {
         openAlert("Admin Settings", res.error, "danger");
       }
     });
   }
 
-  function resetAdminSettings() {
+  function resetAdminSettings(scope = "all") {
+    const section = scope === "admin" || scope === "wifi" ? scope : "all";
     setField("adminCurrentPassword", "");
-    setField("adminUsername", "");
-    setField("adminPassword", "");
-    setField("wifiSSID", "");
-    setField("wifiPassword", "");
+
+    if (section === "admin" || section === "all") {
+      setField("adminUsername", "");
+      setField("adminPassword", "");
+    }
+
+    if (section === "wifi" || section === "all") {
+      if (lastLoadedControls && lastLoadedControls.wifiSSID !== undefined) {
+        setField("wifiSSID", lastLoadedControls.wifiSSID);
+      } else {
+        setField("wifiSSID", "");
+      }
+      setField("wifiPassword", "");
+    }
   }
 
   // ========================================================
@@ -2092,6 +2230,7 @@
     const fanSlider = document.getElementById("fanSlider");
     if (fanSlider && typeof mon.fanSpeed === "number") {
       fanSlider.value = mon.fanSpeed;
+      setFanSpeedValue(mon.fanSpeed);
     }
 
     if (mon.eventUnread) {
@@ -3486,14 +3625,16 @@
     const badge = document.getElementById("testModeBadge");
     if (!badge) return;
 
+    const modeEl = badge.querySelector ? badge.querySelector(".tm-mode") : null;
+
     if (testModeState.active) {
       badge.classList.add("active");
       badge.title = `Test mode active: ${testModeState.label}`;
-      badge.textContent = `TEST MODE: ${testModeState.label}`;
+      if (modeEl) modeEl.textContent = testModeState.label;
     } else {
       badge.classList.remove("active");
       badge.title = "Test mode active";
-      badge.textContent = "TEST MODE";
+      if (modeEl) modeEl.textContent = "--";
     }
     updateStatusBarState();
   }
@@ -3512,7 +3653,13 @@
     const stopBtn = document.getElementById("topStopTestBtn");
     if (stopBtn) {
       const label = testModeState.active ? testModeState.label : "";
-      stopBtn.textContent = label ? `Stop ${label}` : "Stop Test";
+      const title = label ? `Stop ${label}` : "Stop the active test";
+      stopBtn.title = title;
+      stopBtn.setAttribute("aria-label", title);
+      const textEl = stopBtn.querySelector
+        ? stopBtn.querySelector(".status-action-text")
+        : null;
+      if (textEl) textEl.textContent = "Stop";
       stopBtn.disabled = !testModeState.active;
     }
   }
@@ -4778,6 +4925,7 @@
         const fanSlider = document.getElementById("fanSlider");
         if (fanSlider && typeof data.fanSpeed === "number") {
           fanSlider.value = data.fanSpeed;
+          setFanSpeedValue(data.fanSpeed);
         }
       } catch (err) {
         console.error("Monitor error:", err);
@@ -4827,11 +4975,9 @@
     renderAllOutputs("manualOutputs", true);
     renderAllOutputs("userAccessGrid", false);
 
-    enableDragScroll("manualOutputs");
-    enableDragScroll("userAccessGrid");
-
     initPowerButton();
     bindNtcModelUi();
+    bindDeviceSettingsSubtabs();
     liveRender();
     scheduleLiveInterval();
 
@@ -4845,6 +4991,7 @@
     bindCalibrationButton();
     bindLiveControlButton();
     updateStatusBarState();
+    updateModePills();
     startWireTestPoll();
     updateSessionStatsUI(null);
     // Disconnect button
@@ -4884,10 +5031,12 @@
     const fanSlider = document.getElementById("fanSlider");
     if (fanSlider) {
       fanSlider.addEventListener("input", async () => {
+        setFanSpeedValue(fanSlider.value);
         await ensureManualTakeover("fan");
         const speed = parseInt(fanSlider.value, 10) || 0;
         sendControlCommand("set", "fanSpeed", speed);
       });
+      setFanSpeedValue(fanSlider.value);
     }
 
     // Ensure tooltips exist for all visible UI elements.

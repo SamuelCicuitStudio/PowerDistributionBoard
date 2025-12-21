@@ -15,7 +15,7 @@
         right: 20px;
         display: flex;
         align-items: center;
-        gap: 16px;
+        gap: 8px;
         z-index: 1000;
       }
       .user-menu {
@@ -60,11 +60,26 @@
         border: 1px solid rgba(255, 255, 255, 0.12);
         border-left: 4px solid var(--ds-accent, rgba(255, 255, 255, 0.35));
         background: rgba(255, 255, 255, 0.06);
+        display: flex;
+        align-items: center;
+        gap: 8px;
         font-size: 12px;
         font-weight: 800;
         letter-spacing: 0.3px;
         color: rgba(255, 255, 255, 0.95);
         box-shadow: 0 0 10px rgba(0, 0, 0, 0.22);
+      }
+      .ds-group-icon {
+        width: 14px;
+        height: 14px;
+        flex: 0 0 auto;
+        color: var(--ds-accent, rgba(255, 255, 255, 0.8));
+        opacity: 0.95;
+        filter: drop-shadow(0 0 6px rgba(0, 0, 0, 0.35));
+      }
+      .ds-group-title span {
+        min-width: 0;
+        flex: 1 1 auto;
       }
       .ds-group-title.ds-power {
         --ds-accent: #ff3b30;
@@ -102,13 +117,13 @@
       .device-settings-box .device-grid {
         display: grid;
         grid-template-columns: 1.05fr 1.15fr; /* left: device fields | right: nichrome */
+        grid-template-rows: minmax(0, 1fr);
         gap: 18px 28px; /* row gap | column gap */
-        align-items: flex-start;
+        align-items: stretch;
         min-width: 0;
         min-height: 0;
         flex: 1 1 auto;
-        overflow-y: auto;
-        padding-right: 6px; /* keep scrollbar off content */
+        overflow: hidden; /* each column scrolls independently */
       }
       .device-settings-box .device-col {
         display: flex;
@@ -116,6 +131,53 @@
         gap: 10px;
         min-width: 0;
         min-height: 0;
+        padding: 12px 12px 14px;
+        border-radius: 16px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(0, 0, 0, 0.32);
+        box-shadow: inset 0 0 0 1px rgba(0, 255, 174, 0.04);
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(0, 255, 180, 0.32) rgba(0, 0, 0, 0.8);
+      }
+      .device-settings-box .device-col::-webkit-scrollbar {
+        width: 10px;
+      }
+      .device-settings-box .device-col::-webkit-scrollbar-track {
+        background: rgba(0, 0, 0, 0.7);
+        border-radius: 10px;
+      }
+      .device-settings-box .device-col::-webkit-scrollbar-thumb {
+        background: rgba(0, 255, 180, 0.24);
+        border-radius: 10px;
+        box-shadow: inset 0 0 6px rgba(0, 255, 180, 0.22);
+      }
+      .device-settings-box .device-col::-webkit-scrollbar-thumb:hover {
+        background: rgba(0, 255, 180, 0.5);
+        box-shadow: inset 0 0 8px rgba(0, 255, 180, 0.35);
+      }
+      .device-settings-box .ds-col-heading {
+        grid-column: 1 / -1;
+        margin: 0 0 8px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 14px;
+        font-weight: 900;
+        letter-spacing: 0.3px;
+        color: #f8fafc;
+      }
+      .device-settings-box .ds-col-icon {
+        width: 18px;
+        height: 18px;
+        flex: 0 0 auto;
+        color: rgba(0, 255, 174, 0.95);
+        filter: drop-shadow(0 0 6px rgba(0, 255, 174, 0.14));
+      }
+      .device-settings-box .ds-col-heading--nichrome .ds-col-icon {
+        color: rgba(249, 115, 22, 0.95);
+        filter: drop-shadow(0 0 6px rgba(249, 115, 22, 0.18));
       }
       /* Left column (Device Settings) as a compact 2-column grid */
       .device-settings-box .device-grid > .device-col:first-child {
@@ -178,10 +240,12 @@
         grid-column: 1 / -1; /* span entire row */
       }
       /* Actions always visible and tidy */
-      .device-settings-box .user-modal-actions.round-actions {
+      .device-settings-actions {
         margin-top: 8px;
-        justify-content: center;
+        padding-top: 10px;
+        border-top: 1px solid rgba(255, 255, 255, 0.06);
         flex: 0 0 auto; /* always visible under the scroll area */
+        justify-content: flex-end;
       }
       /* Optional: tiny responsive fallback if viewport is very short or narrow */
       @media (max-height: 640px) {
@@ -253,34 +317,109 @@
             <span id="eventErrCount">0</span>
           </span>
         </div>
+        <div id="runModeBadge" class="run-mode-badge" title="Loop running">
+          <svg
+            class="rm-icon"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <circle cx="12" cy="12" r="9"></circle>
+            <polygon points="11 8 16 12 11 16"></polygon>
+          </svg>
+          <span class="rm-label">Run</span>
+        </div>
         <div
           id="testModeBadge"
           class="test-mode-badge"
           title="Test mode active"
         >
-          TEST MODE
+          <svg
+            class="tm-icon"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M3 12h4l2-6 4 12 2-6h6"></path>
+          </svg>
+          <span class="tm-label">TEST MODE</span>
+          <span class="tm-mode">--</span>
         </div>
         <div id="statusActions" class="status-actions">
           <button
             id="topStopTestBtn"
             type="button"
             class="status-action-btn status-stop-btn"
+            aria-label="Stop active test"
           >
-            Stop Test
+            <svg
+              class="status-action-icon"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <rect x="7" y="7" width="10" height="10" rx="2"></rect>
+            </svg>
+            <span class="status-action-text">Stop</span>
           </button>
           <button
             id="topCalibBtn"
             type="button"
             class="status-action-btn status-calib-btn"
+            aria-label="Open calibration"
           >
-            Calibration
+            <svg
+              class="status-action-icon"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <line x1="4" y1="6" x2="20" y2="6"></line>
+              <circle cx="9" cy="6" r="2"></circle>
+              <line x1="4" y1="12" x2="20" y2="12"></line>
+              <circle cx="15" cy="12" r="2"></circle>
+              <line x1="4" y1="18" x2="20" y2="18"></line>
+              <circle cx="11" cy="18" r="2"></circle>
+            </svg>
+            <span class="status-action-text">Calibration</span>
           </button>
           <button
             id="topLiveControlBtn"
             type="button"
             class="status-action-btn status-live-btn"
+            aria-label="Open live control"
           >
-            Live Control
+            <svg
+              class="status-action-icon"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M4 20V4"></path>
+              <path d="M4 20H20"></path>
+              <polyline points="5 14 9 10 13 13 20 7"></polyline>
+            </svg>
+            <span class="status-action-text">Live Control</span>
           </button>
         </div>
         <div class="user-icon" onclick="toggleUserMenu()">👤</div>
@@ -291,12 +430,118 @@
 
       <!-- Sidebar -->
       <div class="sidebar">
-        <div class="tab active" onclick="switchTab(0)">Dashboard</div>
-        <div class="tab" onclick="switchTab(1)">User Settings</div>
-        <div class="tab" onclick="switchTab(2)">Manual Control</div>
-        <div class="tab" onclick="switchTab(3)">Admin Settings</div>
-        <div class="tab" onclick="switchTab(4)">Device Settings</div>
-        <div class="tab" onclick="switchTab(5)">Live</div>
+        <div class="tab active" onclick="switchTab(0)">
+          <svg
+            class="tab-icon"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+            <line x1="3" y1="9" x2="21" y2="9"></line>
+            <line x1="9" y1="21" x2="9" y2="9"></line>
+          </svg>
+          <span>Dashboard</span>
+        </div>
+        <div class="tab" onclick="switchTab(1)">
+          <svg
+            class="tab-icon"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+            <circle cx="12" cy="7" r="4"></circle>
+          </svg>
+          <span>User</span>
+        </div>
+        <div class="tab" onclick="switchTab(2)">
+          <svg
+            class="tab-icon"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <line x1="4" y1="21" x2="4" y2="14"></line>
+            <line x1="4" y1="10" x2="4" y2="3"></line>
+            <line x1="12" y1="21" x2="12" y2="12"></line>
+            <line x1="12" y1="8" x2="12" y2="3"></line>
+            <line x1="20" y1="21" x2="20" y2="16"></line>
+            <line x1="20" y1="12" x2="20" y2="3"></line>
+            <line x1="1" y1="14" x2="7" y2="14"></line>
+            <line x1="9" y1="8" x2="15" y2="8"></line>
+            <line x1="17" y1="16" x2="23" y2="16"></line>
+          </svg>
+          <span>Control</span>
+        </div>
+        <div class="tab" onclick="switchTab(3)">
+          <svg
+            class="tab-icon"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path
+              d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"
+            ></path>
+          </svg>
+          <span>Admin</span>
+        </div>
+        <div class="tab" onclick="switchTab(4)">
+          <svg
+            class="tab-icon"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect>
+            <rect x="9" y="9" width="6" height="6"></rect>
+            <line x1="9" y1="1" x2="9" y2="4"></line>
+            <line x1="15" y1="1" x2="15" y2="4"></line>
+            <line x1="9" y1="20" x2="9" y2="23"></line>
+            <line x1="15" y1="20" x2="15" y2="23"></line>
+            <line x1="20" y1="9" x2="23" y2="9"></line>
+            <line x1="20" y1="14" x2="23" y2="14"></line>
+            <line x1="1" y1="9" x2="4" y2="9"></line>
+            <line x1="1" y1="14" x2="4" y2="14"></line>
+          </svg>
+          <span>Device</span>
+        </div>
+        <div class="tab" onclick="switchTab(5)">
+          <svg
+            class="tab-icon"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+          </svg>
+          <span>Live</span>
+        </div>
 
         <!-- SINGLE vertical stack of 4 buttons -->
         <div class="sidebar-controls-vertical">
@@ -342,45 +587,130 @@
           <h2></h2>
         </div>
 
-        <div
-          class="mode-box"
-          style="
-            background: rgba(255, 255, 255, 0.05);
-            padding: 20px;
-            border-radius: 12px;
-            margin-bottom: 20px;
-            box-shadow: 0 0 5px rgba(255, 255, 255, 0.05);
-          "
-        >
-          <div
-            class="mode-toggle"
-            style="
-              display: flex;
-              align-items: center;
-              gap: 15px;
-              flex-wrap: wrap;
-            "
-          >
-            <label>Auto</label>
-            <label class="switch">
-              <input type="checkbox" id="modeToggle" onchange="toggleMode()" />
-              <span class="slider"></span>
-            </label>
-            <label>Manual</label>
+        <div class="mode-box mode-box-dashboard">
+          <div class="mode-toggle">
+            <div class="mode-group" aria-label="System mode">
+              <span
+                id="modeAutoPill"
+                class="mode-pill mode-pill-auto"
+                title="Auto mode"
+              >
+                <svg
+                  class="mode-pill-icon"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M21 12a9 9 0 1 1-2.64-6.36"></path>
+                  <polyline points="21 3 21 9 15 9"></polyline>
+                </svg>
+                <span class="mode-pill-text">Auto</span>
+              </span>
+              <label class="switch">
+                <input type="checkbox" id="modeToggle" onchange="toggleMode()" />
+                <span class="slider"></span>
+              </label>
+              <span
+                id="modeManualPill"
+                class="mode-pill mode-pill-manual"
+                title="Manual mode"
+              >
+                <svg
+                  class="mode-pill-icon"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path
+                    d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"
+                  ></path>
+                  <circle cx="12" cy="7" r="4"></circle>
+                </svg>
+                <span class="mode-pill-text">Manual</span>
+              </span>
+            </div>
 
-            <label style="margin-left: 20px">LT</label>
-            <label class="switch">
-              <input type="checkbox" id="ltToggle" onchange="toggleLT()" />
-              <span class="slider"></span>
-            </label>
+            <span class="mode-divider" aria-hidden="true"></span>
 
-            <span style="margin-left: 30px">Ready</span>
-            <div id="readyLed" class="led"></div>
-            <span style="margin-left: 20px">OFF</span>
-            <div id="offLed" class="led"></div>
+            <div class="mode-group" aria-label="LED feedback">
+              <span
+                id="ltPill"
+                class="mode-pill mode-pill-lt"
+                title="LT (LED feedback)"
+              >
+                <svg
+                  class="mode-pill-icon"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M9 18h6"></path>
+                  <path d="M10 22h4"></path>
+                  <path
+                    d="M12 2a7 7 0 0 0-4 12c.5.5 1 1.5 1 2h6c0-.5.5-1.5 1-2a7 7 0 0 0-4-12z"
+                  ></path>
+                </svg>
+                <span class="mode-pill-text">LT</span>
+              </span>
+              <label class="switch">
+                <input type="checkbox" id="ltToggle" onchange="toggleLT()" />
+                <span class="slider"></span>
+              </label>
+            </div>
+
+            <span class="mode-divider" aria-hidden="true"></span>
+
+            <div class="mode-group mode-group-status" aria-label="Loop status">
+              <span class="mode-pill mode-pill-ready" title="Ready status">
+                <svg
+                  class="mode-pill-icon"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <circle cx="12" cy="12" r="9"></circle>
+                  <path d="M9 12l2 2 4-4"></path>
+                </svg>
+                <span class="mode-pill-text">Ready</span>
+                <span id="readyLed" class="led" aria-hidden="true"></span>
+              </span>
+              <span class="mode-pill mode-pill-off" title="Off status">
+                <svg
+                  class="mode-pill-icon"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M12 2v10"></path>
+                  <path d="M6.36 6.36a9 9 0 1 0 11.28 0"></path>
+                </svg>
+                <span class="mode-pill-text">Off</span>
+                <span id="offLed" class="led" aria-hidden="true"></span>
+              </span>
+            </div>
           </div>
 
-          <div class="controls" style="margin-top: 10px">
+          <div class="controls">
             <button
               id="forceCalibrationBtn"
               type="button"
@@ -842,40 +1172,143 @@
           <h2></h2>
         </div>
 
-        <div
-          class="user-modal-content zoom-box"
-          style="width: 100%; max-width: 400px"
-        >
-          <input
-            type="password"
-            id="userCurrentPassword"
-            autocomplete="current-password"
-            placeholder="Current Password"
-          />
-          <input
-            type="password"
-            id="userNewPassword"
-            autocomplete="new-password"
-            placeholder="New Password"
-          />
-          <input
-            type="text"
-            id="userDeviceId"
-            autocomplete="off"
-            placeholder="New Device ID"
-          />
-          <div class="user-modal-actions round-actions">
-            <div class="round-button save" onclick="saveUserSettings()">
-              <img src="icons/ok_tank.png" alt="Save" />
+        <div class="user-settings-layout">
+          <section class="user-modal-content zoom-box settings-card user-settings-card">
+            <div class="settings-card-header">
+              <div class="settings-card-title">
+                <svg
+                  class="settings-card-icon"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path
+                    d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"
+                  ></path>
+                  <circle cx="12" cy="7" r="4"></circle>
+                </svg>
+                <span>Account</span>
+              </div>
+              <div class="settings-card-subtitle">
+                Update your password and device label.
+              </div>
             </div>
-            <div class="round-button cancel" onclick="resetUserSettings()">
-              <img src="icons/close.png" alt="Cancel" />
-            </div>
-          </div>
-        </div>
 
-        <div class="section-header">Output Access</div>
-        <div class="manual-outputs" id="userAccessGrid"></div>
+            <div class="settings-form">
+              <div class="settings-field">
+                <label for="userCurrentPassword">Current password</label>
+                <input
+                  type="password"
+                  id="userCurrentPassword"
+                  autocomplete="current-password"
+                  placeholder="Current password"
+                />
+              </div>
+
+              <div class="settings-field">
+                <label for="userNewPassword">New password</label>
+                <input
+                  type="password"
+                  id="userNewPassword"
+                  autocomplete="new-password"
+                  placeholder="New password"
+                />
+              </div>
+
+              <div class="settings-field">
+                <label for="userDeviceId">Device ID</label>
+                <input
+                  type="text"
+                  id="userDeviceId"
+                  autocomplete="off"
+                  placeholder="Device ID"
+                />
+                <div class="settings-field-hint">
+                  Used as the device name/label (may require reconnect).
+                </div>
+              </div>
+            </div>
+
+            <div class="settings-actions">
+              <button
+                type="button"
+                class="settings-btn settings-btn-primary"
+                onclick="saveUserSettings()"
+              >
+                <svg
+                  class="settings-btn-icon"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M20 6L9 17l-5-5"></path>
+                </svg>
+                Save
+              </button>
+              <button
+                type="button"
+                class="settings-btn"
+                onclick="resetUserSettings()"
+              >
+                <svg
+                  class="settings-btn-icon"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M3 12a9 9 0 1 0 3-6.7"></path>
+                  <polyline points="3 3 3 9 9 9"></polyline>
+                </svg>
+                Reset
+              </button>
+            </div>
+          </section>
+
+          <section class="user-modal-content zoom-box settings-card user-access-card">
+            <div class="settings-card-header">
+              <div class="settings-card-title">
+                <svg
+                  class="settings-card-icon"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M12 1v2"></path>
+                  <path d="M12 21v2"></path>
+                  <path d="M4.22 4.22l1.42 1.42"></path>
+                  <path d="M18.36 18.36l1.42 1.42"></path>
+                  <path d="M1 12h2"></path>
+                  <path d="M21 12h2"></path>
+                  <path d="M4.22 19.78l1.42-1.42"></path>
+                  <path d="M18.36 5.64l1.42-1.42"></path>
+                  <circle cx="12" cy="12" r="4"></circle>
+                </svg>
+                <span>Output Access</span>
+              </div>
+              <div class="settings-card-subtitle">
+                Select which outputs the loop/calibration is allowed to use.
+              </div>
+            </div>
+
+            <div id="userAccessGrid" class="output-access-grid"></div>
+          </section>
+        </div>
       </div>
 
       <!-- Manual Control Tab -->
@@ -884,27 +1317,84 @@
           <h2></h2>
         </div>
 
-        <div class="mode-box">
-          <div
-            class="controls"
-            style="
-              display: flex;
-              align-items: center;
-              gap: 20px;
-              flex-wrap: wrap;
-            "
-          >
-            <label>Fan</label>
-            <input type="range" min="0" max="100" id="fanSlider" />
-            <label>Relay</label>
-            <label class="switch">
-              <input type="checkbox" id="relayToggle" />
-              <span class="slider"></span>
-            </label>
-          </div>
-        </div>
+        <div class="manual-control-layout">
+          <section class="user-modal-content zoom-box settings-card manual-controls-card">
+            <div class="settings-card-header">
+              <div class="settings-card-title">
+                <svg
+                  class="settings-card-icon"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <line x1="4" y1="21" x2="4" y2="14"></line>
+                  <line x1="4" y1="10" x2="4" y2="3"></line>
+                  <line x1="12" y1="21" x2="12" y2="12"></line>
+                  <line x1="12" y1="8" x2="12" y2="3"></line>
+                  <line x1="20" y1="21" x2="20" y2="16"></line>
+                  <line x1="20" y1="12" x2="20" y2="3"></line>
+                  <line x1="1" y1="14" x2="7" y2="14"></line>
+                  <line x1="9" y1="8" x2="15" y2="8"></line>
+                  <line x1="17" y1="16" x2="23" y2="16"></line>
+                </svg>
+                <span>Manual Controls</span>
+              </div>
+              <div class="settings-card-subtitle">
+                Adjusting these will switch to manual mode (and abort auto loop if running).
+              </div>
+            </div>
 
-        <div class="manual-outputs" id="manualOutputs"></div>
+            <div class="settings-form">
+              <div class="settings-field">
+                <div class="settings-field-row">
+                  <label for="fanSlider">Fan speed</label>
+                  <span id="fanSpeedValue" class="settings-field-value">--%</span>
+                </div>
+                <input type="range" min="0" max="100" id="fanSlider" />
+              </div>
+
+              <div class="settings-field settings-field-inline">
+                <label for="relayToggle">Relay</label>
+                <label class="switch">
+                  <input type="checkbox" id="relayToggle" />
+                  <span class="slider"></span>
+                </label>
+              </div>
+            </div>
+          </section>
+
+          <section class="user-modal-content zoom-box settings-card manual-outputs-card">
+            <div class="settings-card-header">
+              <div class="settings-card-title">
+                <svg
+                  class="settings-card-icon"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <rect x="3" y="3" width="8" height="8" rx="2"></rect>
+                  <rect x="13" y="3" width="8" height="8" rx="2"></rect>
+                  <rect x="3" y="13" width="8" height="8" rx="2"></rect>
+                  <rect x="13" y="13" width="8" height="8" rx="2"></rect>
+                </svg>
+                <span>Manual Outputs</span>
+              </div>
+              <div class="settings-card-subtitle">
+                Toggle outputs directly (manual mode).
+              </div>
+            </div>
+
+            <div id="manualOutputs" class="manual-output-grid"></div>
+          </section>
+        </div>
       </div>
 
       <!-- Admin Settings Tab -->
@@ -913,52 +1403,199 @@
           <h2></h2>
         </div>
 
-        <div
-          style="
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: calc(100% - 80px);
-          "
-        >
-          <div
-            class="user-modal-content zoom-box"
-            style="width: 100%; max-width: 400px"
-          >
-            <input
-              type="password"
-              id="adminCurrentPassword"
-              placeholder="Current Password"
-            />
-            <input
-              type="text"
-              id="adminUsername"
-              placeholder="New Admin Username"
-            />
-            <input
-              type="password"
-              id="adminPassword"
-              placeholder="New Admin Password"
-            />
-
-            <hr style="margin: 20px 0; opacity: 0.2" />
-
-            <input type="text" id="wifiSSID" placeholder="Wi-Fi SSID" />
-            <input
-              type="password"
-              id="wifiPassword"
-              placeholder="Wi-Fi Password"
-            />
-
-            <div class="user-modal-actions round-actions">
-              <div class="round-button save" onclick="saveAdminSettings()">
-                <img src="icons/ok_tank.png" alt="Save" />
+        <div class="admin-settings-layout">
+          <section class="user-modal-content zoom-box settings-card admin-credentials-card">
+            <div class="settings-card-header">
+              <div class="settings-card-title">
+                <svg
+                  class="settings-card-icon"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path
+                    d="M12 2l7 4v6c0 5-3 9-7 10-4-1-7-5-7-10V6l7-4z"
+                  ></path>
+                </svg>
+                <span>Admin Credentials</span>
               </div>
-              <div class="round-button cancel" onclick="resetAdminSettings()">
-                <img src="icons/close.png" alt="Cancel" />
+              <div class="settings-card-subtitle">
+                Current password is required to apply changes.
               </div>
             </div>
-          </div>
+
+            <div class="settings-form">
+              <div class="settings-field">
+                <label for="adminCurrentPassword">Current password</label>
+                <input
+                  type="password"
+                  id="adminCurrentPassword"
+                  autocomplete="current-password"
+                  placeholder="Current password"
+                />
+              </div>
+
+              <div class="settings-field">
+                <label for="adminUsername">New admin username</label>
+                <input
+                  type="text"
+                  id="adminUsername"
+                  autocomplete="username"
+                  placeholder="New admin username"
+                />
+                <div class="settings-field-hint">Leave blank to keep current.</div>
+              </div>
+
+              <div class="settings-field">
+                <label for="adminPassword">New admin password</label>
+                <input
+                  type="password"
+                  id="adminPassword"
+                  autocomplete="new-password"
+                  placeholder="New admin password"
+                />
+                <div class="settings-field-hint">Leave blank to keep current.</div>
+              </div>
+            </div>
+
+            <div class="settings-actions">
+              <button
+                type="button"
+                class="settings-btn settings-btn-primary"
+                onclick="saveAdminSettings('admin')"
+              >
+                <svg
+                  class="settings-btn-icon"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M20 6L9 17l-5-5"></path>
+                </svg>
+                Save
+              </button>
+              <button
+                type="button"
+                class="settings-btn"
+                onclick="resetAdminSettings('admin')"
+              >
+                <svg
+                  class="settings-btn-icon"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M3 12a9 9 0 1 0 3-6.7"></path>
+                  <polyline points="3 3 3 9 9 9"></polyline>
+                </svg>
+                Reset
+              </button>
+            </div>
+          </section>
+
+          <section class="user-modal-content zoom-box settings-card wifi-station-card">
+            <div class="settings-card-header">
+              <div class="settings-card-title">
+                <svg
+                  class="settings-card-icon"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M5 12.55a11 11 0 0 1 14.08 0"></path>
+                  <path d="M8.5 15.5a6 6 0 0 1 7 0"></path>
+                  <path d="M12 20h.01"></path>
+                </svg>
+                <span>Wi-Fi Station</span>
+              </div>
+              <div class="settings-card-subtitle">
+                Network the device should join (SSID + password).
+              </div>
+            </div>
+
+            <div class="settings-form">
+              <div class="settings-field">
+                <label for="wifiSSID">Wi-Fi SSID</label>
+                <input
+                  type="text"
+                  id="wifiSSID"
+                  autocomplete="off"
+                  placeholder="Wi-Fi SSID"
+                />
+              </div>
+
+              <div class="settings-field">
+                <label for="wifiPassword">Wi-Fi password</label>
+                <input
+                  type="password"
+                  id="wifiPassword"
+                  autocomplete="new-password"
+                  placeholder="Wi-Fi password"
+                />
+                <div class="settings-field-hint">
+                  Leave blank to keep current.
+                </div>
+              </div>
+            </div>
+
+            <div class="settings-actions">
+              <button
+                type="button"
+                class="settings-btn settings-btn-primary"
+                onclick="saveAdminSettings('wifi')"
+              >
+                <svg
+                  class="settings-btn-icon"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M20 6L9 17l-5-5"></path>
+                </svg>
+                Save
+              </button>
+              <button
+                type="button"
+                class="settings-btn"
+                onclick="resetAdminSettings('wifi')"
+              >
+                <svg
+                  class="settings-btn-icon"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M3 12a9 9 0 1 0 3-6.7"></path>
+                  <polyline points="3 3 3 9 9 9"></polyline>
+                </svg>
+                Reset
+              </button>
+            </div>
+          </section>
         </div>
       </div>
 
@@ -981,9 +1618,51 @@
             <div class="device-grid">
               <!-- Left column: existing device fields -->
               <section class="device-col device-col--left">
-                <h3>Device Settings</h3>
+                <h3 class="ds-col-heading ds-col-heading--device">
+                  <svg
+                    class="ds-col-icon"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path
+                      d="M12 1v2"
+                    ></path>
+                    <path
+                      d="M12 21v2"
+                    ></path>
+                    <path d="M4.22 4.22l1.42 1.42"></path>
+                    <path d="M18.36 18.36l1.42 1.42"></path>
+                    <path d="M1 12h2"></path>
+                    <path d="M21 12h2"></path>
+                    <path d="M4.22 19.78l1.42-1.42"></path>
+                    <path d="M18.36 5.64l1.42-1.42"></path>
+                    <circle cx="12" cy="12" r="4"></circle>
+                  </svg>
+                  <span>Device Settings</span>
+                </h3>
 
-                <div class="ds-group-title ds-power">Sampling &amp; Power</div>
+                <div class="ds-group-title ds-power">
+                  <svg
+                    class="ds-group-icon"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <polygon
+                      points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"
+                    ></polygon>
+                  </svg>
+                  <span>Sampling &amp; Power</span>
+                </div>
 
                 <div class="ds-field">
                   <label for="acFrequency">Sampling Rate</label>
@@ -1010,7 +1689,23 @@
                 </div>
 
                 <div class="ds-group-title ds-thermal-safety">
-                  Thermal Safety
+                  <svg
+                    class="ds-group-icon"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path
+                      d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"
+                    ></path>
+                    <path d="M12 8v5"></path>
+                    <path d="M12 16h.01"></path>
+                  </svg>
+                  <span>Thermal Safety</span>
                 </div>
 
                 <div class="ds-field">
@@ -1029,7 +1724,37 @@
                   </div>
                 </div>
 
-                <div class="ds-group-title ds-thermal-model">Thermal Model</div>
+                <div class="ds-group-title ds-thermal-model">
+                  <svg
+                    class="ds-group-icon"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <rect
+                      x="4"
+                      y="4"
+                      width="16"
+                      height="16"
+                      rx="2"
+                      ry="2"
+                    ></rect>
+                    <rect x="9" y="9" width="6" height="6"></rect>
+                    <path d="M9 1v3"></path>
+                    <path d="M15 1v3"></path>
+                    <path d="M9 20v3"></path>
+                    <path d="M15 20v3"></path>
+                    <path d="M20 9h3"></path>
+                    <path d="M20 15h3"></path>
+                    <path d="M1 9h3"></path>
+                    <path d="M1 15h3"></path>
+                  </svg>
+                  <span>Thermal Model</span>
+                </div>
 
                 <div class="ds-field">
                   <label for="idleCurrentA">Idle Current Baseline</label>
@@ -1063,7 +1788,24 @@
                   </div>
                 </div>
 
-                <div class="ds-group-title ds-ntc">NTC Input</div>
+                <div class="ds-group-title ds-ntc">
+                  <svg
+                    class="ds-group-icon"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path
+                      d="M14 14.76V5a2 2 0 0 0-4 0v9.76a4 4 0 1 0 4 0z"
+                    ></path>
+                    <path d="M12 6v6"></path>
+                  </svg>
+                  <span>NTC Input</span>
+                </div>
 
                 <div class="ds-field">
                   <label for="ntcModel">NTC Model</label>
@@ -1173,117 +1915,111 @@
                     <span class="unit-label">ms</span>
                   </div>
                 </div>
-
-                <div class="ds-group-title ds-loop-timing">Energy Control</div>
-
-                <div class="ds-field" id="mixFrameField">
-                  <label for="mixFrameMs">Energy Frame</label>
-                  <div class="input-with-unit">
-                    <input type="number" id="mixFrameMs" min="10" max="300" />
-                    <span class="unit-label">ms</span>
-                  </div>
-                </div>
-
-                <div class="ds-field">
-                  <label for="mixRefOnMs">Reference On-Time</label>
-                  <div class="input-with-unit">
-                    <input type="number" id="mixRefOnMs" min="1" />
-                    <span class="unit-label">ms</span>
-                  </div>
-                </div>
-
-                <div class="ds-field">
-                  <label for="mixRefResOhm">Reference Resistance</label>
-                  <div class="input-with-unit">
-                    <input type="number" id="mixRefResOhm" step="0.1" />
-                    <span class="unit-label">Ohm</span>
-                  </div>
-                </div>
-
-                <div class="ds-field">
-                  <label for="mixBoostK">Boost Gain</label>
-                  <input type="number" id="mixBoostK" step="0.01" min="0" />
-                </div>
-
-                <div class="ds-field">
-                  <label for="mixBoostMs">Boost Duration</label>
-                  <div class="input-with-unit">
-                    <input type="number" id="mixBoostMs" min="0" />
-                    <span class="unit-label">ms</span>
-                  </div>
-                </div>
-
-                <div class="ds-field">
-                  <label for="mixPreDeltaC">Boost Exit Delta</label>
-                  <div class="input-with-unit">
-                    <input type="number" id="mixPreDeltaC" step="0.1" min="0" />
-                    <span class="unit-label">C</span>
-                  </div>
-                </div>
-
-                <div class="ds-field">
-                  <label for="mixHoldUpdateSec">Thermal Update</label>
-                  <div class="input-with-unit">
-                    <input
-                      type="number"
-                      id="mixHoldUpdateSec"
-                      min="0.5"
-                      max="5"
-                      step="0.1"
-                    />
-                    <span class="unit-label">s</span>
-                  </div>
-                </div>
-
-                <div class="ds-field">
-                  <label for="mixHoldGain">Hold Gain</label>
-                  <div class="input-with-unit">
-                    <input type="number" id="mixHoldGain" step="0.01" min="0" />
-                    <span class="unit-label">ms/C</span>
-                  </div>
-                </div>
-
-                <div class="ds-field">
-                  <label for="mixMinOnMs">Min Packet</label>
-                  <div class="input-with-unit">
-                    <input type="number" id="mixMinOnMs" min="0" />
-                    <span class="unit-label">ms</span>
-                  </div>
-                </div>
-
-                <div class="ds-field">
-                  <label for="mixMaxOnMs">Max Packet</label>
-                  <div class="input-with-unit">
-                    <input type="number" id="mixMaxOnMs" min="1" />
-                    <span class="unit-label">ms</span>
-                  </div>
-                </div>
-
-                <div class="ds-field">
-                  <label for="mixMaxAvgMs">Max Avg / sec</label>
-                  <div class="input-with-unit">
-                    <input type="number" id="mixMaxAvgMs" min="0" />
-                    <span class="unit-label">ms</span>
-                  </div>
-                </div>
-
-                <div class="ds-field">
-                  <label for="wireGauge">Wire Gauge (AWG)</label>
-                  <input
-                    id="wireGauge"
-                    type="number"
-                    step="1"
-                    min="1"
-                    max="40"
-                    inputmode="numeric"
-                  />
-                </div>
               </section>
 
               <!-- Right column: Nichrome -->
               <section class="device-col device-col--right">
-                <h3>Nichrome Calibration</h3>
-                <div class="ds-group-title ds-floor">Floor Settings</div>
+                <h3 class="ds-col-heading ds-col-heading--nichrome">
+                  <svg
+                    class="ds-col-icon"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path
+                      d="M12 2c0 4-2 6-2 8a3 3 0 0 0 6 0c0-2-2-4-2-8"
+                    ></path>
+                    <path
+                      d="M8.5 14.5C7.3 15.7 7 17 7 18a5 5 0 0 0 10 0c0-1-.3-2.3-1.5-3.5"
+                    ></path>
+                  </svg>
+                  <span>Nichrome Calibration</span>
+                </h3>
+
+                <div
+                  class="device-subtabs"
+                  role="tablist"
+                  aria-label="Nichrome settings tabs"
+                >
+                  <button
+                    type="button"
+                    class="device-subtab-btn is-active"
+                    data-device-subtab="nichrome"
+                    role="tab"
+                    aria-selected="true"
+                  >
+                    <svg
+                      class="device-subtab-icon"
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <rect x="3" y="3" width="7" height="7"></rect>
+                      <rect x="14" y="3" width="7" height="7"></rect>
+                      <rect x="3" y="14" width="7" height="7"></rect>
+                      <rect x="14" y="14" width="7" height="7"></rect>
+                    </svg>
+                    <span>Nichrome</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="device-subtab-btn"
+                    data-device-subtab="energy"
+                    role="tab"
+                    aria-selected="false"
+                  >
+                    <svg
+                      class="device-subtab-icon"
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <polyline
+                        points="22 12 18 12 15 21 9 3 6 12 2 12"
+                      ></polyline>
+                    </svg>
+                    <span>Energy Control</span>
+                  </button>
+                </div>
+
+                <div class="device-subtab-panels">
+                  <div
+                    class="device-subtab-panel is-active"
+                    data-device-subtab-panel="nichrome"
+                    role="tabpanel"
+                  >
+                <div class="ds-group-title ds-floor">
+                  <svg
+                    class="ds-group-icon"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <line x1="4" y1="6" x2="20" y2="6"></line>
+                    <circle cx="9" cy="6" r="2"></circle>
+                    <line x1="4" y1="12" x2="20" y2="12"></line>
+                    <circle cx="15" cy="12" r="2"></circle>
+                    <line x1="4" y1="18" x2="20" y2="18"></line>
+                    <circle cx="11" cy="18" r="2"></circle>
+                  </svg>
+                  <span>Floor Settings</span>
+                </div>
                 <div class="nichrome-meta">
                   <div class="ds-field">
                     <label for="floorThicknessMm"
@@ -1327,7 +2063,22 @@
                   </div>
                 </div>
                 <div class="ds-group-title ds-nichrome">
-                  Nichrome Calibration
+                  <svg
+                    class="ds-group-icon"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <rect x="3" y="3" width="7" height="7"></rect>
+                    <rect x="14" y="3" width="7" height="7"></rect>
+                    <rect x="3" y="14" width="7" height="7"></rect>
+                    <rect x="14" y="14" width="7" height="7"></rect>
+                  </svg>
+                  <span>Nichrome Calibration</span>
                 </div>
                 <div class="nichrome-grid">
                   <!-- New: global Ω/m -->
@@ -1432,20 +2183,203 @@
                     />
                   </div>
                 </div>
+                  </div>
+
+                  <div
+                    class="device-subtab-panel"
+                    data-device-subtab-panel="energy"
+                    role="tabpanel"
+                    hidden
+                  >
+                    <div class="energy-control-grid" id="energyControlGrid">
+                      <div class="ds-group-title ds-loop-timing">
+                        <svg
+                          class="ds-group-icon"
+                          viewBox="0 0 24 24"
+                          aria-hidden="true"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        >
+                          <polyline
+                            points="22 12 18 12 15 21 9 3 6 12 2 12"
+                          ></polyline>
+                        </svg>
+                        <span>Energy Control</span>
+                      </div>
+
+                      <div class="ds-field" id="mixFrameField">
+                        <label for="mixFrameMs">Energy Frame</label>
+                        <div class="input-with-unit">
+                          <input
+                            type="number"
+                            id="mixFrameMs"
+                            min="10"
+                            max="300"
+                          />
+                          <span class="unit-label">ms</span>
+                        </div>
+                      </div>
+
+                      <div class="ds-field">
+                        <label for="mixRefOnMs">Reference On-Time</label>
+                        <div class="input-with-unit">
+                          <input type="number" id="mixRefOnMs" min="1" />
+                          <span class="unit-label">ms</span>
+                        </div>
+                      </div>
+
+                      <div class="ds-field">
+                        <label for="mixRefResOhm">Reference Resistance</label>
+                        <div class="input-with-unit">
+                          <input type="number" id="mixRefResOhm" step="0.1" />
+                          <span class="unit-label">Ohm</span>
+                        </div>
+                      </div>
+
+                      <div class="ds-field">
+                        <label for="mixBoostK">Boost Gain</label>
+                        <input
+                          type="number"
+                          id="mixBoostK"
+                          step="0.01"
+                          min="0"
+                        />
+                      </div>
+
+                      <div class="ds-field">
+                        <label for="mixBoostMs">Boost Duration</label>
+                        <div class="input-with-unit">
+                          <input type="number" id="mixBoostMs" min="0" />
+                          <span class="unit-label">ms</span>
+                        </div>
+                      </div>
+
+                      <div class="ds-field">
+                        <label for="mixPreDeltaC">Boost Exit Delta</label>
+                        <div class="input-with-unit">
+                          <input
+                            type="number"
+                            id="mixPreDeltaC"
+                            step="0.1"
+                            min="0"
+                          />
+                          <span class="unit-label">C</span>
+                        </div>
+                      </div>
+
+                      <div class="ds-field">
+                        <label for="mixHoldUpdateSec">Thermal Update</label>
+                        <div class="input-with-unit">
+                          <input
+                            type="number"
+                            id="mixHoldUpdateSec"
+                            min="0.5"
+                            max="5"
+                            step="0.1"
+                          />
+                          <span class="unit-label">s</span>
+                        </div>
+                      </div>
+
+                      <div class="ds-field">
+                        <label for="mixHoldGain">Hold Gain</label>
+                        <div class="input-with-unit">
+                          <input
+                            type="number"
+                            id="mixHoldGain"
+                            step="0.01"
+                            min="0"
+                          />
+                          <span class="unit-label">ms/C</span>
+                        </div>
+                      </div>
+
+                      <div class="ds-field">
+                        <label for="mixMinOnMs">Min Packet</label>
+                        <div class="input-with-unit">
+                          <input type="number" id="mixMinOnMs" min="0" />
+                          <span class="unit-label">ms</span>
+                        </div>
+                      </div>
+
+                      <div class="ds-field">
+                        <label for="mixMaxOnMs">Max Packet</label>
+                        <div class="input-with-unit">
+                          <input type="number" id="mixMaxOnMs" min="1" />
+                          <span class="unit-label">ms</span>
+                        </div>
+                      </div>
+
+                      <div class="ds-field">
+                        <label for="mixMaxAvgMs">Max Avg / sec</label>
+                        <div class="input-with-unit">
+                          <input type="number" id="mixMaxAvgMs" min="0" />
+                          <span class="unit-label">ms</span>
+                        </div>
+                      </div>
+
+                      <div class="ds-field">
+                        <label for="wireGauge">Wire Gauge (AWG)</label>
+                        <input
+                          id="wireGauge"
+                          type="number"
+                          step="1"
+                          min="1"
+                          max="40"
+                          inputmode="numeric"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </section>
             </div>
 
-            <!-- One shared action row -->
-            <div class="user-modal-actions round-actions">
-              <div class="round-button save" onclick="saveDeviceAndNichrome()">
-                <img src="icons/ok_tank.png" alt="Save" />
-              </div>
-              <div
-                class="round-button cancel"
-                onclick="resetDeviceAndNichrome()"
+            <div class="device-settings-actions settings-actions">
+              <button
+                type="button"
+                class="settings-btn settings-btn-primary"
+                onclick="saveDeviceAndNichrome()"
+                title="Save device + nichrome settings"
               >
-                <img src="icons/close.png" alt="Cancel" />
-              </div>
+                <svg
+                  class="settings-btn-icon"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M20 6L9 17l-5-5"></path>
+                </svg>
+                Save
+              </button>
+              <button
+                type="button"
+                class="settings-btn"
+                onclick="resetDeviceAndNichrome()"
+                title="Reset to last loaded values"
+              >
+                <svg
+                  class="settings-btn-icon"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M3 12a9 9 0 1 0 3-6.7"></path>
+                  <polyline points="3 3 3 9 9 9"></polyline>
+                </svg>
+                Reset
+              </button>
             </div>
           </div>
         </div>
