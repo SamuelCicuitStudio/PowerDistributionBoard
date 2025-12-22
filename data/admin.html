@@ -497,9 +497,7 @@
             stroke-linecap="round"
             stroke-linejoin="round"
           >
-            <path
-              d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"
-            ></path>
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
           </svg>
           <span>Admin</span>
         </div>
@@ -584,7 +582,9 @@
       <!-- Dashboard Tab -->
       <div class="content active" id="dashboardTab">
         <div class="dashboard-panels dashboard-panels-top">
-          <section class="user-modal-content zoom-box dashboard-card dashboard-clock">
+          <section
+            class="user-modal-content zoom-box dashboard-card dashboard-clock"
+          >
             <div class="dashboard-card-header">
               <div class="dashboard-card-heading">
                 <div class="dashboard-card-title">
@@ -646,18 +646,102 @@
                   <circle class="clock-inner" cx="60" cy="60" r="44"></circle>
 
                   <g class="clock-ticks" aria-hidden="true">
-                    <line class="clock-tick major" x1="60" y1="12" x2="60" y2="22" transform="rotate(0 60 60)"></line>
-                    <line class="clock-tick major" x1="60" y1="12" x2="60" y2="22" transform="rotate(30 60 60)"></line>
-                    <line class="clock-tick major" x1="60" y1="12" x2="60" y2="22" transform="rotate(60 60 60)"></line>
-                    <line class="clock-tick major" x1="60" y1="12" x2="60" y2="22" transform="rotate(90 60 60)"></line>
-                    <line class="clock-tick major" x1="60" y1="12" x2="60" y2="22" transform="rotate(120 60 60)"></line>
-                    <line class="clock-tick major" x1="60" y1="12" x2="60" y2="22" transform="rotate(150 60 60)"></line>
-                    <line class="clock-tick major" x1="60" y1="12" x2="60" y2="22" transform="rotate(180 60 60)"></line>
-                    <line class="clock-tick major" x1="60" y1="12" x2="60" y2="22" transform="rotate(210 60 60)"></line>
-                    <line class="clock-tick major" x1="60" y1="12" x2="60" y2="22" transform="rotate(240 60 60)"></line>
-                    <line class="clock-tick major" x1="60" y1="12" x2="60" y2="22" transform="rotate(270 60 60)"></line>
-                    <line class="clock-tick major" x1="60" y1="12" x2="60" y2="22" transform="rotate(300 60 60)"></line>
-                    <line class="clock-tick major" x1="60" y1="12" x2="60" y2="22" transform="rotate(330 60 60)"></line>
+                    <line
+                      class="clock-tick major"
+                      x1="60"
+                      y1="12"
+                      x2="60"
+                      y2="22"
+                      transform="rotate(0 60 60)"
+                    ></line>
+                    <line
+                      class="clock-tick major"
+                      x1="60"
+                      y1="12"
+                      x2="60"
+                      y2="22"
+                      transform="rotate(30 60 60)"
+                    ></line>
+                    <line
+                      class="clock-tick major"
+                      x1="60"
+                      y1="12"
+                      x2="60"
+                      y2="22"
+                      transform="rotate(60 60 60)"
+                    ></line>
+                    <line
+                      class="clock-tick major"
+                      x1="60"
+                      y1="12"
+                      x2="60"
+                      y2="22"
+                      transform="rotate(90 60 60)"
+                    ></line>
+                    <line
+                      class="clock-tick major"
+                      x1="60"
+                      y1="12"
+                      x2="60"
+                      y2="22"
+                      transform="rotate(120 60 60)"
+                    ></line>
+                    <line
+                      class="clock-tick major"
+                      x1="60"
+                      y1="12"
+                      x2="60"
+                      y2="22"
+                      transform="rotate(150 60 60)"
+                    ></line>
+                    <line
+                      class="clock-tick major"
+                      x1="60"
+                      y1="12"
+                      x2="60"
+                      y2="22"
+                      transform="rotate(180 60 60)"
+                    ></line>
+                    <line
+                      class="clock-tick major"
+                      x1="60"
+                      y1="12"
+                      x2="60"
+                      y2="22"
+                      transform="rotate(210 60 60)"
+                    ></line>
+                    <line
+                      class="clock-tick major"
+                      x1="60"
+                      y1="12"
+                      x2="60"
+                      y2="22"
+                      transform="rotate(240 60 60)"
+                    ></line>
+                    <line
+                      class="clock-tick major"
+                      x1="60"
+                      y1="12"
+                      x2="60"
+                      y2="22"
+                      transform="rotate(270 60 60)"
+                    ></line>
+                    <line
+                      class="clock-tick major"
+                      x1="60"
+                      y1="12"
+                      x2="60"
+                      y2="22"
+                      transform="rotate(300 60 60)"
+                    ></line>
+                    <line
+                      class="clock-tick major"
+                      x1="60"
+                      y1="12"
+                      x2="60"
+                      y2="22"
+                      transform="rotate(330 60 60)"
+                    ></line>
                   </g>
 
                   <g class="clock-hands" aria-hidden="true">
@@ -692,7 +776,9 @@
 
               <div class="dashboard-clock-meta">
                 <div id="dashboardClockDay" class="dashboard-clock-day">--</div>
-                <div id="dashboardClockDate" class="dashboard-clock-date">--</div>
+                <div id="dashboardClockDate" class="dashboard-clock-date">
+                  --
+                </div>
                 <div
                   id="dashboardClockTime"
                   class="dashboard-clock-time dashboard-mono"
@@ -703,65 +789,217 @@
             </div>
           </section>
 
-        <section class="user-modal-content zoom-box dashboard-card dashboard-system">
-          <div class="dashboard-card-header">
-            <div class="dashboard-card-heading">
-              <div class="dashboard-card-title">
-                <svg
-                  class="dashboard-card-icon"
-                  viewBox="0 0 24 24"
-                  aria-hidden="true"
+          <section
+            class="user-modal-content zoom-box dashboard-card dashboard-system"
+          >
+            <div class="dashboard-card-header">
+              <div class="dashboard-card-heading">
+                <div class="dashboard-card-title">
+                  <svg
+                    class="dashboard-card-icon"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <line x1="4" y1="21" x2="4" y2="14"></line>
+                    <line x1="4" y1="10" x2="4" y2="3"></line>
+                    <line x1="12" y1="21" x2="12" y2="12"></line>
+                    <line x1="12" y1="8" x2="12" y2="3"></line>
+                    <line x1="20" y1="21" x2="20" y2="16"></line>
+                    <line x1="20" y1="12" x2="20" y2="3"></line>
+                    <line x1="1" y1="14" x2="7" y2="14"></line>
+                    <line x1="9" y1="8" x2="15" y2="8"></line>
+                    <line x1="17" y1="16" x2="23" y2="16"></line>
+                  </svg>
+                  <span>System</span>
+                </div>
+                <div class="dashboard-card-subtitle">Mode, LEDs, readiness</div>
+              </div>
+
+              <svg
+                class="dashboard-card-watermark"
+                viewBox="0 0 120 120"
+                aria-hidden="true"
+              >
+                <path
+                  d="M14 74h26l10-24 16 44 10-26h24"
                   fill="none"
                   stroke="currentColor"
-                  stroke-width="2"
+                  stroke-width="3"
                   stroke-linecap="round"
                   stroke-linejoin="round"
-                >
-                  <line x1="4" y1="21" x2="4" y2="14"></line>
-                  <line x1="4" y1="10" x2="4" y2="3"></line>
-                  <line x1="12" y1="21" x2="12" y2="12"></line>
-                  <line x1="12" y1="8" x2="12" y2="3"></line>
-                  <line x1="20" y1="21" x2="20" y2="16"></line>
-                  <line x1="20" y1="12" x2="20" y2="3"></line>
-                  <line x1="1" y1="14" x2="7" y2="14"></line>
-                  <line x1="9" y1="8" x2="15" y2="8"></line>
-                  <line x1="17" y1="16" x2="23" y2="16"></line>
-                </svg>
-                <span>System</span>
-              </div>
-              <div class="dashboard-card-subtitle">Mode, LEDs, readiness</div>
+                  opacity="0.8"
+                />
+                <circle
+                  cx="14"
+                  cy="74"
+                  r="4"
+                  fill="currentColor"
+                  opacity="0.65"
+                />
+                <circle
+                  cx="110"
+                  cy="68"
+                  r="4"
+                  fill="currentColor"
+                  opacity="0.45"
+                />
+              </svg>
             </div>
 
-            <svg
-              class="dashboard-card-watermark"
-              viewBox="0 0 120 120"
-              aria-hidden="true"
-            >
-              <path
-                d="M14 74h26l10-24 16 44 10-26h24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="3"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                opacity="0.8"
-              />
-              <circle cx="14" cy="74" r="4" fill="currentColor" opacity="0.65" />
-              <circle cx="110" cy="68" r="4" fill="currentColor" opacity="0.45" />
-            </svg>
-          </div>
+            <div class="mode-toggle">
+              <div class="mode-group mode-group-mode" aria-label="System mode">
+                <div class="mode-group-label">Mode</div>
+                <div class="mode-group-controls">
+                  <span
+                    id="modeAutoPill"
+                    class="mode-pill mode-pill-auto"
+                    title="Auto mode"
+                  >
+                    <svg
+                      class="mode-pill-icon"
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M21 12a9 9 0 1 1-2.64-6.36"></path>
+                      <polyline points="21 3 21 9 15 9"></polyline>
+                    </svg>
+                    <span class="mode-pill-text">Auto</span>
+                  </span>
+                  <label class="switch">
+                    <input
+                      type="checkbox"
+                      id="modeToggle"
+                      onchange="toggleMode()"
+                    />
+                    <span class="slider"></span>
+                  </label>
+                  <span
+                    id="modeManualPill"
+                    class="mode-pill mode-pill-manual"
+                    title="Manual mode"
+                  >
+                    <svg
+                      class="mode-pill-icon"
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path
+                        d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"
+                      ></path>
+                      <circle cx="12" cy="7" r="4"></circle>
+                    </svg>
+                    <span class="mode-pill-text">Manual</span>
+                  </span>
+                </div>
+              </div>
 
-          <div class="mode-toggle">
-            <div class="mode-group mode-group-mode" aria-label="System mode">
-              <div class="mode-group-label">Mode</div>
-              <div class="mode-group-controls">
-                <span
-                  id="modeAutoPill"
-                  class="mode-pill mode-pill-auto"
-                  title="Auto mode"
+              <div
+                class="mode-group mode-group-feedback"
+                aria-label="LED feedback"
+              >
+                <div class="mode-group-label">LED feedback</div>
+                <div class="mode-group-controls">
+                  <span
+                    id="ltPill"
+                    class="mode-pill mode-pill-lt"
+                    title="LT (LED feedback)"
+                  >
+                    <svg
+                      class="mode-pill-icon"
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M9 18h6"></path>
+                      <path d="M10 22h4"></path>
+                      <path
+                        d="M12 2a7 7 0 0 0-4 12c.5.5 1 1.5 1 2h6c0-.5.5-1.5 1-2a7 7 0 0 0-4-12z"
+                      ></path>
+                    </svg>
+                    <span class="mode-pill-text">LT</span>
+                  </span>
+                  <label class="switch">
+                    <input
+                      type="checkbox"
+                      id="ltToggle"
+                      onchange="toggleLT()"
+                    />
+                    <span class="slider"></span>
+                  </label>
+                </div>
+              </div>
+
+              <div
+                class="mode-group mode-group-status"
+                aria-label="Loop status"
+              >
+                <div class="mode-group-label">Loop status</div>
+                <div class="mode-group-controls">
+                  <span class="mode-pill mode-pill-ready" title="Ready status">
+                    <svg
+                      class="mode-pill-icon"
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <circle cx="12" cy="12" r="9"></circle>
+                      <path d="M9 12l2 2 4-4"></path>
+                    </svg>
+                    <span class="mode-pill-text">Ready</span>
+                    <span id="readyLed" class="led" aria-hidden="true"></span>
+                  </span>
+                  <span class="mode-pill mode-pill-off" title="Off status">
+                    <svg
+                      class="mode-pill-icon"
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M12 2v10"></path>
+                      <path d="M6.36 6.36a9 9 0 1 0 11.28 0"></path>
+                    </svg>
+                    <span class="mode-pill-text">Off</span>
+                    <span id="offLed" class="led" aria-hidden="true"></span>
+                  </span>
+                </div>
+              </div>
+
+              <div class="dashboard-system-actions">
+                <button
+                  id="forceCalibrationBtn"
+                  type="button"
+                  class="settings-btn settings-btn-primary dashboard-action-btn"
+                  onclick="forceCalibration()"
                 >
                   <svg
-                    class="mode-pill-icon"
+                    class="settings-btn-icon"
                     viewBox="0 0 24 24"
                     aria-hidden="true"
                     fill="none"
@@ -772,142 +1010,13 @@
                   >
                     <path d="M21 12a9 9 0 1 1-2.64-6.36"></path>
                     <polyline points="21 3 21 9 15 9"></polyline>
+                    <path d="M12 7v5l3 3"></path>
                   </svg>
-                  <span class="mode-pill-text">Auto</span>
-                </span>
-                <label class="switch">
-                  <input
-                    type="checkbox"
-                    id="modeToggle"
-                    onchange="toggleMode()"
-                  />
-                  <span class="slider"></span>
-                </label>
-                <span
-                  id="modeManualPill"
-                  class="mode-pill mode-pill-manual"
-                  title="Manual mode"
-                >
-                  <svg
-                    class="mode-pill-icon"
-                    viewBox="0 0 24 24"
-                    aria-hidden="true"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <path
-                      d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"
-                    ></path>
-                    <circle cx="12" cy="7" r="4"></circle>
-                  </svg>
-                  <span class="mode-pill-text">Manual</span>
-                </span>
+                  <span>Force Calibration</span>
+                </button>
               </div>
             </div>
-
-            <div class="mode-group mode-group-feedback" aria-label="LED feedback">
-              <div class="mode-group-label">LED feedback</div>
-              <div class="mode-group-controls">
-                <span
-                  id="ltPill"
-                  class="mode-pill mode-pill-lt"
-                  title="LT (LED feedback)"
-                >
-                  <svg
-                    class="mode-pill-icon"
-                    viewBox="0 0 24 24"
-                    aria-hidden="true"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <path d="M9 18h6"></path>
-                    <path d="M10 22h4"></path>
-                    <path
-                      d="M12 2a7 7 0 0 0-4 12c.5.5 1 1.5 1 2h6c0-.5.5-1.5 1-2a7 7 0 0 0-4-12z"
-                    ></path>
-                  </svg>
-                  <span class="mode-pill-text">LT</span>
-                </span>
-                <label class="switch">
-                  <input type="checkbox" id="ltToggle" onchange="toggleLT()" />
-                  <span class="slider"></span>
-                </label>
-              </div>
-            </div>
-
-            <div class="mode-group mode-group-status" aria-label="Loop status">
-              <div class="mode-group-label">Loop status</div>
-              <div class="mode-group-controls">
-                <span class="mode-pill mode-pill-ready" title="Ready status">
-                  <svg
-                    class="mode-pill-icon"
-                    viewBox="0 0 24 24"
-                    aria-hidden="true"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <circle cx="12" cy="12" r="9"></circle>
-                    <path d="M9 12l2 2 4-4"></path>
-                  </svg>
-                  <span class="mode-pill-text">Ready</span>
-                  <span id="readyLed" class="led" aria-hidden="true"></span>
-                </span>
-                <span class="mode-pill mode-pill-off" title="Off status">
-                  <svg
-                    class="mode-pill-icon"
-                    viewBox="0 0 24 24"
-                    aria-hidden="true"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <path d="M12 2v10"></path>
-                    <path d="M6.36 6.36a9 9 0 1 0 11.28 0"></path>
-                  </svg>
-                  <span class="mode-pill-text">Off</span>
-                  <span id="offLed" class="led" aria-hidden="true"></span>
-                </span>
-              </div>
-            </div>
-
-            <div class="dashboard-system-actions">
-              <button
-                id="forceCalibrationBtn"
-                type="button"
-                class="settings-btn settings-btn-primary dashboard-action-btn"
-                onclick="forceCalibration()"
-              >
-                <svg
-                  class="settings-btn-icon"
-                  viewBox="0 0 24 24"
-                  aria-hidden="true"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path d="M21 12a9 9 0 1 1-2.64-6.36"></path>
-                  <polyline points="21 3 21 9 15 9"></polyline>
-                  <path d="M12 7v5l3 3"></path>
-                </svg>
-                <span>Force Calibration</span>
-              </button>
-            </div>
-          </div>
-        </section>
-
+          </section>
         </div>
 
         <div class="gauge-scroll-area">
@@ -915,122 +1024,11 @@
             <section
               class="user-modal-content zoom-box dashboard-card dashboard-electrical"
             >
-                <div class="dashboard-card-header">
-                  <div class="dashboard-card-heading">
-                    <div class="dashboard-card-title">
-                      <svg
-                        class="dashboard-card-icon"
-                        viewBox="0 0 24 24"
-                        aria-hidden="true"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      >
-                        <path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z"></path>
-                      </svg>
-                      <span>Electrical</span>
-                    </div>
-                    <div class="dashboard-card-subtitle">
-                      Voltage, current, capacitance
-                    </div>
-                  </div>
-                </div>
-
-                <div class="dashboard-metrics">
-                  <!-- Voltage -->
-                  <div class="gauge-card">
-                    <div class="gauge">
-                      <svg viewBox="0 0 36 36" class="gauge-svg">
-                        <g transform="rotate(-90 18 18)">
-                          <path
-                            class="gauge-bg"
-                            d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
-                          />
-                          <path
-                            class="gauge-fg voltage"
-                            stroke-dasharray="92, 100"
-                            d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
-                          />
-                        </g>
-                        <text
-                          x="18"
-                          y="18"
-                          class="gauge-value"
-                          transform="rotate(90 18 18)"
-                          id="voltageValue"
-                        >
-                          230V
-                        </text>
-                      </svg>
-                    </div>
-                    <div class="gauge-label">Voltage</div>
-                  </div>
-
-                  <!-- Current -->
-                  <div class="gauge-card">
-                    <div class="gauge">
-                      <svg viewBox="0 0 36 36" class="gauge-svg">
-                        <g transform="rotate(-90 18 18)">
-                          <path
-                            class="gauge-bg"
-                            d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
-                          />
-                          <path
-                            class="gauge-fg current"
-                            stroke-dasharray="60, 100"
-                            d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
-                          />
-                        </g>
-                        <text
-                          x="18"
-                          y="18"
-                          class="gauge-value"
-                          transform="rotate(90 18 18)"
-                          id="currentValue"
-                        >
-                          1.2A
-                        </text>
-                      </svg>
-                    </div>
-                    <div class="gauge-label">Current</div>
-                  </div>
-
-                  <!-- Capacitance -->
-                  <div class="gauge-card">
-                    <div class="gauge">
-                      <svg viewBox="0 0 36 36" class="gauge-svg">
-                        <g transform="rotate(-90 18 18)">
-                          <path
-                            class="gauge-bg"
-                            d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
-                          />
-                          <path
-                            class="gauge-fg voltage"
-                            stroke-dasharray="0, 100"
-                            d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
-                          />
-                        </g>
-                        <text
-                          x="18"
-                          y="18"
-                          class="gauge-value"
-                          transform="rotate(90 18 18)"
-                          id="capacitanceValue"
-                        >
-                          --mF
-                        </text>
-                      </svg>
-                    </div>
-                    <div class="gauge-label">Capacitance</div>
-                  </div>
-                </div>
-
-                <div class="dashboard-meta">
-                  <div class="dashboard-meta-pill">
+              <div class="dashboard-card-header">
+                <div class="dashboard-card-heading">
+                  <div class="dashboard-card-title">
                     <svg
-                      class="dashboard-meta-icon"
+                      class="dashboard-card-icon"
                       viewBox="0 0 24 24"
                       aria-hidden="true"
                       fill="none"
@@ -1039,391 +1037,506 @@
                       stroke-linecap="round"
                       stroke-linejoin="round"
                     >
-                      <path d="M3 12h4l2-6 4 12 2-6h6"></path>
+                      <path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z"></path>
                     </svg>
-                    <span>ADC raw (/100):</span>
-                    <span id="adcRawValue" class="dashboard-mono">--</span>
+                    <span>Electrical</span>
+                  </div>
+                  <div class="dashboard-card-subtitle">
+                    Voltage, current, capacitance
                   </div>
                 </div>
-              </section>
-
-            <section class="user-modal-content zoom-box dashboard-card dashboard-thermal">
-          <div class="dashboard-card-header">
-            <div class="dashboard-card-heading">
-              <div class="dashboard-card-title">
-                <svg
-                  class="dashboard-card-icon"
-                  viewBox="0 0 24 24"
-                  aria-hidden="true"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path
-                    d="M14 14.76V5a2 2 0 0 0-4 0v9.76a4 4 0 1 0 4 0z"
-                  ></path>
-                </svg>
-                <span>Thermals</span>
               </div>
-              <div class="dashboard-card-subtitle">12 temperature channels</div>
-            </div>
-          </div>
 
-          <div class="dashboard-temps">
-            <!-- Temp 1 -->
-            <div class="gauge-card is-key">
-              <div class="gauge">
-                <svg viewBox="0 0 36 36" class="gauge-svg">
-                  <g transform="rotate(-90 18 18)">
-                    <path
-                      class="gauge-bg"
-                      d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 
+              <div class="dashboard-metrics">
+                <!-- Voltage -->
+                <div class="gauge-card">
+                  <div class="gauge">
+                    <svg viewBox="0 0 36 36" class="gauge-svg">
+                      <g transform="rotate(-90 18 18)">
+                        <path
+                          class="gauge-bg"
+                          d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                        />
+                        <path
+                          class="gauge-fg voltage"
+                          stroke-dasharray="92, 100"
+                          d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                        />
+                      </g>
+                      <text
+                        x="18"
+                        y="18"
+                        class="gauge-value"
+                        transform="rotate(90 18 18)"
+                        id="voltageValue"
+                      >
+                        230V
+                      </text>
+                    </svg>
+                  </div>
+                  <div class="gauge-label">Voltage</div>
+                </div>
+
+                <!-- Current -->
+                <div class="gauge-card">
+                  <div class="gauge">
+                    <svg viewBox="0 0 36 36" class="gauge-svg">
+                      <g transform="rotate(-90 18 18)">
+                        <path
+                          class="gauge-bg"
+                          d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                        />
+                        <path
+                          class="gauge-fg current"
+                          stroke-dasharray="60, 100"
+                          d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                        />
+                      </g>
+                      <text
+                        x="18"
+                        y="18"
+                        class="gauge-value"
+                        transform="rotate(90 18 18)"
+                        id="currentValue"
+                      >
+                        1.2A
+                      </text>
+                    </svg>
+                  </div>
+                  <div class="gauge-label">Current</div>
+                </div>
+
+                <!-- Capacitance -->
+                <div class="gauge-card">
+                  <div class="gauge">
+                    <svg viewBox="0 0 36 36" class="gauge-svg">
+                      <g transform="rotate(-90 18 18)">
+                        <path
+                          class="gauge-bg"
+                          d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                        />
+                        <path
+                          class="gauge-fg voltage"
+                          stroke-dasharray="0, 100"
+                          d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                        />
+                      </g>
+                      <text
+                        x="18"
+                        y="18"
+                        class="gauge-value"
+                        transform="rotate(90 18 18)"
+                        id="capacitanceValue"
+                      >
+                        --mF
+                      </text>
+                    </svg>
+                  </div>
+                  <div class="gauge-label">Capacitance</div>
+                </div>
+              </div>
+
+              <div class="dashboard-meta">
+                <div class="dashboard-meta-pill">
+                  <svg
+                    class="dashboard-meta-icon"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M3 12h4l2-6 4 12 2-6h6"></path>
+                  </svg>
+                  <span>ADC raw (/100):</span>
+                  <span id="adcRawValue" class="dashboard-mono">--</span>
+                </div>
+              </div>
+            </section>
+
+            <section
+              class="user-modal-content zoom-box dashboard-card dashboard-thermal"
+            >
+              <div class="dashboard-card-header">
+                <div class="dashboard-card-heading">
+                  <div class="dashboard-card-title">
+                    <svg
+                      class="dashboard-card-icon"
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path
+                        d="M14 14.76V5a2 2 0 0 0-4 0v9.76a4 4 0 1 0 4 0z"
+                      ></path>
+                    </svg>
+                    <span>Thermals</span>
+                  </div>
+                  <div class="dashboard-card-subtitle">
+                    12 temperature channels
+                  </div>
+                </div>
+              </div>
+
+              <div class="dashboard-temps">
+                <!-- Temp 1 -->
+                <div class="gauge-card is-key">
+                  <div class="gauge">
+                    <svg viewBox="0 0 36 36" class="gauge-svg">
+                      <g transform="rotate(-90 18 18)">
+                        <path
+                          class="gauge-bg"
+                          d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 
                         a15.9155 15.9155 0 1 1 0 -31.831"
-                    />
-                    <path
-                      class="gauge-fg temperature"
-                      stroke-dasharray="21, 100"
-                      d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 
+                        />
+                        <path
+                          class="gauge-fg temperature"
+                          stroke-dasharray="21, 100"
+                          d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 
                         a15.9155 15.9155 0 1 1 0 -31.831"
-                    />
-                  </g>
-                  <text
-                    x="18"
-                    y="18"
-                    class="gauge-value"
-                    transform="rotate(90 18 18)"
-                    id="temp1Value"
-                  >
-                    31°C
-                  </text>
-                </svg>
-              </div>
-              <div class="gauge-label">Board 01</div>
-            </div>
+                        />
+                      </g>
+                      <text
+                        x="18"
+                        y="18"
+                        class="gauge-value"
+                        transform="rotate(90 18 18)"
+                        id="temp1Value"
+                      >
+                        31°C
+                      </text>
+                    </svg>
+                  </div>
+                  <div class="gauge-label">Board 01</div>
+                </div>
 
-            <!-- Temp 2 -->
-            <div class="gauge-card is-key">
-              <div class="gauge">
-                <svg viewBox="0 0 36 36" class="gauge-svg">
-                  <g transform="rotate(-90 18 18)">
-                    <path
-                      class="gauge-bg"
-                      d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
-                    />
-                    <path
-                      class="gauge-fg temperature"
-                      stroke-dasharray="17, 100"
-                      d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
-                    />
-                  </g>
-                  <text
-                    x="18"
-                    y="18"
-                    class="gauge-value"
-                    transform="rotate(90 18 18)"
-                    id="temp2Value"
-                  >
-                    25°C
-                  </text>
-                </svg>
-              </div>
-              <div class="gauge-label">Board 02</div>
-            </div>
+                <!-- Temp 2 -->
+                <div class="gauge-card is-key">
+                  <div class="gauge">
+                    <svg viewBox="0 0 36 36" class="gauge-svg">
+                      <g transform="rotate(-90 18 18)">
+                        <path
+                          class="gauge-bg"
+                          d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                        />
+                        <path
+                          class="gauge-fg temperature"
+                          stroke-dasharray="17, 100"
+                          d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                        />
+                      </g>
+                      <text
+                        x="18"
+                        y="18"
+                        class="gauge-value"
+                        transform="rotate(90 18 18)"
+                        id="temp2Value"
+                      >
+                        25°C
+                      </text>
+                    </svg>
+                  </div>
+                  <div class="gauge-label">Board 02</div>
+                </div>
 
-            <!-- Temp 3 -->
-            <div class="gauge-card is-key">
-              <div class="gauge">
-                <svg viewBox="0 0 36 36" class="gauge-svg">
-                  <g transform="rotate(-90 18 18)">
-                    <path
-                      class="gauge-bg"
-                      d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
-                    />
-                    <path
-                      class="gauge-fg temperature"
-                      stroke-dasharray="26, 100"
-                      d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
-                    />
-                  </g>
-                  <text
-                    x="18"
-                    y="18"
-                    class="gauge-value"
-                    transform="rotate(90 18 18)"
-                    id="temp3Value"
-                  >
-                    39°C
-                  </text>
-                </svg>
-              </div>
-              <div class="gauge-label">Heatsink</div>
-            </div>
+                <!-- Temp 3 -->
+                <div class="gauge-card is-key">
+                  <div class="gauge">
+                    <svg viewBox="0 0 36 36" class="gauge-svg">
+                      <g transform="rotate(-90 18 18)">
+                        <path
+                          class="gauge-bg"
+                          d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                        />
+                        <path
+                          class="gauge-fg temperature"
+                          stroke-dasharray="26, 100"
+                          d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                        />
+                      </g>
+                      <text
+                        x="18"
+                        y="18"
+                        class="gauge-value"
+                        transform="rotate(90 18 18)"
+                        id="temp3Value"
+                      >
+                        39°C
+                      </text>
+                    </svg>
+                  </div>
+                  <div class="gauge-label">Heatsink</div>
+                </div>
 
-            <!-- Temp 4 -->
-            <div class="gauge-card">
-              <div class="gauge">
-                <svg viewBox="0 0 36 36" class="gauge-svg">
-                  <g transform="rotate(-90 18 18)">
-                    <path
-                      class="gauge-bg"
-                      d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
-                    />
-                    <path
-                      class="gauge-fg temperature"
-                      stroke-dasharray="29, 100"
-                      d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
-                    />
-                  </g>
-                  <text
-                    x="18"
-                    y="18"
-                    class="gauge-value"
-                    transform="rotate(90 18 18)"
-                    id="temp4Value"
-                  >
-                    44°C
-                  </text>
-                </svg>
-              </div>
-              <div class="gauge-label">Temp 4</div>
-            </div>
+                <!-- Temp 4 -->
+                <div class="gauge-card">
+                  <div class="gauge">
+                    <svg viewBox="0 0 36 36" class="gauge-svg">
+                      <g transform="rotate(-90 18 18)">
+                        <path
+                          class="gauge-bg"
+                          d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                        />
+                        <path
+                          class="gauge-fg temperature"
+                          stroke-dasharray="29, 100"
+                          d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                        />
+                      </g>
+                      <text
+                        x="18"
+                        y="18"
+                        class="gauge-value"
+                        transform="rotate(90 18 18)"
+                        id="temp4Value"
+                      >
+                        44°C
+                      </text>
+                    </svg>
+                  </div>
+                  <div class="gauge-label">Temp 4</div>
+                </div>
 
-            <!-- Temp 5 -->
-            <div class="gauge-card">
-              <div class="gauge">
-                <svg viewBox="0 0 36 36" class="gauge-svg">
-                  <g transform="rotate(-90 18 18)">
-                    <path
-                      class="gauge-bg"
-                      d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
-                    />
-                    <path
-                      class="gauge-fg temperature"
-                      stroke-dasharray="19, 100"
-                      d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
-                    />
-                  </g>
-                  <text
-                    x="18"
-                    y="18"
-                    class="gauge-value"
-                    transform="rotate(90 18 18)"
-                    id="temp5Value"
-                  >
-                    28°C
-                  </text>
-                </svg>
-              </div>
-              <div class="gauge-label">Temp 5</div>
-            </div>
+                <!-- Temp 5 -->
+                <div class="gauge-card">
+                  <div class="gauge">
+                    <svg viewBox="0 0 36 36" class="gauge-svg">
+                      <g transform="rotate(-90 18 18)">
+                        <path
+                          class="gauge-bg"
+                          d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                        />
+                        <path
+                          class="gauge-fg temperature"
+                          stroke-dasharray="19, 100"
+                          d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                        />
+                      </g>
+                      <text
+                        x="18"
+                        y="18"
+                        class="gauge-value"
+                        transform="rotate(90 18 18)"
+                        id="temp5Value"
+                      >
+                        28°C
+                      </text>
+                    </svg>
+                  </div>
+                  <div class="gauge-label">Temp 5</div>
+                </div>
 
-            <!-- Temp 6 -->
-            <div class="gauge-card">
-              <div class="gauge">
-                <svg viewBox="0 0 36 36" class="gauge-svg">
-                  <g transform="rotate(-90 18 18)">
-                    <path
-                      class="gauge-bg"
-                      d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
-                    />
-                    <path
-                      class="gauge-fg temperature"
-                      stroke-dasharray="24, 100"
-                      d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
-                    />
-                  </g>
-                  <text
-                    x="18"
-                    y="18"
-                    class="gauge-value"
-                    transform="rotate(90 18 18)"
-                    id="temp6Value"
-                  >
-                    36°C
-                  </text>
-                </svg>
-              </div>
-              <div class="gauge-label">Temp 6</div>
-            </div>
+                <!-- Temp 6 -->
+                <div class="gauge-card">
+                  <div class="gauge">
+                    <svg viewBox="0 0 36 36" class="gauge-svg">
+                      <g transform="rotate(-90 18 18)">
+                        <path
+                          class="gauge-bg"
+                          d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                        />
+                        <path
+                          class="gauge-fg temperature"
+                          stroke-dasharray="24, 100"
+                          d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                        />
+                      </g>
+                      <text
+                        x="18"
+                        y="18"
+                        class="gauge-value"
+                        transform="rotate(90 18 18)"
+                        id="temp6Value"
+                      >
+                        36°C
+                      </text>
+                    </svg>
+                  </div>
+                  <div class="gauge-label">Temp 6</div>
+                </div>
 
-            <!-- Temp 7 -->
-            <div class="gauge-card">
-              <div class="gauge">
-                <svg viewBox="0 0 36 36" class="gauge-svg">
-                  <g transform="rotate(-90 18 18)">
-                    <path
-                      class="gauge-bg"
-                      d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
-                    />
-                    <path
-                      class="gauge-fg temperature"
-                      stroke-dasharray="14, 100"
-                      d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
-                    />
-                  </g>
-                  <text
-                    x="18"
-                    y="18"
-                    class="gauge-value"
-                    transform="rotate(90 18 18)"
-                    id="temp7Value"
-                  >
-                    22°C
-                  </text>
-                </svg>
-              </div>
-              <div class="gauge-label">Temp 7</div>
-            </div>
+                <!-- Temp 7 -->
+                <div class="gauge-card">
+                  <div class="gauge">
+                    <svg viewBox="0 0 36 36" class="gauge-svg">
+                      <g transform="rotate(-90 18 18)">
+                        <path
+                          class="gauge-bg"
+                          d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                        />
+                        <path
+                          class="gauge-fg temperature"
+                          stroke-dasharray="14, 100"
+                          d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                        />
+                      </g>
+                      <text
+                        x="18"
+                        y="18"
+                        class="gauge-value"
+                        transform="rotate(90 18 18)"
+                        id="temp7Value"
+                      >
+                        22°C
+                      </text>
+                    </svg>
+                  </div>
+                  <div class="gauge-label">Temp 7</div>
+                </div>
 
-            <!-- Temp 8 -->
-            <div class="gauge-card">
-              <div class="gauge">
-                <svg viewBox="0 0 36 36" class="gauge-svg">
-                  <g transform="rotate(-90 18 18)">
-                    <path
-                      class="gauge-bg"
-                      d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
-                    />
-                    <path
-                      class="gauge-fg temperature"
-                      stroke-dasharray="32, 100"
-                      d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
-                    />
-                  </g>
-                  <text
-                    x="18"
-                    y="18"
-                    class="gauge-value"
-                    transform="rotate(90 18 18)"
-                    id="temp8Value"
-                  >
-                    48°C
-                  </text>
-                </svg>
-              </div>
-              <div class="gauge-label">Temp 8</div>
-            </div>
+                <!-- Temp 8 -->
+                <div class="gauge-card">
+                  <div class="gauge">
+                    <svg viewBox="0 0 36 36" class="gauge-svg">
+                      <g transform="rotate(-90 18 18)">
+                        <path
+                          class="gauge-bg"
+                          d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                        />
+                        <path
+                          class="gauge-fg temperature"
+                          stroke-dasharray="32, 100"
+                          d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                        />
+                      </g>
+                      <text
+                        x="18"
+                        y="18"
+                        class="gauge-value"
+                        transform="rotate(90 18 18)"
+                        id="temp8Value"
+                      >
+                        48°C
+                      </text>
+                    </svg>
+                  </div>
+                  <div class="gauge-label">Temp 8</div>
+                </div>
 
-            <!-- Temp 9 -->
-            <div class="gauge-card">
-              <div class="gauge">
-                <svg viewBox="0 0 36 36" class="gauge-svg">
-                  <g transform="rotate(-90 18 18)">
-                    <path
-                      class="gauge-bg"
-                      d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
-                    />
-                    <path
-                      class="gauge-fg temperature"
-                      stroke-dasharray="18, 100"
-                      d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
-                    />
-                  </g>
-                  <text
-                    x="18"
-                    y="18"
-                    class="gauge-value"
-                    transform="rotate(90 18 18)"
-                    id="temp9Value"
-                  >
-                    27°C
-                  </text>
-                </svg>
-              </div>
-              <div class="gauge-label">Temp 9</div>
-            </div>
+                <!-- Temp 9 -->
+                <div class="gauge-card">
+                  <div class="gauge">
+                    <svg viewBox="0 0 36 36" class="gauge-svg">
+                      <g transform="rotate(-90 18 18)">
+                        <path
+                          class="gauge-bg"
+                          d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                        />
+                        <path
+                          class="gauge-fg temperature"
+                          stroke-dasharray="18, 100"
+                          d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                        />
+                      </g>
+                      <text
+                        x="18"
+                        y="18"
+                        class="gauge-value"
+                        transform="rotate(90 18 18)"
+                        id="temp9Value"
+                      >
+                        27°C
+                      </text>
+                    </svg>
+                  </div>
+                  <div class="gauge-label">Temp 9</div>
+                </div>
 
-            <!-- Temp 10 -->
-            <div class="gauge-card">
-              <div class="gauge">
-                <svg viewBox="0 0 36 36" class="gauge-svg">
-                  <g transform="rotate(-90 18 18)">
-                    <path
-                      class="gauge-bg"
-                      d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
-                    />
-                    <path
-                      class="gauge-fg temperature"
-                      stroke-dasharray="22, 100"
-                      d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
-                    />
-                  </g>
-                  <text
-                    x="18"
-                    y="18"
-                    class="gauge-value"
-                    transform="rotate(90 18 18)"
-                    id="temp10Value"
-                  >
-                    33°C
-                  </text>
-                </svg>
-              </div>
-              <div class="gauge-label">Temp 10</div>
-            </div>
+                <!-- Temp 10 -->
+                <div class="gauge-card">
+                  <div class="gauge">
+                    <svg viewBox="0 0 36 36" class="gauge-svg">
+                      <g transform="rotate(-90 18 18)">
+                        <path
+                          class="gauge-bg"
+                          d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                        />
+                        <path
+                          class="gauge-fg temperature"
+                          stroke-dasharray="22, 100"
+                          d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                        />
+                      </g>
+                      <text
+                        x="18"
+                        y="18"
+                        class="gauge-value"
+                        transform="rotate(90 18 18)"
+                        id="temp10Value"
+                      >
+                        33°C
+                      </text>
+                    </svg>
+                  </div>
+                  <div class="gauge-label">Temp 10</div>
+                </div>
 
-            <!-- Temp 11 -->
-            <div class="gauge-card">
-              <div class="gauge">
-                <svg viewBox="0 0 36 36" class="gauge-svg">
-                  <g transform="rotate(-90 18 18)">
-                    <path
-                      class="gauge-bg"
-                      d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
-                    />
-                    <path
-                      class="gauge-fg temperature"
-                      stroke-dasharray="27, 100"
-                      d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
-                    />
-                  </g>
-                  <text
-                    x="18"
-                    y="18"
-                    class="gauge-value"
-                    transform="rotate(90 18 18)"
-                    id="temp11Value"
-                  >
-                    41°C
-                  </text>
-                </svg>
-              </div>
-              <div class="gauge-label">Temp 11</div>
-            </div>
+                <!-- Temp 11 -->
+                <div class="gauge-card">
+                  <div class="gauge">
+                    <svg viewBox="0 0 36 36" class="gauge-svg">
+                      <g transform="rotate(-90 18 18)">
+                        <path
+                          class="gauge-bg"
+                          d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                        />
+                        <path
+                          class="gauge-fg temperature"
+                          stroke-dasharray="27, 100"
+                          d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                        />
+                      </g>
+                      <text
+                        x="18"
+                        y="18"
+                        class="gauge-value"
+                        transform="rotate(90 18 18)"
+                        id="temp11Value"
+                      >
+                        41°C
+                      </text>
+                    </svg>
+                  </div>
+                  <div class="gauge-label">Temp 11</div>
+                </div>
 
-            <!-- Temp 12 -->
-            <div class="gauge-card">
-              <div class="gauge">
-                <svg viewBox="0 0 36 36" class="gauge-svg">
-                  <g transform="rotate(-90 18 18)">
-                    <path
-                      class="gauge-bg"
-                      d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
-                    />
-                    <path
-                      class="gauge-fg temperature"
-                      stroke-dasharray="19, 100"
-                      d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
-                    />
-                  </g>
-                  <text
-                    x="18"
-                    y="18"
-                    class="gauge-value"
-                    transform="rotate(90 18 18)"
-                    id="temp12Value"
-                  >
-                    29°C
-                  </text>
-                </svg>
+                <!-- Temp 12 -->
+                <div class="gauge-card">
+                  <div class="gauge">
+                    <svg viewBox="0 0 36 36" class="gauge-svg">
+                      <g transform="rotate(-90 18 18)">
+                        <path
+                          class="gauge-bg"
+                          d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                        />
+                        <path
+                          class="gauge-fg temperature"
+                          stroke-dasharray="19, 100"
+                          d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                        />
+                      </g>
+                      <text
+                        x="18"
+                        y="18"
+                        class="gauge-value"
+                        transform="rotate(90 18 18)"
+                        id="temp12Value"
+                      >
+                        29°C
+                      </text>
+                    </svg>
+                  </div>
+                  <div class="gauge-label">Temp 12</div>
+                </div>
               </div>
-              <div class="gauge-label">Temp 12</div>
-            </div>
+            </section>
           </div>
-        </section>
-      </div>
         </div>
       </div>
 
@@ -1434,7 +1547,9 @@
         </div>
 
         <div class="user-settings-layout">
-          <section class="user-modal-content zoom-box settings-card user-settings-card">
+          <section
+            class="user-modal-content zoom-box settings-card user-settings-card"
+          >
             <div class="settings-card-header">
               <div class="settings-card-title">
                 <svg
@@ -1447,9 +1562,7 @@
                   stroke-linecap="round"
                   stroke-linejoin="round"
                 >
-                  <path
-                    d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"
-                  ></path>
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
                   <circle cx="12" cy="7" r="4"></circle>
                 </svg>
                 <span>Account</span>
@@ -1537,7 +1650,9 @@
             </div>
           </section>
 
-          <section class="user-modal-content zoom-box settings-card user-access-card">
+          <section
+            class="user-modal-content zoom-box settings-card user-access-card"
+          >
             <div class="settings-card-header">
               <div class="settings-card-title">
                 <svg
@@ -1579,7 +1694,9 @@
         </div>
 
         <div class="manual-control-layout">
-          <section class="user-modal-content zoom-box settings-card manual-controls-card">
+          <section
+            class="user-modal-content zoom-box settings-card manual-controls-card"
+          >
             <div class="settings-card-header">
               <div class="settings-card-title">
                 <svg
@@ -1605,7 +1722,8 @@
                 <span>Manual Controls</span>
               </div>
               <div class="settings-card-subtitle">
-                Adjusting these will switch to manual mode (and abort auto loop if running).
+                Adjusting these will switch to manual mode (and abort auto loop
+                if running).
               </div>
             </div>
 
@@ -1613,7 +1731,9 @@
               <div class="settings-field">
                 <div class="settings-field-row">
                   <label for="fanSlider">Fan speed</label>
-                  <span id="fanSpeedValue" class="settings-field-value">--%</span>
+                  <span id="fanSpeedValue" class="settings-field-value"
+                    >--%</span
+                  >
                 </div>
                 <input type="range" min="0" max="100" id="fanSlider" />
               </div>
@@ -1628,7 +1748,9 @@
             </div>
           </section>
 
-          <section class="user-modal-content zoom-box settings-card manual-outputs-card">
+          <section
+            class="user-modal-content zoom-box settings-card manual-outputs-card"
+          >
             <div class="settings-card-header">
               <div class="settings-card-title">
                 <svg
@@ -1665,7 +1787,9 @@
         </div>
 
         <div class="admin-settings-layout">
-          <section class="user-modal-content zoom-box settings-card admin-credentials-card">
+          <section
+            class="user-modal-content zoom-box settings-card admin-credentials-card"
+          >
             <div class="settings-card-header">
               <div class="settings-card-title">
                 <svg
@@ -1678,9 +1802,7 @@
                   stroke-linecap="round"
                   stroke-linejoin="round"
                 >
-                  <path
-                    d="M12 2l7 4v6c0 5-3 9-7 10-4-1-7-5-7-10V6l7-4z"
-                  ></path>
+                  <path d="M12 2l7 4v6c0 5-3 9-7 10-4-1-7-5-7-10V6l7-4z"></path>
                 </svg>
                 <span>Admin Credentials</span>
               </div>
@@ -1708,7 +1830,9 @@
                   autocomplete="username"
                   placeholder="New admin username"
                 />
-                <div class="settings-field-hint">Leave blank to keep current.</div>
+                <div class="settings-field-hint">
+                  Leave blank to keep current.
+                </div>
               </div>
 
               <div class="settings-field">
@@ -1719,7 +1843,9 @@
                   autocomplete="new-password"
                   placeholder="New admin password"
                 />
-                <div class="settings-field-hint">Leave blank to keep current.</div>
+                <div class="settings-field-hint">
+                  Leave blank to keep current.
+                </div>
               </div>
             </div>
 
@@ -1766,7 +1892,9 @@
             </div>
           </section>
 
-          <section class="user-modal-content zoom-box settings-card wifi-station-card">
+          <section
+            class="user-modal-content zoom-box settings-card wifi-station-card"
+          >
             <div class="settings-card-header">
               <div class="settings-card-title">
                 <svg
@@ -1890,12 +2018,8 @@
                     stroke-linecap="round"
                     stroke-linejoin="round"
                   >
-                    <path
-                      d="M12 1v2"
-                    ></path>
-                    <path
-                      d="M12 21v2"
-                    ></path>
+                    <path d="M12 1v2"></path>
+                    <path d="M12 21v2"></path>
                     <path d="M4.22 4.22l1.42 1.42"></path>
                     <path d="M18.36 18.36l1.42 1.42"></path>
                     <path d="M1 12h2"></path>
@@ -2261,189 +2385,200 @@
                     data-device-subtab-panel="nichrome"
                     role="tabpanel"
                   >
-                <div class="ds-group-title ds-floor">
-                  <svg
-                    class="ds-group-icon"
-                    viewBox="0 0 24 24"
-                    aria-hidden="true"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <line x1="4" y1="6" x2="20" y2="6"></line>
-                    <circle cx="9" cy="6" r="2"></circle>
-                    <line x1="4" y1="12" x2="20" y2="12"></line>
-                    <circle cx="15" cy="12" r="2"></circle>
-                    <line x1="4" y1="18" x2="20" y2="18"></line>
-                    <circle cx="11" cy="18" r="2"></circle>
-                  </svg>
-                  <span>Floor Settings</span>
-                </div>
-                <div class="nichrome-meta">
-                  <div class="ds-field">
-                    <label for="floorThicknessMm"
-                      >Floor Thickness (20-50 mm)</label
-                    >
-                    <div class="input-with-unit">
-                      <input
-                        type="number"
-                        id="floorThicknessMm"
-                        step="0.1"
-                        min="20"
-                        max="50"
-                      />
-                      <span class="unit-label">mm</span>
+                    <div class="ds-group-title ds-floor">
+                      <svg
+                        class="ds-group-icon"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <line x1="4" y1="6" x2="20" y2="6"></line>
+                        <circle cx="9" cy="6" r="2"></circle>
+                        <line x1="4" y1="12" x2="20" y2="12"></line>
+                        <circle cx="15" cy="12" r="2"></circle>
+                        <line x1="4" y1="18" x2="20" y2="18"></line>
+                        <circle cx="11" cy="18" r="2"></circle>
+                      </svg>
+                      <span>Floor Settings</span>
                     </div>
-                  </div>
-                  <div class="ds-field">
-                    <label for="nichromeFinalTempC">Nichrome Final Temp</label>
-                    <div class="input-with-unit">
-                      <input type="number" id="nichromeFinalTempC" step="0.1" />
-                      <span class="unit-label">C</span>
+                    <div class="nichrome-meta">
+                      <div class="ds-field">
+                        <label for="floorThicknessMm"
+                          >Floor Thickness (20-50 mm)</label
+                        >
+                        <div class="input-with-unit">
+                          <input
+                            type="number"
+                            id="floorThicknessMm"
+                            step="0.1"
+                            min="20"
+                            max="50"
+                          />
+                          <span class="unit-label">mm</span>
+                        </div>
+                      </div>
+                      <div class="ds-field">
+                        <label for="nichromeFinalTempC"
+                          >Nichrome Final Temp</label
+                        >
+                        <div class="input-with-unit">
+                          <input
+                            type="number"
+                            id="nichromeFinalTempC"
+                            step="0.1"
+                          />
+                          <span class="unit-label">C</span>
+                        </div>
+                      </div>
+                      <div class="ds-field">
+                        <label for="floorMaterial">Floor Material</label>
+                        <select id="floorMaterial">
+                          <option value="wood">Wood</option>
+                          <option value="epoxy">Epoxy</option>
+                          <option value="concrete">Concrete</option>
+                          <option value="slate">Slate</option>
+                          <option value="marble">Marble</option>
+                          <option value="granite">Granite</option>
+                        </select>
+                      </div>
+                      <div class="ds-field">
+                        <label for="floorMaxC">Max Floor Temp (<= 35 C)</label>
+                        <div class="input-with-unit">
+                          <input
+                            type="number"
+                            id="floorMaxC"
+                            step="0.1"
+                            max="35"
+                          />
+                          <span class="unit-label">C</span>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                  <div class="ds-field">
-                    <label for="floorMaterial">Floor Material</label>
-                    <select id="floorMaterial">
-                      <option value="wood">Wood</option>
-                      <option value="epoxy">Epoxy</option>
-                      <option value="concrete">Concrete</option>
-                      <option value="slate">Slate</option>
-                      <option value="marble">Marble</option>
-                      <option value="granite">Granite</option>
-                    </select>
-                  </div>
-                  <div class="ds-field">
-                    <label for="floorMaxC">Max Floor Temp (<= 35 C)</label>
-                    <div class="input-with-unit">
-                      <input type="number" id="floorMaxC" step="0.1" max="35" />
-                      <span class="unit-label">C</span>
+                    <div class="ds-group-title ds-nichrome">
+                      <svg
+                        class="ds-group-icon"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <rect x="3" y="3" width="7" height="7"></rect>
+                        <rect x="14" y="3" width="7" height="7"></rect>
+                        <rect x="3" y="14" width="7" height="7"></rect>
+                        <rect x="14" y="14" width="7" height="7"></rect>
+                      </svg>
+                      <span>Nichrome Calibration</span>
                     </div>
-                  </div>
-                </div>
-                <div class="ds-group-title ds-nichrome">
-                  <svg
-                    class="ds-group-icon"
-                    viewBox="0 0 24 24"
-                    aria-hidden="true"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <rect x="3" y="3" width="7" height="7"></rect>
-                    <rect x="14" y="3" width="7" height="7"></rect>
-                    <rect x="3" y="14" width="7" height="7"></rect>
-                    <rect x="14" y="14" width="7" height="7"></rect>
-                  </svg>
-                  <span>Nichrome Calibration</span>
-                </div>
-                <div class="nichrome-grid">
-                  <!-- New: global Ω/m -->
-                  <div class="field">
-                    <label for="wireOhmPerM">Wire Resistivity (Ω/m)</label>
-                    <input
-                      id="wireOhmPerM"
-                      type="number"
-                      step="0.01"
-                      inputmode="decimal"
-                    />
-                  </div>
-                  <!-- R01..R10 -->
-                  <div class="field">
-                    <label for="r01ohm">R01 (Ω)</label>
-                    <input
-                      id="r01ohm"
-                      type="number"
-                      step="0.1"
-                      inputmode="decimal"
-                    />
-                  </div>
-                  <div class="field">
-                    <label for="r02ohm">R02 (Ω)</label>
-                    <input
-                      id="r02ohm"
-                      type="number"
-                      step="0.1"
-                      inputmode="decimal"
-                    />
-                  </div>
-                  <div class="field">
-                    <label for="r03ohm">R03 (Ω)</label>
-                    <input
-                      id="r03ohm"
-                      type="number"
-                      step="0.1"
-                      inputmode="decimal"
-                    />
-                  </div>
-                  <div class="field">
-                    <label for="r04ohm">R04 (Ω)</label>
-                    <input
-                      id="r04ohm"
-                      type="number"
-                      step="0.1"
-                      inputmode="decimal"
-                    />
-                  </div>
-                  <div class="field">
-                    <label for="r05ohm">R05 (Ω)</label>
-                    <input
-                      id="r05ohm"
-                      type="number"
-                      step="0.1"
-                      inputmode="decimal"
-                    />
-                  </div>
-                  <div class="field">
-                    <label for="r06ohm">R06 (Ω)</label>
-                    <input
-                      id="r06ohm"
-                      type="number"
-                      step="0.1"
-                      inputmode="decimal"
-                    />
-                  </div>
-                  <div class="field">
-                    <label for="r07ohm">R07 (Ω)</label>
-                    <input
-                      id="r07ohm"
-                      type="number"
-                      step="0.1"
-                      inputmode="decimal"
-                    />
-                  </div>
-                  <div class="field">
-                    <label for="r08ohm">R08 (Ω)</label>
-                    <input
-                      id="r08ohm"
-                      type="number"
-                      step="0.1"
-                      inputmode="decimal"
-                    />
-                  </div>
-                  <div class="field">
-                    <label for="r09ohm">R09 (Ω)</label>
-                    <input
-                      id="r09ohm"
-                      type="number"
-                      step="0.1"
-                      inputmode="decimal"
-                    />
-                  </div>
-                  <div class="field">
-                    <label for="r10ohm">R10 (Ω)</label>
-                    <input
-                      id="r10ohm"
-                      type="number"
-                      step="0.1"
-                      inputmode="decimal"
-                    />
-                  </div>
-                </div>
+                    <div class="nichrome-grid">
+                      <!-- New: global Ω/m -->
+                      <div class="field">
+                        <label for="wireOhmPerM">Wire Resistivity (Ω/m)</label>
+                        <input
+                          id="wireOhmPerM"
+                          type="number"
+                          step="0.01"
+                          inputmode="decimal"
+                        />
+                      </div>
+                      <!-- R01..R10 -->
+                      <div class="field">
+                        <label for="r01ohm">R01 (Ω)</label>
+                        <input
+                          id="r01ohm"
+                          type="number"
+                          step="0.1"
+                          inputmode="decimal"
+                        />
+                      </div>
+                      <div class="field">
+                        <label for="r02ohm">R02 (Ω)</label>
+                        <input
+                          id="r02ohm"
+                          type="number"
+                          step="0.1"
+                          inputmode="decimal"
+                        />
+                      </div>
+                      <div class="field">
+                        <label for="r03ohm">R03 (Ω)</label>
+                        <input
+                          id="r03ohm"
+                          type="number"
+                          step="0.1"
+                          inputmode="decimal"
+                        />
+                      </div>
+                      <div class="field">
+                        <label for="r04ohm">R04 (Ω)</label>
+                        <input
+                          id="r04ohm"
+                          type="number"
+                          step="0.1"
+                          inputmode="decimal"
+                        />
+                      </div>
+                      <div class="field">
+                        <label for="r05ohm">R05 (Ω)</label>
+                        <input
+                          id="r05ohm"
+                          type="number"
+                          step="0.1"
+                          inputmode="decimal"
+                        />
+                      </div>
+                      <div class="field">
+                        <label for="r06ohm">R06 (Ω)</label>
+                        <input
+                          id="r06ohm"
+                          type="number"
+                          step="0.1"
+                          inputmode="decimal"
+                        />
+                      </div>
+                      <div class="field">
+                        <label for="r07ohm">R07 (Ω)</label>
+                        <input
+                          id="r07ohm"
+                          type="number"
+                          step="0.1"
+                          inputmode="decimal"
+                        />
+                      </div>
+                      <div class="field">
+                        <label for="r08ohm">R08 (Ω)</label>
+                        <input
+                          id="r08ohm"
+                          type="number"
+                          step="0.1"
+                          inputmode="decimal"
+                        />
+                      </div>
+                      <div class="field">
+                        <label for="r09ohm">R09 (Ω)</label>
+                        <input
+                          id="r09ohm"
+                          type="number"
+                          step="0.1"
+                          inputmode="decimal"
+                        />
+                      </div>
+                      <div class="field">
+                        <label for="r10ohm">R10 (Ω)</label>
+                        <input
+                          id="r10ohm"
+                          type="number"
+                          step="0.1"
+                          inputmode="decimal"
+                        />
+                      </div>
+                    </div>
                   </div>
 
                   <div
@@ -2693,14 +2828,8 @@
               >
                 <circle cx="60" cy="60" r="42" opacity="0.35"></circle>
                 <circle cx="60" cy="60" r="30" opacity="0.18"></circle>
-                <path
-                  d="M18 60h18l7-18 12 36 7-18h40"
-                  opacity="0.55"
-                ></path>
-                <path
-                  d="M34 36h14M72 84h14"
-                  opacity="0.22"
-                ></path>
+                <path d="M18 60h18l7-18 12 36 7-18h40" opacity="0.55"></path>
+                <path d="M34 36h14M72 84h14" opacity="0.22"></path>
                 <circle cx="36" cy="36" r="2.2" opacity="0.35"></circle>
                 <circle cx="84" cy="84" r="2.2" opacity="0.35"></circle>
               </svg>
@@ -3581,10 +3710,9 @@
 
     <!-- enable/disable: set window.USE_MOCK=true/false before mock.js -->
     <script>
-      window.USE_MOCK = true;
+      window.USE_MOCK = false;
     </script>
     <script src="js/admin.js"></script>
-    <script src="js/mock.js"></script>
 
     <!-- Confirm dialog -->
     <div id="confirmModal" class="user-modal" style="display: none">

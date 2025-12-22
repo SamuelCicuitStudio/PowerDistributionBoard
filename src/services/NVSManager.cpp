@@ -189,6 +189,7 @@ void NVS::begin() {
         RestartSysDelay(10000);
     } else {
         DEBUG_PRINTLN("[NVS] Using existing configuration...");
+        ensureMissingDefaults();
     }
 }
 
@@ -291,6 +292,9 @@ void NVS::initializeVariables() {
   PutFloat(NTC_R0_KEY, DEFAULT_NTC_R0_OHMS);
   PutFloat(NTC_FIXED_RES_KEY, DEFAULT_NTC_FIXED_RES_OHMS);
   PutInt(NTC_MODEL_KEY, DEFAULT_NTC_MODEL);
+  PutFloat(NTC_SH_A_KEY, DEFAULT_NTC_SH_A);
+  PutFloat(NTC_SH_B_KEY, DEFAULT_NTC_SH_B);
+  PutFloat(NTC_SH_C_KEY, DEFAULT_NTC_SH_C);
   PutFloat(NTC_PRESS_MV_KEY, DEFAULT_NTC_PRESS_MV);
   PutFloat(NTC_RELEASE_MV_KEY, DEFAULT_NTC_RELEASE_MV);
   PutInt(NTC_DEBOUNCE_MS_KEY, DEFAULT_NTC_DEBOUNCE_MS);
@@ -298,6 +302,8 @@ void NVS::initializeVariables() {
   PutFloat(NTC_MAX_C_KEY, DEFAULT_NTC_MAX_C);
   PutInt(NTC_SAMPLES_KEY, DEFAULT_NTC_SAMPLES);
   PutInt(NTC_GATE_INDEX_KEY, DEFAULT_NTC_GATE_INDEX);
+  PutULong64(RTC_CURRENT_EPOCH_KEY, static_cast<int>(RTC_DEFAULT_EPOCH));
+  PutULong64(RTC_PRESLEEP_EPOCH_KEY, static_cast<int>(RTC_DEFAULT_EPOCH));
   PutFloat(FLOOR_THICKNESS_MM_KEY, DEFAULT_FLOOR_THICKNESS_MM);
   PutInt(FLOOR_MATERIAL_KEY, DEFAULT_FLOOR_MATERIAL);
   PutFloat(FLOOR_MAX_C_KEY, DEFAULT_FLOOR_MAX_C);
@@ -338,6 +344,146 @@ void NVS::initializeVariables() {
   PutString(TSHSID_KEY, "");
   PutBool  (TSMAP_KEY, false);
 
+}
+
+void NVS::ensureMissingDefaults() {
+  lock_();
+  ensureOpenRW_();
+
+  auto ensureBool = [&](const char* key, bool value) {
+    if (!preferences.isKey(key)) preferences.putBool(key, value);
+  };
+  auto ensureInt = [&](const char* key, int value) {
+    if (!preferences.isKey(key)) preferences.putInt(key, value);
+  };
+  auto ensureULong64 = [&](const char* key, uint64_t value) {
+    if (!preferences.isKey(key)) preferences.putULong64(key, value);
+  };
+  auto ensureFloat = [&](const char* key, float value) {
+    if (!preferences.isKey(key)) preferences.putFloat(key, value);
+  };
+  auto ensureDouble = [&](const char* key, double value) {
+    if (!preferences.isKey(key)) preferences.putBytes(key, &value, sizeof(value));
+  };
+  auto ensureString = [&](const char* key, const char* value) {
+    if (!preferences.isKey(key)) preferences.putString(key, value);
+  };
+
+  uint8_t mac[6];
+  get_efuse_mac(mac);
+  String ssid = String(DEVICE_WIFI_HOTSPOT_NAME) + hex_suffix_last3(mac);
+  String devId = make_device_id_from_efuse();
+
+  ensureBool(RESET_FLAG, false);
+
+  ensureString(DEVICE_WIFI_HOTSPOT_NAME_KEY, ssid.c_str());
+  ensureString(DEVICE_AP_AUTH_PASS_KEY, DEVICE_AP_AUTH_PASS_DEFAULT);
+
+  ensureString(STA_SSID_KEY, DEFAULT_STA_SSID);
+  ensureString(STA_PASS_KEY, DEFAULT_STA_PASS);
+
+  ensureString(ADMIN_ID_KEY, DEFAULT_ADMIN_ID);
+  ensureString(ADMIN_PASS_KEY, DEFAULT_ADMIN_PASS);
+  ensureString(USER_ID_KEY, DEFAULT_USER_ID);
+  ensureString(USER_PASS_KEY, DEFAULT_USER_PASS);
+
+  ensureString(DEV_ID_KEY, devId.c_str());
+  ensureString(DEV_SW_KEY, DEVICE_SW_VERSION);
+  ensureString(DEV_HW_KEY, DEVICE_HW_VERSION);
+
+  ensureInt(INRUSH_DELAY_KEY, DEFAULT_INRUSH_DELAY);
+  ensureBool(LED_FEEDBACK_KEY, DEFAULT_LED_FEEDBACK);
+  ensureFloat(TEMP_THRESHOLD_KEY, DEFAULT_TEMP_THRESHOLD);
+  ensureFloat(TEMP_WARN_KEY, DEFAULT_TEMP_WARN_C);
+  ensureFloat(CHARGE_RESISTOR_KEY, DEFAULT_CHARGE_RESISTOR_OHMS);
+  ensureInt(AC_FREQUENCY_KEY, DEFAULT_AC_FREQUENCY);
+  ensureFloat(AC_VOLTAGE_KEY, DEFAULT_AC_VOLTAGE);
+  ensureFloat(CP_EMP_GAIN_KEY, DEFAULT_CAP_EMP_GAIN);
+  ensureFloat(CAP_BANK_CAP_F_KEY, DEFAULT_CAP_BANK_CAP_F);
+  ensureInt(MIX_FRAME_MS_KEY, DEFAULT_MIX_FRAME_MS);
+  ensureInt(MIX_REF_ON_MS_KEY, DEFAULT_MIX_REF_ON_MS);
+  ensureFloat(MIX_REF_RES_OHM_KEY, DEFAULT_MIX_REF_RES_OHM);
+  ensureFloat(MIX_BOOST_K_KEY, DEFAULT_MIX_BOOST_K);
+  ensureInt(MIX_BOOST_MS_KEY, DEFAULT_MIX_BOOST_MS);
+  ensureFloat(MIX_PRE_DELTA_C_KEY, DEFAULT_MIX_PRE_DELTA_C);
+  ensureInt(MIX_HOLD_UPDATE_MS_KEY, DEFAULT_MIX_HOLD_UPDATE_MS);
+  ensureFloat(MIX_HOLD_GAIN_KEY, DEFAULT_MIX_HOLD_GAIN);
+  ensureInt(MIX_MIN_ON_MS_KEY, DEFAULT_MIX_MIN_ON_MS);
+  ensureInt(MIX_MAX_ON_MS_KEY, DEFAULT_MIX_MAX_ON_MS);
+  ensureInt(MIX_MAX_AVG_MS_KEY, DEFAULT_MIX_MAX_AVG_MS);
+  ensureInt(TIMING_MODE_KEY, DEFAULT_TIMING_MODE);
+  ensureInt(TIMING_PROFILE_KEY, DEFAULT_TIMING_PROFILE);
+  ensureFloat(CURR_LIMIT_KEY, DEFAULT_CURR_LIMIT_A);
+  ensureDouble(WIRE_TAU_KEY, DEFAULT_WIRE_TAU_SEC);
+  ensureDouble(WIRE_K_LOSS_KEY, DEFAULT_WIRE_K_LOSS);
+  ensureDouble(WIRE_C_TH_KEY, DEFAULT_WIRE_THERMAL_C);
+
+  ensureBool(OUT01_ACCESS_KEY, DEFAULT_OUT01_ACCESS);
+  ensureBool(OUT02_ACCESS_KEY, DEFAULT_OUT02_ACCESS);
+  ensureBool(OUT03_ACCESS_KEY, DEFAULT_OUT03_ACCESS);
+  ensureBool(OUT04_ACCESS_KEY, DEFAULT_OUT04_ACCESS);
+  ensureBool(OUT05_ACCESS_KEY, DEFAULT_OUT05_ACCESS);
+  ensureBool(OUT06_ACCESS_KEY, DEFAULT_OUT06_ACCESS);
+  ensureBool(OUT07_ACCESS_KEY, DEFAULT_OUT07_ACCESS);
+  ensureBool(OUT08_ACCESS_KEY, DEFAULT_OUT08_ACCESS);
+  ensureBool(OUT09_ACCESS_KEY, DEFAULT_OUT09_ACCESS);
+  ensureBool(OUT10_ACCESS_KEY, DEFAULT_OUT10_ACCESS);
+
+  ensureInt(TEMP_SENSOR_COUNT_KEY, DEFAULT_TEMP_SENSOR_COUNT);
+  ensureFloat(IDLE_CURR_KEY, DEFAULT_IDLE_CURR);
+  ensureFloat(NTC_BETA_KEY, DEFAULT_NTC_BETA);
+  ensureFloat(NTC_R0_KEY, DEFAULT_NTC_R0_OHMS);
+  ensureFloat(NTC_FIXED_RES_KEY, DEFAULT_NTC_FIXED_RES_OHMS);
+  ensureInt(NTC_MODEL_KEY, DEFAULT_NTC_MODEL);
+  ensureFloat(NTC_SH_A_KEY, DEFAULT_NTC_SH_A);
+  ensureFloat(NTC_SH_B_KEY, DEFAULT_NTC_SH_B);
+  ensureFloat(NTC_SH_C_KEY, DEFAULT_NTC_SH_C);
+  ensureFloat(NTC_PRESS_MV_KEY, DEFAULT_NTC_PRESS_MV);
+  ensureFloat(NTC_RELEASE_MV_KEY, DEFAULT_NTC_RELEASE_MV);
+  ensureInt(NTC_DEBOUNCE_MS_KEY, DEFAULT_NTC_DEBOUNCE_MS);
+  ensureFloat(NTC_MIN_C_KEY, DEFAULT_NTC_MIN_C);
+  ensureFloat(NTC_MAX_C_KEY, DEFAULT_NTC_MAX_C);
+  ensureInt(NTC_SAMPLES_KEY, DEFAULT_NTC_SAMPLES);
+  ensureInt(NTC_GATE_INDEX_KEY, DEFAULT_NTC_GATE_INDEX);
+  ensureULong64(RTC_CURRENT_EPOCH_KEY, static_cast<uint64_t>(RTC_DEFAULT_EPOCH));
+  ensureULong64(RTC_PRESLEEP_EPOCH_KEY, static_cast<uint64_t>(RTC_DEFAULT_EPOCH));
+  ensureFloat(FLOOR_THICKNESS_MM_KEY, DEFAULT_FLOOR_THICKNESS_MM);
+  ensureInt(FLOOR_MATERIAL_KEY, DEFAULT_FLOOR_MATERIAL);
+  ensureFloat(FLOOR_MAX_C_KEY, DEFAULT_FLOOR_MAX_C);
+  ensureFloat(NICHROME_FINAL_TEMP_C_KEY, DEFAULT_NICHROME_FINAL_TEMP_C);
+
+  ensureBool(BUZLOW_KEY, BUZLOW_DEFAULT);
+  ensureBool(BUZMUT_KEY, BUZMUT_DEFAULT);
+
+  ensureFloat(R01OHM_KEY, DEFAULT_WIRE_RES_OHMS);
+  ensureFloat(R02OHM_KEY, DEFAULT_WIRE_RES_OHMS);
+  ensureFloat(R03OHM_KEY, DEFAULT_WIRE_RES_OHMS);
+  ensureFloat(R04OHM_KEY, DEFAULT_WIRE_RES_OHMS);
+  ensureFloat(R05OHM_KEY, DEFAULT_WIRE_RES_OHMS);
+  ensureFloat(R06OHM_KEY, DEFAULT_WIRE_RES_OHMS);
+  ensureFloat(R07OHM_KEY, DEFAULT_WIRE_RES_OHMS);
+  ensureFloat(R08OHM_KEY, DEFAULT_WIRE_RES_OHMS);
+  ensureFloat(R09OHM_KEY, DEFAULT_WIRE_RES_OHMS);
+  ensureFloat(R10OHM_KEY, DEFAULT_WIRE_RES_OHMS);
+
+  ensureFloat(WIRE_OHM_PER_M_KEY, DEFAULT_WIRE_OHM_PER_M);
+  ensureInt(WIRE_GAUGE_KEY, DEFAULT_WIRE_GAUGE);
+
+  ensureFloat(PT_KEY_TOTAL_ENERGY_WH, PT_DEF_TOTAL_ENERGY_WH);
+  ensureInt(PT_KEY_TOTAL_SESSIONS, PT_DEF_TOTAL_SESSIONS);
+  ensureInt(PT_KEY_TOTAL_SESSIONS_OK, PT_DEF_TOTAL_SESSIONS_OK);
+
+  ensureFloat(PT_KEY_LAST_SESS_ENERGY_WH, PT_DEF_LAST_SESS_ENERGY_WH);
+  ensureInt(PT_KEY_LAST_SESS_DURATION_S, PT_DEF_LAST_SESS_DURATION_S);
+  ensureFloat(PT_KEY_LAST_SESS_PEAK_W, PT_DEF_LAST_SESS_PEAK_W);
+  ensureFloat(PT_KEY_LAST_SESS_PEAK_A, PT_DEF_LAST_SESS_PEAK_A);
+
+  ensureString(TSB0ID_KEY, "");
+  ensureString(TSB1ID_KEY, "");
+  ensureString(TSHSID_KEY, "");
+  ensureBool(TSMAP_KEY, false);
+
+  unlock_();
 }
 
 // ======================================================

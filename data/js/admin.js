@@ -1028,7 +1028,7 @@
     checkbox.disabled = false;
   }
 
-  function updateOutputAccess(index, newState) {
+  async function updateOutputAccess(index, newState) {
     if (
       guardUnsafeAction("changing output access", {
         blockAuto: true,
@@ -1038,7 +1038,16 @@
       loadControls();
       return;
     }
-    sendControlCommand("set", "Access" + index, !!newState);
+    const key = "output" + index;
+    const res = await sendControlCommand("set", "Access" + index, !!newState);
+    if (res && res.error) {
+      loadControls();
+      return;
+    }
+    if (!lastLoadedControls) lastLoadedControls = {};
+    if (!lastLoadedControls.outputAccess) lastLoadedControls.outputAccess = {};
+    lastLoadedControls.outputAccess[key] = !!newState;
+    renderLiveControlChart();
   }
 
   function toggleOutput(index, state) {
@@ -1934,6 +1943,7 @@
       // Apply power button look from LEDs if desired
       applyReadyOffFlagsToPower(data.ready, data.off);
 
+      renderLiveControlChart();
       applySafetyLocks();
     } catch (err) {
       console.error("Failed to load controls:", err);
@@ -4697,6 +4707,7 @@
     "#b8f2e6",
     "#a3be8c",
   ];
+  const LIVE_CTRL_SETPOINT_COLOR = "#ff2d6f";
 
   const LIVE_CTRL_TICK_EVERY_SECONDS = 5;
 
@@ -4752,7 +4763,7 @@
 
     if (Number.isFinite(setpointC)) {
       items.push(
-        `<div class="legend-item"><span class="legend-swatch" style="background:#ffb347"></span><span class="legend-label">Setpoint</span></div>`
+        `<div class="legend-item"><span class="legend-swatch" style="background:${LIVE_CTRL_SETPOINT_COLOR}"></span><span class="legend-label">Setpoint</span></div>`
       );
     }
 
@@ -4868,7 +4879,7 @@
   function buildLiveControlSetpointLine(xMax, setpointC) {
     if (!Number.isFinite(setpointC)) return "";
     const y = yFromTemp(setpointC);
-    return `<line class="setpoint-line" x1="0" y1="${y}" x2="${xMax}" y2="${y}"></line>`;
+    return `<line class="setpoint-line" stroke="${LIVE_CTRL_SETPOINT_COLOR}" x1="0" y1="${y}" x2="${xMax}" y2="${y}"></line>`;
   }
 
   function scrollLiveControlToLatest() {

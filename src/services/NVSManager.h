@@ -104,6 +104,7 @@ private:
     // -----------------------------------------------------------------
     void initializeDefaults();   // calls initializeVariables()
     void initializeVariables();  // writes all default keys
+    void ensureMissingDefaults();
     bool getResetFlag();
 
     // locking helpers

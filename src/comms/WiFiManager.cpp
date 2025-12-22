@@ -1147,7 +1147,7 @@ void WiFiManager::registerRoutes_() {
             if (mode == CalibrationRecorder::Mode::Model) {
                 float runTargetC = targetC;
                 if (!isfinite(runTargetC) || runTargetC <= 0.0f) {
-                    float fallback = WIRE_T_MAX_C;
+                    float fallback = 150.0f;
                     if (CONF) {
                         float v = CONF->GetFloat(NICHROME_FINAL_TEMP_C_KEY,
                                                  DEFAULT_NICHROME_FINAL_TEMP_C);

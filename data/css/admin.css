@@ -547,14 +547,18 @@ body {
   overflow: hidden;
 }
 
+#dashboardTab .dashboard-system .dashboard-card-header {
+  margin-bottom: 2px;
+}
+
 #dashboardTab .dashboard-system .mode-toggle {
-  margin-top: 0;
+  margin-top: -6px;
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   grid-template-areas:
     "mode feedback"
     "status action";
-  gap: 10px;
+  gap: 4px;
   align-items: stretch;
 }
 
@@ -566,8 +570,8 @@ body {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 8px;
-  padding: 10px 10px;
+  gap: 3px;
+  padding: 4px 8px;
   border-radius: 14px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   background: rgba(0, 0, 0, 0.22);
@@ -575,7 +579,7 @@ body {
 }
 
 #dashboardTab .dashboard-system .mode-group-label {
-  font-size: 0.68rem;
+  font-size: 0.54rem;
   text-transform: uppercase;
   letter-spacing: 0.4px;
   color: rgba(255, 255, 255, 0.55);
@@ -585,7 +589,7 @@ body {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 4px;
   justify-content: flex-start;
 }
 
@@ -611,7 +615,9 @@ body {
 }
 
 #dashboardTab .dashboard-system .mode-pill {
-  padding: 7px 11px;
+  padding: 3px 6px;
+  font-size: 0.64rem;
+  line-height: 1;
   border-color: rgba(255, 255, 255, 0.14);
   background: linear-gradient(
       180deg,
@@ -619,6 +625,11 @@ body {
       rgba(0, 0, 0, 0.12)
     ),
     rgba(10, 14, 20, 0.5);
+}
+
+#dashboardTab .dashboard-system .mode-pill-icon {
+  width: 10px;
+  height: 10px;
 }
 
 #dashboardTab .dashboard-system .mode-pill:hover {
@@ -677,8 +688,8 @@ body {
 }
 
 #dashboardTab .dashboard-system .switch {
-  width: 46px;
-  height: 24px;
+  width: 34px;
+  height: 16px;
 }
 
 #dashboardTab .dashboard-system .slider {
@@ -688,9 +699,9 @@ body {
 }
 
 #dashboardTab .dashboard-system .slider:before {
-  height: 16px;
-  width: 16px;
-  left: 4px;
+  height: 10px;
+  width: 10px;
+  left: 3px;
   bottom: 3px;
   background: linear-gradient(180deg, #ffffff, rgba(220, 230, 230, 0.92));
 }
@@ -702,7 +713,7 @@ body {
 }
 
 #dashboardTab .dashboard-system input:checked + .slider:before {
-  transform: translateX(21px);
+  transform: translateX(13px);
 }
 
 #dashboardTab .dashboard-system-actions {
@@ -716,6 +727,13 @@ body {
 
 #dashboardTab .dashboard-system-actions .dashboard-action-btn {
   width: 100%;
+  padding: 4px 8px;
+  font-size: 0.64rem;
+}
+
+#dashboardTab .dashboard-system-actions .settings-btn-icon {
+  width: 14px;
+  height: 14px;
 }
 
 #dashboardTab .dashboard-action-btn {
@@ -4214,7 +4232,6 @@ button.danger:hover {
 }
 
 #liveControlPlot .setpoint-line {
-  stroke: #ffb347;
   stroke-width: 2;
   stroke-dasharray: 6 6;
 }
