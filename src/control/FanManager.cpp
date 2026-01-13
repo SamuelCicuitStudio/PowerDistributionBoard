@@ -1,4 +1,4 @@
-﻿#include "control/FanManager.h"
+﻿#include <FanManager.hpp>
 
 // How many pending fan commands we buffer
 #ifndef FAN_CMD_QUEUE_LEN

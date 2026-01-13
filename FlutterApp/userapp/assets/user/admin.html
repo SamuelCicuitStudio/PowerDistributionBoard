@@ -1,0 +1,3899 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="Cache-Control" content="no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin Dashboard</title>
+    <link rel="stylesheet" href="css/admin.css?v=2" />
+    <style>
+      .user-status-global {
+        position: absolute;
+        top: 10px;
+        right: 20px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        z-index: 1000;
+      }
+      .user-menu {
+        position: absolute;
+        top: 35px;
+        right: 0;
+        display: none;
+        background: rgba(0, 0, 0, 0.7);
+        border-radius: 8px;
+        padding: 10px;
+        box-shadow: 0 0 8px rgba(0, 0, 0, 0.4);
+      }
+      .user-menu button {
+        background: none;
+        border: none;
+        color: white;
+        cursor: pointer;
+      }
+      /* === Device Settings: scoped, compact, no vertical scroll === */
+      #deviceSettingsTab.content,
+      #deviceSettingsTab .content {
+        /* in case a theme sets scroll on .content, force this tab to fit */
+        padding: 14px 18px 10px;
+        overflow-y: hidden;
+      }
+      /* Make the single box fill available width and fit the frame height */
+      .user-modal-content.device-settings-box {
+        width: 100%;
+        max-width: 720px;
+        max-height: 540px;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column; /* grid + actions stacked */
+        gap: 16px;
+        overflow: hidden; /* scrolling happens inside .device-grid */
+      }
+      .ds-group-title {
+        grid-column: 1 / -1;
+        margin-top: 10px;
+        padding: 8px 10px;
+        border-radius: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-left: 4px solid var(--ds-accent, rgba(255, 255, 255, 0.35));
+        background: rgba(255, 255, 255, 0.06);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0.3px;
+        color: rgba(255, 255, 255, 0.95);
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.22);
+      }
+      .ds-group-icon {
+        width: 14px;
+        height: 14px;
+        flex: 0 0 auto;
+        color: var(--ds-accent, rgba(255, 255, 255, 0.8));
+        opacity: 0.95;
+        filter: drop-shadow(0 0 6px rgba(0, 0, 0, 0.35));
+      }
+      .ds-group-title span {
+        min-width: 0;
+        flex: 1 1 auto;
+      }
+      .ds-group-title.ds-power {
+        --ds-accent: #ff3b30;
+        background: rgba(255, 59, 48, 0.12);
+      }
+      .ds-group-title.ds-thermal-safety {
+        --ds-accent: #ffb020;
+        background: rgba(255, 176, 32, 0.12);
+      }
+      .ds-group-title.ds-thermal-model {
+        --ds-accent: #a855f7;
+        background: rgba(168, 85, 247, 0.12);
+      }
+      .ds-group-title.ds-ntc {
+        --ds-accent: #22d3ee;
+        background: rgba(34, 211, 238, 0.12);
+      }
+      .ds-group-title.ds-control {
+        --ds-accent: #4d9efc;
+        background: rgba(77, 158, 252, 0.12);
+      }
+      .ds-group-title.ds-floor {
+        --ds-accent: #10b981;
+        background: rgba(16, 185, 129, 0.12);
+      }
+      .ds-group-title.ds-nichrome {
+        --ds-accent: #f97316;
+        background: rgba(249, 115, 22, 0.12);
+      }
+      .ds-group-title.ds-loop-timing {
+        --ds-accent: #20c997;
+        background: rgba(32, 201, 151, 0.12);
+      }
+      /* Two-column grid inside the box */
+      .device-settings-box .device-grid {
+        display: grid;
+        grid-template-columns: 1.05fr 1.15fr; /* left: device fields | right: nichrome */
+        grid-template-rows: minmax(0, 1fr);
+        gap: 18px 28px; /* row gap | column gap */
+        align-items: stretch;
+        min-width: 0;
+        min-height: 0;
+        flex: 1 1 auto;
+        overflow: hidden; /* each column scrolls independently */
+      }
+      .device-settings-box .device-col {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        min-width: 0;
+        min-height: 0;
+        padding: 12px 12px 14px;
+        border-radius: 16px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(0, 0, 0, 0.32);
+        box-shadow: inset 0 0 0 1px rgba(0, 255, 174, 0.04);
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(0, 255, 180, 0.32) rgba(0, 0, 0, 0.8);
+      }
+      .device-settings-box .device-col::-webkit-scrollbar {
+        width: 10px;
+      }
+      .device-settings-box .device-col::-webkit-scrollbar-track {
+        background: rgba(0, 0, 0, 0.7);
+        border-radius: 10px;
+      }
+      .device-settings-box .device-col::-webkit-scrollbar-thumb {
+        background: rgba(0, 255, 180, 0.24);
+        border-radius: 10px;
+        box-shadow: inset 0 0 6px rgba(0, 255, 180, 0.22);
+      }
+      .device-settings-box .device-col::-webkit-scrollbar-thumb:hover {
+        background: rgba(0, 255, 180, 0.5);
+        box-shadow: inset 0 0 8px rgba(0, 255, 180, 0.35);
+      }
+      .device-settings-box .ds-col-heading {
+        grid-column: 1 / -1;
+        margin: 0 0 8px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 14px;
+        font-weight: 900;
+        letter-spacing: 0.3px;
+        color: #f8fafc;
+      }
+      .device-settings-box .ds-col-icon {
+        width: 18px;
+        height: 18px;
+        flex: 0 0 auto;
+        color: rgba(0, 255, 174, 0.95);
+        filter: drop-shadow(0 0 6px rgba(0, 255, 174, 0.14));
+      }
+      .device-settings-box .ds-col-heading--nichrome .ds-col-icon {
+        color: rgba(249, 115, 22, 0.95);
+        filter: drop-shadow(0 0 6px rgba(249, 115, 22, 0.18));
+      }
+      /* Left column (Device Settings) as a compact 2-column grid */
+      .device-settings-box .device-grid > .device-col:first-child {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px 16px;
+      }
+      .device-settings-box .device-grid > .device-col:first-child h3 {
+        grid-column: 1 / -1;
+        margin: 0 0 10px;
+        font-size: 15px;
+      }
+      .mixed-only {
+        display: none;
+      }
+      /* Inputs with right-side unit tag */
+      .input-with-unit {
+        position: relative;
+      }
+      .input-with-unit input {
+        width: 100%;
+        padding-right: 42px; /* space for unit */
+      }
+      .unit-label {
+        position: absolute;
+        right: 10px;
+        top: 50%;
+        transform: translateY(-50%);
+        font-size: 12px;
+        opacity: 0.75;
+        pointer-events: none;
+      }
+      /* Nichrome calibration grid: 5 x 2 for R01..R10 + 1 full-width target row */
+      .nichrome-grid {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 10px 12px;
+      }
+      .nichrome-meta {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px 12px;
+      }
+      .nichrome-meta .ds-field {
+        min-width: 0;
+      }
+      .nichrome-grid .field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .nichrome-grid .field label {
+        font-size: 11px;
+        opacity: 0.85;
+      }
+      .nichrome-grid .field input {
+        padding: 8px;
+      }
+      .nichrome-grid .field.target {
+        grid-column: 1 / -1; /* span entire row */
+      }
+      /* Actions always visible and tidy */
+      .device-settings-actions {
+        margin-top: 8px;
+        padding-top: 10px;
+        border-top: 1px solid rgba(255, 255, 255, 0.06);
+        flex: 0 0 auto; /* always visible under the scroll area */
+        justify-content: flex-end;
+      }
+      /* Optional: tiny responsive fallback if viewport is very short or narrow */
+      @media (max-height: 640px) {
+        .user-modal-content.device-settings-box {
+          max-height: 440px;
+        }
+      }
+      @media (max-width: 980px) {
+        .user-modal-content.device-settings-box {
+          max-width: 600px;
+        }
+      }
+      @media (max-width: 860px) {
+        .device-settings-box .device-grid {
+          grid-template-columns: 1fr; /* stack columns on very narrow view */
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="ui-container">
+      <!-- Global User Icon / Menu -->
+      <div class="user-status-global">
+        <div class="status-dot" title="Auto Mode"></div>
+        <div id="wifiSignal" class="wifi-signal" title="WiFi signal">
+          <img
+            id="wifiSignalIcon"
+            src="icons/wifi-0-bars.png"
+            alt="WiFi signal"
+          />
+        </div>
+        <div id="boardTempChip" class="temp-chip" title="Board temperature">
+          <img src="icons/thermoBoard.png" alt="Board temp" />
+          <span id="boardTempText">--?C</span>
+        </div>
+        <div
+          id="heatsinkTempChip"
+          class="temp-chip"
+          title="Heatsink temperature"
+        >
+          <img src="icons/thermoHeatsink.png" alt="Heatsink temp" />
+          <span id="heatsinkTempText">--?C</span>
+        </div>
+        <div id="dcVoltageChip" class="temp-chip" title="DC bus voltage">
+          <span class="chip-label">DC</span>
+          <span id="dcVoltageText">--V</span>
+        </div>
+        <div id="dcCurrentChip" class="temp-chip" title="DC current">
+          <span class="chip-label">I</span>
+          <span id="dcCurrentText">--A</span>
+        </div>
+        <div id="eventBadge" class="event-badge" title="New warnings/errors">
+          <span
+            id="eventWarnBtn"
+            class="event-pill warn"
+            role="button"
+            tabindex="0"
+          >
+            <img src="icons/Warning.png" alt="Warning" />
+            <span id="eventWarnCount">0</span>
+          </span>
+          <span
+            id="eventErrBtn"
+            class="event-pill err"
+            role="button"
+            tabindex="0"
+          >
+            <img src="icons/Error.png" alt="Error" />
+            <span id="eventErrCount">0</span>
+          </span>
+        </div>
+        <div id="runModeBadge" class="run-mode-badge" title="Loop running">
+          <svg
+            class="rm-icon"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <circle cx="12" cy="12" r="9"></circle>
+            <polygon points="11 8 16 12 11 16"></polygon>
+          </svg>
+          <span class="rm-label">Run</span>
+        </div>
+        <div
+          id="testModeBadge"
+          class="test-mode-badge"
+          title="Test mode active"
+        >
+          <svg
+            class="tm-icon"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M3 12h4l2-6 4 12 2-6h6"></path>
+          </svg>
+          <span class="tm-label">TEST MODE</span>
+          <span class="tm-mode">--</span>
+        </div>
+        <div id="statusActions" class="status-actions">
+          <button
+            id="topStopTestBtn"
+            type="button"
+            class="status-action-btn status-stop-btn"
+            aria-label="Stop active test"
+          >
+            <svg
+              class="status-action-icon"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <rect x="7" y="7" width="10" height="10" rx="2"></rect>
+            </svg>
+            <span class="status-action-text">Stop</span>
+          </button>
+          <button
+            id="topCalibBtn"
+            type="button"
+            class="status-action-btn status-calib-btn"
+            aria-label="Open calibration"
+          >
+            <svg
+              class="status-action-icon"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <line x1="4" y1="6" x2="20" y2="6"></line>
+              <circle cx="9" cy="6" r="2"></circle>
+              <line x1="4" y1="12" x2="20" y2="12"></line>
+              <circle cx="15" cy="12" r="2"></circle>
+              <line x1="4" y1="18" x2="20" y2="18"></line>
+              <circle cx="11" cy="18" r="2"></circle>
+            </svg>
+            <span class="status-action-text">Calibration</span>
+          </button>
+          <button
+            id="topLiveControlBtn"
+            type="button"
+            class="status-action-btn status-live-btn"
+            aria-label="Open live control"
+          >
+            <svg
+              class="status-action-icon"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M4 20V4"></path>
+              <path d="M4 20H20"></path>
+              <polyline points="5 14 9 10 13 13 20 7"></polyline>
+            </svg>
+            <span class="status-action-text">Live Control</span>
+          </button>
+        </div>
+        <div class="user-icon" onclick="toggleUserMenu()">👤</div>
+        <div class="user-menu" id="userMenu">
+          <button id="disconnectBtn" type="button">Disconnect</button>
+        </div>
+      </div>
+
+      <!-- Sidebar -->
+      <div class="sidebar">
+        <div class="tab active" onclick="switchTab(0)">
+          <svg
+            class="tab-icon"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+            <line x1="3" y1="9" x2="21" y2="9"></line>
+            <line x1="9" y1="21" x2="9" y2="9"></line>
+          </svg>
+          <span>Dashboard</span>
+        </div>
+        <div class="tab" onclick="switchTab(1)">
+          <svg
+            class="tab-icon"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+            <circle cx="12" cy="7" r="4"></circle>
+          </svg>
+          <span>User</span>
+        </div>
+        <div class="tab" onclick="switchTab(2)">
+          <svg
+            class="tab-icon"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <line x1="4" y1="21" x2="4" y2="14"></line>
+            <line x1="4" y1="10" x2="4" y2="3"></line>
+            <line x1="12" y1="21" x2="12" y2="12"></line>
+            <line x1="12" y1="8" x2="12" y2="3"></line>
+            <line x1="20" y1="21" x2="20" y2="16"></line>
+            <line x1="20" y1="12" x2="20" y2="3"></line>
+            <line x1="1" y1="14" x2="7" y2="14"></line>
+            <line x1="9" y1="8" x2="15" y2="8"></line>
+            <line x1="17" y1="16" x2="23" y2="16"></line>
+          </svg>
+          <span>Control</span>
+        </div>
+        <div class="tab" onclick="switchTab(3)">
+          <svg
+            class="tab-icon"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+          </svg>
+          <span>Admin</span>
+        </div>
+        <div class="tab" onclick="switchTab(4)">
+          <svg
+            class="tab-icon"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect>
+            <rect x="9" y="9" width="6" height="6"></rect>
+            <line x1="9" y1="1" x2="9" y2="4"></line>
+            <line x1="15" y1="1" x2="15" y2="4"></line>
+            <line x1="9" y1="20" x2="9" y2="23"></line>
+            <line x1="15" y1="20" x2="15" y2="23"></line>
+            <line x1="20" y1="9" x2="23" y2="9"></line>
+            <line x1="20" y1="14" x2="23" y2="14"></line>
+            <line x1="1" y1="9" x2="4" y2="9"></line>
+            <line x1="1" y1="14" x2="4" y2="14"></line>
+          </svg>
+          <span>Device</span>
+        </div>
+        <div class="tab" onclick="switchTab(5)">
+          <svg
+            class="tab-icon"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+          </svg>
+          <span>Live</span>
+        </div>
+
+        <!-- SINGLE vertical stack of 4 buttons -->
+        <div class="sidebar-controls-vertical">
+          <!-- 1) Mute -->
+          <div
+            class="round-button mute"
+            id="muteBtn"
+            onclick="toggleMute()"
+            title="Mute / Unmute"
+          >
+            <img id="muteIcon" src="icons/volume-up-4-256.png" alt="Sound" />
+          </div>
+
+          <!-- 2) Power -->
+          <button id="powerButton" class="power-button state-off" title="Power">
+            <span class="ring"></span>
+            <span class="label" id="powerLabel">OFF</span>
+          </button>
+
+          <!-- 3) Reboot -->
+          <div
+            class="round-button reset"
+            onclick="rebootSystem()"
+            title="Reboot"
+          >
+            <img src="icons/refresh.png" alt="Reset" />
+          </div>
+
+          <!-- 4) Reset -->
+          <div
+            class="round-button reset"
+            onclick="openConfirm('reset')"
+            title="Reset"
+          >
+            <img src="icons/redo-5-16.png" alt="Reset" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Dashboard Tab -->
+      <div class="content active" id="dashboardTab">
+        <div class="dashboard-panels dashboard-panels-top">
+          <section
+            class="user-modal-content zoom-box dashboard-card dashboard-clock"
+          >
+            <div class="dashboard-card-header">
+              <div class="dashboard-card-heading">
+                <div class="dashboard-card-title">
+                  <svg
+                    class="dashboard-card-icon"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <circle cx="12" cy="12" r="9"></circle>
+                    <path d="M12 7v5l3 3"></path>
+                  </svg>
+                  <span>Clock</span>
+                </div>
+                <div class="dashboard-card-subtitle">Local time and day</div>
+              </div>
+            </div>
+
+            <div class="dashboard-clock-layout">
+              <div class="dashboard-clock-face">
+                <svg
+                  id="dashboardClockSvg"
+                  class="dashboard-clock-svg"
+                  viewBox="0 0 120 120"
+                  role="img"
+                  aria-label="Analog clock"
+                >
+                  <defs>
+                    <radialGradient
+                      id="dashboardClockFaceGlow"
+                      cx="50%"
+                      cy="30%"
+                      r="70%"
+                    >
+                      <stop
+                        offset="0%"
+                        stop-color="#00ffae"
+                        stop-opacity="0.22"
+                      />
+                      <stop
+                        offset="60%"
+                        stop-color="#00ffae"
+                        stop-opacity="0"
+                      />
+                      <stop
+                        offset="100%"
+                        stop-color="#00ffae"
+                        stop-opacity="0"
+                      />
+                    </radialGradient>
+                  </defs>
+
+                  <circle class="clock-face" cx="60" cy="60" r="52"></circle>
+                  <circle class="clock-glow" cx="60" cy="60" r="52"></circle>
+                  <circle class="clock-inner" cx="60" cy="60" r="44"></circle>
+
+                  <g class="clock-ticks" aria-hidden="true">
+                    <line
+                      class="clock-tick major"
+                      x1="60"
+                      y1="12"
+                      x2="60"
+                      y2="22"
+                      transform="rotate(0 60 60)"
+                    ></line>
+                    <line
+                      class="clock-tick major"
+                      x1="60"
+                      y1="12"
+                      x2="60"
+                      y2="22"
+                      transform="rotate(30 60 60)"
+                    ></line>
+                    <line
+                      class="clock-tick major"
+                      x1="60"
+                      y1="12"
+                      x2="60"
+                      y2="22"
+                      transform="rotate(60 60 60)"
+                    ></line>
+                    <line
+                      class="clock-tick major"
+                      x1="60"
+                      y1="12"
+                      x2="60"
+                      y2="22"
+                      transform="rotate(90 60 60)"
+                    ></line>
+                    <line
+                      class="clock-tick major"
+                      x1="60"
+                      y1="12"
+                      x2="60"
+                      y2="22"
+                      transform="rotate(120 60 60)"
+                    ></line>
+                    <line
+                      class="clock-tick major"
+                      x1="60"
+                      y1="12"
+                      x2="60"
+                      y2="22"
+                      transform="rotate(150 60 60)"
+                    ></line>
+                    <line
+                      class="clock-tick major"
+                      x1="60"
+                      y1="12"
+                      x2="60"
+                      y2="22"
+                      transform="rotate(180 60 60)"
+                    ></line>
+                    <line
+                      class="clock-tick major"
+                      x1="60"
+                      y1="12"
+                      x2="60"
+                      y2="22"
+                      transform="rotate(210 60 60)"
+                    ></line>
+                    <line
+                      class="clock-tick major"
+                      x1="60"
+                      y1="12"
+                      x2="60"
+                      y2="22"
+                      transform="rotate(240 60 60)"
+                    ></line>
+                    <line
+                      class="clock-tick major"
+                      x1="60"
+                      y1="12"
+                      x2="60"
+                      y2="22"
+                      transform="rotate(270 60 60)"
+                    ></line>
+                    <line
+                      class="clock-tick major"
+                      x1="60"
+                      y1="12"
+                      x2="60"
+                      y2="22"
+                      transform="rotate(300 60 60)"
+                    ></line>
+                    <line
+                      class="clock-tick major"
+                      x1="60"
+                      y1="12"
+                      x2="60"
+                      y2="22"
+                      transform="rotate(330 60 60)"
+                    ></line>
+                  </g>
+
+                  <g class="clock-hands" aria-hidden="true">
+                    <line
+                      id="dashboardClockHourHand"
+                      class="clock-hand clock-hand-hour"
+                      x1="60"
+                      y1="60"
+                      x2="60"
+                      y2="38"
+                    ></line>
+                    <line
+                      id="dashboardClockMinuteHand"
+                      class="clock-hand clock-hand-minute"
+                      x1="60"
+                      y1="62"
+                      x2="60"
+                      y2="28"
+                    ></line>
+                    <line
+                      id="dashboardClockSecondHand"
+                      class="clock-hand clock-hand-second"
+                      x1="60"
+                      y1="68"
+                      x2="60"
+                      y2="22"
+                    ></line>
+                  </g>
+                  <circle class="clock-pin" cx="60" cy="60" r="3.2"></circle>
+                </svg>
+              </div>
+
+              <div class="dashboard-clock-meta">
+                <div id="dashboardClockDay" class="dashboard-clock-day">--</div>
+                <div id="dashboardClockDate" class="dashboard-clock-date">
+                  --
+                </div>
+                <div
+                  id="dashboardClockTime"
+                  class="dashboard-clock-time dashboard-mono"
+                >
+                  --:--:--
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section
+            class="user-modal-content zoom-box dashboard-card dashboard-system"
+          >
+            <div class="dashboard-card-header">
+              <div class="dashboard-card-heading">
+                <div class="dashboard-card-title">
+                  <svg
+                    class="dashboard-card-icon"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <line x1="4" y1="21" x2="4" y2="14"></line>
+                    <line x1="4" y1="10" x2="4" y2="3"></line>
+                    <line x1="12" y1="21" x2="12" y2="12"></line>
+                    <line x1="12" y1="8" x2="12" y2="3"></line>
+                    <line x1="20" y1="21" x2="20" y2="16"></line>
+                    <line x1="20" y1="12" x2="20" y2="3"></line>
+                    <line x1="1" y1="14" x2="7" y2="14"></line>
+                    <line x1="9" y1="8" x2="15" y2="8"></line>
+                    <line x1="17" y1="16" x2="23" y2="16"></line>
+                  </svg>
+                  <span>System</span>
+                </div>
+                <div class="dashboard-card-subtitle">Mode, LEDs, readiness</div>
+              </div>
+
+              <svg
+                class="dashboard-card-watermark"
+                viewBox="0 0 120 120"
+                aria-hidden="true"
+              >
+                <path
+                  d="M14 74h26l10-24 16 44 10-26h24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="3"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  opacity="0.8"
+                />
+                <circle
+                  cx="14"
+                  cy="74"
+                  r="4"
+                  fill="currentColor"
+                  opacity="0.65"
+                />
+                <circle
+                  cx="110"
+                  cy="68"
+                  r="4"
+                  fill="currentColor"
+                  opacity="0.45"
+                />
+              </svg>
+            </div>
+
+            <div class="mode-toggle">
+              <div class="mode-group mode-group-mode" aria-label="System mode">
+                <div class="mode-group-label">Mode</div>
+                <div class="mode-group-controls">
+                  <span
+                    id="modeAutoPill"
+                    class="mode-pill mode-pill-auto"
+                    title="Auto mode"
+                  >
+                    <svg
+                      class="mode-pill-icon"
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M21 12a9 9 0 1 1-2.64-6.36"></path>
+                      <polyline points="21 3 21 9 15 9"></polyline>
+                    </svg>
+                    <span class="mode-pill-text">Auto</span>
+                  </span>
+                  <label class="switch">
+                    <input
+                      type="checkbox"
+                      id="modeToggle"
+                      onchange="toggleMode()"
+                    />
+                    <span class="slider"></span>
+                  </label>
+                  <span
+                    id="modeManualPill"
+                    class="mode-pill mode-pill-manual"
+                    title="Manual mode"
+                  >
+                    <svg
+                      class="mode-pill-icon"
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path
+                        d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"
+                      ></path>
+                      <circle cx="12" cy="7" r="4"></circle>
+                    </svg>
+                    <span class="mode-pill-text">Manual</span>
+                  </span>
+                </div>
+              </div>
+
+              <div
+                class="mode-group mode-group-feedback"
+                aria-label="LED feedback"
+              >
+                <div class="mode-group-label">LED feedback</div>
+                <div class="mode-group-controls">
+                  <span
+                    id="ltPill"
+                    class="mode-pill mode-pill-lt"
+                    title="LT (LED feedback)"
+                  >
+                    <svg
+                      class="mode-pill-icon"
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M9 18h6"></path>
+                      <path d="M10 22h4"></path>
+                      <path
+                        d="M12 2a7 7 0 0 0-4 12c.5.5 1 1.5 1 2h6c0-.5.5-1.5 1-2a7 7 0 0 0-4-12z"
+                      ></path>
+                    </svg>
+                    <span class="mode-pill-text">LT</span>
+                  </span>
+                  <label class="switch">
+                    <input
+                      type="checkbox"
+                      id="ltToggle"
+                      onchange="toggleLT()"
+                    />
+                    <span class="slider"></span>
+                  </label>
+                </div>
+              </div>
+
+              <div
+                class="mode-group mode-group-status"
+                aria-label="Loop status"
+              >
+                <div class="mode-group-label">Loop status</div>
+                <div class="mode-group-controls">
+                  <span class="mode-pill mode-pill-ready" title="Ready status">
+                    <svg
+                      class="mode-pill-icon"
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <circle cx="12" cy="12" r="9"></circle>
+                      <path d="M9 12l2 2 4-4"></path>
+                    </svg>
+                    <span class="mode-pill-text">Ready</span>
+                    <span id="readyLed" class="led" aria-hidden="true"></span>
+                  </span>
+                  <span class="mode-pill mode-pill-off" title="Off status">
+                    <svg
+                      class="mode-pill-icon"
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M12 2v10"></path>
+                      <path d="M6.36 6.36a9 9 0 1 0 11.28 0"></path>
+                    </svg>
+                    <span class="mode-pill-text">Off</span>
+                    <span id="offLed" class="led" aria-hidden="true"></span>
+                  </span>
+                </div>
+              </div>
+
+              <div class="dashboard-system-actions">
+                <button
+                  id="forceCalibrationBtn"
+                  type="button"
+                  class="settings-btn settings-btn-primary dashboard-action-btn"
+                  onclick="forceCalibration()"
+                >
+                  <svg
+                    class="settings-btn-icon"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M21 12a9 9 0 1 1-2.64-6.36"></path>
+                    <polyline points="21 3 21 9 15 9"></polyline>
+                    <path d="M12 7v5l3 3"></path>
+                  </svg>
+                  <span>Force Calibration</span>
+                </button>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <div class="gauge-scroll-area">
+          <div class="dashboard-panels dashboard-panels-bottom">
+            <section
+              class="user-modal-content zoom-box dashboard-card dashboard-electrical"
+            >
+              <div class="dashboard-card-header">
+                <div class="dashboard-card-heading">
+                  <div class="dashboard-card-title">
+                    <svg
+                      class="dashboard-card-icon"
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z"></path>
+                    </svg>
+                    <span>Electrical</span>
+                  </div>
+                  <div class="dashboard-card-subtitle">
+                    Voltage, current, capacitance
+                  </div>
+                </div>
+              </div>
+
+              <div class="dashboard-metrics">
+                <!-- Voltage -->
+                <div class="gauge-card">
+                  <div class="gauge">
+                    <svg viewBox="0 0 36 36" class="gauge-svg">
+                      <g transform="rotate(-90 18 18)">
+                        <path
+                          class="gauge-bg"
+                          d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                        />
+                        <path
+                          class="gauge-fg voltage"
+                          stroke-dasharray="92, 100"
+                          d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                        />
+                      </g>
+                      <text
+                        x="18"
+                        y="18"
+                        class="gauge-value"
+                        transform="rotate(90 18 18)"
+                        id="voltageValue"
+                      >
+                        230V
+                      </text>
+                    </svg>
+                  </div>
+                  <div class="gauge-label">Voltage</div>
+                </div>
+
+                <!-- Current -->
+                <div class="gauge-card">
+                  <div class="gauge">
+                    <svg viewBox="0 0 36 36" class="gauge-svg">
+                      <g transform="rotate(-90 18 18)">
+                        <path
+                          class="gauge-bg"
+                          d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                        />
+                        <path
+                          class="gauge-fg current"
+                          stroke-dasharray="60, 100"
+                          d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                        />
+                      </g>
+                      <text
+                        x="18"
+                        y="18"
+                        class="gauge-value"
+                        transform="rotate(90 18 18)"
+                        id="currentValue"
+                      >
+                        1.2A
+                      </text>
+                    </svg>
+                  </div>
+                  <div class="gauge-label">Current</div>
+                </div>
+
+                <!-- Capacitance -->
+                <div class="gauge-card">
+                  <div class="gauge">
+                    <svg viewBox="0 0 36 36" class="gauge-svg">
+                      <g transform="rotate(-90 18 18)">
+                        <path
+                          class="gauge-bg"
+                          d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                        />
+                        <path
+                          class="gauge-fg voltage"
+                          stroke-dasharray="0, 100"
+                          d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                        />
+                      </g>
+                      <text
+                        x="18"
+                        y="18"
+                        class="gauge-value"
+                        transform="rotate(90 18 18)"
+                        id="capacitanceValue"
+                      >
+                        --mF
+                      </text>
+                    </svg>
+                  </div>
+                  <div class="gauge-label">Capacitance</div>
+                </div>
+              </div>
+
+              <div class="dashboard-meta">
+                <div class="dashboard-meta-pill">
+                  <svg
+                    class="dashboard-meta-icon"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M3 12h4l2-6 4 12 2-6h6"></path>
+                  </svg>
+                  <span>ADC raw (/100):</span>
+                  <span id="adcRawValue" class="dashboard-mono">--</span>
+                </div>
+              </div>
+            </section>
+
+            <section
+              class="user-modal-content zoom-box dashboard-card dashboard-thermal"
+            >
+              <div class="dashboard-card-header">
+                <div class="dashboard-card-heading">
+                  <div class="dashboard-card-title">
+                    <svg
+                      class="dashboard-card-icon"
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path
+                        d="M14 14.76V5a2 2 0 0 0-4 0v9.76a4 4 0 1 0 4 0z"
+                      ></path>
+                    </svg>
+                    <span>Thermals</span>
+                  </div>
+                  <div class="dashboard-card-subtitle">
+                    12 temperature channels
+                  </div>
+                </div>
+              </div>
+
+              <div class="dashboard-temps">
+                <!-- Temp 1 -->
+                <div class="gauge-card is-key">
+                  <div class="gauge">
+                    <svg viewBox="0 0 36 36" class="gauge-svg">
+                      <g transform="rotate(-90 18 18)">
+                        <path
+                          class="gauge-bg"
+                          d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 
+                        a15.9155 15.9155 0 1 1 0 -31.831"
+                        />
+                        <path
+                          class="gauge-fg temperature"
+                          stroke-dasharray="21, 100"
+                          d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 
+                        a15.9155 15.9155 0 1 1 0 -31.831"
+                        />
+                      </g>
+                      <text
+                        x="18"
+                        y="18"
+                        class="gauge-value"
+                        transform="rotate(90 18 18)"
+                        id="temp1Value"
+                      >
+                        31°C
+                      </text>
+                    </svg>
+                  </div>
+                  <div class="gauge-label">Board 01</div>
+                </div>
+
+                <!-- Temp 2 -->
+                <div class="gauge-card is-key">
+                  <div class="gauge">
+                    <svg viewBox="0 0 36 36" class="gauge-svg">
+                      <g transform="rotate(-90 18 18)">
+                        <path
+                          class="gauge-bg"
+                          d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                        />
+                        <path
+                          class="gauge-fg temperature"
+                          stroke-dasharray="17, 100"
+                          d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                        />
+                      </g>
+                      <text
+                        x="18"
+                        y="18"
+                        class="gauge-value"
+                        transform="rotate(90 18 18)"
+                        id="temp2Value"
+                      >
+                        25°C
+                      </text>
+                    </svg>
+                  </div>
+                  <div class="gauge-label">Board 02</div>
+                </div>
+
+                <!-- Temp 3 -->
+                <div class="gauge-card is-key">
+                  <div class="gauge">
+                    <svg viewBox="0 0 36 36" class="gauge-svg">
+                      <g transform="rotate(-90 18 18)">
+                        <path
+                          class="gauge-bg"
+                          d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                        />
+                        <path
+                          class="gauge-fg temperature"
+                          stroke-dasharray="26, 100"
+                          d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                        />
+                      </g>
+                      <text
+                        x="18"
+                        y="18"
+                        class="gauge-value"
+                        transform="rotate(90 18 18)"
+                        id="temp3Value"
+                      >
+                        39°C
+                      </text>
+                    </svg>
+                  </div>
+                  <div class="gauge-label">Heatsink</div>
+                </div>
+
+                <!-- Temp 4 -->
+                <div class="gauge-card">
+                  <div class="gauge">
+                    <svg viewBox="0 0 36 36" class="gauge-svg">
+                      <g transform="rotate(-90 18 18)">
+                        <path
+                          class="gauge-bg"
+                          d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                        />
+                        <path
+                          class="gauge-fg temperature"
+                          stroke-dasharray="29, 100"
+                          d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                        />
+                      </g>
+                      <text
+                        x="18"
+                        y="18"
+                        class="gauge-value"
+                        transform="rotate(90 18 18)"
+                        id="temp4Value"
+                      >
+                        44°C
+                      </text>
+                    </svg>
+                  </div>
+                  <div class="gauge-label">Temp 4</div>
+                </div>
+
+                <!-- Temp 5 -->
+                <div class="gauge-card">
+                  <div class="gauge">
+                    <svg viewBox="0 0 36 36" class="gauge-svg">
+                      <g transform="rotate(-90 18 18)">
+                        <path
+                          class="gauge-bg"
+                          d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                        />
+                        <path
+                          class="gauge-fg temperature"
+                          stroke-dasharray="19, 100"
+                          d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                        />
+                      </g>
+                      <text
+                        x="18"
+                        y="18"
+                        class="gauge-value"
+                        transform="rotate(90 18 18)"
+                        id="temp5Value"
+                      >
+                        28°C
+                      </text>
+                    </svg>
+                  </div>
+                  <div class="gauge-label">Temp 5</div>
+                </div>
+
+                <!-- Temp 6 -->
+                <div class="gauge-card">
+                  <div class="gauge">
+                    <svg viewBox="0 0 36 36" class="gauge-svg">
+                      <g transform="rotate(-90 18 18)">
+                        <path
+                          class="gauge-bg"
+                          d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                        />
+                        <path
+                          class="gauge-fg temperature"
+                          stroke-dasharray="24, 100"
+                          d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                        />
+                      </g>
+                      <text
+                        x="18"
+                        y="18"
+                        class="gauge-value"
+                        transform="rotate(90 18 18)"
+                        id="temp6Value"
+                      >
+                        36°C
+                      </text>
+                    </svg>
+                  </div>
+                  <div class="gauge-label">Temp 6</div>
+                </div>
+
+                <!-- Temp 7 -->
+                <div class="gauge-card">
+                  <div class="gauge">
+                    <svg viewBox="0 0 36 36" class="gauge-svg">
+                      <g transform="rotate(-90 18 18)">
+                        <path
+                          class="gauge-bg"
+                          d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                        />
+                        <path
+                          class="gauge-fg temperature"
+                          stroke-dasharray="14, 100"
+                          d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                        />
+                      </g>
+                      <text
+                        x="18"
+                        y="18"
+                        class="gauge-value"
+                        transform="rotate(90 18 18)"
+                        id="temp7Value"
+                      >
+                        22°C
+                      </text>
+                    </svg>
+                  </div>
+                  <div class="gauge-label">Temp 7</div>
+                </div>
+
+                <!-- Temp 8 -->
+                <div class="gauge-card">
+                  <div class="gauge">
+                    <svg viewBox="0 0 36 36" class="gauge-svg">
+                      <g transform="rotate(-90 18 18)">
+                        <path
+                          class="gauge-bg"
+                          d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                        />
+                        <path
+                          class="gauge-fg temperature"
+                          stroke-dasharray="32, 100"
+                          d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                        />
+                      </g>
+                      <text
+                        x="18"
+                        y="18"
+                        class="gauge-value"
+                        transform="rotate(90 18 18)"
+                        id="temp8Value"
+                      >
+                        48°C
+                      </text>
+                    </svg>
+                  </div>
+                  <div class="gauge-label">Temp 8</div>
+                </div>
+
+                <!-- Temp 9 -->
+                <div class="gauge-card">
+                  <div class="gauge">
+                    <svg viewBox="0 0 36 36" class="gauge-svg">
+                      <g transform="rotate(-90 18 18)">
+                        <path
+                          class="gauge-bg"
+                          d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                        />
+                        <path
+                          class="gauge-fg temperature"
+                          stroke-dasharray="18, 100"
+                          d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                        />
+                      </g>
+                      <text
+                        x="18"
+                        y="18"
+                        class="gauge-value"
+                        transform="rotate(90 18 18)"
+                        id="temp9Value"
+                      >
+                        27°C
+                      </text>
+                    </svg>
+                  </div>
+                  <div class="gauge-label">Temp 9</div>
+                </div>
+
+                <!-- Temp 10 -->
+                <div class="gauge-card">
+                  <div class="gauge">
+                    <svg viewBox="0 0 36 36" class="gauge-svg">
+                      <g transform="rotate(-90 18 18)">
+                        <path
+                          class="gauge-bg"
+                          d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                        />
+                        <path
+                          class="gauge-fg temperature"
+                          stroke-dasharray="22, 100"
+                          d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                        />
+                      </g>
+                      <text
+                        x="18"
+                        y="18"
+                        class="gauge-value"
+                        transform="rotate(90 18 18)"
+                        id="temp10Value"
+                      >
+                        33°C
+                      </text>
+                    </svg>
+                  </div>
+                  <div class="gauge-label">Temp 10</div>
+                </div>
+
+                <!-- Temp 11 -->
+                <div class="gauge-card">
+                  <div class="gauge">
+                    <svg viewBox="0 0 36 36" class="gauge-svg">
+                      <g transform="rotate(-90 18 18)">
+                        <path
+                          class="gauge-bg"
+                          d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                        />
+                        <path
+                          class="gauge-fg temperature"
+                          stroke-dasharray="27, 100"
+                          d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                        />
+                      </g>
+                      <text
+                        x="18"
+                        y="18"
+                        class="gauge-value"
+                        transform="rotate(90 18 18)"
+                        id="temp11Value"
+                      >
+                        41°C
+                      </text>
+                    </svg>
+                  </div>
+                  <div class="gauge-label">Temp 11</div>
+                </div>
+
+                <!-- Temp 12 -->
+                <div class="gauge-card">
+                  <div class="gauge">
+                    <svg viewBox="0 0 36 36" class="gauge-svg">
+                      <g transform="rotate(-90 18 18)">
+                        <path
+                          class="gauge-bg"
+                          d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                        />
+                        <path
+                          class="gauge-fg temperature"
+                          stroke-dasharray="19, 100"
+                          d="M18 2.0845 a15.9155 15.9155 0 1 1 0 31.831 a15.9155 15.9155 0 1 1 0 -31.831"
+                        />
+                      </g>
+                      <text
+                        x="18"
+                        y="18"
+                        class="gauge-value"
+                        transform="rotate(90 18 18)"
+                        id="temp12Value"
+                      >
+                        29°C
+                      </text>
+                    </svg>
+                  </div>
+                  <div class="gauge-label">Temp 12</div>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+
+      <!-- User Settings Tab -->
+      <div class="content" id="userSettingsTab">
+        <div class="content-header">
+          <h2></h2>
+        </div>
+
+        <div class="user-settings-layout">
+          <section
+            class="user-modal-content zoom-box settings-card user-settings-card"
+          >
+            <div class="settings-card-header">
+              <div class="settings-card-title">
+                <svg
+                  class="settings-card-icon"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                  <circle cx="12" cy="7" r="4"></circle>
+                </svg>
+                <span>Account</span>
+              </div>
+              <div class="settings-card-subtitle">
+                Update your password and device label.
+              </div>
+            </div>
+
+            <div class="settings-form">
+              <div class="settings-field">
+                <label for="userCurrentPassword">Current password</label>
+                <input
+                  type="password"
+                  id="userCurrentPassword"
+                  autocomplete="current-password"
+                  placeholder="Current password"
+                />
+              </div>
+
+              <div class="settings-field">
+                <label for="userNewPassword">New password</label>
+                <input
+                  type="password"
+                  id="userNewPassword"
+                  autocomplete="new-password"
+                  placeholder="New password"
+                />
+              </div>
+
+              <div class="settings-field">
+                <label for="userDeviceId">Device ID</label>
+                <input
+                  type="text"
+                  id="userDeviceId"
+                  autocomplete="off"
+                  placeholder="Device ID"
+                />
+                <div class="settings-field-hint">
+                  Used as the device name/label (may require reconnect).
+                </div>
+              </div>
+            </div>
+
+            <div class="settings-actions">
+              <button
+                type="button"
+                class="settings-btn settings-btn-primary"
+                onclick="saveUserSettings()"
+              >
+                <svg
+                  class="settings-btn-icon"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M20 6L9 17l-5-5"></path>
+                </svg>
+                Save
+              </button>
+              <button
+                type="button"
+                class="settings-btn"
+                onclick="resetUserSettings()"
+              >
+                <svg
+                  class="settings-btn-icon"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M3 12a9 9 0 1 0 3-6.7"></path>
+                  <polyline points="3 3 3 9 9 9"></polyline>
+                </svg>
+                Reset
+              </button>
+            </div>
+          </section>
+
+          <section
+            class="user-modal-content zoom-box settings-card user-access-card"
+          >
+            <div class="settings-card-header">
+              <div class="settings-card-title">
+                <svg
+                  class="settings-card-icon"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M12 1v2"></path>
+                  <path d="M12 21v2"></path>
+                  <path d="M4.22 4.22l1.42 1.42"></path>
+                  <path d="M18.36 18.36l1.42 1.42"></path>
+                  <path d="M1 12h2"></path>
+                  <path d="M21 12h2"></path>
+                  <path d="M4.22 19.78l1.42-1.42"></path>
+                  <path d="M18.36 5.64l1.42-1.42"></path>
+                  <circle cx="12" cy="12" r="4"></circle>
+                </svg>
+                <span>Output Access</span>
+              </div>
+              <div class="settings-card-subtitle">
+                Select which outputs the loop/calibration is allowed to use.
+              </div>
+            </div>
+
+            <div id="userAccessGrid" class="output-access-grid"></div>
+          </section>
+        </div>
+      </div>
+
+      <!-- Manual Control Tab -->
+      <div class="content" id="manualControlTab">
+        <div class="content-header">
+          <h2></h2>
+        </div>
+
+        <div class="manual-control-layout">
+          <section
+            class="user-modal-content zoom-box settings-card manual-controls-card"
+          >
+            <div class="settings-card-header">
+              <div class="settings-card-title">
+                <svg
+                  class="settings-card-icon"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <line x1="4" y1="21" x2="4" y2="14"></line>
+                  <line x1="4" y1="10" x2="4" y2="3"></line>
+                  <line x1="12" y1="21" x2="12" y2="12"></line>
+                  <line x1="12" y1="8" x2="12" y2="3"></line>
+                  <line x1="20" y1="21" x2="20" y2="16"></line>
+                  <line x1="20" y1="12" x2="20" y2="3"></line>
+                  <line x1="1" y1="14" x2="7" y2="14"></line>
+                  <line x1="9" y1="8" x2="15" y2="8"></line>
+                  <line x1="17" y1="16" x2="23" y2="16"></line>
+                </svg>
+                <span>Manual Controls</span>
+              </div>
+              <div class="settings-card-subtitle">
+                Adjusting these will switch to manual mode (and abort auto loop
+                if running).
+              </div>
+            </div>
+
+            <div class="settings-form">
+              <div class="settings-field">
+                <div class="settings-field-row">
+                  <label for="fanSlider">Fan speed</label>
+                  <span id="fanSpeedValue" class="settings-field-value"
+                    >--%</span
+                  >
+                </div>
+                <input type="range" min="0" max="100" id="fanSlider" />
+              </div>
+
+              <div class="settings-field settings-field-inline">
+                <label for="relayToggle">Relay</label>
+                <label class="switch">
+                  <input type="checkbox" id="relayToggle" />
+                  <span class="slider"></span>
+                </label>
+              </div>
+
+              <div class="settings-divider"></div>
+
+              <div class="manual-device-info">
+                <div class="settings-field">
+                  <div class="settings-field-row">
+                    <label>Device Name/ID</label>
+                    <span id="deviceInfoId" class="settings-field-value">--</span>
+                  </div>
+                </div>
+
+                <div class="settings-field">
+                  <div class="settings-field-row">
+                    <label>HW Version</label>
+                    <span id="deviceInfoHw" class="settings-field-value">--</span>
+                  </div>
+                </div>
+
+                <div class="settings-field">
+                  <div class="settings-field-row">
+                    <label>SW Version</label>
+                    <span id="deviceInfoSw" class="settings-field-value">--</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section
+            class="user-modal-content zoom-box settings-card manual-outputs-card"
+          >
+            <div class="settings-card-header">
+              <div class="settings-card-title">
+                <svg
+                  class="settings-card-icon"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <rect x="3" y="3" width="8" height="8" rx="2"></rect>
+                  <rect x="13" y="3" width="8" height="8" rx="2"></rect>
+                  <rect x="3" y="13" width="8" height="8" rx="2"></rect>
+                  <rect x="13" y="13" width="8" height="8" rx="2"></rect>
+                </svg>
+                <span>Manual Outputs</span>
+              </div>
+              <div class="settings-card-subtitle">
+                Toggle outputs directly (manual mode).
+              </div>
+            </div>
+
+            <div id="manualOutputs" class="manual-output-grid"></div>
+          </section>
+        </div>
+      </div>
+
+      <!-- Admin Settings Tab -->
+      <div class="content" id="adminSettingsTab">
+        <div class="content-header">
+          <h2></h2>
+        </div>
+
+        <div class="admin-settings-layout">
+          <section
+            class="user-modal-content zoom-box settings-card admin-credentials-card"
+          >
+            <div class="settings-card-header">
+              <div class="settings-card-title">
+                <svg
+                  class="settings-card-icon"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M12 2l7 4v6c0 5-3 9-7 10-4-1-7-5-7-10V6l7-4z"></path>
+                </svg>
+                <span>Admin Credentials</span>
+              </div>
+              <div class="settings-card-subtitle">
+                Current password is required to apply changes.
+              </div>
+            </div>
+
+            <div class="settings-form">
+              <div class="settings-field">
+                <label for="adminCurrentPassword">Current password</label>
+                <input
+                  type="password"
+                  id="adminCurrentPassword"
+                  autocomplete="current-password"
+                  placeholder="Current password"
+                />
+              </div>
+
+              <div class="settings-field">
+                <label for="adminUsername">New admin username</label>
+                <input
+                  type="text"
+                  id="adminUsername"
+                  autocomplete="username"
+                  placeholder="New admin username"
+                />
+                <div class="settings-field-hint">
+                  Leave blank to keep current.
+                </div>
+              </div>
+
+              <div class="settings-field">
+                <label for="adminPassword">New admin password</label>
+                <input
+                  type="password"
+                  id="adminPassword"
+                  autocomplete="new-password"
+                  placeholder="New admin password"
+                />
+                <div class="settings-field-hint">
+                  Leave blank to keep current.
+                </div>
+              </div>
+            </div>
+
+            <div class="settings-actions">
+              <button
+                type="button"
+                class="settings-btn settings-btn-primary"
+                onclick="saveAdminSettings('admin')"
+              >
+                <svg
+                  class="settings-btn-icon"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M20 6L9 17l-5-5"></path>
+                </svg>
+                Save
+              </button>
+              <button
+                type="button"
+                class="settings-btn"
+                onclick="resetAdminSettings('admin')"
+              >
+                <svg
+                  class="settings-btn-icon"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M3 12a9 9 0 1 0 3-6.7"></path>
+                  <polyline points="3 3 3 9 9 9"></polyline>
+                </svg>
+                Reset
+              </button>
+            </div>
+          </section>
+
+          <section
+            class="user-modal-content zoom-box settings-card wifi-station-card"
+          >
+            <div class="settings-card-header">
+              <div class="settings-card-title">
+                <svg
+                  class="settings-card-icon"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M5 12.55a11 11 0 0 1 14.08 0"></path>
+                  <path d="M8.5 15.5a6 6 0 0 1 7 0"></path>
+                  <path d="M12 20h.01"></path>
+                </svg>
+                <span>Wi-Fi Station</span>
+              </div>
+              <div class="settings-card-subtitle">
+                Network the device should join (SSID + password).
+              </div>
+            </div>
+
+            <div class="settings-form">
+              <div class="settings-field">
+                <label for="wifiSSID">Wi-Fi SSID</label>
+                <input
+                  type="text"
+                  id="wifiSSID"
+                  autocomplete="off"
+                  placeholder="Wi-Fi SSID"
+                />
+                <div class="settings-field-hint">
+                  Leave blank to keep current.
+                </div>
+              </div>
+
+              <div class="settings-field">
+                <label for="wifiPassword">Wi-Fi password</label>
+                <input
+                  type="password"
+                  id="wifiPassword"
+                  autocomplete="new-password"
+                  placeholder="Wi-Fi password"
+                />
+                <div class="settings-field-hint">
+                  Leave blank to keep current.
+                </div>
+              </div>
+            </div>
+
+            <div class="settings-actions">
+              <button
+                type="button"
+                class="settings-btn settings-btn-primary"
+                onclick="saveAdminSettings('wifi')"
+              >
+                <svg
+                  class="settings-btn-icon"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M20 6L9 17l-5-5"></path>
+                </svg>
+                Save
+              </button>
+              <button
+                type="button"
+                class="settings-btn"
+                onclick="resetAdminSettings('wifi')"
+              >
+                <svg
+                  class="settings-btn-icon"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M3 12a9 9 0 1 0 3-6.7"></path>
+                  <polyline points="3 3 3 9 9 9"></polyline>
+                </svg>
+                Reset
+              </button>
+            </div>
+          </section>
+
+          <section
+            class="user-modal-content zoom-box settings-card wifi-ap-card"
+          >
+            <div class="settings-card-header">
+              <div class="settings-card-title">
+                <svg
+                  class="settings-card-icon"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M2 12.5a13 13 0 0 1 20 0"></path>
+                  <path d="M6.5 16.5a7 7 0 0 1 11 0"></path>
+                  <path d="M12 21h.01"></path>
+                </svg>
+                <span>Wi-Fi Access Point</span>
+              </div>
+              <div class="settings-card-subtitle">
+                Hotspot name and password (AP mode).
+              </div>
+            </div>
+
+            <div class="settings-form">
+              <div class="settings-field">
+                <label for="apSSID">AP SSID</label>
+                <input
+                  type="text"
+                  id="apSSID"
+                  autocomplete="off"
+                  placeholder="AP SSID"
+                />
+                <div class="settings-field-hint">
+                  Leave blank to keep current.
+                </div>
+              </div>
+
+              <div class="settings-field">
+                <label for="apPassword">AP password</label>
+                <input
+                  type="password"
+                  id="apPassword"
+                  autocomplete="new-password"
+                  placeholder="AP password"
+                />
+                <div class="settings-field-hint">
+                  Leave blank to keep current.
+                </div>
+              </div>
+            </div>
+
+            <div class="settings-actions">
+              <button
+                type="button"
+                class="settings-btn settings-btn-primary"
+                onclick="saveApSettings()"
+              >
+                <svg
+                  class="settings-btn-icon"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M20 6L9 17l-5-5"></path>
+                </svg>
+                Save
+              </button>
+              <button
+                type="button"
+                class="settings-btn"
+                onclick="resetApSettings()"
+              >
+                <svg
+                  class="settings-btn-icon"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M3 12a9 9 0 1 0 3-6.7"></path>
+                  <polyline points="3 3 3 9 9 9"></polyline>
+                </svg>
+                Reset
+              </button>
+            </div>
+          </section>
+        </div>
+      </div>
+
+      <!-- Device Settings Tab -->
+      <div class="content" id="deviceSettingsTab">
+        <div class="content-header">
+          <h2></h2>
+        </div>
+
+        <div
+          style="
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: calc(100% - 80px);
+          "
+        >
+          <!-- Device Settings: ONE SINGLE BOX -->
+          <div class="user-modal-content zoom-box device-settings-box">
+            <div class="device-grid">
+              <!-- Left column: existing device fields -->
+              <section class="device-col device-col--left">
+                <h3 class="ds-col-heading ds-col-heading--device">
+                  <svg
+                    class="ds-col-icon"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M12 1v2"></path>
+                    <path d="M12 21v2"></path>
+                    <path d="M4.22 4.22l1.42 1.42"></path>
+                    <path d="M18.36 18.36l1.42 1.42"></path>
+                    <path d="M1 12h2"></path>
+                    <path d="M21 12h2"></path>
+                    <path d="M4.22 19.78l1.42-1.42"></path>
+                    <path d="M18.36 5.64l1.42-1.42"></path>
+                    <circle cx="12" cy="12" r="4"></circle>
+                  </svg>
+                  <span>Device Settings</span>
+                </h3>
+
+                <div class="ds-group-title ds-power">
+                  <svg
+                    class="ds-group-icon"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <polygon
+                      points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"
+                    ></polygon>
+                  </svg>
+                  <span>Sampling &amp; Power</span>
+                </div>
+
+                <div class="ds-field">
+                  <label for="acFrequency">Sampling Rate</label>
+                  <div class="input-with-unit">
+                    <input type="number" id="acFrequency" min="50" max="500" />
+                    <span class="unit-label">Hz</span>
+                  </div>
+                </div>
+
+                <div class="ds-field">
+                  <label for="chargeResistor">Charge Resistor</label>
+                  <div class="input-with-unit">
+                    <input type="number" id="chargeResistor" />
+                    <span class="unit-label">Ω</span>
+                  </div>
+                </div>
+
+                <div class="ds-field">
+                  <label for="currLimit">Current Trip Limit</label>
+                  <div class="input-with-unit">
+                    <input type="number" id="currLimit" step="0.1" />
+                    <span class="unit-label">A</span>
+                  </div>
+                </div>
+
+                <div class="ds-group-title ds-thermal-safety">
+                  <svg
+                    class="ds-group-icon"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path
+                      d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"
+                    ></path>
+                    <path d="M12 8v5"></path>
+                    <path d="M12 16h.01"></path>
+                  </svg>
+                  <span>Thermal Safety</span>
+                </div>
+
+                <div class="ds-field">
+                  <label for="tempWarnC">Temp Warning</label>
+                  <div class="input-with-unit">
+                    <input type="number" id="tempWarnC" step="0.1" />
+                    <span class="unit-label">°C</span>
+                  </div>
+                </div>
+
+                <div class="ds-field">
+                  <label for="tempTripC">Temp Trip (Shutdown)</label>
+                  <div class="input-with-unit">
+                    <input type="number" id="tempTripC" step="0.1" />
+                    <span class="unit-label">°C</span>
+                  </div>
+                </div>
+
+                <div class="ds-group-title ds-thermal-model">
+                  <svg
+                    class="ds-group-icon"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <rect
+                      x="4"
+                      y="4"
+                      width="16"
+                      height="16"
+                      rx="2"
+                      ry="2"
+                    ></rect>
+                    <rect x="9" y="9" width="6" height="6"></rect>
+                    <path d="M9 1v3"></path>
+                    <path d="M15 1v3"></path>
+                    <path d="M9 20v3"></path>
+                    <path d="M15 20v3"></path>
+                    <path d="M20 9h3"></path>
+                    <path d="M20 15h3"></path>
+                    <path d="M1 9h3"></path>
+                    <path d="M1 15h3"></path>
+                  </svg>
+                  <span>Thermal Model</span>
+                </div>
+
+                <div class="ds-field">
+                  <label for="idleCurrentA">Idle Current Baseline</label>
+                  <div class="input-with-unit">
+                    <input type="number" id="idleCurrentA" step="0.01" />
+                    <span class="unit-label">A</span>
+                  </div>
+                </div>
+
+                <div class="ds-field">
+                  <label for="wireTauSec">Wire Tau (time constant)</label>
+                  <div class="input-with-unit">
+                    <input type="number" id="wireTauSec" step="0.01" />
+                    <span class="unit-label">s</span>
+                  </div>
+                </div>
+
+                <div class="ds-field">
+                  <label for="wireKLoss">Heat Loss k</label>
+                  <div class="input-with-unit">
+                    <input type="number" id="wireKLoss" step="0.001" />
+                    <span class="unit-label">W/K</span>
+                  </div>
+                </div>
+
+                <div class="ds-field">
+                  <label for="wireThermalC">Thermal Mass C</label>
+                  <div class="input-with-unit">
+                    <input type="number" id="wireThermalC" step="0.01" />
+                    <span class="unit-label">J/K</span>
+                  </div>
+                </div>
+
+                <div class="ds-group-title ds-ntc">
+                  <svg
+                    class="ds-group-icon"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path
+                      d="M14 14.76V5a2 2 0 0 0-4 0v9.76a4 4 0 1 0 4 0z"
+                    ></path>
+                    <path d="M12 6v6"></path>
+                  </svg>
+                  <span>NTC Input</span>
+                </div>
+
+                <div class="ds-field">
+                  <label for="ntcModel">NTC Model</label>
+                  <select id="ntcModel">
+                    <option value="beta">Beta at T0</option>
+                    <option value="steinhart">Steinhart-Hart (A, B, C)</option>
+                  </select>
+                </div>
+
+                <div class="ds-field ntc-model-beta">
+                  <label for="ntcBeta">NTC Beta</label>
+                  <div class="input-with-unit">
+                    <input type="number" id="ntcBeta" step="1" />
+                    <span class="unit-label">K</span>
+                  </div>
+                </div>
+
+                <div class="ds-field ntc-model-beta">
+                  <label for="ntcR0">NTC R0</label>
+                  <div class="input-with-unit">
+                    <input type="number" id="ntcR0" step="1" />
+                    <span class="unit-label">Ohm</span>
+                  </div>
+                </div>
+
+                <div class="ds-field ntc-model-steinhart">
+                  <label for="ntcShA">NTC SH A</label>
+                  <input type="number" id="ntcShA" step="0.000001" />
+                </div>
+
+                <div class="ds-field ntc-model-steinhart">
+                  <label for="ntcShB">NTC SH B</label>
+                  <input type="number" id="ntcShB" step="0.000001" />
+                </div>
+
+                <div class="ds-field ntc-model-steinhart">
+                  <label for="ntcShC">NTC SH C</label>
+                  <input type="number" id="ntcShC" step="0.000001" />
+                </div>
+
+                <div class="ds-field">
+                  <label for="ntcFixedRes">NTC Fixed Resistor</label>
+                  <div class="input-with-unit">
+                    <input type="number" id="ntcFixedRes" step="1" />
+                    <span class="unit-label">Ohm</span>
+                  </div>
+                </div>
+
+                <div class="ds-field">
+                  <label for="ntcMinC">NTC Min Temp</label>
+                  <div class="input-with-unit">
+                    <input type="number" id="ntcMinC" step="0.1" />
+                    <span class="unit-label">C</span>
+                  </div>
+                </div>
+
+                <div class="ds-field">
+                  <label for="ntcMaxC">NTC Max Temp</label>
+                  <div class="input-with-unit">
+                    <input type="number" id="ntcMaxC" step="0.1" />
+                    <span class="unit-label">C</span>
+                  </div>
+                </div>
+
+                <div class="ds-field">
+                  <label for="ntcSamples">NTC Samples</label>
+                  <input
+                    type="number"
+                    id="ntcSamples"
+                    min="1"
+                    max="64"
+                    step="1"
+                  />
+                </div>
+
+                <div class="ds-field">
+                  <label for="ntcGateIndex">NTC Wire Index</label>
+                  <input
+                    type="number"
+                    id="ntcGateIndex"
+                    min="1"
+                    max="10"
+                    step="1"
+                  />
+                </div>
+
+                <div class="ds-field">
+                  <label for="ntcPressMv">Button Press Threshold</label>
+                  <div class="input-with-unit">
+                    <input type="number" id="ntcPressMv" step="1" />
+                    <span class="unit-label">mV</span>
+                  </div>
+                </div>
+
+                <div class="ds-field">
+                  <label for="ntcReleaseMv">Button Release Threshold</label>
+                  <div class="input-with-unit">
+                    <input type="number" id="ntcReleaseMv" step="1" />
+                    <span class="unit-label">mV</span>
+                  </div>
+                </div>
+
+                <div class="ds-field">
+                  <label for="ntcDebounceMs">Button Debounce</label>
+                  <div class="input-with-unit">
+                    <input type="number" id="ntcDebounceMs" step="1" />
+                    <span class="unit-label">ms</span>
+                  </div>
+                </div>
+              </section>
+
+              <!-- Right column: Nichrome -->
+              <section class="device-col device-col--right">
+                <h3 class="ds-col-heading ds-col-heading--nichrome">
+                  <svg
+                    class="ds-col-icon"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path
+                      d="M12 2c0 4-2 6-2 8a3 3 0 0 0 6 0c0-2-2-4-2-8"
+                    ></path>
+                    <path
+                      d="M8.5 14.5C7.3 15.7 7 17 7 18a5 5 0 0 0 10 0c0-1-.3-2.3-1.5-3.5"
+                    ></path>
+                  </svg>
+                  <span>Nichrome Calibration</span>
+                </h3>
+
+                <div
+                  class="device-subtabs"
+                  role="tablist"
+                  aria-label="Nichrome settings tabs"
+                >
+                  <button
+                    type="button"
+                    class="device-subtab-btn is-active"
+                    data-device-subtab="nichrome"
+                    role="tab"
+                    aria-selected="true"
+                  >
+                    <svg
+                      class="device-subtab-icon"
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <rect x="3" y="3" width="7" height="7"></rect>
+                      <rect x="14" y="3" width="7" height="7"></rect>
+                      <rect x="3" y="14" width="7" height="7"></rect>
+                      <rect x="14" y="14" width="7" height="7"></rect>
+                    </svg>
+                    <span>Nichrome</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="device-subtab-btn"
+                    data-device-subtab="energy"
+                    role="tab"
+                    aria-selected="false"
+                  >
+                    <svg
+                      class="device-subtab-icon"
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <polyline
+                        points="22 12 18 12 15 21 9 3 6 12 2 12"
+                      ></polyline>
+                    </svg>
+                    <span>Energy Control</span>
+                  </button>
+                </div>
+
+                <div class="device-subtab-panels">
+                  <div
+                    class="device-subtab-panel is-active"
+                    data-device-subtab-panel="nichrome"
+                    role="tabpanel"
+                  >
+                    <div class="ds-group-title ds-floor">
+                      <svg
+                        class="ds-group-icon"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <line x1="4" y1="6" x2="20" y2="6"></line>
+                        <circle cx="9" cy="6" r="2"></circle>
+                        <line x1="4" y1="12" x2="20" y2="12"></line>
+                        <circle cx="15" cy="12" r="2"></circle>
+                        <line x1="4" y1="18" x2="20" y2="18"></line>
+                        <circle cx="11" cy="18" r="2"></circle>
+                      </svg>
+                      <span>Floor Settings</span>
+                    </div>
+                    <div class="nichrome-meta">
+                      <div class="ds-field">
+                        <label for="floorThicknessMm"
+                          >Floor Thickness (20-50 mm)</label
+                        >
+                        <div class="input-with-unit">
+                          <input
+                            type="number"
+                            id="floorThicknessMm"
+                            step="0.1"
+                            min="20"
+                            max="50"
+                          />
+                          <span class="unit-label">mm</span>
+                        </div>
+                      </div>
+                      <div class="ds-field">
+                        <label for="nichromeFinalTempC"
+                          >Nichrome Final Temp</label
+                        >
+                        <div class="input-with-unit">
+                          <input
+                            type="number"
+                            id="nichromeFinalTempC"
+                            step="0.1"
+                          />
+                          <span class="unit-label">C</span>
+                        </div>
+                      </div>
+                      <div class="ds-field">
+                        <label for="floorMaterial">Floor Material</label>
+                        <select id="floorMaterial">
+                          <option value="wood">Wood</option>
+                          <option value="epoxy">Epoxy</option>
+                          <option value="concrete">Concrete</option>
+                          <option value="slate">Slate</option>
+                          <option value="marble">Marble</option>
+                          <option value="granite">Granite</option>
+                        </select>
+                      </div>
+                      <div class="ds-field">
+                        <label for="floorMaxC">Max Floor Temp (<= 35 C)</label>
+                        <div class="input-with-unit">
+                          <input
+                            type="number"
+                            id="floorMaxC"
+                            step="0.1"
+                            max="35"
+                          />
+                          <span class="unit-label">C</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="ds-group-title ds-nichrome">
+                      <svg
+                        class="ds-group-icon"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <rect x="3" y="3" width="7" height="7"></rect>
+                        <rect x="14" y="3" width="7" height="7"></rect>
+                        <rect x="3" y="14" width="7" height="7"></rect>
+                        <rect x="14" y="14" width="7" height="7"></rect>
+                      </svg>
+                      <span>Nichrome Calibration</span>
+                    </div>
+                    <div class="nichrome-grid">
+                      <!-- New: global Ω/m -->
+                      <div class="field">
+                        <label for="wireOhmPerM">Wire Resistivity (Ω/m)</label>
+                        <input
+                          id="wireOhmPerM"
+                          type="number"
+                          step="0.01"
+                          inputmode="decimal"
+                        />
+                      </div>
+                      <!-- R01..R10 -->
+                      <div class="field">
+                        <label for="r01ohm">R01 (Ω)</label>
+                        <input
+                          id="r01ohm"
+                          type="number"
+                          step="0.1"
+                          inputmode="decimal"
+                        />
+                      </div>
+                      <div class="field">
+                        <label for="r02ohm">R02 (Ω)</label>
+                        <input
+                          id="r02ohm"
+                          type="number"
+                          step="0.1"
+                          inputmode="decimal"
+                        />
+                      </div>
+                      <div class="field">
+                        <label for="r03ohm">R03 (Ω)</label>
+                        <input
+                          id="r03ohm"
+                          type="number"
+                          step="0.1"
+                          inputmode="decimal"
+                        />
+                      </div>
+                      <div class="field">
+                        <label for="r04ohm">R04 (Ω)</label>
+                        <input
+                          id="r04ohm"
+                          type="number"
+                          step="0.1"
+                          inputmode="decimal"
+                        />
+                      </div>
+                      <div class="field">
+                        <label for="r05ohm">R05 (Ω)</label>
+                        <input
+                          id="r05ohm"
+                          type="number"
+                          step="0.1"
+                          inputmode="decimal"
+                        />
+                      </div>
+                      <div class="field">
+                        <label for="r06ohm">R06 (Ω)</label>
+                        <input
+                          id="r06ohm"
+                          type="number"
+                          step="0.1"
+                          inputmode="decimal"
+                        />
+                      </div>
+                      <div class="field">
+                        <label for="r07ohm">R07 (Ω)</label>
+                        <input
+                          id="r07ohm"
+                          type="number"
+                          step="0.1"
+                          inputmode="decimal"
+                        />
+                      </div>
+                      <div class="field">
+                        <label for="r08ohm">R08 (Ω)</label>
+                        <input
+                          id="r08ohm"
+                          type="number"
+                          step="0.1"
+                          inputmode="decimal"
+                        />
+                      </div>
+                      <div class="field">
+                        <label for="r09ohm">R09 (Ω)</label>
+                        <input
+                          id="r09ohm"
+                          type="number"
+                          step="0.1"
+                          inputmode="decimal"
+                        />
+                      </div>
+                      <div class="field">
+                        <label for="r10ohm">R10 (Ω)</label>
+                        <input
+                          id="r10ohm"
+                          type="number"
+                          step="0.1"
+                          inputmode="decimal"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div
+                    class="device-subtab-panel"
+                    data-device-subtab-panel="energy"
+                    role="tabpanel"
+                    hidden
+                  >
+                    <div class="energy-control-grid" id="energyControlGrid">
+                      <div class="ds-group-title ds-loop-timing">
+                        <svg
+                          class="ds-group-icon"
+                          viewBox="0 0 24 24"
+                          aria-hidden="true"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        >
+                          <polyline
+                            points="22 12 18 12 15 21 9 3 6 12 2 12"
+                          ></polyline>
+                        </svg>
+                        <span>Energy Control</span>
+                      </div>
+
+                      <div class="ds-field" id="mixFrameField">
+                        <label for="mixFrameMs">Energy Frame</label>
+                        <div class="input-with-unit">
+                          <input
+                            type="number"
+                            id="mixFrameMs"
+                            min="10"
+                            max="300"
+                          />
+                          <span class="unit-label">ms</span>
+                        </div>
+                      </div>
+
+                      <div class="ds-field">
+                        <label for="mixRefOnMs">Reference On-Time</label>
+                        <div class="input-with-unit">
+                          <input type="number" id="mixRefOnMs" min="1" />
+                          <span class="unit-label">ms</span>
+                        </div>
+                      </div>
+
+                      <div class="ds-field">
+                        <label for="mixRefResOhm">Reference Resistance</label>
+                        <div class="input-with-unit">
+                          <input type="number" id="mixRefResOhm" step="0.1" />
+                          <span class="unit-label">Ohm</span>
+                        </div>
+                      </div>
+
+                      <div class="ds-field">
+                        <label for="mixBoostK">Boost Gain</label>
+                        <input
+                          type="number"
+                          id="mixBoostK"
+                          step="0.01"
+                          min="0"
+                        />
+                      </div>
+
+                      <div class="ds-field">
+                        <label for="mixBoostMs">Boost Duration</label>
+                        <div class="input-with-unit">
+                          <input type="number" id="mixBoostMs" min="0" />
+                          <span class="unit-label">ms</span>
+                        </div>
+                      </div>
+
+                      <div class="ds-field">
+                        <label for="mixPreDeltaC">Boost Exit Delta</label>
+                        <div class="input-with-unit">
+                          <input
+                            type="number"
+                            id="mixPreDeltaC"
+                            step="0.1"
+                            min="0"
+                          />
+                          <span class="unit-label">C</span>
+                        </div>
+                      </div>
+
+                      <div class="ds-field">
+                        <label for="mixHoldUpdateSec">Thermal Update</label>
+                        <div class="input-with-unit">
+                          <input
+                            type="number"
+                            id="mixHoldUpdateSec"
+                            min="0.5"
+                            max="5"
+                            step="0.1"
+                          />
+                          <span class="unit-label">s</span>
+                        </div>
+                      </div>
+
+                      <div class="ds-field">
+                        <label for="mixHoldGain">Hold Gain</label>
+                        <div class="input-with-unit">
+                          <input
+                            type="number"
+                            id="mixHoldGain"
+                            step="0.01"
+                            min="0"
+                          />
+                          <span class="unit-label">ms/C</span>
+                        </div>
+                      </div>
+
+                      <div class="ds-field">
+                        <label for="mixMinOnMs">Min Packet</label>
+                        <div class="input-with-unit">
+                          <input type="number" id="mixMinOnMs" min="0" />
+                          <span class="unit-label">ms</span>
+                        </div>
+                      </div>
+
+                      <div class="ds-field">
+                        <label for="mixMaxOnMs">Max Packet</label>
+                        <div class="input-with-unit">
+                          <input type="number" id="mixMaxOnMs" min="1" />
+                          <span class="unit-label">ms</span>
+                        </div>
+                      </div>
+
+                      <div class="ds-field">
+                        <label for="mixMaxAvgMs">Max Avg / sec</label>
+                        <div class="input-with-unit">
+                          <input type="number" id="mixMaxAvgMs" min="0" />
+                          <span class="unit-label">ms</span>
+                        </div>
+                      </div>
+
+                      <div class="ds-field">
+                        <label for="wireGauge">Wire Gauge (AWG)</label>
+                        <input
+                          id="wireGauge"
+                          type="number"
+                          step="1"
+                          min="1"
+                          max="40"
+                          inputmode="numeric"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            </div>
+
+            <div class="device-settings-actions settings-actions">
+              <button
+                type="button"
+                class="settings-btn settings-btn-primary"
+                onclick="saveDeviceAndNichrome()"
+                title="Save device + nichrome settings"
+              >
+                <svg
+                  class="settings-btn-icon"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M20 6L9 17l-5-5"></path>
+                </svg>
+                Save
+              </button>
+              <button
+                type="button"
+                class="settings-btn"
+                onclick="resetDeviceAndNichrome()"
+                title="Reset to last loaded values"
+              >
+                <svg
+                  class="settings-btn-icon"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M3 12a9 9 0 1 0 3-6.7"></path>
+                  <polyline points="3 3 3 9 9 9"></polyline>
+                </svg>
+                Reset
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live Tab -->
+      <!-- Live Tab -->
+      <div class="content" id="liveTab">
+        <div class="content-header">
+          <h2></h2>
+        </div>
+
+        <div class="live-wrap">
+          <!-- Legend -->
+          <div class="live-legend">
+            <span class="chip on-chip">
+              <span class="dot-sample on"></span>
+              ON (energized)
+            </span>
+            <span class="chip off-chip">
+              <span class="dot-sample off"></span>
+              OFF (connected)
+            </span>
+            <span class="chip cyan-chip">
+              <span class="dot-sample cyan"></span>
+              No wire / Not connected
+            </span>
+          </div>
+
+          <!-- Centralized radial stage -->
+          <div class="live-stage">
+            <!-- SVG: traces + dots + temp circles -->
+            <svg
+              class="live-overlay"
+              viewBox="0 0 100 100"
+              preserveAspectRatio="xMidYMid meet"
+            ></svg>
+
+            <!-- Center core: current session data -->
+            <div class="live-core">
+              <svg
+                class="live-core-sigil"
+                viewBox="0 0 120 120"
+                aria-hidden="true"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <circle cx="60" cy="60" r="42" opacity="0.35"></circle>
+                <circle cx="60" cy="60" r="30" opacity="0.18"></circle>
+                <path d="M18 60h18l7-18 12 36 7-18h40" opacity="0.55"></path>
+                <path d="M34 36h14M72 84h14" opacity="0.22"></path>
+                <circle cx="36" cy="36" r="2.2" opacity="0.35"></circle>
+                <circle cx="84" cy="84" r="2.2" opacity="0.35"></circle>
+              </svg>
+              <div class="live-core-header">
+                <div class="live-core-label">
+                  <svg
+                    class="live-core-label-icon"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M4 20V4"></path>
+                    <path d="M4 20H20"></path>
+                    <polyline points="5 14 9 10 13 13 20 7"></polyline>
+                  </svg>
+                  <span>Current Session</span>
+                </div>
+                <div class="live-core-indicator" title="Live monitor">
+                  <span class="live-core-dot" aria-hidden="true"></span>
+                  <span class="live-core-indicator-text">LIVE</span>
+                </div>
+              </div>
+
+              <div
+                id="sessionStatus"
+                class="session-status session-status-idle"
+              >
+                No active session
+              </div>
+
+              <div class="live-core-metrics">
+                <div class="metric">
+                  <div class="metric-label">
+                    <svg
+                      class="metric-icon"
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <polygon
+                        points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"
+                      ></polygon>
+                    </svg>
+                    <span>Energy</span>
+                  </div>
+                  <div id="sessionEnergy" class="metric-value">-- Wh</div>
+                </div>
+                <div class="metric">
+                  <div class="metric-label">
+                    <svg
+                      class="metric-icon"
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <circle cx="12" cy="12" r="9"></circle>
+                      <polyline points="12 7 12 12 15 15"></polyline>
+                    </svg>
+                    <span>Duration</span>
+                  </div>
+                  <div id="sessionDuration" class="metric-value">-- s</div>
+                </div>
+                <div class="metric">
+                  <div class="metric-label">
+                    <svg
+                      class="metric-icon"
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <line x1="18" y1="20" x2="18" y2="10"></line>
+                      <line x1="12" y1="20" x2="12" y2="4"></line>
+                      <line x1="6" y1="20" x2="6" y2="14"></line>
+                    </svg>
+                    <span>Peak Power</span>
+                  </div>
+                  <div id="sessionPeakPower" class="metric-value">-- W</div>
+                </div>
+                <div class="metric">
+                  <div class="metric-label">
+                    <svg
+                      class="metric-icon"
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <polyline
+                        points="22 12 18 12 15 21 9 3 6 12 2 12"
+                      ></polyline>
+                    </svg>
+                    <span>Peak Current</span>
+                  </div>
+                  <div id="sessionPeakCurrent" class="metric-value">-- A</div>
+                </div>
+              </div>
+
+              <div class="live-core-actions">
+                <button
+                  id="sessionHistoryBtn"
+                  type="button"
+                  class="session-history-btn"
+                >
+                  <svg
+                    class="live-core-btn-icon"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <circle cx="4" cy="6" r="1"></circle>
+                    <circle cx="4" cy="12" r="1"></circle>
+                    <circle cx="4" cy="18" r="1"></circle>
+                    <line x1="8" y1="6" x2="21" y2="6"></line>
+                    <line x1="8" y1="12" x2="21" y2="12"></line>
+                    <line x1="8" y1="18" x2="21" y2="18"></line>
+                  </svg>
+                  <span>History</span>
+                </button>
+                <button
+                  id="calibrationBtn"
+                  type="button"
+                  class="session-history-btn session-calib-btn"
+                >
+                  <svg
+                    class="live-core-btn-icon"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <line x1="4" y1="6" x2="20" y2="6"></line>
+                    <circle cx="9" cy="6" r="2"></circle>
+                    <line x1="4" y1="12" x2="20" y2="12"></line>
+                    <circle cx="15" cy="12" r="2"></circle>
+                    <line x1="4" y1="18" x2="20" y2="18"></line>
+                    <circle cx="11" cy="18" r="2"></circle>
+                  </svg>
+                  <span>Calibration</span>
+                </button>
+                <button
+                  id="liveControlBtn"
+                  type="button"
+                  class="session-history-btn session-live-btn"
+                >
+                  <svg
+                    class="live-core-btn-icon"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M4 20V4"></path>
+                    <path d="M4 20H20"></path>
+                    <polyline points="5 14 9 10 13 13 20 7"></polyline>
+                  </svg>
+                  <span>Live Control</span>
+                </button>
+                <button
+                  id="errorBtn"
+                  type="button"
+                  class="session-history-btn session-error-btn"
+                >
+                  <svg
+                    class="live-core-btn-icon"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path
+                      d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
+                    ></path>
+                    <line x1="12" y1="9" x2="12" y2="13"></line>
+                    <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                  </svg>
+                  <span>Error</span>
+                </button>
+                <button
+                  id="logBtn"
+                  type="button"
+                  class="session-history-btn session-log-btn"
+                >
+                  <svg
+                    class="live-core-btn-icon"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path
+                      d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
+                    ></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                    <line x1="10" y1="9" x2="8" y2="9"></line>
+                  </svg>
+                  <span>Log</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Session History modal (unchanged skeleton, just kept below) -->
+          <div id="sessionHistoryModal" class="session-history-modal">
+            <div
+              class="session-history-backdrop"
+              onclick="closeSessionHistory()"
+            ></div>
+            <div class="session-history-content">
+              <div class="session-history-header">
+                <h3>Session History</h3>
+                <button
+                  type="button"
+                  class="session-history-close"
+                  onclick="closeSessionHistory()"
+                >
+                  ✕
+                </button>
+              </div>
+              <div class="session-history-body">
+                <p class="session-history-placeholder">
+                  No history loaded yet. Backend will populate this table.
+                </p>
+                <table class="session-history-table">
+                  <thead>
+                    <tr>
+                      <th>Time</th>
+                      <th>Duration</th>
+                      <th>Energy (Wh)</th>
+                      <th>Peak P (W)</th>
+                      <th>Peak I (A)</th>
+                    </tr>
+                  </thead>
+                  <tbody id="sessionHistoryTableBody">
+                    <!-- rows from backend -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- Calibration modal -->
+          <div id="calibrationModal" class="calibration-modal">
+            <div
+              class="calibration-backdrop"
+              onclick="closeCalibrationModal()"
+            ></div>
+            <div class="calibration-content">
+              <div class="calibration-header">
+                <h3>Calibration</h3>
+                <div style="display: flex; align-items: center; gap: 8px">
+                  <button
+                    id="calibrationInfoBtn"
+                    type="button"
+                    class="calib-btn"
+                    style="padding: 4px 8px; min-width: 32px"
+                  >
+                    ?
+                  </button>
+                  <button
+                    type="button"
+                    class="calibration-close"
+                    onclick="closeCalibrationModal()"
+                  >
+                    x
+                  </button>
+                </div>
+              </div>
+              <div class="calibration-body">
+                <div
+                  id="calibrationInfoPopover"
+                  class="calibration-info-popover"
+                  aria-hidden="true"
+                >
+                  <div class="calibration-info-header">
+                    <div class="calibration-info-title">Calibration help</div>
+                    <button
+                      id="calibrationInfoCloseBtn"
+                      type="button"
+                      class="calibration-info-close"
+                    >
+                      x
+                    </button>
+                  </div>
+                  <div class="calibration-info-content">
+                    <div class="calibration-info-grid">
+                      <div class="calibration-info-card">
+                        <div class="calibration-info-icon">1</div>
+                        <div class="calibration-info-card-title">
+                          NTC calibration
+                        </div>
+                        <div class="calibration-info-card-text">
+                          Heats the NTC wire using energy packets until the
+                          heatsink target is reached, then fits A/B/C for
+                          accurate temperature estimation.
+                        </div>
+                      </div>
+                      <div class="calibration-info-card">
+                        <div class="calibration-info-icon">2</div>
+                        <div class="calibration-info-card-title">
+                          Temp model calibration
+                        </div>
+                        <div class="calibration-info-card-text">
+                          Records temperature and time while the energy-based
+                          loop heats and cools the NTC wire. Use the resulting
+                          curve to fit tau/k/C so the model matches real
+                          measurements.
+                        </div>
+                      </div>
+                      <div class="calibration-info-card">
+                        <div class="calibration-info-icon">3</div>
+                        <div class="calibration-info-card-title">Wire test</div>
+                        <div class="calibration-info-card-text">
+                          Runs the energy-based sequential loop across all
+                          allowed outputs to reach and hold the target
+                          temperature. This is a live test and does not save
+                          history.
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="calibration-info-actions">
+                      <div class="calibration-info-actions-title">Buttons</div>
+                      <ul>
+                        <li>
+                          <strong>NTC Calibration:</strong> Heat the NTC wire
+                          with energy packets to the target and fit A/B/C from
+                          heatsink temperature.
+                        </li>
+                        <li>
+                          <strong>Temp Model Calibration:</strong> Start/stop
+                          the model capture while the energy loop runs.
+                        </li>
+                        <li>
+                          <strong>Start/Stop Wire Test:</strong> Run the energy
+                          loop across all allowed outputs to hold the target.
+                        </li>
+                        <li>
+                          <strong>Load History / Resume Live:</strong> View
+                          saved buffer or live feed.
+                        </li>
+                        <li>
+                          <strong>Clear Data:</strong> Clears the buffer and
+                          removes the saved file.
+                        </li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="calibration-hero">
+                  <h4>Simple steps</h4>
+                  <div class="cal-steps">
+                    <div class="cal-step">
+                      <span class="dot">1</span>
+                      <p>
+                        NTC calibrate<br />
+                        <span class="hint"
+                          >Beta: enter a reference temp. A/B/C: run NTC
+                          calibration to the target.</span
+                        >
+                      </p>
+                    </div>
+                    <div class="cal-step">
+                      <span class="dot">2</span>
+                      <p>
+                        Model capture<br />
+                        <span class="hint"
+                          >Start Temp Model Calibration to log heat/cool with
+                          energy packets.</span
+                        >
+                      </p>
+                    </div>
+                    <div class="cal-step">
+                      <span class="dot">3</span>
+                      <p>
+                        Wire test<br />
+                        <span class="hint"
+                          >Hold a target temp and verify the energy loop (no
+                          logging).</span
+                        >
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Error details modal -->
+                <div id="errorModal" class="error-modal">
+                  <div class="error-backdrop" onclick="closeErrorModal()"></div>
+                  <div class="error-content">
+                    <div class="error-header">
+                      <h3 id="eventModalTitle">Last Stop / Error</h3>
+                      <button
+                        type="button"
+                        class="error-close"
+                        onclick="closeErrorModal()"
+                      >
+                        x
+                      </button>
+                    </div>
+                    <div class="error-body">
+                      <div class="error-row" id="errorStateRow">
+                        <span class="error-label">Current state</span>
+                        <span id="errorStateText">--</span>
+                      </div>
+                      <div class="error-section" id="lastErrorSection">
+                        <div class="error-title">Last error</div>
+                        <div class="error-row">
+                          <span class="error-label">Reason</span>
+                          <span id="errorReasonText">--</span>
+                        </div>
+                        <div class="error-row">
+                          <span class="error-label">Time</span>
+                          <span id="errorTimeText">--</span>
+                        </div>
+                      </div>
+                      <div class="error-section" id="lastStopSection">
+                        <div class="error-title">Last stop</div>
+                        <div class="error-row">
+                          <span class="error-label">Reason</span>
+                          <span id="stopReasonText">--</span>
+                        </div>
+                        <div class="error-row">
+                          <span class="error-label">Time</span>
+                          <span id="stopTimeText">--</span>
+                        </div>
+                      </div>
+                      <div class="error-section" id="warningHistorySection">
+                        <div class="error-title">Warnings (last 10)</div>
+                        <div id="warningList" class="error-list">
+                          <div class="error-empty">No warnings logged yet.</div>
+                        </div>
+                      </div>
+                      <div class="error-section" id="errorHistorySection">
+                        <div class="error-title">Errors (last 10)</div>
+                        <div id="errorList" class="error-list">
+                          <div class="error-empty">No errors logged yet.</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Log modal -->
+                <div id="logModal" class="log-modal">
+                  <div class="log-backdrop" onclick="closeLogModal()"></div>
+                  <div class="log-content">
+                    <div class="log-header">
+                      <h3>Device Log</h3>
+                      <button
+                        type="button"
+                        class="log-close"
+                        onclick="closeLogModal()"
+                      >
+                        x
+                      </button>
+                    </div>
+                    <div class="log-actions">
+                      <button id="logRefreshBtn" type="button" class="log-btn">
+                        Refresh
+                      </button>
+                      <button
+                        id="logClearBtn"
+                        type="button"
+                        class="log-btn log-clear"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                    <pre id="logContent" class="log-body">Loading...</pre>
+                  </div>
+                </div>
+
+                <div class="calib-actionbar">
+                  <div class="calib-action-group">
+                    <button
+                      id="startModelCalibBtn"
+                      type="button"
+                      class="calib-btn"
+                    >
+                      Temp Model Calibration
+                    </button>
+                    <button
+                      id="stopCalibBtn"
+                      type="button"
+                      class="calib-btn calib-stop"
+                    >
+                      Stop &amp; Save
+                    </button>
+                  </div>
+                  <div class="calib-action-group">
+                    <button
+                      id="calibHistoryBtn"
+                      type="button"
+                      class="calib-secondary"
+                    >
+                      Load History
+                    </button>
+                    <button
+                      id="calibClearBtn"
+                      type="button"
+                      class="calib-secondary calib-danger"
+                    >
+                      Clear Data
+                    </button>
+                  </div>
+                </div>
+
+                <div class="calibration-status">
+                  <div class="calib-stat">
+                    Status: <span id="calibStatusText">Idle</span>
+                  </div>
+                  <div class="calib-stat">
+                    Mode: <span id="calibModeText">--</span>
+                  </div>
+                  <div class="calib-stat">
+                    Samples: <span id="calibCountText">0</span>
+                  </div>
+                  <div class="calib-stat">
+                    Interval: <span id="calibIntervalText">--</span>
+                  </div>
+                  <div class="calib-stat">
+                    Temp: <span id="calibTempText">--</span>
+                  </div>
+                  <div class="calib-stat">
+                    Wire: <span id="calibWireText">--</span>
+                  </div>
+                  <div class="calib-stat">
+                    Target: <span id="calibTargetText">--</span>
+                  </div>
+                  <div class="calib-stat">
+                    Elapsed: <span id="calibElapsedText">--</span>
+                  </div>
+                </div>
+
+                <div class="calib-history-picker">
+                  <label for="calibHistorySelect">Saved history</label>
+                  <select id="calibHistorySelect"></select>
+                  <button
+                    id="calibHistoryLoadBtn"
+                    type="button"
+                    class="calib-secondary"
+                  >
+                    Load Saved
+                  </button>
+                  <button
+                    id="calibHistoryRefreshBtn"
+                    type="button"
+                    class="calib-secondary"
+                  >
+                    Refresh List
+                  </button>
+                </div>
+
+                <div class="calibration-wire-test">
+                  <div class="ds-field">
+                    <label for="wireTestTargetC">Target Temp</label>
+                    <div class="input-with-unit">
+                      <input type="number" id="wireTestTargetC" step="0.1" />
+                      <span class="unit-label">C</span>
+                    </div>
+                  </div>
+                  <div class="ds-field">
+                    <button
+                      id="wireTestStartBtn"
+                      type="button"
+                      class="calib-btn"
+                    >
+                      Start Wire Test
+                    </button>
+                  </div>
+                  <div class="ds-field">
+                    <button
+                      id="wireTestStopBtn"
+                      type="button"
+                      class="calib-btn calib-stop"
+                    >
+                      Stop Wire Test
+                    </button>
+                  </div>
+                  <div class="status-line wide">
+                    Energy Loop: <span id="wireTestState">Idle</span> | Mode:
+                    <span id="wireTestMode">--</span> | Purpose:
+                    <span id="wireTestPurpose">--</span> | Active:
+                    <span id="wireTestActiveWire">--</span> | NTC:
+                    <span id="wireTestNtcTemp">--</span> | Model:
+                    <span id="wireTestModelTemp">--</span> | Packet:
+                    <span id="wireTestPacket">--</span> | Frame:
+                    <span id="wireTestFrame">--</span>
+                  </div>
+                  <div class="calib-inline-row wide">
+                    <label for="ntcCalRef" class="calib-inline-label"
+                      >NTC Calibration</label
+                    >
+                    <input
+                      type="number"
+                      id="ntcCalRef"
+                      step="0.1"
+                      placeholder="Reference/target C (blank = 100)"
+                      class="calib-inline-input"
+                    />
+                    <button id="ntcBetaCalBtn" type="button" class="calib-btn">
+                      Calibrate (Beta)
+                    </button>
+                    <button
+                      id="ntcCalibrateBtn"
+                      type="button"
+                      class="calib-btn"
+                    >
+                      Start NTC Cal
+                    </button>
+                    <button
+                      id="ntcCalStopBtn"
+                      type="button"
+                      class="calib-btn calib-stop"
+                    >
+                      Stop NTC
+                    </button>
+                    <span
+                      id="ntcCalibrateStatus"
+                      class="calib-inline-status"
+                    ></span>
+                  </div>
+                  <div class="status-line wide">
+                    NTC Fit: <span id="ntcCalibCoeffText">--</span> | Beta/R0:
+                    <span id="ntcCalibBetaText">--</span> | Heatsink:
+                    <span id="ntcCalibTempText">--</span> | Samples:
+                    <span id="ntcCalibCountText">0</span>
+                  </div>
+                </div>
+
+                <div class="calib-model-card">
+                  <div class="calib-model-header">
+                    <div>
+                      <div class="calib-chart-title">Model suggestions</div>
+                      <div class="calib-chart-sub">
+                        Based on last calibration samples (power) and current
+                        thermal params.
+                      </div>
+                    </div>
+                    <div class="calib-chart-controls">
+                      <button
+                        id="calibSuggestRefresh"
+                        type="button"
+                        class="calib-secondary"
+                      >
+                        Refresh
+                      </button>
+                      <button
+                        id="calibSuggestFromHistory"
+                        type="button"
+                        class="calib-secondary"
+                      >
+                        Use Saved History
+                      </button>
+                      <button
+                        id="calibPersistBtn"
+                        type="button"
+                        class="calib-secondary calib-save"
+                      >
+                        Persist &amp; Reload
+                      </button>
+                    </div>
+                  </div>
+
+                  <div class="calib-model-grid">
+                    <div class="calib-stat-card">
+                      <div class="calib-stat-label">Thermal model</div>
+                      <div class="calib-stat-row">
+                        τ: <span id="calibTauText">--</span> s
+                      </div>
+                      <div class="calib-stat-row">
+                        k loss: <span id="calibKText">--</span> W/K
+                      </div>
+                      <div class="calib-stat-row">
+                        C: <span id="calibCText">--</span> J/K
+                      </div>
+                      <div class="calib-stat-row">
+                        Max P (calib): <span id="calibPmaxText">--</span> W
+                      </div>
+                    </div>
+                  </div>
+                  <div class="calib-model-note">
+                    Click Persist &amp; Reload to save suggested values into NVS
+                    and reload settings.
+                  </div>
+                </div>
+
+                <div class="calibration-chart">
+                  <div class="calib-chart-top">
+                    <div>
+                      <div class="calib-chart-title">Temperature vs Time</div>
+                      <div class="calib-chart-sub">
+                        Drag the chart to pan horizontally. Y axis stays
+                        visible.
+                      </div>
+                    </div>
+
+                    <div class="calib-chart-controls">
+                      <button
+                        id="calibLatestBtn"
+                        type="button"
+                        class="calib-secondary"
+                      >
+                        Most recent
+                      </button>
+                      <button
+                        id="calibPauseBtn"
+                        type="button"
+                        class="calib-secondary"
+                      >
+                        Pause
+                      </button>
+                    </div>
+
+                    <div class="calib-chart-stats">
+                      <div class="calib-pill">
+                        Temp: <b id="calibNowTempPill">--</b>&nbsp;C
+                      </div>
+                      <div class="calib-pill">
+                        Time:
+                        <b id="calibNowTimePill" class="calib-mono">--:--</b>
+                      </div>
+                      <div class="calib-pill">Max: <b>150</b>&nbsp;C</div>
+                    </div>
+                  </div>
+
+                  <div class="calib-chart-shell">
+                    <div class="calib-axis-col">
+                      <svg id="calibYAxis" role="img" aria-label="Y axis"></svg>
+                    </div>
+                    <div
+                      id="calibScrollWrap"
+                      class="calib-scroll-wrap"
+                      title="Drag to pan horizontally"
+                    >
+                      <svg
+                        id="calibPlot"
+                        role="img"
+                        aria-label="Temperature chart"
+                      ></svg>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Buttons moved to the action bar for a cleaner layout -->
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live control view modal -->
+      <div id="liveControlModal" class="live-control-modal">
+        <div
+          class="live-control-backdrop"
+          onclick="closeLiveControlModal()"
+        ></div>
+        <div class="live-control-content">
+          <div class="live-control-header">
+            <h3>Live Control View</h3>
+            <button
+              type="button"
+              class="live-control-close"
+              onclick="closeLiveControlModal()"
+            >
+              x
+            </button>
+          </div>
+          <div class="live-control-body">
+            <div class="calibration-chart live-control-chart">
+              <div class="calib-chart-top">
+                <div>
+                  <div class="calib-chart-title">Temperature vs Time</div>
+                  <div class="calib-chart-sub">
+                    Live trace of allowed outputs with the setpoint line.
+                  </div>
+                </div>
+                <div class="calib-chart-controls">
+                  <button
+                    id="liveControlLatestBtn"
+                    type="button"
+                    class="calib-secondary"
+                  >
+                    Latest
+                  </button>
+                  <button
+                    id="liveControlPauseBtn"
+                    type="button"
+                    class="calib-secondary"
+                  >
+                    Pause
+                  </button>
+                  <button
+                    id="liveControlClearBtn"
+                    type="button"
+                    class="calib-secondary calib-danger"
+                  >
+                    Clear
+                  </button>
+                </div>
+                <div class="calib-chart-stats">
+                  <div class="calib-pill">
+                    Setpoint: <b id="liveControlSetpointPill">--</b>&nbsp;C
+                  </div>
+                  <div class="calib-pill">
+                    Mode: <b id="liveControlModePill">--</b>
+                  </div>
+                  <div class="calib-pill">
+                    Time:
+                    <b id="liveControlNowTimePill" class="calib-mono">--:--</b>
+                  </div>
+                </div>
+              </div>
+
+              <div id="liveControlLegend" class="live-control-legend"></div>
+
+              <div class="calib-chart-shell">
+                <div class="calib-axis-col">
+                  <svg
+                    id="liveControlYAxis"
+                    role="img"
+                    aria-label="Y axis"
+                  ></svg>
+                </div>
+                <div id="liveControlScrollWrap" class="calib-scroll-wrap">
+                  <svg
+                    id="liveControlPlot"
+                    role="img"
+                    aria-label="Live control chart"
+                  ></svg>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div class="footer">&copy; 2025 Power Distribution Admin Interface</div>
+    </div>
+
+    <!-- enable/disable: set window.USE_MOCK=true/false before mock.js -->
+    <script>
+      window.USE_MOCK = false;
+    </script>
+    <script src="js/admin.js"></script>
+
+    <!-- Confirm dialog -->
+    <div id="confirmModal" class="user-modal" style="display: none">
+      <div
+        class="user-modal-content zoom-box"
+        style="max-width: 380px; text-align: center"
+      >
+        <h3 id="confirmTitle">Confirm Action</h3>
+        <p id="confirmMessage">Are you sure?</p>
+
+        <div class="user-modal-actions">
+          <button id="confirmCancelBtn">Cancel</button>
+          <button id="confirmOkBtn" class="danger">Yes, do it</button>
+        </div>
+      </div>
+    </div>
+  </body>
+
+  <style>
+    /* === Fixed App Stage (change these if you want another size) === */
+    :root {
+      --APP_W: 980px;
+      --APP_H: 640px;
+    }
+    /* Don't let the layout collapse below the fixed stage */
+    html,
+    body {
+      min-width: var(--APP_W);
+      min-height: var(--APP_H);
+      overflow: auto; /* scrollbars if window is smaller */
+    }
+    /* Pin the whole admin UI to a fixed box */
+    .ui-container {
+      width: var(--APP_W);
+      height: var(--APP_H);
+      min-width: var(--APP_W);
+      min-height: var(--APP_H);
+      max-width: var(--APP_W);
+      max-height: var(--APP_H);
+      margin: 0 auto; /* centered if window gets wider */
+      overflow: hidden; /* avoid inner jiggle/resizes */
+      box-sizing: border-box;
+    }
+    /* Neutralize narrow/short responsive fallbacks */
+    @media (max-width: 99999px) {
+      /* keep two columns in device settings even on small windows */
+      .device-settings-box .device-grid {
+        grid-template-columns: 1fr 1fr !important;
+      }
+    }
+    @media (max-width: 980px), (max-height: 640px) {
+      /* keep the same fixed size even if viewport goes below */
+      .ui-container {
+        width: var(--APP_W);
+        height: var(--APP_H);
+      }
+    }
+  </style>
+</html>

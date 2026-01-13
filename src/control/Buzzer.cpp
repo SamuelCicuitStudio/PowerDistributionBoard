@@ -1,6 +1,6 @@
-﻿#include "control/Buzzer.h"
-#include "services/NVSManager.h"   // for CONF
-
+﻿#include <Buzzer.hpp>
+#include <NVSManager.hpp>   // for CONF
+#include <Utils.hpp>
 // ===== Singleton backing =====
 Buzzer* Buzzer::s_inst = nullptr;
 
@@ -63,6 +63,11 @@ bool Buzzer::begin() {
     ledcSetup(BUZZER_PWM_CHANNEL, 4000, 8);   // base setup; freq overridden by ledcWriteTone
     ledcAttachPin(_pin, BUZZER_PWM_CHANNEL);
     ledcWriteTone(BUZZER_PWM_CHANNEL, 0);    // ensure silent
+    if (_muted) {
+      ledcWriteTone(BUZZER_PWM_CHANNEL, 0);
+      ledcDetachPin(_pin);
+      digitalWrite(_pin, HIGH);
+    }
   }
 
   if (!_mtx)   _mtx   = xSemaphoreCreateMutex();
@@ -115,10 +120,19 @@ void Buzzer::setMuted(bool on) {
     // Stop any current tone immediately and clear pending sounds
     if (_pin >= 0) {
       noTone(_pin);
-      idleOff();
+      ledcWriteTone(BUZZER_PWM_CHANNEL, 0);
+      ledcDetachPin(_pin);
+      digitalWrite(_pin, HIGH);
     }
     if (_queue) {
       xQueueReset(_queue);   // drop everything pending
+    }
+  } else {
+    if (_pin >= 0) {
+      pinMode(_pin, OUTPUT);
+      ledcAttachPin(_pin, BUZZER_PWM_CHANNEL);
+      ledcWriteTone(BUZZER_PWM_CHANNEL, 0);
+      idleOff();
     }
   }
 
@@ -227,11 +241,6 @@ void Buzzer::playMode(Mode mode) {
 
 // ===== Persistence (no pin in NVS) =====
 void Buzzer::loadFromPrefs_() {
-  // Always resolve pin from BUZZER_PIN if defined.
-#ifdef BUZZER_PIN
-  _pin = BUZZER_PIN;
-#endif
-
   // Use current members as defaults so Init() can seed first-boot values.
   _activeLow = CONF->GetBool(BUZLOW_KEY, _activeLow);
   _muted     = CONF->GetBool(BUZMUT_KEY, _muted);

@@ -1,7 +1,7 @@
-﻿#include "system/Device.h"
-#include "system/Utils.h"
-#include "control/CpDischg.h"
-#include "sensing/NtcSensor.h"
+﻿#include <Device.hpp>
+#include <Utils.hpp>
+#include <CpDischg.hpp>
+#include <NtcSensor.hpp>
 #include <math.h>
 #include <stdio.h>
 #ifndef THERMAL_TASK_STACK_SIZE
@@ -21,6 +21,16 @@
 #ifndef THERMAL_TASK_PERIOD_MS
 #define THERMAL_TASK_PERIOD_MS 25  // 40 Hz integration over 200 Hz samples
 #endif
+
+static uint8_t getNtcGateIndex() {
+    int idx = DEFAULT_NTC_GATE_INDEX;
+    if (CONF) {
+        idx = CONF->GetInt(NTC_GATE_INDEX_KEY, DEFAULT_NTC_GATE_INDEX);
+    }
+    if (idx < 1) idx = 1;
+    if (idx > HeaterManager::kWireCount) idx = HeaterManager::kWireCount;
+    return static_cast<uint8_t>(idx);
+}
 
 
 // ============================================================================
@@ -197,9 +207,11 @@ void Device::updateAmbientFromSensors(bool force) {
 // 6) Wait until all wires are near ambient (used before new loop starts)
 // ============================================================================
 
-void Device::waitForWiresNearAmbient(float tolC, uint32_t maxWaitMs) {
+void Device::waitForWiresNearAmbient(float tolC, uint32_t maxWaitMs,
+                                     const char* reason) {
     if (!thermalInitDone) {
         // Will be initialized on first use; nothing to wait for yet.
+        setAmbientWaitStatus(false, tolC, reason);
         return;
     }
 
@@ -208,6 +220,7 @@ void Device::waitForWiresNearAmbient(float tolC, uint32_t maxWaitMs) {
     }
 
     const uint32_t start = millis();
+    setAmbientWaitStatus(true, tolC, reason);
     DEBUG_PRINTF("[Thermal] Waiting for wires within %.1f°C of ambient...\n", tolC);
 
     while (true) {
@@ -253,6 +266,8 @@ void Device::waitForWiresNearAmbient(float tolC, uint32_t maxWaitMs) {
 
         vTaskDelay(pdMS_TO_TICKS(200));
     }
+
+    setAmbientWaitStatus(false, tolC, reason);
 }
 
 void Device::startThermalTask() {
@@ -299,9 +314,6 @@ void Device::thermalTask() {
 void Device::updateWireThermalFromHistory() {
     if (!WIRE) {
         return;
-    }
-    if (manualMode) {
-        return; // skip thermal integration in manual mode
     }
     if (!thermalInitDone) {
         initWireThermalModelOnce();
@@ -355,7 +367,6 @@ void Device::updateWireThermalFromHistory() {
     CpDischg::Sample            voltBuf[32];
     HeaterManager::OutputEvent  outBuf[32];
 
-    uint32_t newCurSeq  = currentHistorySeq;
     uint32_t newVoltSeq = voltageHistorySeq;
     uint32_t newBusSeq  = busHistorySeq;
     uint32_t newOutSeq  = outputHistorySeq;
@@ -370,7 +381,7 @@ void Device::updateWireThermalFromHistory() {
         size_t nBus = busSampler->getHistorySince(
             busHistorySeq, busBuf, (size_t)32, newBusSeq);
         if (nBus > 0) {
-            // Current samples (used by current-only model and watchdog)
+            // Derived current samples (used for timing/watchdog).
             nCur = nBus;
             for (size_t i = 0; i < nBus; ++i) {
                 curBuf[i].timestampMs = busBuf[i].timestampMs;
@@ -386,14 +397,14 @@ void Device::updateWireThermalFromHistory() {
         }
     }
 
-    if (capConfigured && nVolt == 0 && discharger) {
+    if (nVolt == 0 && discharger) {
         // Fallback: use CpDischg history if BusSampler isn't available.
         nVolt = discharger->getHistorySince(
             voltageHistorySeq, voltBuf, (size_t)32, newVoltSeq);
         // If still no voltage samples, take a single immediate reading so the
         // capacitor model can proceed with realistic data.
         if (nVolt == 0) {
-            float v = discharger->readCapVoltage();
+            float v = discharger->sampleVoltageNow();
             if (isfinite(v)) {
                 voltBuf[0].timestampMs = millis();
                 voltBuf[0].voltageV    = v;
@@ -403,13 +414,23 @@ void Device::updateWireThermalFromHistory() {
         }
     }
 
-    if (!capConfigured && nCur == 0 && currentSensor) {
-        nCur = currentSensor->getHistorySince(
-            currentHistorySeq, curBuf, (size_t)32, newCurSeq);
-    }
-
     const size_t nOut = WIRE->getOutputHistorySince(
         outputHistorySeq, outBuf, (size_t)32, newOutSeq);
+
+    if (nCur == 0 && nVolt > 0) {
+        uint16_t mask = wireStateModel.getLastMask();
+        size_t outIdx = 0;
+        for (size_t i = 0; i < nVolt; ++i) {
+            const uint32_t ts = voltBuf[i].timestampMs;
+            while (outIdx < nOut && outBuf[outIdx].timestampMs <= ts) {
+                mask = outBuf[outIdx].mask;
+                ++outIdx;
+            }
+            curBuf[i].timestampMs = ts;
+            curBuf[i].currentA = (WIRE ? WIRE->estimateCurrentFromVoltage(voltBuf[i].voltageV, mask) : NAN);
+        }
+        nCur = nVolt;
+    }
 
     // Update last-sample watchdog when we have fresh current.
     if (nCur > 0) {
@@ -443,7 +464,7 @@ void Device::updateWireThermalFromHistory() {
 
     // Delegate integration to WireThermalModel:
     //  - If capBankCapF is calibrated AND we have voltage+output history: use capacitor model.
-    //  - Otherwise: fall back to current-only integration so temps/power still update.
+    //  - Otherwise: use voltage-based integration (derived current) when samples exist.
     if (useCapModel) {
         float vSrc = DEFAULT_DC_VOLTAGE;
         float rChg = DEFAULT_CHARGE_RESISTOR_OHMS;
@@ -475,22 +496,18 @@ void Device::updateWireThermalFromHistory() {
             return;
         }
     } else {
-        // Ensure we have current samples when falling back.
-        if (nCur == 0 && currentSensor) {
-            nCur = currentSensor->getHistorySince(
-                currentHistorySeq, curBuf, (size_t)32, newCurSeq);
-        }
+        if (nVolt > 0) {
+            wireThermalModel.integrate(curBuf, nCur,
+                                       voltBuf, nVolt,
+                                       outBuf, nOut,
+                                       idleCurrentA, ambientC,
+                                       wireStateModel,
+                                       *WIRE);
 
-        if (nCur > 0 || nOut > 0) {
-            wireThermalModel.integrateCurrentOnly(curBuf, nCur,
-                                                  outBuf, nOut,
-                                                  ambientC,
-                                                  wireStateModel,
-                                                  *WIRE);
-
-            if (nCur)  currentHistorySeq = newCurSeq;
-            if (busSampler) busHistorySeq = newBusSeq;
-            else if (!busSampler && nVolt) voltageHistorySeq = newVoltSeq;
+            if (nVolt) {
+                if (busSampler) busHistorySeq = newBusSeq;
+                else            voltageHistorySeq = newVoltSeq;
+            }
             outputHistorySeq  = newOutSeq;
             lastHeaterMask    = wireStateModel.getLastMask();
 
@@ -506,13 +523,14 @@ void Device::updateWireThermalFromHistory() {
         }
     }
 
-    if (NTC && CONF) {
-        int idx = CONF->GetInt(NTC_GATE_INDEX_KEY, DEFAULT_NTC_GATE_INDEX);
-        if (idx < 1) idx = 1;
-        if (idx > HeaterManager::kWireCount) idx = HeaterManager::kWireCount;
+    if (NTC) {
+        NTC->update();
+    }
+    if (NTC) {
+        const uint8_t idx = getNtcGateIndex();
         const float ntcTemp = NTC->getLastTempC();
         if (isfinite(ntcTemp)) {
-            wireThermalModel.applyExternalWireTemp(static_cast<uint8_t>(idx),
+            wireThermalModel.applyExternalWireTemp(idx,
                                                    ntcTemp,
                                                    millis(),
                                                    wireStateModel,

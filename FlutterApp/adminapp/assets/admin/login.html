@@ -1,0 +1,220 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Login</title>
+    <link rel="stylesheet" href="css/login.css" />
+  </head>
+  <body>
+    <div class="login-container">
+      <div class="logo-circle">
+        <img src="icons/power-16.png" alt="Company Logo" />
+      </div>
+
+      <div class="input-group">
+        <img src="icons/user.png" alt="User Icon" />
+        <input
+          id="username"
+          type="text"
+          placeholder="Username"
+          autocomplete="username"
+          inputmode="text"
+        />
+      </div>
+
+      <div class="input-group input-group--password">
+        <img src="icons/lock.png" alt="Lock Icon" />
+        <input
+          id="password"
+          type="password"
+          placeholder="Password"
+          autocomplete="current-password"
+          aria-describedby="pwdHelp"
+        />
+        <!-- Eye lives INSIDE the typing zone -->
+        <button
+          id="togglePassword"
+          class="toggle-eye"
+          type="button"
+          aria-label="Show password while pressed"
+          title="Press and hold to show password"
+        >
+          <!-- eye / eye-off (CSS switches which is visible) -->
+          <svg
+            class="eye-open"
+            viewBox="0 0 24 24"
+            width="22"
+            height="22"
+            aria-hidden="true"
+          >
+            <path
+              d="M12 5c5.25 0 9.27 3.32 10.86 7-1.59 3.68-5.61 7-10.86 7S2.73 15.68 1.14 12C2.73 8.32 6.75 5 12 5Zm0 2c-4.06 0-7.38 2.43-8.86 5 1.48 2.57 4.8 5 8.86 5s7.38-2.43 8.86-5c-1.48-2.57-4.8-5-8.86-5Zm0 2.5A4.5 4.5 0 1 1 7.5 14 4.5 4.5 0 0 1 12 9.5Zm0 2A2.5 2.5 0 1 0 14.5 14 2.5 2.5 0 0 0 12 11.5Z"
+            ></path>
+          </svg>
+          <svg
+            class="eye-closed"
+            viewBox="0 0 24 24"
+            width="22"
+            height="22"
+            aria-hidden="true"
+          >
+            <path
+              d="M3.28 2.22 21.78 20.7l-1.06 1.06-3.1-3.1A13.14 13.14 0 0 1 12 19c-5.25 0-9.27-3.32-10.86-7a12.07 12.07 0 0 1 4.14-5.04L2.22 3.28Zm5.7 5.7-1.5-1.5A12.09 12.09 0 0 1 12 5c5.25 0 9.27 3.32 10.86 7a12.13 12.13 0 0 1-4.33 5.21l-1.48-1.48a10.2 10.2 0 0 0 3.4-3.73C19.37 9.7 16.05 7.27 12 7.27a10.1 10.1 0 0 0-3.02.65ZM9.3 10.52a2.7 2.7 0 0 0 3.18 3.18l-1.5-1.5a.5.5 0 0 1-.18-.18Zm7.12 7.12-2.25-2.25A4.5 4.5 0 0 1 8.6 9.62L6.4 7.42a10.2 10.2 0 0 0 3.4 3.73C4.63 14.3 7.95 16.73 12 16.73a10.1 10.1 0 0 0 4.42-.64Z"
+            ></path>
+          </svg>
+        </button>
+        <small id="pwdHelp" class="visually-hidden"
+          >Press and hold the eye to show the password.</small
+        >
+      </div>
+
+      <button type="button" class="login-btn" onclick="submitLogin()">
+        <img src="icons/login.png" alt="Login Icon" />
+        Login
+      </button>
+
+      <button type="button" class="info-btn" onclick="toggleDeviceInfo()">
+        i
+      </button>
+
+      <div id="deviceInfoPanel" class="device-info-panel" style="display: none">
+        <h4>Device Information</h4>
+        <p id="infoDeviceId">Device ID: ...</p>
+        <p id="infoSwVer">SW Version: ...</p>
+        <p id="infoHwVer">HW Version: ...</p>
+      </div>
+
+      <div class="footer">&copy; 2025 Power Distribution Interface</div>
+    </div>
+
+    <script src="js/base.js"></script>
+
+    <script>
+      async function submitLogin() {
+        const username = document.getElementById("username").value.trim();
+        const password = document.getElementById("password").value.trim();
+
+        if (!username || !password) {
+          alert("Please enter both username and password.");
+          return;
+        }
+
+        try {
+          const res = await fetch("/connect", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ username, password }),
+          });
+
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            alert(data.error || "Login failed.");
+            return;
+          }
+          if (!data.token) {
+            alert("Missing session token.");
+            return;
+          }
+          if (data.role !== "admin") {
+            alert("Admin credentials required.");
+            if (window.pbClearToken) window.pbClearToken();
+            return;
+          }
+          if (window.pbSetToken) window.pbSetToken(data.token);
+          const base = window.pbGetBaseUrl ? window.pbGetBaseUrl() : "";
+          const next = "admin.html" + (base ? "?base=" + encodeURIComponent(base) : "");
+          window.location.href = next;
+        } catch (err) {
+          console.error("Login request failed:", err);
+          alert("Failed to connect to server.");
+        }
+      }
+
+      // Submit on Enter
+      ["username", "password"].forEach((id) => {
+        const el = document.getElementById(id);
+        el.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") submitLogin();
+        });
+      });
+
+      // Press-and-hold eye behavior (mouse, touch, keyboard)
+      (function pressToReveal() {
+        const pwd = document.getElementById("password");
+        const btn = document.getElementById("togglePassword");
+
+        const setVisible = (v) => {
+          pwd.type = v ? "text" : "password";
+          btn.classList.toggle("is-showing", v);
+          btn.setAttribute("aria-pressed", v ? "true" : "false");
+        };
+
+        const down = (e) => {
+          setVisible(true);
+          // keep typing focus in the input
+          e.preventDefault();
+          pwd.focus({ preventScroll: true });
+        };
+        const up = () => setVisible(false);
+
+        // Pointer events (mouse/touch/pen)
+        btn.addEventListener("pointerdown", down);
+        btn.addEventListener("pointerup", up);
+        btn.addEventListener("pointercancel", up);
+        btn.addEventListener("pointerleave", up);
+
+        // Keyboard (Space/Enter to show while held)
+        btn.addEventListener("keydown", (e) => {
+          if (e.code === "Space" || e.code === "Enter") down(e);
+        });
+        btn.addEventListener("keyup", (e) => {
+          if (e.code === "Space" || e.code === "Enter") up();
+        });
+
+        // Safety: hide on blur / tab hidden
+        pwd.addEventListener("blur", up);
+        document.addEventListener("visibilitychange", () => {
+          if (document.visibilityState !== "visible") up();
+        });
+      })();
+
+      function toggleDeviceInfo() {
+        const panel = document.getElementById("deviceInfoPanel");
+        if (!panel) return;
+        panel.style.display = panel.style.display === "none" ? "block" : "none";
+      }
+
+      async function populateDeviceInfo() {
+        try {
+          const res = await fetch("/device_info", { cache: "no-store" });
+          if (!res.ok) return;
+          const data = await res.json();
+          const idEl = document.getElementById("infoDeviceId");
+          const swEl = document.getElementById("infoSwVer");
+          const hwEl = document.getElementById("infoHwVer");
+          if (idEl && data.deviceId !== undefined)
+            idEl.textContent = "Device ID: " + data.deviceId;
+          if (swEl && data.sw !== undefined)
+            swEl.textContent = "SW Version: " + data.sw;
+          if (hwEl && data.hw !== undefined)
+            hwEl.textContent = "HW Version: " + data.hw;
+        } catch (e) {
+          console.warn("device_info fetch failed", e);
+        }
+      }
+
+      populateDeviceInfo();
+
+      // Close info panel when clicking outside
+      document.addEventListener("click", (e) => {
+        const panel = document.getElementById("deviceInfoPanel");
+        const btn = document.querySelector(".info-btn");
+        if (!panel || panel.style.display === "none") return;
+        if (panel.contains(e.target) || (btn && btn.contains(e.target))) return;
+        panel.style.display = "none";
+      });
+    </script>
+  </body>
+</html>
+

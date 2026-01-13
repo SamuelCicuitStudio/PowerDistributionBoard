@@ -1,8 +1,8 @@
-﻿#include "comms/SwitchManager.h"
-#include "control/RGBLed.h"
-#include "control/HeaterManager.h"
-#include "services/NVSManager.h"
-#include "sensing/NtcSensor.h"
+﻿#include <SwitchManager.hpp>
+#include <RGBLed.hpp>
+#include <HeaterManager.hpp>
+#include <NVSManager.hpp>
+#include <NtcSensor.hpp>
 
 SwitchManager* SwitchManager::instance = nullptr;
 

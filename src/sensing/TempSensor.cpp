@@ -1,5 +1,5 @@
-﻿#include "sensing/TempSensor.h"
-#include "system/Utils.h"  // DEBUG_* macros
+﻿#include <TempSensor.hpp>
+#include <Utils.hpp>  // DEBUG_* macros
 
 // ============================ Public API ============================
 

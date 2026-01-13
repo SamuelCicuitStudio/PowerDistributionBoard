@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
-// Copyright 2016-2025 Hristo Gochkov, Mathieu Carbou, Emil Muratov
+// Copyright 2016-2026 Hristo Gochkov, Mathieu Carbou, Emil Muratov, Will Miles
 
 #ifndef ASYNCTCP_H_
 #define ASYNCTCP_H_
@@ -7,10 +7,13 @@
 #include "AsyncTCPVersion.h"
 #define ASYNCTCP_FORK_ESP32Async
 
+#ifdef ARDUINO
 #include "IPAddress.h"
-#if ESP_IDF_VERSION_MAJOR < 5
+#if __has_include(<IPv6Address.h>)
 #include "IPv6Address.h"
 #endif
+#endif
+
 #include "lwip/ip6_addr.h"
 #include "lwip/ip_addr.h"
 #include <functional>
@@ -24,9 +27,9 @@ extern "C" {
 #else
 extern "C" {
 #include <lwip/pbuf.h>
+#include <FreeRTOS.h>
 #include <semphr.h>
 }
-#define CONFIG_ASYNC_TCP_RUNNING_CORE -1  // any available core
 #endif
 
 // If core is not defined, then we are running in Arduino or PIO
@@ -68,36 +71,54 @@ typedef std::function<void(void *, AsyncClient *, struct pbuf *pb)> AcPacketHand
 typedef std::function<void(void *, AsyncClient *, uint32_t time)> AcTimeoutHandler;
 
 struct tcp_pcb;
-struct ip_addr;
+class AsyncTCP_detail;
 
 class AsyncClient {
 public:
   AsyncClient(tcp_pcb *pcb = 0);
   ~AsyncClient();
 
-  AsyncClient &operator=(const AsyncClient &other);
-  AsyncClient &operator+=(const AsyncClient &other);
+  // Noncopyable
+  AsyncClient(const AsyncClient &) = delete;
+  AsyncClient &operator=(const AsyncClient &) = delete;
+
+  // Nonmovable
+  AsyncClient(AsyncClient &&) = delete;
+  AsyncClient &operator=(AsyncClient &&) = delete;
 
   bool operator==(const AsyncClient &other) const;
 
   bool operator!=(const AsyncClient &other) const {
     return !(*this == other);
   }
+  bool connect(ip_addr_t addr, uint16_t port);
+#ifdef ARDUINO
   bool connect(const IPAddress &ip, uint16_t port);
-#if ESP_IDF_VERSION_MAJOR < 5
+#if __has_include(<IPv6Address.h>)
   bool connect(const IPv6Address &ip, uint16_t port);
 #endif
+#endif
   bool connect(const char *host, uint16_t port);
+
   /**
      * @brief close connection
      *
      * @param now - ignored
      */
-  void close(bool now = false);
-  // same as close()
+  [[deprecated("Use AsyncClient::close() instead")]]
+  void close(bool now) {
+    close();
+  }
+  [[deprecated("Use AsyncClient::close() instead")]]
   void stop() {
-    close(false);
+    close();
   };
+
+  /**
+     * @brief close connection
+     */
+  void close();
+
   int8_t abort();
   bool free();
 
@@ -180,12 +201,24 @@ public:
 
   uint32_t getRemoteAddress() const;
   uint16_t getRemotePort() const;
+  uint16_t remotePort() const {
+    return getRemotePort();
+  }
+
   uint32_t getLocalAddress() const;
   uint16_t getLocalPort() const;
+  uint16_t localPort() const {
+    return getLocalPort();
+  }
+
+  ip4_addr_t getRemoteAddress4() const;
+  ip4_addr_t getLocalAddress4() const;
+
 #if LWIP_IPV6
   ip6_addr_t getRemoteAddress6() const;
   ip6_addr_t getLocalAddress6() const;
-#if ESP_IDF_VERSION_MAJOR < 5
+#ifdef ARDUINO
+#if __has_include(<IPv6Address.h>)
   IPv6Address remoteIP6() const;
   IPv6Address localIP6() const;
 #else
@@ -193,12 +226,12 @@ public:
   IPAddress localIP6() const;
 #endif
 #endif
+#endif
 
-  // compatibility
+#ifdef ARDUINO
   IPAddress remoteIP() const;
-  uint16_t remotePort() const;
   IPAddress localIP() const;
-  uint16_t localPort() const;
+#endif
 
   // set callback - on successful connect
   void onConnect(AcConnectHandler cb, void *arg = 0);
@@ -230,29 +263,16 @@ public:
   static const char *errorToString(int8_t error);
   const char *stateToString() const;
 
-  // internal callbacks - Do NOT call any of the functions below in user code!
-  static int8_t _s_poll(void *arg, struct tcp_pcb *tpcb);
-  static int8_t _s_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *pb, int8_t err);
-  static int8_t _s_fin(void *arg, struct tcp_pcb *tpcb, int8_t err);
-  static int8_t _s_lwip_fin(void *arg, struct tcp_pcb *tpcb, int8_t err);
-  static void _s_error(void *arg, int8_t err);
-  static int8_t _s_sent(void *arg, struct tcp_pcb *tpcb, uint16_t len);
-  static int8_t _s_connected(void *arg, struct tcp_pcb *tpcb, int8_t err);
-  static void _s_dns_found(const char *name, struct ip_addr *ipaddr, void *arg);
-  static void _tcp_error(void *arg, int8_t err);
-
   int8_t _recv(tcp_pcb *pcb, pbuf *pb, int8_t err);
   tcp_pcb *pcb() {
     return _pcb;
   }
 
 protected:
+  friend class AsyncTCP_detail;
   friend class AsyncServer;
 
-  bool _connect(ip_addr_t addr, uint16_t port);
-
   tcp_pcb *_pcb;
-  int8_t _closed_slot;
 
   AcConnectHandler _connect_cb;
   void *_connect_cb_arg;
@@ -281,26 +301,23 @@ protected:
   uint16_t _connect_port;
 
   int8_t _close();
-  void _free_closed_slot();
-  bool _allocate_closed_slot();
   int8_t _connected(tcp_pcb *pcb, int8_t err);
   void _error(int8_t err);
   int8_t _poll(tcp_pcb *pcb);
   int8_t _sent(tcp_pcb *pcb, uint16_t len);
   int8_t _fin(tcp_pcb *pcb, int8_t err);
   int8_t _lwip_fin(tcp_pcb *pcb, int8_t err);
-  void _dns_found(struct ip_addr *ipaddr);
-
-public:
-  AsyncClient *prev;
-  AsyncClient *next;
+  void _dns_found(ip_addr_t *ipaddr);
 };
 
 class AsyncServer {
 public:
+  AsyncServer(ip_addr_t addr, uint16_t port);
+#ifdef ARDUINO
   AsyncServer(IPAddress addr, uint16_t port);
-#if ESP_IDF_VERSION_MAJOR < 5
+#if __has_include(<IPv6Address.h>)
   AsyncServer(IPv6Address addr, uint16_t port);
+#endif
 #endif
   AsyncServer(uint16_t port);
   ~AsyncServer();
@@ -311,18 +328,11 @@ public:
   bool getNoDelay() const;
   uint8_t status() const;
 
-  // Do not use any of the functions below!
-  static int8_t _s_accept(void *arg, tcp_pcb *newpcb, int8_t err);
-  static int8_t _s_accepted(void *arg, AsyncClient *client);
-
 protected:
+  friend class AsyncTCP_detail;
+
   uint16_t _port;
-  bool _bind4 = false;
-  bool _bind6 = false;
-  IPAddress _addr;
-#if ESP_IDF_VERSION_MAJOR < 5
-  IPv6Address _addr6;
-#endif
+  ip_addr_t _addr;
   bool _noDelay;
   tcp_pcb *_pcb;
   AcConnectHandler _connect_cb;

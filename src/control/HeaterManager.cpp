@@ -2,8 +2,8 @@
  *  HeaterManager.cpp
  **************************************************************/
 
-#include "control/HeaterManager.h"
-#include "system/Device.h"
+#include <HeaterManager.hpp>
+#include <Device.hpp>
 #include <math.h>
 // Static singleton pointer
 HeaterManager* HeaterManager::s_instance = nullptr;
@@ -344,6 +344,35 @@ uint16_t HeaterManager::getOutputMask() const {
     uint16_t m = _currentMask;
     unlock();
     return m;
+}
+
+float HeaterManager::estimateCurrentFromVoltage(float busVoltage, uint16_t mask) const {
+    if (!isfinite(busVoltage)) {
+        return NAN;
+    }
+    if (busVoltage <= 0.0f || mask == 0) {
+        return 0.0f;
+    }
+    if (!lock()) {
+        return NAN;
+    }
+
+    double gTot = 0.0;
+    for (uint8_t i = 0; i < kWireCount; ++i) {
+        if (!(mask & (1u << i))) continue;
+        const float r = wires[i].resistanceOhm;
+        if (isfinite(r) && r > 0.01f) {
+            gTot += 1.0 / r;
+        }
+    }
+
+    unlock();
+
+    if (!(gTot > 0.0)) {
+        return 0.0f;
+    }
+
+    return static_cast<float>(busVoltage * gTot);
 }
 
 // ==========================================================================

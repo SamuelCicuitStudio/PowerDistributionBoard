@@ -53,9 +53,11 @@ Files to change:
 - `src/system/DeviceLoop.cpp`
 
 ## Step 4: Target selection rules
-1. Normal mode: use floor target temperature.
-2. Test/calibration mode: use user target temperature from calibration UI.
-3. Apply allowed/present wire filtering in all paths.
+1. Normal RUN: use NTC floor temperature as the only control target.
+2. Wire temps are display/safety only (hard cap 150 C).
+3. Wire test + model calibration: use the NTC-attached wire as feedback and target.
+4. Run start: wait for cool-down from assumed 150 C unless the user confirms wires are cool.
+5. Apply allowed/present wire filtering in all paths.
 
 Files to change:
 - `src/system/DeviceLoop.cpp`
@@ -64,10 +66,10 @@ Files to change:
 
 ## Step 5: Model calibration behavior
 1. Run only on the NTC-attached wire.
-2. Use energy-based control to heat to the user target temperature.
+2. Use NTC feedback to heat to the user target temperature.
 3. Sample temperature/voltage/current every 0.5 s.
-4. After reaching target, cool to baseline and compute the model parameter.
-5. Store the model parameter and show it in the calibration UI.
+4. After reaching target, stop heating and log the cool-down to baseline.
+5. Store model parameters and show them in the calibration UI.
 
 Files to change:
 - `src/services/CalibrationRecorder.cpp`
@@ -79,8 +81,8 @@ Files to change:
 ## Step 6: NTC calibration behavior and model selection
 1. Add NTC model selection: "Steinhart-Hart (A,B,C)" or "Beta at T0".
 2. Calibration window "Calibrate" uses Beta approximation.
-3. "NTC Calibration" runs energy-based heat up/cool down and computes A/B/C
-   from heatsink comparison, then saves A/B/C to NVS.
+3. "NTC Calibration" uses a reference temp (heatsink if blank) with no heating,
+   then saves the parameters to NVS.
 4. UI shows only relevant parameters based on selected model.
 
 Files to change:
@@ -123,10 +125,10 @@ Files to change:
 1. Remove references to deleted keys, UI nodes, and planner logic.
 2. Confirm only one control mode is visible in the UI.
 3. Validate:
-   - Normal mode uses floor target.
-   - Test mode uses calibration target.
-   - Model calibration runs NTC wire only.
-   - NTC calibration computes and displays A/B/C.
+   - Normal RUN uses the NTC floor target; wire model is safety only.
+   - Wire test uses the NTC-attached wire to hold its target.
+   - Model calibration runs the NTC wire and captures heat-up/cool-down.
+   - Run start waits for cool-down unless the user confirms wires are cool.
 
 ## Removals (explicit)
 - Control modes: sequential, advanced, and planner logic.

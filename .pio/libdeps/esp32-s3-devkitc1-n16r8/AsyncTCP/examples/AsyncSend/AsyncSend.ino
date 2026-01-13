@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
-// Copyright 2016-2025 Hristo Gochkov, Mathieu Carbou, Emil Muratov
+// Copyright 2016-2026 Hristo Gochkov, Mathieu Carbou, Emil Muratov, Will Miles
 
 /*
   This example demonstrates how to send data to a remote server asynchronously.
@@ -38,6 +38,7 @@ Buffer received - next send in 2 sec
 #include <AsyncTCP.h>
 #include <StreamString.h>
 #include <WiFi.h>
+#include <assert.h>
 
 #include <functional>
 #include <string>

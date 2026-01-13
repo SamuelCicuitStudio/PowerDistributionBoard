@@ -1,8 +1,8 @@
-#include "system/Device.h"
-#include "system/Utils.h"
-#include "control/RGBLed.h"
-#include "control/Buzzer.h"
-#include "services/SleepTimer.h"
+#include <Device.hpp>
+#include <Utils.hpp>
+#include <RGBLed.hpp>
+#include <Buzzer.hpp>
+#include <SleepTimer.hpp>
 #include <math.h>
 #include <stdio.h>
 
@@ -18,7 +18,9 @@ static inline uint16_t _allowedMaskFrom(const bool allowed[10]) {
     return m;
 }
 
-static constexpr uint32_t CAL_TIMEOUT_MS = 10000; // max time for pre-loop charge + calibrations
+static constexpr uint32_t PREP_CAL_TIMEOUT_MS = 10000;    // per-step timeout for calibrations
+static constexpr uint32_t PREP_CHARGE_TIMEOUT_MS = 15000; // per-step timeout for cap charging
+static constexpr uint32_t PREP_CHARGE_SOAK_MS = 4000;     // fixed cap soak before RUN
 static constexpr uint32_t WAIT_12V_TIMEOUT_MS = 10000;
 
 // ============================================================================
@@ -95,34 +97,75 @@ static bool _runMaskedPulse(Device* self,
         }
     }
 
-    // Keep ON with protection-aware delay.
-    bool ok = self->delayWithPowerWatch(onTimeMs);
+    float pulseVSum = 0.0f;
+    uint8_t pulseVSamples = 0;
+    BusSampler* sampler = BUS_SAMPLER;
 
-    // If pulse completed (no fault/STOP), log estimated V (from measured I) and per-wire currents.
-    if (ok) {
-        float Itot = (self->currentSensor ? self->currentSensor->readCurrent() : NAN);
-        float Gtot = 0.0f;
-        for (uint8_t i = 0; i < HeaterManager::kWireCount; ++i) {
-            if (!(mask & (1u << i))) continue;
-            float R = WIRE->getWireInfo(i + 1).resistanceOhm;
-            if (R > 0.01f && isfinite(R)) {
-                Gtot += 1.0f / R;
+    auto recordPulseSample = [&](float v) {
+        if (!isfinite(v)) return;
+        pulseVSum += v;
+        pulseVSamples++;
+        if (sampler) {
+            const float i = WIRE->estimateCurrentFromVoltage(v, mask);
+            sampler->recordSample(millis(), v, i);
+        }
+    };
+
+    uint8_t midSamples = 0;
+    if (onTimeMs >= 60)  midSamples = 1;
+    if (onTimeMs >= 180) midSamples = 2;
+    if (onTimeMs >= 300) midSamples = 3;
+
+    bool ok = true;
+    if (midSamples == 0) {
+        ok = self->delayWithPowerWatch(onTimeMs);
+    } else {
+        const uint32_t segmentMs = onTimeMs / (midSamples + 1);
+        uint32_t remainingMs = onTimeMs;
+        for (uint8_t s = 0; s < midSamples; ++s) {
+            if (segmentMs > 0) {
+                if (!self->delayWithPowerWatch(segmentMs)) {
+                    ok = false;
+                    break;
+                }
+                if (remainingMs > segmentMs) remainingMs -= segmentMs;
+                else remainingMs = 0;
+            }
+            if (self->discharger) {
+                recordPulseSample(self->discharger->sampleVoltageNow());
             }
         }
-        float V_est = (isfinite(Itot) && Gtot > 0.0f) ? (Itot / Gtot) : NAN;
-        DEBUG_PRINTF("[Pulse] end: mask=0x%03X Vest=%.2fV I=%.3fA\n",
+        if (ok && remainingMs > 0) {
+            ok = self->delayWithPowerWatch(remainingMs);
+        }
+    }
+
+    if (ok && self->discharger) {
+        recordPulseSample(self->discharger->sampleVoltageNow());
+    }
+
+    // If pulse completed (no fault/STOP), log estimated V and per-wire currents.
+    if (ok) {
+        float V_bus = NAN;
+        if (pulseVSamples > 0) {
+            V_bus = pulseVSum / static_cast<float>(pulseVSamples);
+        } else if (self->discharger) {
+            V_bus = self->discharger->sampleVoltageNow();
+        }
+        const float Itot = (WIRE ? WIRE->estimateCurrentFromVoltage(V_bus, mask) : NAN);
+        DEBUG_PRINTF("[Pulse] end: mask=0x%03X Vbus=%.2fV Iest=%.3fA\n",
                      (unsigned)mask,
-                     (double)V_est,
+                     (double)V_bus,
                      (double)Itot);
-        if (isfinite(V_est) && V_est > 0.0f) {
+        if (isfinite(V_bus) && V_bus > 0.0f) {
             for (uint8_t i = 0; i < HeaterManager::kWireCount; ++i) {
                 uint16_t bit = (1u << i);
                 if (!(mask & bit)) continue;
                 WireInfo wi = WIRE->getWireInfo(i + 1);
                 float R = wi.resistanceOhm;
                 if (!(R > 0.01f && isfinite(R))) continue;
-                float Iw = V_est / R;
-                DEBUG_PRINTF("  [Pulse] OUT%u: R=%.2fΩ I=%.3fA\n",
+                float Iw = V_bus / R;
+                DEBUG_PRINTF("  [Pulse] OUT%u: R=%.2fIc I=%.3fA\n",
                              (unsigned)(i + 1),
                              (double)R,
                              (double)Iw);
@@ -300,9 +343,8 @@ void Device::loopTask() {
         RGB->setWait();
         BUZZ->bip();
 
-        const TickType_t prepStart = xTaskGetTickCount();
-        auto timedOut = [&]() -> bool {
-            return (xTaskGetTickCount() - prepStart) * portTICK_PERIOD_MS >= CAL_TIMEOUT_MS;
+        auto stepTimedOut = [&](TickType_t stepStart, uint32_t timeoutMs) -> bool {
+            return (xTaskGetTickCount() - stepStart) * portTICK_PERIOD_MS >= timeoutMs;
         };
 
         bool abortRun = false;
@@ -313,29 +355,19 @@ void Device::loopTask() {
         if (WIRE)      WIRE->disableAll();
         if (indicator) indicator->clearAll();
 
-        // 0) Current sensor zero calibration must happen first, with relay OFF (no load).
-        relayControl->turnOff();
-        vTaskDelay(pdMS_TO_TICKS(40));
-        if (currentSensor) {
-            currentSensor->calibrateZeroCurrent();
-        }
-        if (timedOut()) {
-            DEBUG_PRINTLN("[Device] Timeout during current sensor zero calibration; aborting start");
-            abortRun = true;
-            abortCat = ErrorCategory::CALIB;
-            abortCode = 1;
-        }
+        TickType_t stepStart = 0;
 
         // 1) Enable relay and charge capacitors to GO threshold.
         if (!abortRun) {
             DEBUG_PRINTLN("[Device] RUN prep: enabling relay");
+            TickType_t chargeStart = xTaskGetTickCount();
             relayControl->turnOn();
             RGB->postOverlay(OverlayEvent::RELAY_ON);
             vTaskDelay(pdMS_TO_TICKS(150));
 
             TickType_t lastChargePost = 0;
             while (discharger && discharger->readCapVoltage() < GO_THRESHOLD_RATIO) {
-                if (timedOut()) {
+                if (stepTimedOut(chargeStart, PREP_CHARGE_TIMEOUT_MS)) {
                     DEBUG_PRINTLN("[Device] Timeout while charging caps to GO threshold; aborting start");
                     abortRun = true;
                     abortCat = ErrorCategory::POWER;
@@ -353,7 +385,7 @@ void Device::loopTask() {
                 if (!delayWithPowerWatch(200)) {
                     // STOP or 12V loss handled inside delayWithPowerWatch()
                     abortRun = true;
-                    if (getState() == DeviceState::Idle) {
+                    if (getState() == DeviceState::Shutdown) {
                         // Treat STOP as a clean cancel (no error code).
                         abortCode = 0;
                     } else {
@@ -365,42 +397,15 @@ void Device::loopTask() {
             }
         }
 
-        // 2) Idle current calibration (relay ON, no heaters).
+        // 2) Capacitor bank capacitance calibration (timed discharge with relay OFF).
         if (!abortRun) {
-            calibrateIdleCurrent();
-            if (timedOut()) {
-                DEBUG_PRINTLN("[Device] Timeout during idle current calibration; aborting start");
-                abortRun = true;
-                abortCat = ErrorCategory::CALIB;
-                abortCode = 1;
-            }
-        }
-
-        // 3) Capacitor voltage gain calibration (coarse + fine) + presence probing.
-        if (!abortRun) {
-            const bool ok = calibrateCapVoltageGain();
-            if (!ok) {
-                DEBUG_PRINTLN("[Device] Cap gain calibration failed; aborting start");
-                abortRun  = true;
-                abortCat  = ErrorCategory::CALIB;
-                abortCode = 2;
-            }
-            if (timedOut()) {
-                DEBUG_PRINTLN("[Device] Timeout during capacitor gain calibration; aborting start");
-                abortRun = true;
-                abortCat = ErrorCategory::CALIB;
-                abortCode = 2;
-            }
-        }
-
-        // 4) Capacitor bank capacitance calibration (timed discharge with relay OFF).
-        if (!abortRun) {
+            stepStart = xTaskGetTickCount();
             if (!calibrateCapacitance()) {
                 DEBUG_PRINTLN("[Device] Capacitance calibration failed; aborting start");
                 abortRun = true;
                 abortCat = ErrorCategory::CALIB;
                 abortCode = 3;
-            } else if (timedOut()) {
+            } else if (stepTimedOut(stepStart, PREP_CAL_TIMEOUT_MS)) {
                 DEBUG_PRINTLN("[Device] Timeout during capacitance calibration; aborting start");
                 abortRun = true;
                 abortCat = ErrorCategory::CALIB;
@@ -408,11 +413,12 @@ void Device::loopTask() {
             }
         }
 
-        // 5) Recharge after discharge-based calibration so RUN starts with sane voltage.
+        // 3) Recharge after discharge-based calibration so RUN starts with sane voltage.
         if (!abortRun) {
+            TickType_t chargeStart = xTaskGetTickCount();
             TickType_t lastChargePost = 0;
             while (discharger && discharger->readCapVoltage() < GO_THRESHOLD_RATIO) {
-                if (timedOut()) {
+                if (stepTimedOut(chargeStart, PREP_CHARGE_TIMEOUT_MS)) {
                     DEBUG_PRINTLN("[Device] Timeout while re-charging caps after calibration; aborting start");
                     abortRun = true;
                     abortCat = ErrorCategory::POWER;
@@ -426,7 +432,7 @@ void Device::loopTask() {
                 }
                 if (!delayWithPowerWatch(200)) {
                     abortRun = true;
-                    if (getState() == DeviceState::Idle) {
+                    if (getState() == DeviceState::Shutdown) {
                         abortCode = 0; // STOP cancel
                     } else {
                         abortCat = ErrorCategory::POWER;
@@ -437,8 +443,22 @@ void Device::loopTask() {
             }
         }
 
+        // 4) Final cap soak before RUN (fixed pre-charge dwell).
+        if (!abortRun) {
+            DEBUG_PRINTLN("[Device] RUN prep: cap soak 4s");
+            if (!delayWithPowerWatch(PREP_CHARGE_SOAK_MS)) {
+                abortRun = true;
+                if (getState() == DeviceState::Shutdown) {
+                    abortCode = 0; // STOP cancel
+                } else {
+                    abortCat = ErrorCategory::POWER;
+                    abortCode = 2;
+                }
+            }
+        }
+
         if (abortRun) {
-            if (getState() == DeviceState::Idle && abortCode == 0) {
+            if (getState() == DeviceState::Shutdown && abortCode == 0) {
                 DEBUG_PRINTLN("[Device] RUN prep cancelled by STOP -> returning to OFF");
                 RGB->postOverlay(OverlayEvent::RELAY_OFF);
                 relayControl->turnOff();
@@ -494,6 +514,9 @@ void Device::loopTask() {
         if (WIRE)      WIRE->disableAll();
         if (indicator) indicator->clearAll();
         RGB->setOff();
+        if (getState() != DeviceState::Error) {
+            setState(DeviceState::Shutdown);
+        }
 
         // loop back to OFF
     }
@@ -517,9 +540,7 @@ struct RunSessionGuard {
 
     void tick() {
         if (!dev || !active) return;
-        if (dev->currentSensor) {
-            POWER_TRACKER->update(*dev->currentSensor);
-        }
+        POWER_TRACKER->update();
     }
 
     void end(bool success) {
@@ -553,25 +574,38 @@ void Device::StartLoop() {
 
     manualMode = false; // auto loop enforces model updates
 
-    // Current sensor zero calibration is performed in RUN-prep (before state=RUN).
+    // Current sensor is not used for power calculations during RUN.
 
-    // 1) Thermal model ready & wires cooled.
+    // 1) Thermal model ready & wires cooled (skip for wire test).
     initWireThermalModelOnce();
-    waitForWiresNearAmbient(5.0f, 0);
+    EnergyRunPurpose waitPurpose = EnergyRunPurpose::None;
+    if (controlMtx &&
+        xSemaphoreTake(controlMtx, pdMS_TO_TICKS(10)) == pdTRUE)
+    {
+        waitPurpose = wireTargetStatus.active ? wireTargetStatus.purpose
+                                              : EnergyRunPurpose::None;
+        xSemaphoreGive(controlMtx);
+    } else {
+        waitPurpose = wireTargetStatus.active ? wireTargetStatus.purpose
+                                              : EnergyRunPurpose::None;
+    }
+    const bool shouldWait =
+        (waitPurpose == EnergyRunPurpose::None) ||
+        (waitPurpose == EnergyRunPurpose::ModelCal) ||
+        (waitPurpose == EnergyRunPurpose::NtcCal);
+    if (shouldWait) {
+        const char* waitReason =
+            (waitPurpose == EnergyRunPurpose::ModelCal) ? "model_cal" :
+            (waitPurpose == EnergyRunPurpose::NtcCal)   ? "ntc_cal"   :
+                                                        "run";
+        waitForWiresNearAmbient(5.0f, 0, waitReason);
+    } else {
+        setAmbientWaitStatus(false, 0.0f, "none");
+    }
 
     // 2) Presence check disabled.
 
-    // 3) Start continuous current & thermal integration (observers only).
-    if (currentSensor && !currentSensor->isContinuousRunning()) {
-        int hz = DEFAULT_AC_FREQUENCY;
-        if (CONF) {
-            hz = CONF->GetInt(AC_FREQUENCY_KEY, DEFAULT_AC_FREQUENCY);
-        }
-        if (hz < 50) hz = 50;
-        if (hz > 500) hz = 500;
-        const uint32_t periodMs = (hz > 0) ? std::max(2, static_cast<int>(lroundf(1000.0f / hz))) : 2;
-        currentSensor->startContinuous(periodMs);
-    }
+    // 3) Start thermal integration (observers only).
     if (thermalTaskHandle == nullptr) {
         startThermalTask();
     }
@@ -652,6 +686,8 @@ void Device::StartLoop() {
 
     float targetC = WIRE_T_MAX_C;
     float defaultTargetC = WIRE_T_MAX_C;
+    EnergyRunPurpose targetPurpose = EnergyRunPurpose::None;
+    uint8_t targetWire = 0;
     if (CONF) {
         float v = CONF->GetFloat(NICHROME_FINAL_TEMP_C_KEY,
                                  DEFAULT_NICHROME_FINAL_TEMP_C);
@@ -663,6 +699,8 @@ void Device::StartLoop() {
     {
         if (wireTargetStatus.active && isfinite(wireTargetStatus.targetC)) {
             targetC = wireTargetStatus.targetC;
+            targetPurpose = wireTargetStatus.purpose;
+            targetWire = wireTargetStatus.activeWire;
         } else if (floorControlStatus.active &&
                    isfinite(floorControlStatus.wireTargetC)) {
             targetC = floorControlStatus.wireTargetC;
@@ -672,6 +710,18 @@ void Device::StartLoop() {
     if (targetC > WIRE_T_MAX_C) targetC = WIRE_T_MAX_C;
     if (targetC < 0.0f) targetC = 0.0f;
     const float boostExitC = targetC - preDeltaC;
+
+    bool targetedRun = false;
+    if (controlMtx &&
+        xSemaphoreTake(controlMtx, pdMS_TO_TICKS(10)) == pdTRUE)
+    {
+        targetedRun = wireTargetStatus.active &&
+                      (wireTargetStatus.purpose != EnergyRunPurpose::None);
+        xSemaphoreGive(controlMtx);
+    } else {
+        targetedRun = wireTargetStatus.active &&
+                      (wireTargetStatus.purpose != EnergyRunPurpose::None);
+    }
 
     float holdMs[HeaterManager::kWireCount] = {0.0f};
     bool  holdInit = false;
@@ -690,7 +740,25 @@ void Device::StartLoop() {
                 DEBUG_PRINTLN("[Device] STOP -> exit MIXED loop");
                 xEventGroupClearBits(gEvt, EVT_STOP_REQ);
                 setLastStopReason("Stop requested");
-                setState(DeviceState::Idle);
+                setState(DeviceState::Shutdown);
+                break;
+            }
+        }
+
+        if (targetedRun) {
+            bool active = false;
+            if (controlMtx &&
+                xSemaphoreTake(controlMtx, pdMS_TO_TICKS(10)) == pdTRUE)
+            {
+                active = wireTargetStatus.active;
+                xSemaphoreGive(controlMtx);
+            } else {
+                active = wireTargetStatus.active;
+            }
+            if (!active) {
+                DEBUG_PRINTLN("[Device] Targeted run stopped -> exit MIXED loop");
+                setLastStopReason("Targeted run stopped");
+                setState(DeviceState::Shutdown);
                 break;
             }
         }
@@ -721,12 +789,48 @@ void Device::StartLoop() {
             allowedIdx[allowedCount++] = i;
         }
 
+        if (targetedRun && isfinite(targetC) && targetC > 0.0f)
+        {
+            EnergyRunPurpose runPurpose = targetPurpose;
+            uint8_t runWire = targetWire;
+            if (controlMtx &&
+                xSemaphoreTake(controlMtx, pdMS_TO_TICKS(10)) == pdTRUE)
+            {
+                if (wireTargetStatus.active) {
+                    runPurpose = wireTargetStatus.purpose;
+                    runWire = wireTargetStatus.activeWire;
+                }
+                xSemaphoreGive(controlMtx);
+            }
+
+            if (runPurpose == EnergyRunPurpose::ModelCal) {
+                bool reached = false;
+                if (runWire >= 1 && runWire <= HeaterManager::kWireCount) {
+                    const float t = tempC[runWire - 1];
+                    reached = isfinite(t) && t >= targetC;
+                } else {
+                    for (size_t i = 0; i < allowedCount; ++i) {
+                        const uint8_t idx = allowedIdx[i];
+                        const float t = tempC[idx];
+                        if (isfinite(t) && t >= targetC) {
+                            reached = true;
+                            break;
+                        }
+                    }
+                }
+                if (reached) {
+                    stopWireTargetTest();
+                    break;
+                }
+            }
+        }
+
         if (allowedCount == 0) {
             if (!delayWithPowerWatch(100)) {
                 if (!is12VPresent()) handle12VDrop();
                 else {
                     xEventGroupClearBits(gEvt, EVT_STOP_REQ);
-                    setState(DeviceState::Idle);
+                    setState(DeviceState::Shutdown);
                 }
                 break;
             }
@@ -822,7 +926,7 @@ void Device::StartLoop() {
             }
             if (!_runMaskedPulse(this, mask, pulseMs, ledFeedback)) {
                 if (!is12VPresent()) handle12VDrop();
-                else setState(DeviceState::Idle);
+                else setState(DeviceState::Shutdown);
                 abortMixed = true;
                 break;
             }
@@ -837,7 +941,7 @@ void Device::StartLoop() {
                 if (!is12VPresent()) handle12VDrop();
                 else {
                     xEventGroupClearBits(gEvt, EVT_STOP_REQ);
-                    setState(DeviceState::Idle);
+                    setState(DeviceState::Shutdown);
                 }
                 break;
             }

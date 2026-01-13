@@ -6,5 +6,6 @@
     "cmath": "cpp",
     "vector": "cpp"
   },
-  "liveServer.settings.port": 5502
+  "liveServer.settings.port": 5502,
+  "cmake.sourceDirectory": "D:/Freelancer/JOBS/@sertody/PowerDistributionBoard/.pio/libdeps/esp32-s3-devkitc1-n16r8/ArduinoJson/src"
 }

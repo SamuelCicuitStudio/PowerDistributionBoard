@@ -181,7 +181,9 @@
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/esp_hw_support/include/soc/esp32/spiram.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/cores/esp32/io_pin_remap.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/cores/esp32/Arduino.h \
+ .pio/libdeps/esp32-s3-devkitc1-n16r8/ESPAsyncWebServer/src/AsyncWebServerLogging.h \
+ C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/cores/esp32/esp32-hal-log.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/cores/esp32/libb64/cencode.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/cores/esp32/MD5Builder.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/esp_rom/include/esp_rom_md5.h \
- .pio/libdeps/esp32-s3-devkitc1-n16r8/ESPAsyncWebServer/src/literals.h
+ .pio/libdeps/esp32-s3-devkitc1-n16r8/ESPAsyncWebServer/src/./literals.h

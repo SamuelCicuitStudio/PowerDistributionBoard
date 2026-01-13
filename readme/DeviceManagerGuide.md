@@ -11,9 +11,9 @@ This document explains how the firmware is organized around the `Device` class: 
 - Sensors:
   - `TempSensor` (`src/sensing/TempSensor.*`): DS18B20 board/heatsink temperatures.
   - `NtcSensor` (`src/sensing/NtcSensor.*`): analog NTC temperature + "button pressed" detection on the shared analog pin.
-  - `CurrentSensor` (`src/sensing/CurrentSensor.*`): continuous current sampling + safety limit.
+  - `CurrentSensor` (`src/sensing/CurrentSensor.*`): on-demand current sampling for presence detection and safety checks.
   - `BusSampler` (`src/sensing/BusSampler.*`): synchronized V/I history at a fixed period (default 5 ms); can include NTC fields when requested.
-- Thermal model: `DeviceThermal` (`src/system/DeviceThermal.cpp`, `src/system/WireSubsystem.h`) maintains virtual wire temperatures using first-order parameters `tau` / `kLoss` / `Cth`.
+- Thermal model: `DeviceThermal` (`src/system/DeviceThermal.cpp`, `src/system/WireSubsystem.h`) maintains virtual wire temperatures using per-wire parameters `tau` / `kLoss` / `Cth` loaded from NVS.
 - Control loop: `DeviceControl` (`src/system/DeviceControl.cpp`) runs the energy-based sequential controller and wire target test logic.
 - Calibration:
   - `CalibrationRecorder` (`src/services/CalibrationRecorder.*`): captures a time series of `{V, I, NTC}` samples with a single time base.
@@ -24,7 +24,7 @@ This document explains how the firmware is organized around the `Device` class: 
 
 The `Device::loopTask()` RTOS task is the dispatcher that moves between:
 - `DeviceState::Shutdown`: safe OFF state (relay off, heaters off).
-- `DeviceState::Idle`: powered and ready, but not running the main heater loop.
+- `DeviceState::Idle`: 12V detected, relay on, outputs off; preparation stage with cool-down wait (assume wires could be at 150 C unless user confirms cool) before RUN.
 - `DeviceState::Running`: main loop active (`Device::StartLoop()`).
 - `DeviceState::Error`: fatal fault latched; relay/heaters forced off.
 
@@ -33,9 +33,8 @@ Transition triggers are posted as event bits (`EVT_WAKE_REQ`, `EVT_RUN_REQ`, `EV
 ## Background tasks (what runs all the time)
 
 ### Sensor sampling
-
-- `CurrentSensor` continuous sampling is started in `Device::begin()` (see `src/system/DeviceCore.cpp`).
-- `BusSampler` runs a dedicated task that pushes `{timestampMs, voltageV, currentA}` into a ring buffer at ~200 Hz (`periodMs=5` by default).
+- `CurrentSensor` is idle by default; it is used on-demand for presence detection or explicit reads.
+- `BusSampler` runs a dedicated task that pushes `{timestampMs, voltageV, currentA}` into a ring buffer at ~200 Hz; current is derived from bus voltage and the active output mask.
 - `TempSensor` is updated by the temperature monitor task when enabled (board + heatsink DS18B20s).
 
 ### Thermal integration (virtual wire temperatures)
@@ -55,49 +54,42 @@ File: `src/system/DeviceControl.cpp`
 - Started in `Device::begin()` and runs continuously, but it only drives outputs in specific modes.
 - The controller allocates energy packets per wire in a sequential frame and adjusts packet sizes slowly based on temperature error (no PID/PI loop).
 - Output driving rules (important):
-  - The energy-based controller only energizes heaters in `DeviceState::Running` or when an Idle wire-target test is active.
+  - The energy-based controller only energizes heaters in `DeviceState::Running` or during an Idle (relay-on) wire-target test.
   - Calibration energy runs and wire tests are mutually exclusive.
 
 ## Temperature sources (what is used when)
-
 ### Board / heatsink temperatures (always physical)
-
 - Source: DS18B20 readings in `TempSensor`.
-- Used for: UI display, ambient estimate, floor proxy, safety.
+- Used for: UI display, ambient estimate, safety, and floor NTC validation.
 
-### Wire temperature during normal RUN (energy-based sequential)
-
-- Source: virtual temperature computed by the thermal task and stored in `HeaterManager` (`WireInfo.temperatureC`).
-- Reason: only one wire has a physical NTC; other wires must be estimated.
+### Normal RUN control target (floor temperature)
+- Source: NTC (`NtcSensor`), treated as the floor temperature target.
+- Virtual wire temps are display/safety only (hard limit at 150 C).
 
 ### Wire temperature during Wire Test
+- Source: NTC (`NtcSensor`) on the attached wire.
+- Reason: wire test explicitly controls the NTC-linked wire to a setpoint.
 
-- Source: NTC (`NtcSensor`) if valid.
-- Reason: wire test is explicitly "control the NTC-attached wire to a setpoint".
-
-### Temperature in calibration capture
-
+### Temperature in model calibration capture
 - Source: NTC if attached and valid, captured as `CalibrationRecorder::Sample.tempC`.
-- Note: the capture buffer stores `tMs` (time since capture start), not real wall-clock time.
+- Reason: model calibration uses the NTC-linked wire during heat-up and cool-down.
 
 ## Use cases (what changes depending on mode)
-
 ### 1) Normal RUN: `Device::StartLoop()`
 
 File: `src/system/DeviceLoop.cpp`
 - Entered only from the state machine when transitioning to `DeviceState::Running`.
-- The loop allocates sequential energy packets across allowed wires; all output pulses are guarded:
-  - outputs are forced off after every pulse,
-  - delays use `delayWithPowerWatch()` so STOP/power-loss/faults abort quickly.
-- The thermal task continues updating wire temperature estimates while RUN is active.
+- Before starting, the system assumes wires could be hot (model at 150 C) and waits for cool-down unless the user confirms wires are cool.
+- The loop distributes energy packets sequentially across allowed outputs to equalize heating rates (resistance-weighted).
+- NTC floor temperature is the target for boost/hold decisions; wire model is display/safety only.
 - `PowerTracker` session runs to compute energy (Wh), peaks, and session history.
 
 ### 2) Wire Test (Idle-only energy target)
 
 File: `src/system/DeviceControl.cpp`
 - Triggered by HTTP endpoints (`/wire_test_start`, `/wire_test_stop`, `/wire_test_status`).
-- Runs only in `DeviceState::Idle`.
-- Uses the energy-based controller to hold a target temperature across allowed wires.
+- Runs only in `DeviceState::Idle` (relay on, outputs off beforehand).
+- Uses the NTC-linked wire as feedback to hold the target temperature.
 - Does not create a logged calibration buffer.
 
 ### 3) NTC calibration (no heating)
@@ -111,7 +103,8 @@ File: `src/system/DeviceControl.cpp`
   - `/calib_start`, `/calib_stop`, `/calib_status`, `/calib_data`, `/calib_file`, `/calib_clear`
 - Behavior:
   - Starts `CalibrationRecorder` to capture `{V, I, NTC}` at the requested interval into a bounded buffer.
-  - In "model capture" mode it also starts an energy-based calibration run (Idle-only).
+  - In "model capture" mode it starts an energy-based run on the NTC-linked wire to reach target and capture the cool-down.
+  - When a test or calibration stops/finishes, the device returns to `DeviceState::Shutdown` (relay off).
 - What the data is used for:
   - Plotting the temperature curve in the UI.
   - Feeding `ThermalEstimator` for conservative tau/k/C suggestions.

@@ -1,6 +1,37 @@
-#include "sensing/BusSampler.h"
-#include "sensing/NtcSensor.h"
+#include <BusSampler.hpp>
+#include <HeaterManager.hpp>
+#include <NtcSensor.hpp>
 #include <math.h>
+
+static float median3(float a, float b, float c) {
+    if (a > b) { float t = a; a = b; b = t; }
+    if (b > c) { float t = b; b = c; c = t; }
+    if (a > b) { float t = a; a = b; b = t; }
+    return b;
+}
+
+static float sampleBusVoltage(CpDischg* cp) {
+    if (!cp) return NAN;
+    float v[3];
+    int count = 0;
+    float sum = 0.0f;
+    for (int i = 0; i < 3; ++i) {
+        v[i] = cp->sampleVoltageNow();
+        if (isfinite(v[i])) {
+            sum += v[i];
+            ++count;
+        }
+    }
+    if (count == 0) return NAN;
+    if (count < 3) return sum / static_cast<float>(count);
+    return median3(v[0], v[1], v[2]);
+}
+
+static float estimateBusCurrent(float busVoltage) {
+    if (!WIRE) return NAN;
+    const uint16_t mask = WIRE->getOutputMask();
+    return WIRE->estimateCurrentFromVoltage(busVoltage, mask);
+}
 
 BusSampler* BusSampler::Get() {
     static BusSampler instance;
@@ -44,14 +75,8 @@ bool BusSampler::sampleNow(SyncSample& out) {
     out.timestampMs = millis();
 
     if (cpDischg) {
-        out.voltageV = cpDischg->readCapVoltage();
-    }
-    if (currentSensor) {
-        if (currentSensor->isContinuousRunning()) {
-            out.currentA = currentSensor->getLastCurrent();
-        } else {
-            out.currentA = currentSensor->readCurrent();
-        }
+        out.voltageV = sampleBusVoltage(cpDischg);
+        out.currentA = estimateBusCurrent(out.voltageV);
     }
 
     if (ntcSensor) {
@@ -85,15 +110,9 @@ void BusSampler::taskLoop(uint32_t periodMs) {
         float i = NAN;
 
         if (cpDischg) {
-            v = cpDischg->readCapVoltage();
+            v = sampleBusVoltage(cpDischg);
         }
-        if (currentSensor) {
-            if (currentSensor->isContinuousRunning()) {
-                i = currentSensor->getLastCurrent();
-            } else {
-                i = currentSensor->readCurrent();
-            }
-        }
+        i = estimateBusCurrent(v);
 
         pushSample(ts, v, i);
         vTaskDelay(delayTicks);
@@ -152,4 +171,8 @@ size_t BusSampler::getHistorySince(uint32_t lastSeq,
     newSeq = lastSeq + available;
     xSemaphoreGive(_mutex);
     return (size_t)available;
+}
+
+void BusSampler::recordSample(uint32_t tsMs, float voltageV, float currentA) {
+    pushSample(tsMs, voltageV, currentA);
 }

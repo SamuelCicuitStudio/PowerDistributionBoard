@@ -7,9 +7,9 @@
  *  Phone       : +216 54 429 793
  **************************************************************/
 
-#include "services/SleepTimer.h"
-#include "system/Device.h"
-#include "control/Buzzer.h"
+#include <SleepTimer.hpp>
+#include <Device.hpp>
+#include <Buzzer.hpp>
 #include <esp_sleep.h>
 #include <WiFi.h>
 

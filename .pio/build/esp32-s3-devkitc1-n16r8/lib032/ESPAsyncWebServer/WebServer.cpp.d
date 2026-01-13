@@ -182,12 +182,27 @@
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/cores/esp32/io_pin_remap.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/cores/esp32/Arduino.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/libraries/FS/src/FS.h \
+ C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/lwip/lwip/src/include/lwip/tcpbase.h \
+ .pio/libdeps/esp32-s3-devkitc1-n16r8/ArduinoJson/src/ArduinoJson.h \
+ .pio/libdeps/esp32-s3-devkitc1-n16r8/ArduinoJson/src/ArduinoJson.hpp \
+ .pio/libdeps/esp32-s3-devkitc1-n16r8/ArduinoJson/src/ArduinoJson/Configuration.hpp \
  .pio/libdeps/esp32-s3-devkitc1-n16r8/AsyncTCP/src/AsyncTCP.h \
  .pio/libdeps/esp32-s3-devkitc1-n16r8/AsyncTCP/src/AsyncTCPVersion.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/cores/esp32/IPv6Address.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/lwip/lwip/src/include/lwip/pbuf.h \
- C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/libraries/WiFi/src/WiFi.h \
+ .pio/libdeps/esp32-s3-devkitc1-n16r8/ESPAsyncWebServer/src/AsyncWebServerVersion.h \
+ .pio/libdeps/esp32-s3-devkitc1-n16r8/ESPAsyncWebServer/src/./literals.h \
+ .pio/libdeps/esp32-s3-devkitc1-n16r8/ESPAsyncWebServer/src/AsyncEventSource.h \
+ .pio/libdeps/esp32-s3-devkitc1-n16r8/ESPAsyncWebServer/src/AsyncWebSocket.h \
+ .pio/libdeps/esp32-s3-devkitc1-n16r8/ESPAsyncWebServer/src/AsyncWebServerLogging.h \
+ C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/cores/esp32/esp32-hal-log.h \
+ .pio/libdeps/esp32-s3-devkitc1-n16r8/ESPAsyncWebServer/src/WebHandlerImpl.h \
+ .pio/libdeps/esp32-s3-devkitc1-n16r8/ESPAsyncWebServer/src/WebResponseImpl.h \
+ C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/cores/esp32/cbuf.h \
+ .pio/libdeps/esp32-s3-devkitc1-n16r8/ESPAsyncWebServer/src/AsyncJson.h \
+ .pio/libdeps/esp32-s3-devkitc1-n16r8/ESPAsyncWebServer/src/ChunkPrint.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/cores/esp32/Print.h \
+ C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/libraries/WiFi/src/WiFi.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/libraries/WiFi/src/WiFiType.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/libraries/WiFi/src/WiFiSTA.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/libraries/WiFi/src/WiFiGeneric.h \
@@ -203,12 +218,4 @@
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/libraries/WiFi/src/WiFiServer.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/cores/esp32/Server.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/libraries/WiFi/src/WiFiUdp.h \
- C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/cores/esp32/Udp.h \
- C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/cores/esp32/cbuf.h \
- .pio/libdeps/esp32-s3-devkitc1-n16r8/ESPAsyncWebServer/src/literals.h \
- .pio/libdeps/esp32-s3-devkitc1-n16r8/ESPAsyncWebServer/src/AsyncEventSource.h \
- .pio/libdeps/esp32-s3-devkitc1-n16r8/ESPAsyncWebServer/src/ESPAsyncWebServer.h \
- .pio/libdeps/esp32-s3-devkitc1-n16r8/ESPAsyncWebServer/src/AsyncWebSocket.h \
- .pio/libdeps/esp32-s3-devkitc1-n16r8/ESPAsyncWebServer/src/WebHandlerImpl.h \
- .pio/libdeps/esp32-s3-devkitc1-n16r8/ESPAsyncWebServer/src/WebResponseImpl.h \
- C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/cores/esp32/StreamString.h
+ C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/cores/esp32/Udp.h

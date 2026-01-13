@@ -1,4 +1,4 @@
-﻿#include "control/Indicator.h"
+﻿#include <Indicator.hpp>
 
 // How many pending LED operations we can buffer.
 #define INDICATOR_QUEUE_LEN 64   // increased from 32 for more headroom

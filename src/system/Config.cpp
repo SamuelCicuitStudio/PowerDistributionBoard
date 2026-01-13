@@ -1,4 +1,4 @@
-﻿#include "system/Config.h"
+﻿#include <Config.hpp>
 #include <pgmspace.h>  // for reading F("...") strings from flash
 #include "esp_heap_caps.h"   // heap_caps_malloc for PSRAM
 

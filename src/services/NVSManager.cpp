@@ -1,4 +1,7 @@
-﻿#include "services/NVSManager.h"
+#include <NVSManager.hpp>
+#include <esp_err.h>
+#include <esp_sleep.h>
+#include <esp_task_wdt.h>
 
 // ======================================================
 // Static singleton pointer
@@ -68,6 +71,35 @@ static String make_device_id_from_efuse() {
     // group as 5-5 for readability
     return String("PDB-") + b32.substring(0,5) + "-" + b32.substring(5,10);
 }
+
+static const char* kWireModelTauKeys[10] = {
+    W1TAU_KEY, W2TAU_KEY, W3TAU_KEY, W4TAU_KEY, W5TAU_KEY,
+    W6TAU_KEY, W7TAU_KEY, W8TAU_KEY, W9TAU_KEY, W10TAU_KEY
+};
+static const char* kWireModelKKeys[10] = {
+    W1KLS_KEY, W2KLS_KEY, W3KLS_KEY, W4KLS_KEY, W5KLS_KEY,
+    W6KLS_KEY, W7KLS_KEY, W8KLS_KEY, W9KLS_KEY, W10KLS_KEY
+};
+static const char* kWireModelCKeys[10] = {
+    W1CAP_KEY, W2CAP_KEY, W3CAP_KEY, W4CAP_KEY, W5CAP_KEY,
+    W6CAP_KEY, W7CAP_KEY, W8CAP_KEY, W9CAP_KEY, W10CAP_KEY
+};
+static const char* kWireCalibDoneKeys[10] = {
+    CALIB_W1_DONE_KEY, CALIB_W2_DONE_KEY, CALIB_W3_DONE_KEY, CALIB_W4_DONE_KEY, CALIB_W5_DONE_KEY,
+    CALIB_W6_DONE_KEY, CALIB_W7_DONE_KEY, CALIB_W8_DONE_KEY, CALIB_W9_DONE_KEY, CALIB_W10_DONE_KEY
+};
+static const char* kWireCalibStageKeys[10] = {
+    CALIB_W1_STAGE_KEY, CALIB_W2_STAGE_KEY, CALIB_W3_STAGE_KEY, CALIB_W4_STAGE_KEY, CALIB_W5_STAGE_KEY,
+    CALIB_W6_STAGE_KEY, CALIB_W7_STAGE_KEY, CALIB_W8_STAGE_KEY, CALIB_W9_STAGE_KEY, CALIB_W10_STAGE_KEY
+};
+static const char* kWireCalibRunKeys[10] = {
+    CALIB_W1_RUNNING_KEY, CALIB_W2_RUNNING_KEY, CALIB_W3_RUNNING_KEY, CALIB_W4_RUNNING_KEY, CALIB_W5_RUNNING_KEY,
+    CALIB_W6_RUNNING_KEY, CALIB_W7_RUNNING_KEY, CALIB_W8_RUNNING_KEY, CALIB_W9_RUNNING_KEY, CALIB_W10_RUNNING_KEY
+};
+static const char* kWireCalibTsKeys[10] = {
+    CALIB_W1_TS_KEY, CALIB_W2_TS_KEY, CALIB_W3_TS_KEY, CALIB_W4_TS_KEY, CALIB_W5_TS_KEY,
+    CALIB_W6_TS_KEY, CALIB_W7_TS_KEY, CALIB_W8_TS_KEY, CALIB_W9_TS_KEY, CALIB_W10_TS_KEY
+};
 // ======================================================
 // ctor / dtor
 // ======================================================
@@ -288,26 +320,39 @@ void NVS::initializeVariables() {
   // Temperature sensor count & idle current
   PutInt(TEMP_SENSOR_COUNT_KEY, DEFAULT_TEMP_SENSOR_COUNT);
   PutFloat(IDLE_CURR_KEY, DEFAULT_IDLE_CURR);
-  PutFloat(NTC_BETA_KEY, DEFAULT_NTC_BETA);
-  PutFloat(NTC_R0_KEY, DEFAULT_NTC_R0_OHMS);
-  PutFloat(NTC_FIXED_RES_KEY, DEFAULT_NTC_FIXED_RES_OHMS);
-  PutInt(NTC_MODEL_KEY, DEFAULT_NTC_MODEL);
-  PutFloat(NTC_SH_A_KEY, DEFAULT_NTC_SH_A);
-  PutFloat(NTC_SH_B_KEY, DEFAULT_NTC_SH_B);
-  PutFloat(NTC_SH_C_KEY, DEFAULT_NTC_SH_C);
-  PutFloat(NTC_PRESS_MV_KEY, DEFAULT_NTC_PRESS_MV);
-  PutFloat(NTC_RELEASE_MV_KEY, DEFAULT_NTC_RELEASE_MV);
-  PutInt(NTC_DEBOUNCE_MS_KEY, DEFAULT_NTC_DEBOUNCE_MS);
-  PutFloat(NTC_MIN_C_KEY, DEFAULT_NTC_MIN_C);
-  PutFloat(NTC_MAX_C_KEY, DEFAULT_NTC_MAX_C);
-  PutInt(NTC_SAMPLES_KEY, DEFAULT_NTC_SAMPLES);
-  PutInt(NTC_GATE_INDEX_KEY, DEFAULT_NTC_GATE_INDEX);
   PutULong64(RTC_CURRENT_EPOCH_KEY, static_cast<int>(RTC_DEFAULT_EPOCH));
   PutULong64(RTC_PRESLEEP_EPOCH_KEY, static_cast<int>(RTC_DEFAULT_EPOCH));
   PutFloat(FLOOR_THICKNESS_MM_KEY, DEFAULT_FLOOR_THICKNESS_MM);
   PutInt(FLOOR_MATERIAL_KEY, DEFAULT_FLOOR_MATERIAL);
   PutFloat(FLOOR_MAX_C_KEY, DEFAULT_FLOOR_MAX_C);
   PutFloat(NICHROME_FINAL_TEMP_C_KEY, DEFAULT_NICHROME_FINAL_TEMP_C);
+  PutInt(NTC_GATE_INDEX_KEY, DEFAULT_NTC_GATE_INDEX);
+
+  // Setup wizard state
+  PutBool(SETUP_DONE_KEY, DEFAULT_SETUP_DONE);
+  PutInt(SETUP_STAGE_KEY, DEFAULT_SETUP_STAGE);
+  PutInt(SETUP_SUBSTAGE_KEY, DEFAULT_SETUP_SUBSTAGE);
+  PutInt(SETUP_WIRE_INDEX_KEY, DEFAULT_SETUP_WIRE_INDEX);
+  PutBool(CALIB_CAP_DONE_KEY, DEFAULT_CALIB_CAP_DONE);
+  PutBool(CALIB_IDLE_DONE_KEY, DEFAULT_CALIB_IDLE_DONE);
+  PutBool(CALIB_NTC_DONE_KEY, DEFAULT_CALIB_NTC_DONE);
+  for (int i = 0; i < 10; ++i) {
+      PutBool(kWireCalibDoneKeys[i], DEFAULT_CALIB_W_DONE);
+      PutInt(kWireCalibStageKeys[i], DEFAULT_CALIB_W_STAGE);
+      PutBool(kWireCalibRunKeys[i], DEFAULT_CALIB_W_RUNNING);
+      PutInt(kWireCalibTsKeys[i], DEFAULT_CALIB_W_TS);
+      PutDouble(kWireModelTauKeys[i], DEFAULT_WIRE_MODEL_TAU);
+      PutDouble(kWireModelKKeys[i], DEFAULT_WIRE_MODEL_K);
+      PutDouble(kWireModelCKeys[i], DEFAULT_WIRE_MODEL_C);
+  }
+  PutBool(CALIB_FLOOR_DONE_KEY, DEFAULT_CALIB_FLOOR_DONE);
+  PutInt(CALIB_FLOOR_STAGE_KEY, DEFAULT_CALIB_FLOOR_STAGE);
+  PutBool(CALIB_FLOOR_RUNNING_KEY, DEFAULT_CALIB_FLOOR_RUNNING);
+  PutInt(CALIB_FLOOR_TS_KEY, DEFAULT_CALIB_FLOOR_TS);
+  PutInt(CALIB_SCHEMA_VERSION_KEY, DEFAULT_CALIB_SCHEMA_VERSION);
+  PutDouble(FLOOR_MODEL_TAU_KEY, DEFAULT_FLOOR_MODEL_TAU);
+  PutDouble(FLOOR_MODEL_K_KEY, DEFAULT_FLOOR_MODEL_K);
+  PutDouble(FLOOR_MODEL_C_KEY, DEFAULT_FLOOR_MODEL_C);
 
   // --- Buzzer configuration ---
   PutBool(BUZLOW_KEY, BUZLOW_DEFAULT);
@@ -431,26 +476,38 @@ void NVS::ensureMissingDefaults() {
 
   ensureInt(TEMP_SENSOR_COUNT_KEY, DEFAULT_TEMP_SENSOR_COUNT);
   ensureFloat(IDLE_CURR_KEY, DEFAULT_IDLE_CURR);
-  ensureFloat(NTC_BETA_KEY, DEFAULT_NTC_BETA);
-  ensureFloat(NTC_R0_KEY, DEFAULT_NTC_R0_OHMS);
-  ensureFloat(NTC_FIXED_RES_KEY, DEFAULT_NTC_FIXED_RES_OHMS);
-  ensureInt(NTC_MODEL_KEY, DEFAULT_NTC_MODEL);
-  ensureFloat(NTC_SH_A_KEY, DEFAULT_NTC_SH_A);
-  ensureFloat(NTC_SH_B_KEY, DEFAULT_NTC_SH_B);
-  ensureFloat(NTC_SH_C_KEY, DEFAULT_NTC_SH_C);
-  ensureFloat(NTC_PRESS_MV_KEY, DEFAULT_NTC_PRESS_MV);
-  ensureFloat(NTC_RELEASE_MV_KEY, DEFAULT_NTC_RELEASE_MV);
-  ensureInt(NTC_DEBOUNCE_MS_KEY, DEFAULT_NTC_DEBOUNCE_MS);
-  ensureFloat(NTC_MIN_C_KEY, DEFAULT_NTC_MIN_C);
-  ensureFloat(NTC_MAX_C_KEY, DEFAULT_NTC_MAX_C);
-  ensureInt(NTC_SAMPLES_KEY, DEFAULT_NTC_SAMPLES);
-  ensureInt(NTC_GATE_INDEX_KEY, DEFAULT_NTC_GATE_INDEX);
   ensureULong64(RTC_CURRENT_EPOCH_KEY, static_cast<uint64_t>(RTC_DEFAULT_EPOCH));
   ensureULong64(RTC_PRESLEEP_EPOCH_KEY, static_cast<uint64_t>(RTC_DEFAULT_EPOCH));
   ensureFloat(FLOOR_THICKNESS_MM_KEY, DEFAULT_FLOOR_THICKNESS_MM);
   ensureInt(FLOOR_MATERIAL_KEY, DEFAULT_FLOOR_MATERIAL);
   ensureFloat(FLOOR_MAX_C_KEY, DEFAULT_FLOOR_MAX_C);
   ensureFloat(NICHROME_FINAL_TEMP_C_KEY, DEFAULT_NICHROME_FINAL_TEMP_C);
+  ensureInt(NTC_GATE_INDEX_KEY, DEFAULT_NTC_GATE_INDEX);
+
+  ensureBool(SETUP_DONE_KEY, DEFAULT_SETUP_DONE);
+  ensureInt(SETUP_STAGE_KEY, DEFAULT_SETUP_STAGE);
+  ensureInt(SETUP_SUBSTAGE_KEY, DEFAULT_SETUP_SUBSTAGE);
+  ensureInt(SETUP_WIRE_INDEX_KEY, DEFAULT_SETUP_WIRE_INDEX);
+  ensureBool(CALIB_CAP_DONE_KEY, DEFAULT_CALIB_CAP_DONE);
+  ensureBool(CALIB_IDLE_DONE_KEY, DEFAULT_CALIB_IDLE_DONE);
+  ensureBool(CALIB_NTC_DONE_KEY, DEFAULT_CALIB_NTC_DONE);
+  for (int i = 0; i < 10; ++i) {
+      ensureBool(kWireCalibDoneKeys[i], DEFAULT_CALIB_W_DONE);
+      ensureInt(kWireCalibStageKeys[i], DEFAULT_CALIB_W_STAGE);
+      ensureBool(kWireCalibRunKeys[i], DEFAULT_CALIB_W_RUNNING);
+      ensureInt(kWireCalibTsKeys[i], DEFAULT_CALIB_W_TS);
+      ensureDouble(kWireModelTauKeys[i], DEFAULT_WIRE_MODEL_TAU);
+      ensureDouble(kWireModelKKeys[i], DEFAULT_WIRE_MODEL_K);
+      ensureDouble(kWireModelCKeys[i], DEFAULT_WIRE_MODEL_C);
+  }
+  ensureBool(CALIB_FLOOR_DONE_KEY, DEFAULT_CALIB_FLOOR_DONE);
+  ensureInt(CALIB_FLOOR_STAGE_KEY, DEFAULT_CALIB_FLOOR_STAGE);
+  ensureBool(CALIB_FLOOR_RUNNING_KEY, DEFAULT_CALIB_FLOOR_RUNNING);
+  ensureInt(CALIB_FLOOR_TS_KEY, DEFAULT_CALIB_FLOOR_TS);
+  ensureInt(CALIB_SCHEMA_VERSION_KEY, DEFAULT_CALIB_SCHEMA_VERSION);
+  ensureDouble(FLOOR_MODEL_TAU_KEY, DEFAULT_FLOOR_MODEL_TAU);
+  ensureDouble(FLOOR_MODEL_K_KEY, DEFAULT_FLOOR_MODEL_K);
+  ensureDouble(FLOOR_MODEL_C_KEY, DEFAULT_FLOOR_MODEL_C);
 
   ensureBool(BUZLOW_KEY, BUZLOW_DEFAULT);
   ensureBool(BUZMUT_KEY, BUZMUT_DEFAULT);
@@ -491,43 +548,56 @@ void NVS::ensureMissingDefaults() {
 // ======================================================
 bool NVS::GetBool(const char* key, bool defaultValue) {
     esp_task_wdt_reset();
-    lock_();
+    const bool locked =
+        (mutex_ && xSemaphoreTakeRecursive(mutex_, 0) == pdTRUE);
     ensureOpenRO_();
     bool v = preferences.getBool(key, defaultValue);
-    unlock_();
+    if (locked) {
+        xSemaphoreGiveRecursive(mutex_);
+    }
     return v;
 }
 
 int NVS::GetInt(const char* key, int defaultValue) {
     esp_task_wdt_reset();
-    lock_();
+    const bool locked =
+        (mutex_ && xSemaphoreTakeRecursive(mutex_, 0) == pdTRUE);
     ensureOpenRO_();
     int v = preferences.getInt(key, defaultValue);
-    unlock_();
+    if (locked) {
+        xSemaphoreGiveRecursive(mutex_);
+    }
     return v;
 }
 
 uint64_t NVS::GetULong64(const char* key, int defaultValue) {
     esp_task_wdt_reset();
-    lock_();
+    const bool locked =
+        (mutex_ && xSemaphoreTakeRecursive(mutex_, 0) == pdTRUE);
     ensureOpenRO_();
     uint64_t v = preferences.getULong64(key, defaultValue);
-    unlock_();
+    if (locked) {
+        xSemaphoreGiveRecursive(mutex_);
+    }
     return v;
 }
 
 float NVS::GetFloat(const char* key, float defaultValue) {
     esp_task_wdt_reset();
-    lock_();
+    const bool locked =
+        (mutex_ && xSemaphoreTakeRecursive(mutex_, 0) == pdTRUE);
     ensureOpenRO_();
     float v = preferences.getFloat(key, defaultValue);
-    unlock_();
+    if (locked) {
+        xSemaphoreGiveRecursive(mutex_);
+    }
     return v;
 }
 
 double NVS::GetDouble(const char* key, double defaultValue) {
     esp_task_wdt_reset();
-    lock_();
+    const bool locked =
+        (mutex_ && xSemaphoreTakeRecursive(mutex_, 0) == pdTRUE);
     ensureOpenRO_();
     double v = defaultValue;
     if (preferences.isKey(key)) {
@@ -537,16 +607,21 @@ double NVS::GetDouble(const char* key, double defaultValue) {
             if (isfinite(f)) v = static_cast<double>(f);
         }
     }
-    unlock_();
+    if (locked) {
+        xSemaphoreGiveRecursive(mutex_);
+    }
     return v;
 }
 
 String NVS::GetString(const char* key, const String& defaultValue) {
     esp_task_wdt_reset();
-    lock_();
+    const bool locked =
+        (mutex_ && xSemaphoreTakeRecursive(mutex_, 0) == pdTRUE);
     ensureOpenRO_();
     String v = preferences.getString(key, defaultValue);
-    unlock_();
+    if (locked) {
+        xSemaphoreGiveRecursive(mutex_);
+    }
     return v;
 }
 

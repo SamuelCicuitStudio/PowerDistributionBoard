@@ -1,9 +1,9 @@
-#include "services/CalibrationRecorder.h"
-#include "sensing/BusSampler.h"
-#include "sensing/NtcSensor.h"
-#include "control/HeaterManager.h"
-#include "services/NVSManager.h"
-#include "services/RTCManager.h"
+#include <CalibrationRecorder.hpp>
+#include <BusSampler.hpp>
+#include <NtcSensor.hpp>
+#include <HeaterManager.hpp>
+#include <NVSManager.hpp>
+#include <RTCManager.hpp>
 #include <math.h>
 #include <stdio.h>
 #include <FS.h>
@@ -48,8 +48,8 @@ bool CalibrationRecorder::start(Mode mode,
 
     if (maxSamples == 0) maxSamples = kDefaultMaxSamples;
     if (maxSamples > kAbsoluteMaxSamples) maxSamples = kAbsoluteMaxSamples;
-    if (wireIndex == 0 && CONF) {
-        int idx = CONF->GetInt(NTC_GATE_INDEX_KEY, DEFAULT_NTC_GATE_INDEX);
+    if (wireIndex == 0) {
+        int idx = DEFAULT_NTC_GATE_INDEX;
         if (idx < 1) idx = 1;
         if (idx > HeaterManager::kWireCount) idx = HeaterManager::kWireCount;
         wireIndex = static_cast<uint8_t>(idx);

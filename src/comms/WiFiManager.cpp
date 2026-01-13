@@ -1,12 +1,13 @@
-﻿#include "comms/WiFiManager.h"
-#include "system/Utils.h"
-#include "system/DeviceTransport.h"
-#include "services/CalibrationRecorder.h"
-#include "sensing/BusSampler.h"
-#include "sensing/NtcSensor.h"
-#include "services/ThermalEstimator.h"
-#include "services/RTCManager.h"
+﻿#include <WiFiManager.hpp>
+#include <Utils.hpp>
+#include <DeviceTransport.hpp>
+#include <CalibrationRecorder.hpp>
+#include <BusSampler.hpp>
+#include <NtcSensor.hpp>
+#include <ThermalEstimator.hpp>
+#include <RTCManager.hpp>
 #include <SPIFFS.h>
+#include <esp_system.h>
 #include <ArduinoJson.h>
 #include <ESPmDNS.h>
 #include <WiFiUdp.h>
@@ -35,17 +36,27 @@ static bool syncTimeFromNtp(uint32_t timeoutMs = 2500) {
     DEBUG_PRINTLN("[WiFi] NTP sync failed");
     return false;
 }
+
+static uint8_t getNtcGateIndexFromConfig() {
+    int idx = DEFAULT_NTC_GATE_INDEX;
+    if (CONF) {
+        idx = CONF->GetInt(NTC_GATE_INDEX_KEY, DEFAULT_NTC_GATE_INDEX);
+    }
+    if (idx < 1) idx = 1;
+    if (idx > HeaterManager::kWireCount) idx = HeaterManager::kWireCount;
+    return static_cast<uint8_t>(idx);
+}
 } // namespace
 
 static const char* floorMaterialToString(int code) {
     switch (code) {
-        case FLOOR_MAT_WOOD:     return "wood";
-        case FLOOR_MAT_EPOXY:    return "epoxy";
-        case FLOOR_MAT_CONCRETE: return "concrete";
-        case FLOOR_MAT_SLATE:    return "slate";
-        case FLOOR_MAT_MARBLE:   return "marble";
-        case FLOOR_MAT_GRANITE:  return "granite";
-        default:                 return "wood";
+        case FLOOR_MAT_WOOD:     return FLOOR_MAT_WOOD_STR;
+        case FLOOR_MAT_EPOXY:    return FLOOR_MAT_EPOXY_STR;
+        case FLOOR_MAT_CONCRETE: return FLOOR_MAT_CONCRETE_STR;
+        case FLOOR_MAT_SLATE:    return FLOOR_MAT_SLATE_STR;
+        case FLOOR_MAT_MARBLE:   return FLOOR_MAT_MARBLE_STR;
+        case FLOOR_MAT_GRANITE:  return FLOOR_MAT_GRANITE_STR;
+        default:                 return FLOOR_MAT_WOOD_STR;
     }
 }
 
@@ -56,12 +67,12 @@ static int parseFloorMaterialCode(const String& raw, int fallback) {
     s.toLowerCase();
     s.trim();
 
-    if (s == "wood") return FLOOR_MAT_WOOD;
-    if (s == "epoxy") return FLOOR_MAT_EPOXY;
-    if (s == "concrete") return FLOOR_MAT_CONCRETE;
-    if (s == "slate") return FLOOR_MAT_SLATE;
-    if (s == "marble") return FLOOR_MAT_MARBLE;
-    if (s == "granite") return FLOOR_MAT_GRANITE;
+    if (s == FLOOR_MAT_WOOD_STR) return FLOOR_MAT_WOOD;
+    if (s == FLOOR_MAT_EPOXY_STR) return FLOOR_MAT_EPOXY;
+    if (s == FLOOR_MAT_CONCRETE_STR) return FLOOR_MAT_CONCRETE;
+    if (s == FLOOR_MAT_SLATE_STR) return FLOOR_MAT_SLATE;
+    if (s == FLOOR_MAT_MARBLE_STR) return FLOOR_MAT_MARBLE;
+    if (s == FLOOR_MAT_GRANITE_STR) return FLOOR_MAT_GRANITE;
 
     bool numeric = true;
     for (size_t i = 0; i < s.length(); ++i) {
@@ -85,6 +96,7 @@ constexpr uint32_t kNtcCalTimeoutMs = 20 * 60 * 1000;
 constexpr uint32_t kNtcCalMinSamples = 6;
 constexpr uint32_t kModelCalPollMs = 500;
 constexpr uint32_t kModelCalTimeoutMs = 30 * 60 * 1000;
+constexpr uint32_t kCalibWakeTimeoutMs = 15000;
 
 struct NtcCalStatus {
     bool     running   = false;
@@ -118,6 +130,32 @@ static NtcCalStatus s_ntcCalStatus{};
 static bool s_ntcCalAbort = false;
 static TaskHandle_t s_modelCalTask = nullptr;
 static bool s_modelCalAbort = false;
+
+static bool waitForIdle(DeviceTransport* transport, uint32_t timeoutMs, DeviceState& lastState) {
+    if (!transport) return false;
+
+    Device::StateSnapshot snap = transport->getStateSnapshot();
+    lastState = snap.state;
+    if (snap.state == DeviceState::Idle) return true;
+    if (snap.state != DeviceState::Shutdown) return false;
+
+    if (!transport->requestWake()) return false;
+
+    const uint32_t startMs = millis();
+    while ((millis() - startMs) < timeoutMs) {
+        Device::StateSnapshot evt{};
+        if (transport->waitForStateEvent(evt, pdMS_TO_TICKS(250))) {
+            lastState = evt.state;
+            if (evt.state == DeviceState::Idle) return true;
+        } else {
+            snap = transport->getStateSnapshot();
+            lastState = snap.state;
+            if (snap.state == DeviceState::Idle) return true;
+        }
+    }
+
+    return false;
+}
 
 struct ModelCalTaskArgs {
     float    targetC   = NAN;
@@ -283,27 +321,6 @@ static bool solve3x3(const double a[3][3], const double b[3], double out[3]) {
     return true;
 }
 
-static void readNtcShCoeffs(float& a, float& b, float& c) {
-    a = DEFAULT_NTC_SH_A;
-    b = DEFAULT_NTC_SH_B;
-    c = DEFAULT_NTC_SH_C;
-    float ta = NAN;
-    float tb = NAN;
-    float tc = NAN;
-    if (NTC && NTC->getSteinhartCoefficients(ta, tb, tc)) {
-        a = ta;
-        b = tb;
-        c = tc;
-    } else if (CONF) {
-        a = CONF->GetFloat(NTC_SH_A_KEY, DEFAULT_NTC_SH_A);
-        b = CONF->GetFloat(NTC_SH_B_KEY, DEFAULT_NTC_SH_B);
-        c = CONF->GetFloat(NTC_SH_C_KEY, DEFAULT_NTC_SH_C);
-    }
-    if (!isfinite(a)) a = 0.0f;
-    if (!isfinite(b)) b = 0.0f;
-    if (!isfinite(c)) c = 0.0f;
-}
-
 static void ntcCalTask(void* param) {
     NtcCalTaskArgs args{};
     if (param) {
@@ -336,33 +353,33 @@ static void ntcCalTask(void* param) {
 
         if (ntcCalAbortRequested()) {
             failed = true;
-            failReason = "stopped";
+            failReason = ERR_STOPPED;
             break;
         }
 
         if (elapsedMs >= args.timeoutMs) {
             failed = true;
-            failReason = "timeout";
+            failReason = ERR_TIMEOUT;
             break;
         }
 
         if (!DEVICE || !DEVICE->tempSensor || !NTC) {
             failed = true;
-            failReason = "sensor_missing";
+            failReason = ERR_SENSOR_MISSING;
             break;
         }
 
         Device::WireTargetStatus run{};
         if (!DEVTRAN || !DEVTRAN->getWireTargetStatus(run)) {
             failed = true;
-            failReason = "status_unavailable";
+            failReason = ERR_STATUS_UNAVAILABLE;
             break;
         }
         if (heating &&
             (!run.active || run.purpose != Device::EnergyRunPurpose::NtcCal))
         {
             failed = true;
-            failReason = "energy_stopped";
+            failReason = ERR_ENERGY_STOPPED;
             break;
         }
 
@@ -430,11 +447,11 @@ static void ntcCalTask(void* param) {
 
     if (!failed && samples < kNtcCalMinSamples) {
         failed = true;
-        failReason = "not_enough_samples";
+        failReason = ERR_NOT_ENOUGH_SAMPLES;
     }
 
     if (failed) {
-        ntcCalSetError(failReason ? failReason : "failed", elapsedMs);
+        ntcCalSetError(failReason ? failReason : ERR_FAILED, elapsedMs);
     } else {
         const double mat[3][3] = {
             {s00, s01, s02},
@@ -449,9 +466,9 @@ static void ntcCalTask(void* param) {
         float c = static_cast<float>(out[2]);
 
         if (!ok || !isfinite(a) || !isfinite(b) || !isfinite(c)) {
-            ntcCalSetError("fit_failed", elapsedMs);
+            ntcCalSetError(ERR_FIT_FAILED, elapsedMs);
         } else if (!NTC || !NTC->setSteinhartCoefficients(a, b, c, true)) {
-            ntcCalSetError("persist_failed", elapsedMs);
+            ntcCalSetError(ERR_PERSIST_FAILED, elapsedMs);
         } else {
             NTC->setModel(NtcSensor::Model::Steinhart, true);
             ntcCalFinish(a, b, c, samples, elapsedMs);
@@ -487,45 +504,62 @@ static void modelCalTask(void* param) {
 
         if (modelCalAbortRequested()) {
             failed = true;
-            failReason = "stopped";
+            failReason = ERR_STOPPED;
             break;
         }
 
         if (elapsedMs >= args.timeoutMs) {
             failed = true;
-            failReason = "timeout";
+            failReason = ERR_TIMEOUT;
             break;
         }
 
         if (!DEVICE || !DEVTRAN || !NTC) {
             failed = true;
-            failReason = "device_missing";
+            failReason = ERR_DEVICE_MISSING;
             break;
         }
 
         Device::WireTargetStatus st{};
-        if (!DEVTRAN->getWireTargetStatus(st) ||
-            !st.active ||
-            st.purpose != Device::EnergyRunPurpose::ModelCal)
-        {
-            if (heating) {
-                failed = true;
-                failReason = "energy_stopped";
-            }
-            break;
-        }
+        const bool statusOk = DEVTRAN->getWireTargetStatus(st);
+        const bool statusActive =
+            statusOk && st.active && st.purpose == Device::EnergyRunPurpose::ModelCal;
 
         NTC->update();
-        const float t = NTC->getLastTempC();
-        if (!isfinite(baseTempC) && isfinite(t)) {
-            baseTempC = t;
+        const float ntcTemp = NTC->getLastTempC();
+        const float modelTemp = statusOk ? st.activeTempC : NAN;
+        const float tempNow = isfinite(ntcTemp) ? ntcTemp : modelTemp;
+
+        if (!isfinite(baseTempC) && isfinite(tempNow)) {
+            baseTempC = tempNow;
         }
 
-        if (heating && isfinite(t) && isfinite(args.targetC) && t >= args.targetC) {
+        if (heating && isfinite(tempNow) && isfinite(args.targetC) &&
+            tempNow >= args.targetC) {
             heating = false;
-            DEVTRAN->stopWireTargetTest();
+            if (statusActive) {
+                DEVTRAN->stopWireTargetTest();
+            }
+        }
+
+        if (!statusActive) {
+            if (heating) {
+                failed = true;
+                failReason = ERR_ENERGY_STOPPED;
+                break;
+            }
+            if (isfinite(tempNow) && isfinite(baseTempC) &&
+                tempNow <= (baseTempC + 2.0f)) {
+                break;
+            }
+            if (!isfinite(tempNow)) {
+                failed = true;
+                failReason = ERR_SENSOR_MISSING;
+                break;
+            }
         } else if (!heating) {
-            if (isfinite(t) && isfinite(baseTempC) && t <= (baseTempC + 2.0f)) {
+            if (isfinite(tempNow) && isfinite(baseTempC) &&
+                tempNow <= (baseTempC + 2.0f)) {
                 break;
             }
         }
@@ -609,13 +643,95 @@ WiFiManager* WiFiManager::Get() {
     return instance;
 }
 
+String WiFiManager::issueSessionToken_(const IPAddress& ip) {
+    char buf[25];
+    const uint32_t r1 = esp_random();
+    const uint32_t r2 = esp_random();
+    const uint32_t r3 = esp_random();
+    snprintf(buf, sizeof(buf), "%08lx%08lx%08lx",
+             static_cast<unsigned long>(r1),
+             static_cast<unsigned long>(r2),
+             static_cast<unsigned long>(r3));
+
+    if (lock()) {
+        _sessionToken = buf;
+        _sessionIp = ip;
+        unlock();
+    } else {
+        _sessionToken = buf;
+        _sessionIp = ip;
+    }
+
+    return _sessionToken;
+}
+
+bool WiFiManager::validateSession_(AsyncWebServerRequest* request) const {
+    String sessionToken;
+    IPAddress sessionIp;
+    if (lock()) {
+        sessionToken = _sessionToken;
+        sessionIp = _sessionIp;
+        unlock();
+    } else {
+        sessionToken = _sessionToken;
+        sessionIp = _sessionIp;
+    }
+
+    if (sessionToken.isEmpty()) return false;
+
+    String token;
+    if (request->hasHeader("X-Session-Token")) {
+        token = request->getHeader("X-Session-Token")->value();
+    }
+    if (token.isEmpty() && request->hasParam("token")) {
+        token = request->getParam("token")->value();
+    }
+    if (token.isEmpty() || token != sessionToken) return false;
+
+    if (sessionIp != IPAddress(0, 0, 0, 0)) {
+        IPAddress ip =
+            request->client() ? request->client()->remoteIP() : IPAddress(0, 0, 0, 0);
+        if (ip != sessionIp) return false;
+    }
+
+    return true;
+}
+
+bool WiFiManager::sessionIpMatches_(const IPAddress& ip) const {
+    String sessionToken;
+    IPAddress sessionIp;
+    if (lock()) {
+        sessionToken = _sessionToken;
+        sessionIp = _sessionIp;
+        unlock();
+    } else {
+        sessionToken = _sessionToken;
+        sessionIp = _sessionIp;
+    }
+
+    if (sessionToken.isEmpty()) return false;
+    if (sessionIp == IPAddress(0, 0, 0, 0)) return true;
+    return ip == sessionIp;
+}
+
+void WiFiManager::clearSession_() {
+    if (lock()) {
+        _sessionToken = "";
+        _sessionIp = IPAddress(0, 0, 0, 0);
+        unlock();
+    } else {
+        _sessionToken = "";
+        _sessionIp = IPAddress(0, 0, 0, 0);
+    }
+}
+
 const char* WiFiManager::stateName(DeviceState s) {
     switch (s) {
-        case DeviceState::Idle:     return "Idle";
-        case DeviceState::Running:  return "Running";
-        case DeviceState::Error:    return "Error";
-        case DeviceState::Shutdown: return "Shutdown";
-        default:                    return "Unknown";
+        case DeviceState::Idle:     return STATE_IDLE;
+        case DeviceState::Running:  return STATE_RUNNING;
+        case DeviceState::Error:    return STATE_ERROR;
+        case DeviceState::Shutdown: return STATE_SHUTDOWN;
+        default:                    return STATE_UNKNOWN;
     }
 }
 
@@ -676,6 +792,7 @@ void WiFiManager::begin() {
     // Start snapshot updater (after routes/server started in AP/STA functions)
     startSnapshotTask(250); // ~4Hz; safe & cheap
     startStateStreamTask(); // SSE push for device state
+    startEventStreamTask(); // SSE push for warnings/errors
     startLiveStreamTask();  // batched live stream for UI playback
 
     BUZZ->bipWiFiConnected();
@@ -715,8 +832,8 @@ void WiFiManager::StartWifiAP() {
         return;
     }
 
-    // Start AP
-    if (!WiFi.softAP(ap_ssid.c_str(), ap_pass.c_str())) {
+    // Start AP (limit to a single client)
+    if (!WiFi.softAP(ap_ssid.c_str(), ap_pass.c_str(), 1, 0, 1)) {
         DEBUG_PRINTLN("[WiFi] Failed to start AP");
         BUZZ->bipFault();
         RGB->postOverlay(OverlayEvent::WIFI_LOST);
@@ -761,9 +878,13 @@ bool WiFiManager::StartWifiSTA() {
     }
 
     DEBUG_PRINTLN("[WiFi] Starting Station (STA) mode");
-
-    String ssid = WIFI_STA_SSID;
-    String pass = WIFI_STA_PASS;
+    #if OVERIDE_STA
+        String ssid = WIFI_STA_SSID;
+        String pass = WIFI_STA_PASS;
+    #else
+        String ssid = CONF->GetString(STA_SSID_KEY,"Nothing");
+        String pass = CONF->GetString(STA_PASS_KEY,"Nothing");
+    #endif
 
     // Clean reset WiFi state (important when switching from AP)
     WiFi.softAPdisconnect(true);
@@ -828,12 +949,39 @@ bool WiFiManager::StartWifiSTA() {
 // ======================= Route registration =======================
 
 void WiFiManager::registerRoutes_() {
+    static bool corsReady = false;
+    if (!corsReady) {
+        DefaultHeaders::Instance().addHeader("Access-Control-Allow-Origin", "*");
+        DefaultHeaders::Instance().addHeader(
+            "Access-Control-Allow-Methods",
+            "GET, POST, OPTIONS"
+        );
+        DefaultHeaders::Instance().addHeader(
+            "Access-Control-Allow-Headers",
+            "Content-Type, X-Session-Token"
+        );
+        DefaultHeaders::Instance().addHeader("Access-Control-Max-Age", "600");
+        DefaultHeaders::Instance().addHeader(
+            "Access-Control-Allow-Private-Network",
+            "true"
+        );
+        server.onNotFound([](AsyncWebServerRequest* request) {
+            if (request->method() == HTTP_OPTIONS) {
+                request->send(204);
+                return;
+            }
+            request->send(404, CT_APP_JSON, RESP_ERR_NOT_FOUND);
+        });
+        corsReady = true;
+    }
     // ---- State stream (SSE) ----
     server.addHandler(&stateSse);
+    // ---- Event stream (SSE) ----
+    server.addHandler(&eventSse);
     // ---- Live monitor stream (SSE) ----
     server.addHandler(&liveSse);
     // ---- Live monitor sinceSeq (HTTP) ----
-    server.on("/monitor_since", HTTP_GET,
+    server.on(EP_MONITOR_SINCE, HTTP_GET,
         [this](AsyncWebServerRequest* request) {
             if (!isAuthenticated(request)) return;
             if (lock()) { lastActivityMillis = millis(); unlock(); }
@@ -861,20 +1009,20 @@ void WiFiManager::registerRoutes_() {
 
             String json;
             serializeJson(doc, json);
-            request->send(200, "application/json", json);
+            request->send(200, CT_APP_JSON, json);
         }
     );
     // ---- Live monitor stream (SSE) ----
     server.addHandler(&liveSse);
 
     // ---- Login page ----
-    server.on("/login", HTTP_GET, [this](AsyncWebServerRequest* request) {
+    server.on(EP_LOGIN, HTTP_GET, [this](AsyncWebServerRequest* request) {
         if (lock()) { lastActivityMillis = millis(); unlock(); }
         handleRoot(request);
     });
 
     // ---- Device info for login ----
-    server.on("/device_info", HTTP_GET,
+    server.on(EP_DEVICE_INFO, HTTP_GET,
         [](AsyncWebServerRequest* request) {
             StaticJsonDocument<256> doc;
             doc["deviceId"] = CONF->GetString(DEV_ID_KEY, "");
@@ -882,15 +1030,14 @@ void WiFiManager::registerRoutes_() {
             doc["hw"]       = CONF->GetString(DEV_HW_KEY, DEVICE_HW_VERSION);
             String json;
             serializeJson(doc, json);
-            request->send(200, "application/json", json);
+            request->send(200, CT_APP_JSON, json);
         }
     );
 
     // ---- Heartbeat ----
-    server.on("/heartbeat", HTTP_GET, [this](AsyncWebServerRequest* request) {
+    server.on(EP_HEARTBEAT, HTTP_GET, [this](AsyncWebServerRequest* request) {
         if (!isAuthenticated(request)) {
             BUZZ->bipFault();
-            request->redirect("http://powerboard.local/login");
             return;
         }
         if (lock()) {
@@ -898,11 +1045,11 @@ void WiFiManager::registerRoutes_() {
             keepAlive = true;
             unlock();
         }
-        request->send(200, "text/plain", "alive");
+        request->send(200, CT_TEXT_PLAIN, RESP_ALIVE);
     });
 
     // ---- Login connect ----
-    server.on("/connect", HTTP_POST,
+    server.on(EP_CONNECT, HTTP_POST,
         [this](AsyncWebServerRequest* request) {},
         nullptr,
         [this](AsyncWebServerRequest* request,
@@ -919,8 +1066,8 @@ void WiFiManager::registerRoutes_() {
             DynamicJsonDocument doc(512);
             if (deserializeJson(doc, body)) {
                 body = "";
-                request->send(400, "application/json",
-                              "{\"error\":\"Invalid JSON\"}");
+                request->send(400, CT_APP_JSON,
+                              RESP_ERR_INVALID_JSON);
                 return;
             }
             body = "";
@@ -928,14 +1075,14 @@ void WiFiManager::registerRoutes_() {
             const String username = doc["username"] | "";
             const String password = doc["password"] | "";
             if (username.isEmpty() || password.isEmpty()) {
-                request->send(400, "application/json",
-                              "{\"error\":\"Missing fields\"}");
+                request->send(400, CT_APP_JSON,
+                              RESP_ERR_MISSING_FIELDS);
                 return;
             }
 
             if (wifiStatus != WiFiStatus::NotConnected) {
-                request->send(403, "application/json",
-                              "{\"error\":\"Already connected\"}");
+                request->send(403, CT_APP_JSON,
+                              RESP_ERR_ALREADY_CONNECTED);
                 return;
             }
 
@@ -946,26 +1093,44 @@ void WiFiManager::registerRoutes_() {
 
             if (username == adminUser && password == adminPass) {
                 BUZZ->successSound();
+                const String token =
+                    issueSessionToken_(request->client()->remoteIP());
                 onAdminConnected();
                 RGB->postOverlay(OverlayEvent::WEB_ADMIN_ACTIVE);
-                request->redirect("/admin.html");
+
+                StaticJsonDocument<128> resp;
+                resp["ok"] = true;
+                resp["role"] = "admin";
+                resp["token"] = token;
+                String json;
+                serializeJson(resp, json);
+                request->send(200, CT_APP_JSON, json);
                 return;
             }
             if (username == userUser && password == userPass) {
                 BUZZ->successSound();
+                const String token =
+                    issueSessionToken_(request->client()->remoteIP());
                 onUserConnected();
                 RGB->postOverlay(OverlayEvent::WEB_USER_ACTIVE);
-                request->redirect("/user.html");
+
+                StaticJsonDocument<128> resp;
+                resp["ok"] = true;
+                resp["role"] = "user";
+                resp["token"] = token;
+                String json;
+                serializeJson(resp, json);
+                request->send(200, CT_APP_JSON, json);
                 return;
             }
 
             BUZZ->bipFault();
-            request->redirect("/login_failed.html");
+            request->send(401, CT_APP_JSON, RESP_ERR_BAD_PASSWORD);
         }
     );
 
     // ---- Session history (JSON) ----
-    server.on("/session_history", HTTP_GET,
+    server.on(EP_SESSION_HISTORY, HTTP_GET,
         [this](AsyncWebServerRequest* request) {
             if (!isAuthenticated(request)) return;
             if (lock()) { lastActivityMillis = millis(); unlock(); }
@@ -973,7 +1138,7 @@ void WiFiManager::registerRoutes_() {
             if (SPIFFS.begin(false) && SPIFFS.exists(POWERTRACKER_HISTORY_FILE)) {
                 request->send(SPIFFS,
                               POWERTRACKER_HISTORY_FILE,
-                              "application/json");
+                              CT_APP_JSON);
                 return;
             }
 
@@ -995,44 +1160,113 @@ void WiFiManager::registerRoutes_() {
 
             String json;
             serializeJson(doc, json);
-            request->send(200, "application/json", json);
+            request->send(200, CT_APP_JSON, json);
         }
     );
 
     // ---- Device log ----
-    server.on("/device_log", HTTP_GET,
+    server.on(EP_DEVICE_LOG, HTTP_GET,
         [this](AsyncWebServerRequest* request) {
             if (!isAuthenticated(request)) return;
             if (lock()) { lastActivityMillis = millis(); unlock(); }
 
             AsyncResponseStream* response =
-                request->beginResponseStream("text/plain");
+                request->beginResponseStream(CT_TEXT_PLAIN);
             Debug::writeMemoryLog(*response);
             request->send(response);
         }
     );
 
-    server.on("/device_log_clear", HTTP_POST,
+    server.on(EP_DEVICE_LOG_CLEAR, HTTP_POST,
         [this](AsyncWebServerRequest* request) {
             if (!isAuthenticated(request)) return;
             if (lock()) { lastActivityMillis = millis(); unlock(); }
 
             Debug::clearMemoryLog();
-            request->send(200, "application/json", "{\"ok\":true}");
+            request->send(200, CT_APP_JSON, RESP_OK_TRUE);
+        }
+    );
+
+    // ---- Access Point settings ----
+    server.on(EP_AP_CONFIG, HTTP_POST,
+        [this](AsyncWebServerRequest* request) {},
+        nullptr,
+        [this](AsyncWebServerRequest* request,
+               uint8_t* data,
+               size_t len,
+               size_t index,
+               size_t total)
+        {
+            if (!isAuthenticated(request)) return;
+            if (!isAdminConnected()) {
+                request->send(403, CT_APP_JSON,
+                              RESP_ERR_NOT_AUTHENTICATED);
+                return;
+            }
+            if (lock()) { lastActivityMillis = millis(); unlock(); }
+
+            static String body;
+            if (index == 0) body = "";
+            body += String((char*)data, len);
+            if (index + len != total) return;
+
+            if (!isAuthenticated(request)) {
+                body = "";
+                return;
+            }
+
+            DynamicJsonDocument doc(256);
+            if (deserializeJson(doc, body)) {
+                body = "";
+                request->send(400, CT_APP_JSON,
+                              RESP_ERR_INVALID_JSON);
+                return;
+            }
+            body = "";
+
+            const String newSsid = doc["apSSID"] | "";
+            const String newPass = doc["apPassword"] | "";
+
+            bool changed = false;
+            if (newSsid.length()) {
+                const String current =
+                    CONF->GetString(DEVICE_WIFI_HOTSPOT_NAME_KEY,
+                                    DEVICE_WIFI_HOTSPOT_NAME);
+                if (newSsid != current) {
+                    CONF->PutString(DEVICE_WIFI_HOTSPOT_NAME_KEY, newSsid);
+                    changed = true;
+                }
+            }
+            if (newPass.length()) {
+                const String current =
+                    CONF->GetString(DEVICE_AP_AUTH_PASS_KEY,
+                                    DEVICE_AP_AUTH_PASS_DEFAULT);
+                if (newPass != current) {
+                    CONF->PutString(DEVICE_AP_AUTH_PASS_KEY, newPass);
+                    changed = true;
+                }
+            }
+
+            request->send(200, CT_APP_JSON,
+                          RESP_STATUS_OK_APPLIED);
+
+            if (changed) {
+                CONF->RestartSysDelayDown(3000);
+            }
         }
     );
 
     // ---- Calibration recorder status ----
-    server.on("/calib_status", HTTP_GET,
+    server.on(EP_CALIB_STATUS, HTTP_GET,
         [this](AsyncWebServerRequest* request) {
             if (!isAuthenticated(request)) return;
             if (lock()) { lastActivityMillis = millis(); unlock(); }
 
             const CalibrationRecorder::Meta meta = CALIB->getMeta();
             const char* modeStr =
-                (meta.mode == CalibrationRecorder::Mode::Ntc)   ? "ntc" :
-                (meta.mode == CalibrationRecorder::Mode::Model) ? "model" :
-                "none";
+                (meta.mode == CalibrationRecorder::Mode::Ntc)   ? MODE_NTC :
+                (meta.mode == CalibrationRecorder::Mode::Model) ? MODE_MODEL :
+                MODE_NONE;
 
             StaticJsonDocument<256> doc;
             doc["running"]     = meta.running;
@@ -1057,12 +1291,12 @@ void WiFiManager::registerRoutes_() {
             }
             String json;
             serializeJson(doc, json);
-            request->send(200, "application/json", json);
+            request->send(200, CT_APP_JSON, json);
         }
     );
 
     // ---- Calibration recorder start ----
-    server.on("/calib_start", HTTP_POST,
+    server.on(EP_CALIB_START, HTTP_POST,
         [this](AsyncWebServerRequest* request) {},
         nullptr,
         [this](AsyncWebServerRequest* request,
@@ -1082,8 +1316,8 @@ void WiFiManager::registerRoutes_() {
             DynamicJsonDocument doc(512);
             if (deserializeJson(doc, body)) {
                 body = "";
-                request->send(400, "application/json",
-                              "{\"error\":\"Invalid JSON\"}");
+                request->send(400, CT_APP_JSON,
+                              RESP_ERR_INVALID_JSON);
                 return;
             }
             body = "";
@@ -1095,28 +1329,28 @@ void WiFiManager::registerRoutes_() {
                 StaticJsonDocument<192> err;
                 err["error"] = error;
                 if (detail.length() > 0) err["detail"] = detail;
-                if (state) err["state"] = state;
+                if (state) err[SSE_EVENT_STATE] = state;
                 String json;
                 serializeJson(err, json);
-                request->send(status, "application/json", json);
+                request->send(status, CT_APP_JSON, json);
             };
 
             String modeStr = doc["mode"] | "";
             modeStr.toLowerCase();
             CalibrationRecorder::Mode mode = CalibrationRecorder::Mode::None;
-            if (modeStr == "ntc") mode = CalibrationRecorder::Mode::Ntc;
-            else if (modeStr == "model") mode = CalibrationRecorder::Mode::Model;
+            if (modeStr == MODE_NTC) mode = CalibrationRecorder::Mode::Ntc;
+            else if (modeStr == MODE_MODEL) mode = CalibrationRecorder::Mode::Model;
 
             if (mode == CalibrationRecorder::Mode::None) {
-                sendCalibError(400, "invalid_mode", "", nullptr);
+                sendCalibError(400, ERR_INVALID_MODE, "", nullptr);
                 return;
             }
             if (!BUS_SAMPLER) {
-                sendCalibError(503, "bus_sampler_missing", "", nullptr);
+                sendCalibError(503, ERR_BUS_SAMPLER_MISSING, "", nullptr);
                 return;
             }
             if (CALIB && CALIB->isRunning()) {
-                sendCalibError(409, "already_running", "", nullptr);
+                sendCalibError(409, ERR_ALREADY_RUNNING, "", nullptr);
                 return;
             }
 
@@ -1133,14 +1367,16 @@ void WiFiManager::registerRoutes_() {
             if (epoch > 0 && RTC) {
                 RTC->setUnixTime(epoch);
             }
-            int defaultWire = CONF->GetInt(NTC_GATE_INDEX_KEY, DEFAULT_NTC_GATE_INDEX);
-            if (defaultWire < 1) defaultWire = 1;
-            if (defaultWire > HeaterManager::kWireCount) defaultWire = HeaterManager::kWireCount;
-            uint8_t wireIndex = doc["wire_index"] | defaultWire;
+            const uint8_t ntcGate = getNtcGateIndexFromConfig();
+            uint8_t wireIndex = doc["wire_index"] | ntcGate;
+            if (mode == CalibrationRecorder::Mode::Model ||
+                mode == CalibrationRecorder::Mode::Ntc) {
+                wireIndex = ntcGate;
+            }
 
             const bool ok = CALIB->start(mode, intervalMs, maxSamples, targetC, wireIndex);
             if (!ok) {
-                sendCalibError(500, "start_failed", "", nullptr);
+                sendCalibError(500, ERR_START_FAILED, "", nullptr);
                 return;
             }
 
@@ -1158,24 +1394,25 @@ void WiFiManager::registerRoutes_() {
 
                 if (!DEVTRAN) {
                     CALIB->stop();
-                    sendCalibError(503, "device_transport_missing", "", nullptr);
+                    sendCalibError(503, ERR_DEVICE_TRANSPORT_MISSING, "", nullptr);
                     return;
                 }
-                const Device::StateSnapshot snap = DEVTRAN->getStateSnapshot();
-                if (snap.state != DeviceState::Idle) {
+                DeviceState lastState = DeviceState::Shutdown;
+                if (!waitForIdle(DEVTRAN, kCalibWakeTimeoutMs, lastState)) {
                     CALIB->stop();
-                    sendCalibError(409, "device_not_idle", "", stateName(snap.state));
+                    String detail = (lastState == DeviceState::Shutdown) ? "wake_timeout" : "";
+                    sendCalibError(409, ERR_DEVICE_NOT_IDLE, detail, stateName(lastState));
                     return;
                 }
                 if (!WIRE) {
                     CALIB->stop();
-                    sendCalibError(503, "wire_subsystem_missing", "", nullptr);
+                    sendCalibError(503, ERR_WIRE_SUBSYSTEM_MISSING, "", nullptr);
                     return;
                 }
                 if (CONF && DEVICE) {
                     if (!DEVICE->getWireConfigStore().getAccessFlag(wireIndex)) {
                         CALIB->stop();
-                        sendCalibError(403, "wire_access_blocked",
+                        sendCalibError(403, ERR_WIRE_ACCESS_BLOCKED,
                                        String("wire=") + String(wireIndex), nullptr);
                         return;
                     }
@@ -1183,7 +1420,7 @@ void WiFiManager::registerRoutes_() {
                 auto wi = WIRE->getWireInfo(wireIndex);
                 if (!wi.connected) {
                     CALIB->stop();
-                    sendCalibError(400, "wire_not_connected",
+                    sendCalibError(400, ERR_WIRE_NOT_CONNECTED,
                                    String("wire=") + String(wireIndex), nullptr);
                     return;
                 }
@@ -1191,13 +1428,13 @@ void WiFiManager::registerRoutes_() {
                                                      wireIndex,
                                                      Device::EnergyRunPurpose::ModelCal)) {
                     CALIB->stop();
-                    sendCalibError(500, "energy_start_failed", "", nullptr);
+                    sendCalibError(500, ERR_ENERGY_START_FAILED, "", nullptr);
                     return;
                 }
                 if (s_modelCalTask != nullptr) {
                     DEVTRAN->stopWireTargetTest();
                     CALIB->stop();
-                    sendCalibError(409, "calibration_busy", "", nullptr);
+                    sendCalibError(409, ERR_CALIBRATION_BUSY, "", nullptr);
                     return;
                 }
                 s_modelCalAbort = false;
@@ -1205,7 +1442,7 @@ void WiFiManager::registerRoutes_() {
                 if (!args) {
                     DEVTRAN->stopWireTargetTest();
                     CALIB->stop();
-                    sendCalibError(500, "alloc_failed", "", nullptr);
+                    sendCalibError(500, ERR_ALLOC_FAILED, "", nullptr);
                     return;
                 }
                 args->targetC = runTargetC;
@@ -1226,18 +1463,18 @@ void WiFiManager::registerRoutes_() {
                     s_modelCalTask = nullptr;
                     DEVTRAN->stopWireTargetTest();
                     CALIB->stop();
-                    sendCalibError(500, "task_failed", "", nullptr);
+                    sendCalibError(500, ERR_TASK_FAILED, "", nullptr);
                     return;
                 }
             }
 
-            request->send(200, "application/json",
-                          "{\"status\":\"ok\",\"running\":true}");
+            request->send(200, CT_APP_JSON,
+                          RESP_STATUS_OK_RUNNING_TRUE);
         }
     );
 
     // ---- Calibration recorder stop ----
-    server.on("/calib_stop", HTTP_POST,
+    server.on(EP_CALIB_STOP, HTTP_POST,
         [this](AsyncWebServerRequest* request) {},
         nullptr,
         [this](AsyncWebServerRequest* request,
@@ -1268,14 +1505,14 @@ void WiFiManager::registerRoutes_() {
             if (DEVTRAN) {
                 DEVTRAN->stopWireTargetTest();
             }
-            String json = String("{\"status\":\"ok\",\"running\":false,\"saved\":") +
-                          (saved ? "true" : "false") + "}";
-            request->send(200, "application/json", json);
+            String json = String(RESP_STATUS_OK_RUNNING_FALSE_SAVED_PREFIX) +
+                          (saved ? JSON_TRUE : JSON_FALSE) + RESP_STATE_JSON_SUFFIX;
+            request->send(200, CT_APP_JSON, json);
         }
     );
 
     // ---- Calibration recorder clear ----
-    server.on("/calib_clear", HTTP_POST,
+    server.on(EP_CALIB_CLEAR, HTTP_POST,
         [this](AsyncWebServerRequest* request) {},
         nullptr,
         [this](AsyncWebServerRequest* request,
@@ -1330,15 +1567,16 @@ void WiFiManager::registerRoutes_() {
                 }
             }
 
-            String json = String("{\"status\":\"ok\",\"cleared\":true,\"file_removed\":") +
-                          (removed ? "true" : "false") +
-                          ",\"history_removed\":" + String(removedCount) + "}";
-            request->send(200, "application/json", json);
+            String json = String(RESP_STATUS_OK_CLEARED_FILE_PREFIX) +
+                          (removed ? JSON_TRUE : JSON_FALSE) +
+                          RESP_HISTORY_REMOVED_PREFIX + String(removedCount) +
+                          RESP_STATE_JSON_SUFFIX;
+            request->send(200, CT_APP_JSON, json);
         }
     );
 
     // ---- Calibration recorder data (paged) ----
-    server.on("/calib_data", HTTP_GET,
+    server.on(EP_CALIB_DATA, HTTP_GET,
         [this](AsyncWebServerRequest* request) {
             if (!isAuthenticated(request)) return;
             if (lock()) { lastActivityMillis = millis(); unlock(); }
@@ -1360,9 +1598,9 @@ void WiFiManager::registerRoutes_() {
             DynamicJsonDocument doc(4096 + count * 128);
             JsonObject m = doc.createNestedObject("meta");
             const char* modeStr =
-                (meta.mode == CalibrationRecorder::Mode::Ntc)   ? "ntc" :
-                (meta.mode == CalibrationRecorder::Mode::Model) ? "model" :
-                "none";
+                (meta.mode == CalibrationRecorder::Mode::Ntc)   ? MODE_NTC :
+                (meta.mode == CalibrationRecorder::Mode::Model) ? MODE_MODEL :
+                MODE_NONE;
             m["mode"]        = modeStr;
             m["running"]     = meta.running;
             m["count"]       = total;
@@ -1402,26 +1640,26 @@ void WiFiManager::registerRoutes_() {
 
             String json;
             serializeJson(doc, json);
-            request->send(200, "application/json", json);
+            request->send(200, CT_APP_JSON, json);
         }
     );
 
     // ---- Calibration recorder file (json) ----
-    server.on("/calib_file", HTTP_GET,
+    server.on(EP_CALIB_FILE, HTTP_GET,
         [this](AsyncWebServerRequest* request) {
             if (!isAuthenticated(request)) return;
             if (lock()) { lastActivityMillis = millis(); unlock(); }
 
             if (SPIFFS.begin(false) && SPIFFS.exists(CALIB_MODEL_JSON_FILE)) {
-                request->send(SPIFFS, CALIB_MODEL_JSON_FILE, "application/json");
+                request->send(SPIFFS, CALIB_MODEL_JSON_FILE, CT_APP_JSON);
             } else {
-                request->send(404, "application/json", "{\"error\":\"not_found\"}");
+                request->send(404, CT_APP_JSON, RESP_ERR_NOT_FOUND);
             }
         }
     );
 
     // ---- Calibration history list (json) ----
-    server.on("/calib_history_list", HTTP_GET,
+    server.on(EP_CALIB_HISTORY_LIST, HTTP_GET,
         [this](AsyncWebServerRequest* request) {
             if (!isAuthenticated(request)) return;
             if (lock()) { lastActivityMillis = millis(); unlock(); }
@@ -1471,44 +1709,44 @@ void WiFiManager::registerRoutes_() {
 
             String json;
             serializeJson(doc, json);
-            request->send(200, "application/json", json);
+            request->send(200, CT_APP_JSON, json);
         }
     );
 
     // ---- Calibration history file (json) ----
-    server.on("/calib_history_file", HTTP_GET,
+    server.on(EP_CALIB_HISTORY_FILE, HTTP_GET,
         [this](AsyncWebServerRequest* request) {
             if (!isAuthenticated(request)) return;
             if (lock()) { lastActivityMillis = millis(); unlock(); }
 
             if (!request->hasParam("name")) {
-                request->send(400, "application/json", "{\"error\":\"missing_name\"}");
+                request->send(400, CT_APP_JSON, RESP_ERR_MISSING_NAME);
                 return;
             }
             String name = request->getParam("name")->value();
             String fullName;
             String baseName;
             if (!normalizeHistoryPath(name, fullName, baseName, nullptr)) {
-                request->send(400, "application/json", "{\"error\":\"invalid_name\"}");
+                request->send(400, CT_APP_JSON, RESP_ERR_INVALID_NAME);
                 return;
             }
             if (SPIFFS.begin(false)) {
                 if (SPIFFS.exists(fullName)) {
-                    request->send(SPIFFS, fullName, "application/json");
+                    request->send(SPIFFS, fullName, CT_APP_JSON);
                     return;
                 }
                 String legacyPath = "/" + baseName;
                 if (legacyPath != fullName && SPIFFS.exists(legacyPath)) {
-                    request->send(SPIFFS, legacyPath, "application/json");
+                    request->send(SPIFFS, legacyPath, CT_APP_JSON);
                     return;
                 }
             }
-            request->send(404, "application/json", "{\"error\":\"not_found\"}");
+            request->send(404, CT_APP_JSON, RESP_ERR_NOT_FOUND);
         }
     );
 
     // ---- Calibration model suggestions (compute) ----
-    server.on("/calib_pi_suggest", HTTP_GET,
+    server.on(EP_CALIB_PI_SUGGEST, HTTP_GET,
         [this](AsyncWebServerRequest* request) {
             if (!isAuthenticated(request)) return;
             if (lock()) { lastActivityMillis = millis(); unlock(); }
@@ -1522,12 +1760,12 @@ void WiFiManager::registerRoutes_() {
 
             String json;
             serializeJson(doc, json);
-            request->send(200, "application/json", json);
+            request->send(200, CT_APP_JSON, json);
         }
     );
 
     // ---- Persist thermal model params ----
-    server.on("/calib_pi_save", HTTP_POST,
+    server.on(EP_CALIB_PI_SAVE, HTTP_POST,
         [this](AsyncWebServerRequest* request) {},
         nullptr,
         [this](AsyncWebServerRequest* request,
@@ -1547,8 +1785,8 @@ void WiFiManager::registerRoutes_() {
             DynamicJsonDocument doc(512);
             if (deserializeJson(doc, body)) {
                 body = "";
-                request->send(400, "application/json",
-                              "{\"error\":\"Invalid JSON\"}");
+                request->send(400, CT_APP_JSON,
+                              RESP_ERR_INVALID_JSON);
                 return;
             }
             body = "";
@@ -1560,21 +1798,21 @@ void WiFiManager::registerRoutes_() {
 
             THERMAL_EST->persist(r);
 
-            request->send(200, "application/json",
-                          "{\"status\":\"ok\",\"applied\":true}");
+            request->send(200, CT_APP_JSON,
+                          RESP_STATUS_OK_APPLIED);
         }
     );
 
     // ---- Wire target test status ----
-    server.on("/wire_test_status", HTTP_GET,
+    server.on(EP_WIRE_TEST_STATUS, HTTP_GET,
         [this](AsyncWebServerRequest* request) {
             if (!isAuthenticated(request)) return;
             if (lock()) { lastActivityMillis = millis(); unlock(); }
 
             Device::WireTargetStatus st{};
             if (!DEVTRAN || !DEVTRAN->getWireTargetStatus(st)) {
-                request->send(503, "application/json",
-                              "{\"error\":\"status_unavailable\"}");
+                request->send(503, CT_APP_JSON,
+                              RESP_ERR_STATUS_UNAVAILABLE);
                 return;
             }
 
@@ -1587,24 +1825,24 @@ void WiFiManager::registerRoutes_() {
             doc["packet_ms"] = st.packetMs;
             doc["frame_ms"] = st.frameMs;
             doc["updated_ms"] = st.updatedMs;
-            doc["mode"] = "energy";
-            const char* purpose = "none";
+            doc["mode"] = MODE_ENERGY;
+            const char* purpose = PURPOSE_NONE;
             switch (st.purpose) {
-                case Device::EnergyRunPurpose::WireTest: purpose = "wire_test"; break;
-                case Device::EnergyRunPurpose::ModelCal: purpose = "model_cal"; break;
-                case Device::EnergyRunPurpose::NtcCal:   purpose = "ntc_cal"; break;
+                case Device::EnergyRunPurpose::WireTest: purpose = PURPOSE_WIRE_TEST; break;
+                case Device::EnergyRunPurpose::ModelCal: purpose = PURPOSE_MODEL_CAL; break;
+                case Device::EnergyRunPurpose::NtcCal:   purpose = PURPOSE_NTC_CAL; break;
                 default: break;
             }
             doc["purpose"] = purpose;
 
             String json;
             serializeJson(doc, json);
-            request->send(200, "application/json", json);
+            request->send(200, CT_APP_JSON, json);
         }
     );
 
     // ---- Wire target test start ----
-    server.on("/wire_test_start", HTTP_POST,
+    server.on(EP_WIRE_TEST_START, HTTP_POST,
         [this](AsyncWebServerRequest* request) {},
         nullptr,
         [this](AsyncWebServerRequest* request,
@@ -1624,32 +1862,44 @@ void WiFiManager::registerRoutes_() {
             DynamicJsonDocument doc(256);
             if (deserializeJson(doc, body)) {
                 body = "";
-                request->send(400, "application/json",
-                              "{\"error\":\"Invalid JSON\"}");
+                request->send(400, CT_APP_JSON,
+                              RESP_ERR_INVALID_JSON);
                 return;
             }
             body = "";
 
             float targetC = doc["target_c"].as<float>();
             if (!isfinite(targetC) || targetC <= 0.0f) {
-                request->send(400, "application/json",
-                              "{\"error\":\"invalid_target\"}");
+                request->send(400, CT_APP_JSON,
+                              RESP_ERR_INVALID_TARGET);
                 return;
             }
 
-            if (!DEVTRAN || !DEVTRAN->startWireTargetTest(targetC, 0)) {
-                request->send(400, "application/json",
-                              "{\"error\":\"start_failed\"}");
+            if (!DEVTRAN) {
+                request->send(503, CT_APP_JSON,
+                              RESP_ERR_DEVICE_MISSING);
+                return;
+            }
+            const uint8_t wireIndex = getNtcGateIndexFromConfig();
+            DeviceState lastState = DeviceState::Shutdown;
+            if (!waitForIdle(DEVTRAN, kCalibWakeTimeoutMs, lastState)) {
+                request->send(409, CT_APP_JSON,
+                              RESP_ERR_DEVICE_NOT_IDLE);
+                return;
+            }
+            if (!DEVTRAN->startWireTargetTest(targetC, wireIndex)) {
+                request->send(400, CT_APP_JSON,
+                              RESP_ERR_START_FAILED);
                 return;
             }
 
-            request->send(200, "application/json",
-                          "{\"status\":\"ok\",\"running\":true}");
+            request->send(200, CT_APP_JSON,
+                          RESP_STATUS_OK_RUNNING_TRUE);
         }
     );
 
     // ---- Wire target test stop ----
-    server.on("/wire_test_stop", HTTP_POST,
+    server.on(EP_WIRE_TEST_STOP, HTTP_POST,
         [this](AsyncWebServerRequest* request) {},
         nullptr,
         [this](AsyncWebServerRequest* request,
@@ -1665,285 +1915,12 @@ void WiFiManager::registerRoutes_() {
             if (DEVTRAN) {
                 DEVTRAN->stopWireTargetTest();
             }
-            request->send(200, "application/json",
-                          "{\"status\":\"ok\",\"running\":false}");
+            request->send(200, CT_APP_JSON,
+                          RESP_STATUS_OK_RUNNING_FALSE);
         }
     );
 
-    // ---- NTC calibrate (heat wire, fit Steinhart-Hart) ----
-    server.on("/ntc_calibrate", HTTP_POST,
-        [this](AsyncWebServerRequest* request) {},
-        nullptr,
-        [this](AsyncWebServerRequest* request,
-               uint8_t* data,
-               size_t len,
-               size_t index,
-               size_t total)
-        {
-            if (!isAuthenticated(request)) return;
-            if (lock()) { lastActivityMillis = millis(); unlock(); }
-
-            static String body;
-            if (index == 0) body = "";
-            body += String((char*)data, len);
-            if (index + len != total) return;
-
-            DynamicJsonDocument doc(256);
-            if (deserializeJson(doc, body)) {
-                body = "";
-                request->send(400, "application/json",
-                              "{\"error\":\"Invalid JSON\"}");
-                return;
-            }
-            body = "";
-
-            if (!DEVICE || !DEVTRAN || !NTC) {
-                request->send(400, "application/json",
-                              "{\"error\":\"device_missing\"}");
-                return;
-            }
-
-            NtcCalStatus cur = ntcCalGetStatus();
-            if (cur.running || s_ntcCalTask != nullptr) {
-                request->send(409, "application/json",
-                              "{\"error\":\"calibration_busy\"}");
-                return;
-            }
-
-            float targetC = NAN;
-            if (!doc["target_c"].isNull()) {
-                targetC = doc["target_c"].as<float>();
-            } else if (!doc["ref_temp_c"].isNull()) {
-                targetC = doc["ref_temp_c"].as<float>();
-            }
-            if (!isfinite(targetC)) targetC = kNtcCalTargetDefaultC;
-            if (targetC < 40.0f) targetC = 40.0f;
-            if (targetC > 130.0f) targetC = 130.0f;
-
-            uint8_t wireIndex = doc["wire_index"] | 0;
-            if (wireIndex == 0 && CONF) {
-                int idx = CONF->GetInt(NTC_GATE_INDEX_KEY, DEFAULT_NTC_GATE_INDEX);
-                if (idx < 1) idx = 1;
-                if (idx > HeaterManager::kWireCount) idx = HeaterManager::kWireCount;
-                wireIndex = static_cast<uint8_t>(idx);
-            }
-            if (wireIndex < 1) wireIndex = 1;
-            if (wireIndex > HeaterManager::kWireCount) wireIndex = HeaterManager::kWireCount;
-
-            uint32_t sampleMs = doc["sample_ms"] | kNtcCalSampleMsDefault;
-            if (sampleMs < 200) sampleMs = 200;
-            if (sampleMs > 2000) sampleMs = 2000;
-
-            uint32_t timeoutMs = doc["timeout_ms"] | kNtcCalTimeoutMs;
-            if (timeoutMs < 60000) timeoutMs = 60000;
-            if (timeoutMs > 30 * 60 * 1000) timeoutMs = 30 * 60 * 1000;
-
-            if (DEVICE->getState() != DeviceState::Idle) {
-                request->send(400, "application/json",
-                              "{\"error\":\"device_not_idle\"}");
-                return;
-            }
-
-            if (CONF && !DEVICE->getWireConfigStore().getAccessFlag(wireIndex)) {
-                request->send(400, "application/json",
-                              "{\"error\":\"wire_access_blocked\"}");
-                return;
-            }
-
-            if (!WIRE) {
-                request->send(400, "application/json",
-                              "{\"error\":\"wire_subsystem_missing\"}");
-                return;
-            }
-
-            WireInfo wi = WIRE->getWireInfo(wireIndex);
-            if (!wi.connected) {
-                request->send(400, "application/json",
-                              "{\"error\":\"wire_not_connected\"}");
-                return;
-            }
-
-            const float runTargetC = targetC;
-            if (!DEVTRAN->startEnergyCalibration(runTargetC,
-                                                 wireIndex,
-                                                 Device::EnergyRunPurpose::NtcCal)) {
-                request->send(400, "application/json",
-                              "{\"error\":\"start_failed\"}");
-                return;
-            }
-
-            NtcCalTaskArgs* args = new NtcCalTaskArgs();
-            if (!args) {
-                DEVTRAN->stopWireTargetTest();
-                request->send(500, "application/json",
-                              "{\"error\":\"alloc_failed\"}");
-                return;
-            }
-            args->targetC = targetC;
-            args->wireIndex = wireIndex;
-            args->sampleMs = sampleMs;
-            args->timeoutMs = timeoutMs;
-            args->startMs = millis();
-
-            ntcCalStartStatus(*args);
-
-            BaseType_t ok = xTaskCreate(
-                ntcCalTask,
-                "NtcCal",
-                4096,
-                args,
-                2,
-                &s_ntcCalTask
-            );
-            if (ok != pdPASS) {
-                delete args;
-                DEVTRAN->stopWireTargetTest();
-                ntcCalSetError("task_failed", 0);
-                request->send(500, "application/json",
-                              "{\"error\":\"task_failed\"}");
-                return;
-            }
-
-            StaticJsonDocument<256> out;
-            out["status"] = "running";
-            out["target_c"] = targetC;
-            out["wire_index"] = wireIndex;
-            out["sample_ms"] = sampleMs;
-            String json;
-            serializeJson(out, json);
-            request->send(200, "application/json", json);
-        }
-    );
-
-    // ---- NTC beta calibration (single-point) ----
-    server.on("/ntc_beta_calibrate", HTTP_POST,
-        [this](AsyncWebServerRequest* request) {},
-        nullptr,
-        [this](AsyncWebServerRequest* request,
-               uint8_t* data,
-               size_t len,
-               size_t index,
-               size_t total)
-        {
-            if (!isAuthenticated(request)) return;
-            if (lock()) { lastActivityMillis = millis(); unlock(); }
-
-            static String body;
-            if (index == 0) body = "";
-            body += String((char*)data, len);
-            if (index + len != total) return;
-
-            DynamicJsonDocument doc(256);
-            if (deserializeJson(doc, body)) {
-                body = "";
-                request->send(400, "application/json",
-                              "{\"error\":\"Invalid JSON\"}");
-                return;
-            }
-            body = "";
-
-            if (!NTC) {
-                request->send(503, "application/json",
-                              "{\"error\":\"ntc_missing\"}");
-                return;
-            }
-
-            NtcCalStatus cur = ntcCalGetStatus();
-            if (cur.running || s_ntcCalTask != nullptr) {
-                request->send(409, "application/json",
-                              "{\"error\":\"calibration_busy\"}");
-                return;
-            }
-
-            float refTempC = NAN;
-            if (!doc["ref_temp_c"].isNull()) {
-                refTempC = doc["ref_temp_c"].as<float>();
-            } else if (!doc["target_c"].isNull()) {
-                refTempC = doc["target_c"].as<float>();
-            }
-            if (!isfinite(refTempC) && DEVICE && DEVICE->tempSensor) {
-                refTempC = DEVICE->tempSensor->getHeatsinkTemp();
-            }
-            if (!isfinite(refTempC)) {
-                request->send(400, "application/json",
-                              "{\"error\":\"invalid_ref_temp\"}");
-                return;
-            }
-            if (refTempC < -40.0f) refTempC = -40.0f;
-            if (refTempC > 200.0f) refTempC = 200.0f;
-
-            if (!NTC->calibrateAtTempC(refTempC)) {
-                request->send(400, "application/json",
-                              "{\"error\":\"calibration_failed\"}");
-                return;
-            }
-            NTC->setModel(NtcSensor::Model::Beta, true);
-
-            StaticJsonDocument<256> out;
-            out["status"] = "ok";
-            out["ref_temp_c"] = refTempC;
-            out["beta"] = NTC->getBeta();
-            out["r0"] = NTC->getR0();
-            String json;
-            serializeJson(out, json);
-            request->send(200, "application/json", json);
-        }
-    );
-
-    // ---- NTC calibration status ----
-    server.on("/ntc_cal_status", HTTP_GET,
-        [this](AsyncWebServerRequest* request) {
-            if (!isAuthenticated(request)) return;
-            if (lock()) { lastActivityMillis = millis(); unlock(); }
-
-            NtcCalStatus st = ntcCalGetStatus();
-            StaticJsonDocument<320> doc;
-            doc["running"] = st.running;
-            doc["done"] = st.done;
-            doc["error"] = st.error ? st.errorMsg : "";
-            if (isfinite(st.targetC)) doc["target_c"] = st.targetC;
-            if (isfinite(st.heatsinkC)) doc["heatsink_c"] = st.heatsinkC;
-            if (isfinite(st.ntcOhm)) doc["ntc_ohm"] = st.ntcOhm;
-            doc["samples"] = st.samples;
-            doc["sample_ms"] = st.sampleMs;
-            doc["elapsed_ms"] = st.elapsedMs;
-            doc["wire_index"] = st.wireIndex;
-            if (isfinite(st.shA)) doc["sh_a"] = st.shA;
-            if (isfinite(st.shB)) doc["sh_b"] = st.shB;
-            if (isfinite(st.shC)) doc["sh_c"] = st.shC;
-            String json;
-            serializeJson(doc, json);
-            request->send(200, "application/json", json);
-        }
-    );
-
-    // ---- NTC calibration stop ----
-    server.on("/ntc_cal_stop", HTTP_POST,
-        [this](AsyncWebServerRequest* request) {
-            if (!isAuthenticated(request)) return;
-            if (lock()) { lastActivityMillis = millis(); unlock(); }
-
-            if (!DEVTRAN) {
-                request->send(400, "application/json",
-                              "{\"error\":\"device_missing\"}");
-                return;
-            }
-
-            NtcCalStatus st = ntcCalGetStatus();
-            if (!st.running && s_ntcCalTask == nullptr) {
-                request->send(200, "application/json",
-                              "{\"status\":\"idle\"}");
-                return;
-            }
-
-            ntcCalRequestAbort();
-            DEVTRAN->stopWireTargetTest();
-            request->send(200, "application/json",
-                          "{\"status\":\"stopping\"}");
-        }
-    );
-
-    server.on("/History.json", HTTP_GET,
+    server.on(EP_HISTORY_JSON, HTTP_GET,
         [this](AsyncWebServerRequest* request) {
             if (!isAuthenticated(request)) return;
             if (lock()) { lastActivityMillis = millis(); unlock(); }
@@ -1951,15 +1928,15 @@ void WiFiManager::registerRoutes_() {
             if (SPIFFS.begin(false) && SPIFFS.exists(POWERTRACKER_HISTORY_FILE)) {
                 request->send(SPIFFS,
                               POWERTRACKER_HISTORY_FILE,
-                              "application/json");
+                              CT_APP_JSON);
             } else {
-                request->send(200, "application/json", "{\"history\":[]}");
+                request->send(200, CT_APP_JSON, RESP_HISTORY_EMPTY);
             }
         }
     );
 
     // ---- Disconnect ----
-    server.on("/disconnect", HTTP_POST,
+    server.on(EP_DISCONNECT, HTTP_POST,
         [](AsyncWebServerRequest* request) {},
         nullptr,
         [this](AsyncWebServerRequest* request,
@@ -1976,15 +1953,15 @@ void WiFiManager::registerRoutes_() {
             DynamicJsonDocument doc(256);
             if (deserializeJson(doc, body)) {
                 body = "";
-                request->send(400, "application/json",
-                              "{\"error\":\"Invalid JSON\"}");
+                request->send(400, CT_APP_JSON,
+                              RESP_ERR_INVALID_JSON);
                 return;
             }
             body = "";
 
             if ((String)(doc["action"] | "") != "disconnect") {
-                request->send(400, "application/json",
-                              "{\"error\":\"Invalid action\"}");
+                request->send(400, CT_APP_JSON,
+                              RESP_ERR_INVALID_ACTION);
                 return;
             }
 
@@ -1995,28 +1972,28 @@ void WiFiManager::registerRoutes_() {
                 unlock();
             }
             RGB->postOverlay(OverlayEvent::WIFI_LOST);
-            request->redirect("http://powerboard.local/login");
+            request->send(200, CT_APP_JSON, RESP_OK_TRUE);
         }
     );
 
     // ---- Monitor (uses snapshot) ----
-    server.on("/monitor", HTTP_GET,
+    server.on(EP_MONITOR, HTTP_GET,
         [this](AsyncWebServerRequest* request) {
             if (!isAuthenticated(request)) return;
             if (lock()) { lastActivityMillis = millis(); keepAlive = true; unlock(); }
 
             String json;
             if (!getMonitorJson(json)) {
-                request->send(503, "application/json",
-                              "{\"error\":\"snapshot_busy\"}");
+                request->send(503, CT_APP_JSON,
+                              RESP_ERR_SNAPSHOT_BUSY);
                 return;
             }
-            request->send(200, "application/json", json);
+            request->send(200, CT_APP_JSON, json);
         }
     );
 
     // ---- Last stop/error + recent events ----
-    server.on("/last_event", HTTP_GET,
+    server.on(EP_LAST_EVENT, HTTP_GET,
         [this](AsyncWebServerRequest* request) {
             if (!isAuthenticated(request)) return;
             if (lock()) { lastActivityMillis = millis(); unlock(); }
@@ -2029,7 +2006,7 @@ void WiFiManager::registerRoutes_() {
 
             StaticJsonDocument<3072> doc;
             const Device::StateSnapshot snap = DEVTRAN->getStateSnapshot();
-            doc["state"] = stateName(snap.state);
+            doc[SSE_EVENT_STATE] = stateName(snap.state);
 
             if (DEVICE) {
                 if (markRead) {
@@ -2083,12 +2060,12 @@ void WiFiManager::registerRoutes_() {
 
             String json;
             serializeJson(doc, json);
-            request->send(200, "application/json", json);
+            request->send(200, CT_APP_JSON, json);
         }
     );
 
     // ---- CONTROL (queued) ----
-    server.on("/control", HTTP_POST,
+    server.on(EP_CONTROL, HTTP_POST,
         [this](AsyncWebServerRequest* request) {},
         nullptr,
         [this](AsyncWebServerRequest* request,
@@ -2109,8 +2086,8 @@ void WiFiManager::registerRoutes_() {
             StaticJsonDocument<1024> doc;
             if (deserializeJson(doc, body)) {
                 body = "";
-                request->send(400, "application/json",
-                              "{\"error\":\"Invalid JSON\"}");
+                request->send(400, CT_APP_JSON,
+                              RESP_ERR_INVALID_JSON);
                 return;
             }
             body = "";
@@ -2140,6 +2117,7 @@ void WiFiManager::registerRoutes_() {
                 else if (target.startsWith("Access"))         { c.type = CTRL_ACCESS_BOOL;       c.i1 = target.substring(6).toInt(); c.b1 = value.as<bool>(); }
                 else if (target == "mode")                    { c.type = CTRL_SET_MODE;          c.b1 = value.as<bool>(); }
                 else if (target == "systemStart")             c.type = CTRL_SYSTEM_START;
+                else if (target == "systemWake")              c.type = CTRL_SYSTEM_WAKE;
                 else if (target == "systemShutdown")          c.type = CTRL_SYSTEM_SHUTDOWN;
                 else if (target == "fanSpeed")                { c.type = CTRL_FAN_SPEED;         c.i1 = constrain(value.as<int>(), 0, 100); }
                 else if (target == "buzzerMute")              { c.type = CTRL_BUZZER_MUTE;       c.b1 = value.as<bool>(); }
@@ -2154,20 +2132,44 @@ void WiFiManager::registerRoutes_() {
                     const String newSsid = value["wifiSSID"] | "";
                     const String newWifiPass = value["wifiPassword"] | "";
 
+                    const String storedUser = CONF->GetString(ADMIN_ID_KEY, DEFAULT_ADMIN_ID);
                     const String storedPass = CONF->GetString(ADMIN_PASS_KEY, DEFAULT_ADMIN_PASS);
+                    const String storedSsid = CONF->GetString(STA_SSID_KEY, DEFAULT_STA_SSID);
+                    const String storedWifiPass = CONF->GetString(STA_PASS_KEY, DEFAULT_STA_PASS);
                     if (current.length() && current != storedPass) {
-                        request->send(403, "application/json",
-                                      "{\"error\":\"bad_password\"}");
+                        request->send(403, CT_APP_JSON,
+                                      RESP_ERR_BAD_PASSWORD);
                         return;
                     }
 
-                    if (newUser.length()) CONF->PutString(ADMIN_ID_KEY, newUser);
-                    if (newPass.length()) CONF->PutString(ADMIN_PASS_KEY, newPass);
-                    if (newSsid.length()) CONF->PutString(STA_SSID_KEY, newSsid);
-                    if (newWifiPass.length()) CONF->PutString(STA_PASS_KEY, newWifiPass);
+                    bool sessionChanged = false;
+                    bool wifiChanged = false;
 
-                    request->send(200, "application/json",
-                                  "{\"status\":\"ok\",\"applied\":true}");
+                    if (newUser.length() && newUser != storedUser) {
+                        CONF->PutString(ADMIN_ID_KEY, newUser);
+                        sessionChanged = true;
+                    }
+                    if (newPass.length() && newPass != storedPass) {
+                        CONF->PutString(ADMIN_PASS_KEY, newPass);
+                        sessionChanged = true;
+                    }
+                    if (newSsid.length() && newSsid != storedSsid) {
+                        CONF->PutString(STA_SSID_KEY, newSsid);
+                        wifiChanged = true;
+                    }
+                    if (newWifiPass.length() && newWifiPass != storedWifiPass) {
+                        CONF->PutString(STA_PASS_KEY, newWifiPass);
+                        wifiChanged = true;
+                    }
+
+                    request->send(200, CT_APP_JSON,
+                                  RESP_STATUS_OK_APPLIED);
+                    if (sessionChanged) {
+                        onDisconnected();
+                    }
+                    if (wifiChanged) {
+                        CONF->RestartSysDelayDown(3000);
+                    }
                     return;
                 }
                 else if (target == "userCredentials") {
@@ -2176,52 +2178,83 @@ void WiFiManager::registerRoutes_() {
                     const String newId   = value["newId"]   | "";
                     const String storedPass = CONF->GetString(USER_PASS_KEY, DEFAULT_USER_PASS);
                     if (current.length() && current != storedPass) {
-                        request->send(403, "application/json",
-                                      "{\"error\":\"bad_password\"}");
+                        request->send(403, CT_APP_JSON,
+                                      RESP_ERR_BAD_PASSWORD);
                         return;
                     }
-                    if (newId.length())   CONF->PutString(USER_ID_KEY, newId);
-                    if (newPass.length()) CONF->PutString(USER_PASS_KEY, newPass);
-                    request->send(200, "application/json",
-                                  "{\"status\":\"ok\",\"applied\":true}");
+                    bool sessionChanged = false;
+                    const String storedId = CONF->GetString(USER_ID_KEY, DEFAULT_USER_ID);
+                    if (newId.length() && newId != storedId) {
+                        CONF->PutString(USER_ID_KEY, newId);
+                        sessionChanged = true;
+                    }
+                    if (newPass.length() && newPass != storedPass) {
+                        CONF->PutString(USER_PASS_KEY, newPass);
+                        sessionChanged = true;
+                    }
+                    request->send(200, CT_APP_JSON,
+                                  RESP_STATUS_OK_APPLIED);
+                    if (sessionChanged) {
+                        onDisconnected();
+                    }
                     return;
                 }
                 else if (target == "wifiSSID") {
                     const String ssid = value.as<String>();
-                    if (ssid.length()) CONF->PutString(STA_SSID_KEY, ssid);
-                    request->send(200, "application/json",
-                                  "{\"status\":\"ok\",\"applied\":true}");
+                    bool changed = false;
+                    if (ssid.length()) {
+                        const String stored = CONF->GetString(STA_SSID_KEY, DEFAULT_STA_SSID);
+                        if (ssid != stored) {
+                            CONF->PutString(STA_SSID_KEY, ssid);
+                            changed = true;
+                        }
+                    }
+                    request->send(200, CT_APP_JSON,
+                                  RESP_STATUS_OK_APPLIED);
+                    if (changed) {
+                        CONF->RestartSysDelayDown(3000);
+                    }
                     return;
                 }
                 else if (target == "wifiPassword") {
                     const String pw = value.as<String>();
-                    if (pw.length()) CONF->PutString(STA_PASS_KEY, pw);
-                    request->send(200, "application/json",
-                                  "{\"status\":\"ok\",\"applied\":true}");
+                    bool changed = false;
+                    if (pw.length()) {
+                        const String stored = CONF->GetString(STA_PASS_KEY, DEFAULT_STA_PASS);
+                        if (pw != stored) {
+                            CONF->PutString(STA_PASS_KEY, pw);
+                            changed = true;
+                        }
+                    }
+                    request->send(200, CT_APP_JSON,
+                                  RESP_STATUS_OK_APPLIED);
+                    if (changed) {
+                        CONF->RestartSysDelayDown(3000);
+                    }
                     return;
                 }
                 else if (target == "tempWarnC") {
                     float v = value.as<float>();
                     if (!isfinite(v) || v < 0.0f) v = 0.0f;
                     CONF->PutFloat(TEMP_WARN_KEY, v);
-                    request->send(200, "application/json",
-                                  "{\"status\":\"ok\",\"applied\":true}");
+                    request->send(200, CT_APP_JSON,
+                                  RESP_STATUS_OK_APPLIED);
                     return;
                 }
                 else if (target == "tempTripC") {
                     float v = value.as<float>();
                     if (!isfinite(v) || v < 0.0f) v = DEFAULT_TEMP_THRESHOLD;
                     CONF->PutFloat(TEMP_THRESHOLD_KEY, v);
-                    request->send(200, "application/json",
-                                  "{\"status\":\"ok\",\"applied\":true}");
+                    request->send(200, CT_APP_JSON,
+                                  RESP_STATUS_OK_APPLIED);
                     return;
                 }
                 else if (target == "idleCurrentA") {
                     float v = value.as<float>();
                     if (!isfinite(v) || v < 0.0f) v = 0.0f;
                     CONF->PutFloat(IDLE_CURR_KEY, v);
-                    request->send(200, "application/json",
-                                  "{\"status\":\"ok\",\"applied\":true}");
+                    request->send(200, CT_APP_JSON,
+                                  RESP_STATUS_OK_APPLIED);
                     return;
                 }
                 else if (target == "wireTauSec") {
@@ -2229,211 +2262,24 @@ void WiFiManager::registerRoutes_() {
                     if (!isfinite(v) || v < 0.05) v = DEFAULT_WIRE_TAU_SEC;
                     if (v > 600.0) v = 600.0;
                     CONF->PutDouble(WIRE_TAU_KEY, v);
-                    request->send(200, "application/json",
-                                  "{\"status\":\"ok\",\"applied\":true}");
+                    request->send(200, CT_APP_JSON,
+                                  RESP_STATUS_OK_APPLIED);
                     return;
                 }
                 else if (target == "wireKLoss") {
                     double v = value.as<double>();
                     if (!isfinite(v) || v <= 0.0) v = DEFAULT_WIRE_K_LOSS;
                     CONF->PutDouble(WIRE_K_LOSS_KEY, v);
-                    request->send(200, "application/json",
-                                  "{\"status\":\"ok\",\"applied\":true}");
+                    request->send(200, CT_APP_JSON,
+                                  RESP_STATUS_OK_APPLIED);
                     return;
                 }
                 else if (target == "wireThermalC") {
                     double v = value.as<double>();
                     if (!isfinite(v) || v <= 0.0) v = DEFAULT_WIRE_THERMAL_C;
                     CONF->PutDouble(WIRE_C_TH_KEY, v);
-                    request->send(200, "application/json",
-                                  "{\"status\":\"ok\",\"applied\":true}");
-                    return;
-                }
-                else if (target == "ntcBeta") {
-                    float v = value.as<float>();
-                    if (!isfinite(v) || v <= 0.0f) v = DEFAULT_NTC_BETA;
-                    if (NTC) NTC->setBeta(v, true);
-                    request->send(200, "application/json",
-                                  "{\"status\":\"ok\",\"applied\":true}");
-                    return;
-                }
-                else if (target == "ntcR0") {
-                    float v = value.as<float>();
-                    if (!isfinite(v) || v <= 0.0f) v = DEFAULT_NTC_R0_OHMS;
-                    if (NTC) NTC->setR0(v, true);
-                    request->send(200, "application/json",
-                                  "{\"status\":\"ok\",\"applied\":true}");
-                    return;
-                }
-                else if (target == "ntcFixedRes") {
-                    float v = value.as<float>();
-                    if (!isfinite(v) || v <= 0.0f) v = DEFAULT_NTC_FIXED_RES_OHMS;
-                    if (NTC) NTC->setFixedRes(v, true);
-                    request->send(200, "application/json",
-                                  "{\"status\":\"ok\",\"applied\":true}");
-                    return;
-                }
-                else if (target == "ntcModel") {
-                    int model = static_cast<int>(NtcSensor::Model::Beta);
-                    if (value.is<const char*>()) {
-                        String m = value.as<const char*>();
-                        m.toLowerCase();
-                        if (m.indexOf("stein") >= 0 || m.indexOf("sh") >= 0) {
-                            model = static_cast<int>(NtcSensor::Model::Steinhart);
-                        }
-                    } else if (value.is<String>()) {
-                        String m = value.as<String>();
-                        m.toLowerCase();
-                        if (m.indexOf("stein") >= 0 || m.indexOf("sh") >= 0) {
-                            model = static_cast<int>(NtcSensor::Model::Steinhart);
-                        }
-                    } else {
-                        model = value.as<int>();
-                    }
-                    if (model != static_cast<int>(NtcSensor::Model::Steinhart)) {
-                        model = static_cast<int>(NtcSensor::Model::Beta);
-                    }
-                    if (NTC) NTC->setModel(static_cast<NtcSensor::Model>(model), true);
-                    else if (CONF) CONF->PutInt(NTC_MODEL_KEY, model);
-                    request->send(200, "application/json",
-                                  "{\"status\":\"ok\",\"applied\":true}");
-                    return;
-                }
-                else if (target == "ntcShA") {
-                    float v = value.as<float>();
-                    if (!isfinite(v)) v = 0.0f;
-                    float a = 0.0f, b = 0.0f, c = 0.0f;
-                    readNtcShCoeffs(a, b, c);
-                    a = v;
-                    if (NTC) {
-                        if (!NTC->setSteinhartCoefficients(a, b, c, true)) {
-                            request->send(400, "application/json",
-                                          "{\"error\":\"invalid_coeffs\"}");
-                            return;
-                        }
-                    } else if (CONF) {
-                        CONF->PutFloat(NTC_SH_A_KEY, a);
-                        CONF->PutFloat(NTC_SH_B_KEY, b);
-                        CONF->PutFloat(NTC_SH_C_KEY, c);
-                    }
-                    request->send(200, "application/json",
-                                  "{\"status\":\"ok\",\"applied\":true}");
-                    return;
-                }
-                else if (target == "ntcShB") {
-                    float v = value.as<float>();
-                    if (!isfinite(v)) v = 0.0f;
-                    float a = 0.0f, b = 0.0f, c = 0.0f;
-                    readNtcShCoeffs(a, b, c);
-                    b = v;
-                    if (NTC) {
-                        if (!NTC->setSteinhartCoefficients(a, b, c, true)) {
-                            request->send(400, "application/json",
-                                          "{\"error\":\"invalid_coeffs\"}");
-                            return;
-                        }
-                    } else if (CONF) {
-                        CONF->PutFloat(NTC_SH_A_KEY, a);
-                        CONF->PutFloat(NTC_SH_B_KEY, b);
-                        CONF->PutFloat(NTC_SH_C_KEY, c);
-                    }
-                    request->send(200, "application/json",
-                                  "{\"status\":\"ok\",\"applied\":true}");
-                    return;
-                }
-                else if (target == "ntcShC") {
-                    float v = value.as<float>();
-                    if (!isfinite(v)) v = 0.0f;
-                    float a = 0.0f, b = 0.0f, c = 0.0f;
-                    readNtcShCoeffs(a, b, c);
-                    c = v;
-                    if (NTC) {
-                        if (!NTC->setSteinhartCoefficients(a, b, c, true)) {
-                            request->send(400, "application/json",
-                                          "{\"error\":\"invalid_coeffs\"}");
-                            return;
-                        }
-                    } else if (CONF) {
-                        CONF->PutFloat(NTC_SH_A_KEY, a);
-                        CONF->PutFloat(NTC_SH_B_KEY, b);
-                        CONF->PutFloat(NTC_SH_C_KEY, c);
-                    }
-                    request->send(200, "application/json",
-                                  "{\"status\":\"ok\",\"applied\":true}");
-                    return;
-                }
-                else if (target == "ntcPressMv") {
-                    float v = value.as<float>();
-                    if (!isfinite(v) || v < 0.0f) v = DEFAULT_NTC_PRESS_MV;
-                    const float release = CONF->GetFloat(NTC_RELEASE_MV_KEY, DEFAULT_NTC_RELEASE_MV);
-                    const uint32_t db = static_cast<uint32_t>(
-                        CONF->GetInt(NTC_DEBOUNCE_MS_KEY, DEFAULT_NTC_DEBOUNCE_MS));
-                    if (NTC) NTC->setButtonThresholdsMv(v, release, db, true);
-                    else CONF->PutFloat(NTC_PRESS_MV_KEY, v);
-                    request->send(200, "application/json",
-                                  "{\"status\":\"ok\",\"applied\":true}");
-                    return;
-                }
-                else if (target == "ntcReleaseMv") {
-                    float v = value.as<float>();
-                    if (!isfinite(v) || v < 0.0f) v = DEFAULT_NTC_RELEASE_MV;
-                    const float press = CONF->GetFloat(NTC_PRESS_MV_KEY, DEFAULT_NTC_PRESS_MV);
-                    const uint32_t db = static_cast<uint32_t>(
-                        CONF->GetInt(NTC_DEBOUNCE_MS_KEY, DEFAULT_NTC_DEBOUNCE_MS));
-                    if (NTC) NTC->setButtonThresholdsMv(press, v, db, true);
-                    else CONF->PutFloat(NTC_RELEASE_MV_KEY, v);
-                    request->send(200, "application/json",
-                                  "{\"status\":\"ok\",\"applied\":true}");
-                    return;
-                }
-                else if (target == "ntcDebounceMs") {
-                    int v = value.as<int>();
-                    if (v < 0) v = DEFAULT_NTC_DEBOUNCE_MS;
-                    const float press = CONF->GetFloat(NTC_PRESS_MV_KEY, DEFAULT_NTC_PRESS_MV);
-                    const float release = CONF->GetFloat(NTC_RELEASE_MV_KEY, DEFAULT_NTC_RELEASE_MV);
-                    if (NTC) NTC->setButtonThresholdsMv(press, release, static_cast<uint32_t>(v), true);
-                    else CONF->PutInt(NTC_DEBOUNCE_MS_KEY, v);
-                    request->send(200, "application/json",
-                                  "{\"status\":\"ok\",\"applied\":true}");
-                    return;
-                }
-                else if (target == "ntcMinC") {
-                    float v = value.as<float>();
-                    if (!isfinite(v)) v = DEFAULT_NTC_MIN_C;
-                    const float maxC = CONF->GetFloat(NTC_MAX_C_KEY, DEFAULT_NTC_MAX_C);
-                    if (NTC) NTC->setTempLimits(v, maxC, true);
-                    else CONF->PutFloat(NTC_MIN_C_KEY, v);
-                    request->send(200, "application/json",
-                                  "{\"status\":\"ok\",\"applied\":true}");
-                    return;
-                }
-                else if (target == "ntcMaxC") {
-                    float v = value.as<float>();
-                    if (!isfinite(v)) v = DEFAULT_NTC_MAX_C;
-                    const float minC = CONF->GetFloat(NTC_MIN_C_KEY, DEFAULT_NTC_MIN_C);
-                    if (NTC) NTC->setTempLimits(minC, v, true);
-                    else CONF->PutFloat(NTC_MAX_C_KEY, v);
-                    request->send(200, "application/json",
-                                  "{\"status\":\"ok\",\"applied\":true}");
-                    return;
-                }
-                else if (target == "ntcSamples") {
-                    int v = value.as<int>();
-                    if (v < 1) v = 1;
-                    if (v > 64) v = 64;
-                    if (NTC) NTC->setSampleCount(static_cast<uint8_t>(v), true);
-                    else CONF->PutInt(NTC_SAMPLES_KEY, v);
-                    request->send(200, "application/json",
-                                  "{\"status\":\"ok\",\"applied\":true}");
-                    return;
-                }
-                else if (target == "ntcGateIndex") {
-                    int v = value.as<int>();
-                    if (v < 1) v = 1;
-                    if (v > HeaterManager::kWireCount) v = HeaterManager::kWireCount;
-                    CONF->PutInt(NTC_GATE_INDEX_KEY, v);
-                    request->send(200, "application/json",
-                                  "{\"status\":\"ok\",\"applied\":true}");
+                    request->send(200, CT_APP_JSON,
+                                  RESP_STATUS_OK_APPLIED);
                     return;
                 }
                 else if (target == "floorThicknessMm") {
@@ -2445,8 +2291,8 @@ void WiFiManager::registerRoutes_() {
                         if (v > FLOOR_THICKNESS_MAX_MM) v = FLOOR_THICKNESS_MAX_MM;
                     }
                     CONF->PutFloat(FLOOR_THICKNESS_MM_KEY, v);
-                    request->send(200, "application/json",
-                                  "{\"status\":\"ok\",\"applied\":true}");
+                    request->send(200, CT_APP_JSON,
+                                  RESP_STATUS_OK_APPLIED);
                     return;
                 }
                 else if (target == "floorMaterial") {
@@ -2463,8 +2309,8 @@ void WiFiManager::registerRoutes_() {
                         }
                     }
                     CONF->PutInt(FLOOR_MATERIAL_KEY, code);
-                    request->send(200, "application/json",
-                                  "{\"status\":\"ok\",\"applied\":true}");
+                    request->send(200, CT_APP_JSON,
+                                  RESP_STATUS_OK_APPLIED);
                     return;
                 }
                 else if (target == "floorMaxC") {
@@ -2472,16 +2318,25 @@ void WiFiManager::registerRoutes_() {
                     if (!isfinite(v) || v < 0.0f) v = DEFAULT_FLOOR_MAX_C;
                     if (v > DEFAULT_FLOOR_MAX_C) v = DEFAULT_FLOOR_MAX_C;
                     CONF->PutFloat(FLOOR_MAX_C_KEY, v);
-                    request->send(200, "application/json",
-                                  "{\"status\":\"ok\",\"applied\":true}");
+                    request->send(200, CT_APP_JSON,
+                                  RESP_STATUS_OK_APPLIED);
                     return;
                 }
                 else if (target == "nichromeFinalTempC") {
                     float v = value.as<float>();
                     if (!isfinite(v) || v < 0.0f) v = DEFAULT_NICHROME_FINAL_TEMP_C;
                     CONF->PutFloat(NICHROME_FINAL_TEMP_C_KEY, v);
-                    request->send(200, "application/json",
-                                  "{\"status\":\"ok\",\"applied\":true}");
+                    request->send(200, CT_APP_JSON,
+                                  RESP_STATUS_OK_APPLIED);
+                    return;
+                }
+                else if (target == "ntcGateIndex") {
+                    int v = value.as<int>();
+                    if (v < 1) v = 1;
+                    if (v > HeaterManager::kWireCount) v = HeaterManager::kWireCount;
+                    CONF->PutInt(NTC_GATE_INDEX_KEY, v);
+                    request->send(200, CT_APP_JSON,
+                                  RESP_STATUS_OK_APPLIED);
                     return;
                 }
                 else if (target == "timingMode") {
@@ -2489,8 +2344,8 @@ void WiFiManager::registerRoutes_() {
                     modeStr.toLowerCase();
                     int mode = (modeStr == "manual" || value.as<int>() == 1) ? 1 : 0;
                     CONF->PutInt(TIMING_MODE_KEY, mode);
-                    request->send(200, "application/json",
-                                  "{\"status\":\"ok\",\"applied\":true}");
+                    request->send(200, CT_APP_JSON,
+                                  RESP_STATUS_OK_APPLIED);
                     return;
                 }
                 else if (target == "timingProfile") {
@@ -2504,8 +2359,8 @@ void WiFiManager::registerRoutes_() {
                         if (v == 0 || v == 1 || v == 2) prof = v;
                     }
                     CONF->PutInt(TIMING_PROFILE_KEY, prof);
-                    request->send(200, "application/json",
-                                  "{\"status\":\"ok\",\"applied\":true}");
+                    request->send(200, CT_APP_JSON,
+                                  RESP_STATUS_OK_APPLIED);
                     return;
                 }
                 else if (target == "mixFrameMs") {
@@ -2513,8 +2368,8 @@ void WiFiManager::registerRoutes_() {
                     if (v < 10) v = 10;
                     if (v > 300) v = 300;
                     CONF->PutInt(MIX_FRAME_MS_KEY, v);
-                    request->send(200, "application/json",
-                                  "{\"status\":\"ok\",\"applied\":true}");
+                    request->send(200, CT_APP_JSON,
+                                  RESP_STATUS_OK_APPLIED);
                     return;
                 }
                 else if (target == "mixRefOnMs") {
@@ -2522,16 +2377,16 @@ void WiFiManager::registerRoutes_() {
                     if (v < 1) v = 1;
                     if (v > 200) v = 200;
                     CONF->PutInt(MIX_REF_ON_MS_KEY, v);
-                    request->send(200, "application/json",
-                                  "{\"status\":\"ok\",\"applied\":true}");
+                    request->send(200, CT_APP_JSON,
+                                  RESP_STATUS_OK_APPLIED);
                     return;
                 }
                 else if (target == "mixRefResOhm") {
                     float v = value.as<float>();
                     if (!isfinite(v) || v <= 0.0f) v = DEFAULT_MIX_REF_RES_OHM;
                     CONF->PutFloat(MIX_REF_RES_OHM_KEY, v);
-                    request->send(200, "application/json",
-                                  "{\"status\":\"ok\",\"applied\":true}");
+                    request->send(200, CT_APP_JSON,
+                                  RESP_STATUS_OK_APPLIED);
                     return;
                 }
                 else if (target == "mixBoostK") {
@@ -2539,8 +2394,8 @@ void WiFiManager::registerRoutes_() {
                     if (!isfinite(v) || v <= 0.0f) v = DEFAULT_MIX_BOOST_K;
                     if (v > 5.0f) v = 5.0f;
                     CONF->PutFloat(MIX_BOOST_K_KEY, v);
-                    request->send(200, "application/json",
-                                  "{\"status\":\"ok\",\"applied\":true}");
+                    request->send(200, CT_APP_JSON,
+                                  RESP_STATUS_OK_APPLIED);
                     return;
                 }
                 else if (target == "mixBoostMs") {
@@ -2548,8 +2403,8 @@ void WiFiManager::registerRoutes_() {
                     if (v < 0) v = 0;
                     if (v > 600000) v = 600000;
                     CONF->PutInt(MIX_BOOST_MS_KEY, v);
-                    request->send(200, "application/json",
-                                  "{\"status\":\"ok\",\"applied\":true}");
+                    request->send(200, CT_APP_JSON,
+                                  RESP_STATUS_OK_APPLIED);
                     return;
                 }
                 else if (target == "mixPreDeltaC") {
@@ -2557,8 +2412,8 @@ void WiFiManager::registerRoutes_() {
                     if (!isfinite(v) || v < 0.0f) v = DEFAULT_MIX_PRE_DELTA_C;
                     if (v > 30.0f) v = 30.0f;
                     CONF->PutFloat(MIX_PRE_DELTA_C_KEY, v);
-                    request->send(200, "application/json",
-                                  "{\"status\":\"ok\",\"applied\":true}");
+                    request->send(200, CT_APP_JSON,
+                                  RESP_STATUS_OK_APPLIED);
                     return;
                 }
                 else if (target == "mixHoldUpdateMs") {
@@ -2566,8 +2421,8 @@ void WiFiManager::registerRoutes_() {
                     if (v < 200) v = 200;
                     if (v > 5000) v = 5000;
                     CONF->PutInt(MIX_HOLD_UPDATE_MS_KEY, v);
-                    request->send(200, "application/json",
-                                  "{\"status\":\"ok\",\"applied\":true}");
+                    request->send(200, CT_APP_JSON,
+                                  RESP_STATUS_OK_APPLIED);
                     return;
                 }
                 else if (target == "mixHoldGain") {
@@ -2575,8 +2430,8 @@ void WiFiManager::registerRoutes_() {
                     if (!isfinite(v) || v < 0.0f) v = DEFAULT_MIX_HOLD_GAIN;
                     if (v > 5.0f) v = 5.0f;
                     CONF->PutFloat(MIX_HOLD_GAIN_KEY, v);
-                    request->send(200, "application/json",
-                                  "{\"status\":\"ok\",\"applied\":true}");
+                    request->send(200, CT_APP_JSON,
+                                  RESP_STATUS_OK_APPLIED);
                     return;
                 }
                 else if (target == "mixMinOnMs") {
@@ -2584,8 +2439,8 @@ void WiFiManager::registerRoutes_() {
                     if (v < 0) v = 0;
                     if (v > 200) v = 200;
                     CONF->PutInt(MIX_MIN_ON_MS_KEY, v);
-                    request->send(200, "application/json",
-                                  "{\"status\":\"ok\",\"applied\":true}");
+                    request->send(200, CT_APP_JSON,
+                                  RESP_STATUS_OK_APPLIED);
                     return;
                 }
                 else if (target == "mixMaxOnMs") {
@@ -2593,8 +2448,8 @@ void WiFiManager::registerRoutes_() {
                     if (v < 1) v = 1;
                     if (v > 1000) v = 1000;
                     CONF->PutInt(MIX_MAX_ON_MS_KEY, v);
-                    request->send(200, "application/json",
-                                  "{\"status\":\"ok\",\"applied\":true}");
+                    request->send(200, CT_APP_JSON,
+                                  RESP_STATUS_OK_APPLIED);
                     return;
                 }
                 else if (target == "mixMaxAvgMs") {
@@ -2602,39 +2457,40 @@ void WiFiManager::registerRoutes_() {
                     if (v < 0) v = 0;
                     if (v > 1000) v = 1000;
                     CONF->PutInt(MIX_MAX_AVG_MS_KEY, v);
-                    request->send(200, "application/json",
-                                  "{\"status\":\"ok\",\"applied\":true}");
+                    request->send(200, CT_APP_JSON,
+                                  RESP_STATUS_OK_APPLIED);
                     return;
                 }
                 else if (target == "calibrate")              { c.type = CTRL_CALIBRATE; }
                 else {
-                    request->send(400, "application/json",
-                                  "{\"error\":\"Unknown target\"}");
+                    request->send(400, CT_APP_JSON,
+                                  RESP_ERR_UNKNOWN_TARGET);
                     return;
                 }
 
                 const bool ok = sendCmd(c);
                 if (ok) {
-                    request->send(200, "application/json",
-                                  "{\"status\":\"ok\",\"queued\":true}");
+                    request->send(200, CT_APP_JSON,
+                                  RESP_STATUS_OK_QUEUED);
                 } else {
-                    request->send(503, "application/json",
-                                  "{\"error\":\"ctrl_queue_full\"}");
+                    request->send(503, CT_APP_JSON,
+                                  RESP_ERR_CTRL_QUEUE_FULL);
                 }
             } else if (action == "get" && target == "status") {
                 const Device::StateSnapshot snap = DEVTRAN->getStateSnapshot();
                 const String statusStr = stateName(snap.state);
-                request->send(200, "application/json",
-                              "{\"state\":\"" + statusStr + "\"}");
+                request->send(200, CT_APP_JSON,
+                              String(RESP_STATE_JSON_PREFIX) + statusStr +
+                              RESP_STATE_JSON_SUFFIX);
             } else {
-                request->send(400, "application/json",
-                              "{\"error\":\"Invalid action or target\"}");
+                request->send(400, CT_APP_JSON,
+                              RESP_ERR_INVALID_ACTION_TARGET);
             }
         }
     );
 
     // ---- load_controls (uses snapshot + config) ----
-    server.on("/load_controls", HTTP_GET,
+    server.on(EP_LOAD_CONTROLS, HTTP_GET,
         [this](AsyncWebServerRequest* request) {
             if (!isAuthenticated(request)) return;
             if (lock()) { lastActivityMillis = millis(); unlock(); }
@@ -2647,8 +2503,8 @@ void WiFiManager::registerRoutes_() {
 
             StatusSnapshot s;
             if (!getSnapshot(s)) {
-                request->send(503, "application/json",
-                              "{\"error\":\"snapshot_busy\"}");
+                request->send(503, CT_APP_JSON,
+                              RESP_ERR_SNAPSHOT_BUSY);
                 return;
             }
 
@@ -2660,7 +2516,6 @@ void WiFiManager::registerRoutes_() {
             doc["acFrequency"]    = CONF->GetInt(AC_FREQUENCY_KEY, DEFAULT_AC_FREQUENCY);
             doc["chargeResistor"] = CONF->GetFloat(CHARGE_RESISTOR_KEY, 0.0f);
             doc["deviceId"]       = CONF->GetString(DEV_ID_KEY, "");
-            doc["wifiSSID"]       = CONF->GetString(STA_SSID_KEY, DEFAULT_STA_SSID);
             doc["wireOhmPerM"]    = CONF->GetFloat(WIRE_OHM_PER_M_KEY,
                                                     DEFAULT_WIRE_OHM_PER_M);
             doc["wireGauge"]      = CONF->GetInt(WIRE_GAUGE_KEY, DEFAULT_WIRE_GAUGE);
@@ -2671,26 +2526,13 @@ void WiFiManager::registerRoutes_() {
             doc["wireTauSec"]      = CONF->GetDouble(WIRE_TAU_KEY, DEFAULT_WIRE_TAU_SEC);
             doc["wireKLoss"]       = CONF->GetDouble(WIRE_K_LOSS_KEY, DEFAULT_WIRE_K_LOSS);
             doc["wireThermalC"]    = CONF->GetDouble(WIRE_C_TH_KEY, DEFAULT_WIRE_THERMAL_C);
-            doc["ntcBeta"]         = CONF->GetFloat(NTC_BETA_KEY, DEFAULT_NTC_BETA);
-            doc["ntcR0"]           = CONF->GetFloat(NTC_R0_KEY, DEFAULT_NTC_R0_OHMS);
-            doc["ntcFixedRes"]     = CONF->GetFloat(NTC_FIXED_RES_KEY, DEFAULT_NTC_FIXED_RES_OHMS);
-            doc["ntcModel"]        = CONF->GetInt(NTC_MODEL_KEY, DEFAULT_NTC_MODEL);
-            doc["ntcShA"]          = CONF->GetFloat(NTC_SH_A_KEY, DEFAULT_NTC_SH_A);
-            doc["ntcShB"]          = CONF->GetFloat(NTC_SH_B_KEY, DEFAULT_NTC_SH_B);
-            doc["ntcShC"]          = CONF->GetFloat(NTC_SH_C_KEY, DEFAULT_NTC_SH_C);
-            doc["ntcPressMv"]      = CONF->GetFloat(NTC_PRESS_MV_KEY, DEFAULT_NTC_PRESS_MV);
-            doc["ntcReleaseMv"]    = CONF->GetFloat(NTC_RELEASE_MV_KEY, DEFAULT_NTC_RELEASE_MV);
-            doc["ntcDebounceMs"]   = CONF->GetInt(NTC_DEBOUNCE_MS_KEY, DEFAULT_NTC_DEBOUNCE_MS);
-            doc["ntcMinC"]         = CONF->GetFloat(NTC_MIN_C_KEY, DEFAULT_NTC_MIN_C);
-            doc["ntcMaxC"]         = CONF->GetFloat(NTC_MAX_C_KEY, DEFAULT_NTC_MAX_C);
-            doc["ntcSamples"]      = CONF->GetInt(NTC_SAMPLES_KEY, DEFAULT_NTC_SAMPLES);
-            doc["ntcGateIndex"]    = CONF->GetInt(NTC_GATE_INDEX_KEY, DEFAULT_NTC_GATE_INDEX);
             doc["floorThicknessMm"] = CONF->GetFloat(FLOOR_THICKNESS_MM_KEY, DEFAULT_FLOOR_THICKNESS_MM);
             const int floorMatCode = CONF->GetInt(FLOOR_MATERIAL_KEY, DEFAULT_FLOOR_MATERIAL);
             doc["floorMaterial"]    = floorMaterialToString(floorMatCode);
             doc["floorMaterialCode"] = floorMatCode;
             doc["floorMaxC"]         = CONF->GetFloat(FLOOR_MAX_C_KEY, DEFAULT_FLOOR_MAX_C);
             doc["nichromeFinalTempC"] = CONF->GetFloat(NICHROME_FINAL_TEMP_C_KEY, DEFAULT_NICHROME_FINAL_TEMP_C);
+            doc["ntcGateIndex"]     = getNtcGateIndexFromConfig();
             doc["mixFrameMs"]      = CONF->GetInt(MIX_FRAME_MS_KEY, DEFAULT_MIX_FRAME_MS);
             doc["mixRefOnMs"]      = CONF->GetInt(MIX_REF_ON_MS_KEY, DEFAULT_MIX_REF_ON_MS);
             doc["mixRefResOhm"]    = CONF->GetFloat(MIX_REF_RES_OHM_KEY, DEFAULT_MIX_REF_RES_OHM);
@@ -2750,27 +2592,18 @@ void WiFiManager::registerRoutes_() {
 
             String json;
             serializeJson(doc, json);
-            request->send(200, "application/json", json);
+            request->send(200, CT_APP_JSON, json);
         }
     );
 
     // ---- Static & misc ----
-    server.on("/favicon.ico", HTTP_GET,
+    server.on(EP_FAVICON, HTTP_GET,
         [this](AsyncWebServerRequest* request) {
             if (lock()) { keepAlive = true; unlock(); }
             request->send(204);
         }
     );
 
-    server.serveStatic("/",       SPIFFS, "/");
-    server.serveStatic("/icons/", SPIFFS, "/icons/")
-          .setCacheControl("no-store, must-revalidate");
-    server.serveStatic("/css/",   SPIFFS, "/css/")
-          .setCacheControl("no-store, must-revalidate");
-    server.serveStatic("/js/",    SPIFFS, "/js/")
-          .setCacheControl("no-store, must-revalidate");
-    server.serveStatic("/fonts/", SPIFFS, "/fonts/")
-          .setCacheControl("no-store, must-revalidate");
 }
 
 // ====================== Common helpers / tasks ======================
@@ -2778,7 +2611,7 @@ void WiFiManager::registerRoutes_() {
 void WiFiManager::handleRoot(AsyncWebServerRequest* request) {
     DEBUG_PRINTLN("[WiFi] Handling root request");
     if (lock()) { keepAlive = true; unlock(); }
-    request->send(SPIFFS, "/login.html", "text/html");
+    request->send(404, CT_APP_JSON, RESP_ERR_NOT_FOUND);
 }
 
 void WiFiManager::disableWiFiAP() {
@@ -2866,7 +2699,13 @@ void WiFiManager::onAdminConnected() {
 void WiFiManager::onDisconnected() {
     if (lock()) {
         wifiStatus = WiFiStatus::NotConnected;
+        _sessionToken = "";
+        _sessionIp = IPAddress(0, 0, 0, 0);
         unlock();
+    } else {
+        wifiStatus = WiFiStatus::NotConnected;
+        _sessionToken = "";
+        _sessionIp = IPAddress(0, 0, 0, 0);
     }
     DEBUG_PRINTLN("[WiFi] All clients disconnected");
     RGB->postOverlay(OverlayEvent::WIFI_LOST);
@@ -2882,8 +2721,13 @@ bool WiFiManager::isAdminConnected() const {
 
 bool WiFiManager::isAuthenticated(AsyncWebServerRequest* request) {
     if (wifiStatus == WiFiStatus::NotConnected) {
-        request->send(403, "application/json",
-                      "{\"error\":\"Not authenticated\"}");
+        request->send(401, CT_APP_JSON,
+                      RESP_ERR_NOT_AUTHENTICATED);
+        return false;
+    }
+    if (!validateSession_(request)) {
+        request->send(401, CT_APP_JSON,
+                      RESP_ERR_NOT_AUTHENTICATED);
         return false;
     }
     return true;
@@ -2907,7 +2751,11 @@ void WiFiManager::heartbeat() {
     xTaskCreate(
         [](void* param) {
             WiFiManager* self = static_cast<WiFiManager*>(param);
-            const TickType_t interval = pdMS_TO_TICKS(6000);
+            const uint32_t intervalMs = 6000;
+            const TickType_t interval = pdMS_TO_TICKS(intervalMs);
+            const uint8_t maxMissed = 3;
+            const uint32_t activityGraceMs = intervalMs * 2;
+            uint8_t missed = 0;
 
             for (;;) {
                 vTaskDelay(interval);
@@ -2915,12 +2763,15 @@ void WiFiManager::heartbeat() {
                 bool user  = self->isUserConnected();
                 bool admin = self->isAdminConnected();
                 bool ka    = false;
+                uint32_t last = 0;
 
                 if (self->lock()) {
                     ka = self->keepAlive;
+                    last = self->lastActivityMillis;
                     self->unlock();
                 } else {
                     ka = self->keepAlive;
+                    last = self->lastActivityMillis;
                 }
 
                 if (!user && !admin) {
@@ -2931,7 +2782,32 @@ void WiFiManager::heartbeat() {
                     vTaskDelete(nullptr);
                 }
 
-                if (!ka) {
+                const uint32_t now = millis();
+                const bool recent = (now - last) <= activityGraceMs;
+
+                bool busy = false;
+                if (DEVTRAN) {
+                    const Device::StateSnapshot snap = DEVTRAN->getStateSnapshot();
+                    if (snap.state == DeviceState::Running) {
+                        busy = true;
+                    }
+                    Device::WireTargetStatus st{};
+                    if (DEVTRAN->getWireTargetStatus(st) && st.active) {
+                        busy = true;
+                    }
+                }
+
+                if (!ka && !recent) {
+                    if (!busy) {
+                        missed++;
+                    } else {
+                        missed = 0;
+                    }
+                } else {
+                    missed = 0;
+                }
+
+                if (missed >= maxMissed) {
                     DEBUG_PRINTLN("[WiFi]  Heartbeat timeout  disconnecting");
                     self->onDisconnected();
                     BUZZ->bipWiFiOff();
@@ -3085,6 +2961,12 @@ bool WiFiManager::handleControl(const ControlCmd& c) {
             if (ok) RGB->postOverlay(OverlayEvent::PWR_START);
             break;
 
+        case CTRL_SYSTEM_WAKE:
+            BUZZ->bip();
+            ok = DEVTRAN->requestWake();
+            if (ok) RGB->postOverlay(OverlayEvent::WAKE_FLASH);
+            break;
+
         case CTRL_SYSTEM_SHUTDOWN:
             BUZZ->bip();
             ok = DEVTRAN->requestStop();
@@ -3157,15 +3039,27 @@ void WiFiManager::startStateStreamTask() {
 
     // Send current snapshot on connect
     stateSse.onConnect([this](AsyncEventSourceClient* client) {
+        if (wifiStatus == WiFiStatus::NotConnected) {
+            client->close();
+            return;
+        }
+
+        IPAddress ip =
+            client->client() ? client->client()->remoteIP() : IPAddress(0, 0, 0, 0);
+        if (!sessionIpMatches_(ip)) {
+            client->close();
+            return;
+        }
+
         Device::StateSnapshot snap = DEVTRAN->getStateSnapshot();
-        String json = "{\"state\":\"";
+        String json = RESP_STATE_JSON_PREFIX;
         json += stateName(snap.state);
-        json += "\",\"seq\":";
+        json += RESP_STATE_JSON_MID;
         json += snap.seq;
-        json += ",\"sinceMs\":";
+        json += RESP_STATE_JSON_TAIL;
         json += snap.sinceMs;
-        json += "}";
-        client->send(json.c_str(), "state", snap.seq);
+        json += RESP_STATE_JSON_SUFFIX;
+        client->send(json.c_str(), SSE_EVENT_STATE, snap.seq);
     });
 
     BaseType_t ok = xTaskCreate(
@@ -3190,15 +3084,105 @@ void WiFiManager::stateStreamTask(void* pv) {
         Device::StateSnapshot snap{};
         if (!dt->waitForStateEvent(snap, portMAX_DELAY)) continue;
 
-        String json = "{\"state\":\"";
+        String json = RESP_STATE_JSON_PREFIX;
         json += stateName(snap.state);
-        json += "\",\"seq\":";
+        json += RESP_STATE_JSON_MID;
         json += snap.seq;
-        json += ",\"sinceMs\":";
+        json += RESP_STATE_JSON_TAIL;
         json += snap.sinceMs;
-        json += "}";
+        json += RESP_STATE_JSON_SUFFIX;
 
-        self->stateSse.send(json.c_str(), "state", snap.seq);
+        self->stateSse.send(json.c_str(), SSE_EVENT_STATE, snap.seq);
+    }
+}
+
+// ===================== Event streaming (SSE) =====================
+
+void WiFiManager::startEventStreamTask() {
+    if (eventStreamTaskHandle) return;
+
+    eventSse.onConnect([this](AsyncEventSourceClient* client) {
+        if (wifiStatus == WiFiStatus::NotConnected) {
+            client->close();
+            return;
+        }
+
+        IPAddress ip =
+            client->client() ? client->client()->remoteIP() : IPAddress(0, 0, 0, 0);
+        if (!sessionIpMatches_(ip)) {
+            client->close();
+            return;
+        }
+
+        if (!DEVICE) return;
+
+        StaticJsonDocument<384> doc;
+        uint8_t warnCount = 0;
+        uint8_t errCount = 0;
+        DEVICE->getUnreadEventCounts(warnCount, errCount);
+        JsonObject unread = doc.createNestedObject("unread");
+        unread["warn"] = warnCount;
+        unread["error"] = errCount;
+        doc["kind"] = "snapshot";
+
+        Device::EventEntry warnEntries[1]{};
+        Device::EventEntry errEntries[1]{};
+        if (DEVICE->getWarningHistory(warnEntries, 1) > 0) {
+            JsonObject warn = doc.createNestedObject("last_warning");
+            warn["reason"] = warnEntries[0].reason;
+            if (warnEntries[0].ms) warn["ms"] = warnEntries[0].ms;
+            if (warnEntries[0].epoch) warn["epoch"] = warnEntries[0].epoch;
+        }
+        if (DEVICE->getErrorHistory(errEntries, 1) > 0) {
+            JsonObject err = doc.createNestedObject("last_error");
+            err["reason"] = errEntries[0].reason;
+            if (errEntries[0].ms) err["ms"] = errEntries[0].ms;
+            if (errEntries[0].epoch) err["epoch"] = errEntries[0].epoch;
+        }
+
+        String json;
+        serializeJson(doc, json);
+        client->send(json.c_str(), SSE_EVENT_EVENT, ++eventSeq);
+    });
+
+    BaseType_t ok = xTaskCreate(
+        WiFiManager::eventStreamTask,
+        "EventStreamTask",
+        3072,
+        this,
+        1,
+        &eventStreamTaskHandle
+    );
+    if (ok != pdPASS) {
+        eventStreamTaskHandle = nullptr;
+        DEBUG_PRINTLN("[WiFi] Failed to start EventStreamTask");
+    }
+}
+
+void WiFiManager::eventStreamTask(void* pv) {
+    WiFiManager* self = static_cast<WiFiManager*>(pv);
+
+    for (;;) {
+        if (!DEVICE) {
+            vTaskDelay(pdMS_TO_TICKS(200));
+            continue;
+        }
+
+        Device::EventNotice note{};
+        if (!DEVICE->waitForEventNotice(note, portMAX_DELAY)) continue;
+
+        StaticJsonDocument<256> doc;
+        doc["kind"] = (note.kind == Device::EventKind::Warning) ? "warning" : "error";
+        doc["reason"] = note.reason;
+        if (note.ms) doc["ms"] = note.ms;
+        if (note.epoch) doc["epoch"] = note.epoch;
+        JsonObject unread = doc.createNestedObject("unread");
+        unread["warn"] = note.unreadWarn;
+        unread["error"] = note.unreadErr;
+
+        String json;
+        serializeJson(doc, json);
+        self->eventSse.send(json.c_str(), SSE_EVENT_EVENT, ++self->eventSeq);
     }
 }
 
@@ -3208,7 +3192,7 @@ void WiFiManager::startSnapshotTask(uint32_t periodMs) {
     if (_snapMtx == nullptr) {
         _snapMtx = xSemaphoreCreateMutex();
     }
-    _monitorJson.reserve(1024);
+    _monitorJson.reserve(1536);
     if (snapshotTaskHandle == nullptr) {
         xTaskCreate(
             WiFiManager::snapshotTask,
@@ -3233,9 +3217,9 @@ void WiFiManager::snapshotTask(void* param) {
     }
 
     StatusSnapshot local{};
-    StaticJsonDocument<1024> doc;
+    StaticJsonDocument<1536> doc;
     String monitorJson;
-    monitorJson.reserve(1024);
+    monitorJson.reserve(1536);
     constexpr float kWireTargetMaxC = 150.0f;
 
     for (;;) {
@@ -3247,18 +3231,14 @@ void WiFiManager::snapshotTask(void* param) {
             local.capVoltage = 0.0f;
             local.capAdcScaled = 0.0f;
         }
-
-        if (DEVICE && DEVICE->currentSensor) {
-            if (DEVICE->currentSensor->isContinuousRunning()) {
-                local.current = DEVICE->currentSensor->getLastCurrent();
-            } else {
-                local.current = DEVICE->currentSensor->readCurrent();
-            }
-        } else {
-            local.current = 0.0f;
+        float estCurrent = 0.0f;
+        if (WIRE && isfinite(local.capVoltage)) {
+            estCurrent = WIRE->estimateCurrentFromVoltage(local.capVoltage, WIRE->getOutputMask());
+            if (!isfinite(estCurrent)) estCurrent = 0.0f;
         }
+        local.current = estCurrent;
 
-        // Physical sensor temperatures → dashboard gauges.
+// Physical sensor temperatures → dashboard gauges.
         uint8_t n = 0;
         if (DEVICE && DEVICE->tempSensor) {
             n = DEVICE->tempSensor->getSensorCount();
@@ -3293,6 +3273,13 @@ void WiFiManager::snapshotTask(void* param) {
             local.wireTemps[i - 1] = isfinite(wt) ? wt : -127.0;
             local.outputs[i - 1]   =
                 (WIRE ? WIRE->getOutputState(i) : false);
+        }
+        if (NTC) {
+            const uint8_t ntcIdx = getNtcGateIndexFromConfig();
+            const float ntcTemp = NTC->getLastTempC();
+            if (isfinite(ntcTemp)) {
+                local.wireTemps[ntcIdx - 1] = ntcTemp;
+            }
         }
 
         // AC detect + relay state
@@ -3362,6 +3349,15 @@ void WiFiManager::snapshotTask(void* param) {
             JsonObject unread = doc.createNestedObject("eventUnread");
             unread["warn"] = warnCount;
             unread["error"] = errCount;
+
+            Device::AmbientWaitStatus wait = DEVICE->getAmbientWaitStatus();
+            JsonObject waitObj = doc.createNestedObject("ambientWait");
+            waitObj["active"] = wait.active;
+            if (wait.active) {
+                if (wait.sinceMs) waitObj["since_ms"] = wait.sinceMs;
+                if (isfinite(wait.tolC)) waitObj["tol_c"] = wait.tolC;
+                if (wait.reason[0]) waitObj["reason"] = wait.reason;
+            }
         }
 
         JsonObject outputs = doc.createNestedObject("outputs");

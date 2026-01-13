@@ -1,13 +1,13 @@
-#include "system/Device.h"
+#include <Device.hpp>
 
-#include "system/Utils.h"
+#include <Utils.hpp>
 
-#include "control/RGBLed.h"    // keep
+#include <RGBLed.hpp>    // keep
 
-#include "control/Buzzer.h"    // BUZZ macro
+#include <Buzzer.hpp>    // BUZZ macro
 
-#include "sensing/NtcSensor.h"
-#include "services/RTCManager.h"
+#include <NtcSensor.hpp>
+#include <RTCManager.hpp>
 
 #include <math.h>
 #include <string.h>
@@ -114,6 +114,20 @@ bool Device::waitForStateEvent(StateSnapshot& out, TickType_t toTicks) {
     }
 
     return xQueueReceive(stateEvtQueue, &out, toTicks) == pdTRUE;
+
+}
+
+bool Device::waitForEventNotice(EventNotice& out, TickType_t toTicks) {
+
+    if (!eventEvtQueue) {
+
+        vTaskDelay(toTicks);
+
+        return false;
+
+    }
+
+    return xQueueReceive(eventEvtQueue, &out, toTicks) == pdTRUE;
 
 }
 
@@ -329,13 +343,13 @@ void Device::handleCommand(const DevCommand& cmd) {
 
                 }
 
-                if (currentSensor) {
+            if (currentSensor && currentSensor->isContinuousRunning()) {
 
-                    const uint32_t periodMs = (hz > 0) ? std::max(2, static_cast<int>(lroundf(1000.0f / hz))) : 2;
+                const uint32_t periodMs = (hz > 0) ? std::max(2, static_cast<int>(lroundf(1000.0f / hz))) : 2;
 
-                    currentSensor->startContinuous(periodMs);
+                currentSensor->startContinuous(periodMs);
 
-                }
+            }
 
             }
 
@@ -688,6 +702,16 @@ void Device::pushEventUnlocked(Device* self,
     } else if (kind == Device::EventKind::Error) {
         if (self->unreadErr < self->kEventHistorySize) self->unreadErr++;
     }
+
+    Device::EventNotice note{};
+    note.kind = kind;
+    note.ms = nowMs;
+    note.epoch = epoch;
+    note.unreadWarn = self->unreadWarn;
+    note.unreadErr = self->unreadErr;
+    strncpy(note.reason, reason, sizeof(note.reason) - 1);
+    note.reason[sizeof(note.reason) - 1] = '\0';
+    self->pushEventNotice(note);
 }
 
 void Device::setLastErrorReason(const char* reason) {
@@ -946,6 +970,20 @@ bool Device::pushStateEvent(const StateSnapshot& snap) {
 
 }
 
+bool Device::pushEventNotice(const EventNotice& note) {
+
+    if (!eventEvtQueue) return false;
+
+    if (xQueueSendToBack(eventEvtQueue, &note, 0) == pdTRUE) return true;
+
+    EventNotice dump{};
+
+    xQueueReceive(eventEvtQueue, &dump, 0); // drop oldest
+
+    return xQueueSendToBack(eventEvtQueue, &note, 0) == pdTRUE;
+
+}
+
 
 
 Device::Device(TempSensor* temp,
@@ -983,6 +1021,7 @@ void Device::begin() {
     if (!gEvt)      gEvt      = xEventGroupCreate();
 
     if (!stateEvtQueue) stateEvtQueue = xQueueCreate(8, sizeof(StateSnapshot));
+    if (!eventEvtQueue) eventEvtQueue = xQueueCreate(8, sizeof(EventNotice));
 
     if (!cmdQueue)  cmdQueue  = xQueueCreate(12, sizeof(DevCommand));
 
@@ -1069,7 +1108,7 @@ void Device::begin() {
 
     busSampler = BUS_SAMPLER;
 
-    if (busSampler && currentSensor && discharger) {
+    if (busSampler && discharger) {
 
         busSampler->begin(currentSensor, discharger, 5);
         busSampler->attachNtc(NTC);
@@ -1078,27 +1117,7 @@ void Device::begin() {
 
 
 
-    // Keep sampling + thermal integration alive even outside RUN.
-
-    if (currentSensor && !currentSensor->isContinuousRunning()) {
-
-        int hz = DEFAULT_AC_FREQUENCY;
-
-        if (CONF) {
-
-            hz = CONF->GetInt(AC_FREQUENCY_KEY, DEFAULT_AC_FREQUENCY);
-
-        }
-
-        if (hz < 50) hz = 50;
-
-        if (hz > 500) hz = 500;
-
-        const uint32_t periodMs = (hz > 0) ? std::max(2, static_cast<int>(lroundf(1000.0f / hz))) : 2;
-
-        currentSensor->startContinuous(periodMs);
-
-    }
+    // Current sensor stays idle unless explicitly needed (wire presence probing).
 
     // Apply persisted over-current limit (default to hardware safe limit)
     if (currentSensor && CONF) {
@@ -1172,13 +1191,14 @@ void Device::checkAllowedOutputs() {
 
     syncWireRuntimeFromHeater();
 
-
+    const uint16_t overrideMask = allowedOverrideMask;
 
     for (uint8_t i = 0; i < 10; ++i) {
 
         WireRuntimeState& ws = wireStateModel.wire(i + 1);
 
-        const bool cfgAllowed  = ws.allowedByAccess;
+        const bool overrideAllowed = (overrideMask & (1u << i)) != 0;
+        const bool cfgAllowed  = ws.allowedByAccess || overrideAllowed;
 
         const bool thermLocked = ws.locked ||
 
@@ -1208,7 +1228,6 @@ void Device::checkAllowedOutputs() {
 
     }
 
-    const uint16_t overrideMask = allowedOverrideMask;
     if (overrideMask != 0) {
         for (uint8_t i = 0; i < 10; ++i) {
             if (allowedOutputs[i] && !(overrideMask & (1u << i))) {
@@ -1547,7 +1566,9 @@ void Device::handle12VDrop() {
         float vcap = NAN;
         float curA = NAN;
         if (discharger) vcap = discharger->readCapVoltage();
-        if (currentSensor) curA = currentSensor->readCurrent();
+        if (WIRE && isfinite(vcap)) {
+            curA = WIRE->estimateCurrentFromVoltage(vcap, WIRE->getOutputMask());
+        }
         char reason[96] = {0};
         if (isfinite(vcap) && isfinite(curA)) {
             snprintf(reason, sizeof(reason),
@@ -1645,7 +1666,7 @@ bool Device::delayWithPowerWatch(uint32_t ms)
 
                 setLastStopReason("Stop requested");
 
-                setState(DeviceState::Idle);
+                setState(DeviceState::Shutdown);
 
                 return false;
 
@@ -1699,20 +1720,6 @@ bool Device::dischargeCapBank(float thresholdV, uint8_t maxRounds) {
     return isfinite(vfinal) && vfinal <= thresholdV;
 }
 
-bool Device::calibrateCapVoltageGain() {
-    // Fixed empirical mapping: 1.9 V at ADC corresponds to ~322 V on the bus.
-    if (!discharger) {
-        DEBUG_PRINTLN("[Device] Cap gain calibration skipped (no discharger)");
-        return false;
-    }
-
-    const float fixedGain = 322.0f / 1.9f;
-    discharger->setEmpiricalGain(fixedGain, true);
-    DEBUG_PRINTF("[Device] Cap gain fixed to %.2f (322 V for 1.9 Vadc)\n", (double)fixedGain);
-    return true;
-}
-
-
 bool Device::calibrateCapacitance() {
     // Bypass measurement: fixed bank is 4 mF (four 1000 uF caps in parallel).
     static constexpr float kFixedCapF = 0.004f;
@@ -1743,7 +1750,7 @@ bool Device::runCalibrationsStandalone(uint32_t timeoutMs) {
 
     }
 
-
+    const DeviceState startState = getState();
 
     const TickType_t start = xTaskGetTickCount();
 
@@ -1767,7 +1774,12 @@ bool Device::runCalibrationsStandalone(uint32_t timeoutMs) {
 
         setLastStopReason(msg ? msg : "Calibration aborted");
 
-        setState(DeviceState::Idle);
+        if (getState() != DeviceState::Error) {
+            setState(DeviceState::Shutdown);
+        }
+        if (startState == DeviceState::Idle && gEvt) {
+            xEventGroupSetBits(gEvt, EVT_STOP_REQ);
+        }
 
         return false;
 
@@ -1784,20 +1796,6 @@ bool Device::runCalibrationsStandalone(uint32_t timeoutMs) {
 
     // Pre-discharge to a safe baseline before calibrations.
     dischargeCapBank(5.0f, 3);
-
-    // 0) Zero current calibration (relay off)
-    relayControl->turnOff();
-    vTaskDelay(pdMS_TO_TICKS(40));
-
-    if (currentSensor) {
-
-        currentSensor->calibrateZeroCurrent();
-
-    }
-
-    if (timedOut()) return failSafe("[Device] Calibration timeout (zero current)");
-
-
 
     // 1) Charge caps to threshold
 
@@ -1829,27 +1827,7 @@ bool Device::runCalibrationsStandalone(uint32_t timeoutMs) {
 
 
 
-    // 2) Idle current calibration (relay on, heaters off)
-
-    calibrateIdleCurrent();
-
-    if (timedOut()) return failSafe("[Device] Calibration timeout (idle current)");
-
-
-
-    // 3) Cap voltage gain calibration (presence + empirical gain)
-
-    if (!calibrateCapVoltageGain()) {
-
-        return failSafe("[Device] Cap gain calibration failed");
-
-    }
-
-    if (timedOut()) return failSafe("[Device] Calibration timeout (gain)");
-
-
-
-    // 4) Capacitance calibration (relay cycled inside)
+    // 2) Capacitance calibration (relay cycled inside)
 
     if (!calibrateCapacitance()) {
 
@@ -1861,7 +1839,7 @@ bool Device::runCalibrationsStandalone(uint32_t timeoutMs) {
 
 
 
-    // 5) Recharge after discharge
+    // 3) Recharge after discharge
 
     TickType_t lastRechargePost = 0;
 
@@ -1890,6 +1868,22 @@ bool Device::runCalibrationsStandalone(uint32_t timeoutMs) {
 
 
     DEBUG_PRINTLN("[Device] Manual calibration sequence completed");
+
+    if (WIRE) WIRE->disableAll();
+    if (indicator) indicator->clearAll();
+    if (relayControl) {
+        relayControl->turnOff();
+        if (RGB) {
+            RGB->postOverlay(OverlayEvent::RELAY_OFF);
+            RGB->setOff();
+        }
+    }
+    if (getState() != DeviceState::Error) {
+        setState(DeviceState::Shutdown);
+    }
+    if (startState == DeviceState::Idle && gEvt) {
+        xEventGroupSetBits(gEvt, EVT_STOP_REQ);
+    }
 
     return true;
 
@@ -1932,8 +1926,7 @@ void Device::calibrateIdleCurrent() {
 
 
     const uint16_t samples = 64;          // Enough to smooth noise
-
-    const uint16_t delayMs = 5;           // 64 * 5ms = 320ms total
+    const uint16_t settleUs = 500;        // Keep calibration under prep timeout
 
     float sum = 0.0f;
 
@@ -1945,7 +1938,7 @@ void Device::calibrateIdleCurrent() {
 
         sum += I;
 
-        vTaskDelay(pdMS_TO_TICKS(delayMs));
+        delayMicroseconds(settleUs);
 
     }
 
@@ -1977,7 +1970,12 @@ void Device::handleOverCurrentFault()
     {
         float curA = NAN;
         float limitA = DEFAULT_CURR_LIMIT_A;
-        if (currentSensor) curA = currentSensor->readCurrent();
+        if (WIRE && discharger) {
+            const float vcap = discharger->readCapVoltage();
+            if (isfinite(vcap)) {
+                curA = WIRE->estimateCurrentFromVoltage(vcap, WIRE->getOutputMask());
+            }
+        }
         if (CONF) limitA = CONF->GetFloat(CURR_LIMIT_KEY, DEFAULT_CURR_LIMIT_A);
         if (!isfinite(limitA) || limitA <= 0.0f) limitA = DEFAULT_CURR_LIMIT_A;
         char reason[96] = {0};

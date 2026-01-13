@@ -1,10 +1,8 @@
-﻿#include "sensing/CurrentSensor.h"
+﻿#include <CurrentSensor.hpp>
 #include <Arduino.h>
 #include <math.h>
 
-#ifdef ESP32
 #include "esp_heap_caps.h"
-#endif
 
 // ============================================================================
 // Constructor
@@ -24,11 +22,18 @@ CurrentSensor::CurrentSensor()
       _captureCount(0),
       _zeroCurrentMv(ACS781_ZERO_CURRENT_MV),
       _sensitivityMvPerA(ACS781_SENSITIVITY_MV_PER_A),
+      _zeroCalibrated(false),
+      _maSum(0.0f),
+      _maIndex(0),
+      _maCount(0),
       _ocLimitA(0.0f),
       _ocMinDurationMs(0),
       _ocLatched(false),
       _ocOverStartMs(0)
 {
+    for (uint8_t i = 0; i < CURRENT_MOVING_AVG_SAMPLES; ++i) {
+        _maBuf[i] = 0.0f;
+    }
 }
 
 // ============================================================================
@@ -97,7 +102,7 @@ void CurrentSensor::begin() {
 //   - Single ADC read -> current in A using calibrated parameters.
 // ============================================================================
 
-float CurrentSensor::sampleOnce() {
+float CurrentSensor::sampleOnceRaw() {
     int   adc        = analogRead(ACS_LOAD_CURRENT_VOUT_PIN);
     float voltage_mv = analogToMillivolts(adc);
     float delta_mv   = voltage_mv - _zeroCurrentMv;
@@ -105,38 +110,60 @@ float CurrentSensor::sampleOnce() {
     return current;
 }
 
+float CurrentSensor::applyMovingAverageLocked(float currentA) {
+    if (CURRENT_MOVING_AVG_SAMPLES == 0) {
+        return currentA;
+    }
+
+    if (_maCount < CURRENT_MOVING_AVG_SAMPLES) {
+        _maBuf[_maIndex] = currentA;
+        _maSum += currentA;
+        _maCount++;
+        _maIndex = (_maIndex + 1) % CURRENT_MOVING_AVG_SAMPLES;
+        return _maSum / _maCount;
+    }
+
+    _maSum -= _maBuf[_maIndex];
+    _maBuf[_maIndex] = currentA;
+    _maSum += currentA;
+    _maIndex = (_maIndex + 1) % CURRENT_MOVING_AVG_SAMPLES;
+    return _maSum / CURRENT_MOVING_AVG_SAMPLES;
+}
+
+float CurrentSensor::sampleOnce() {
+    float current = sampleOnceRaw();
+    if (lock()) {
+        current = applyMovingAverageLocked(current);
+        unlock();
+    }
+    return current;
+}
+
 // ============================================================================
 // readCurrent()
 //   - If capturing: return last known (_lastCurrentA).
-//   - Else: 25-sample averaged ADC read (using calibration).
+//   - Else: 32-sample moving average (using calibration).
 // ============================================================================
 
 float CurrentSensor::readCurrent() {
+    if (!_zeroCalibrated) {
+        calibrateZeroCurrent(CURRENT_SENSOR_AUTO_ZERO_CAL_SAMPLES,
+                             CURRENT_SENSOR_AUTO_ZERO_CAL_SETTLE_MS);
+    }
     if (_capturing) {
         return _lastCurrentA;
     }
 
-    constexpr uint8_t NUM_SAMPLES = 25;
+    const float current = sampleOnce();
 
     if (!lock()) {
-        return sampleOnce();
+        return current;
     }
-
-    long sumAdc = 0;
-    for (uint8_t i = 0; i < NUM_SAMPLES; ++i) {
-        sumAdc += analogRead(ACS_LOAD_CURRENT_VOUT_PIN);
-    }
-
-    int   adc        = static_cast<int>(sumAdc / NUM_SAMPLES);
-    float voltage_mv = analogToMillivolts(adc);
-    float delta_mv   = voltage_mv - _zeroCurrentMv;
-    float current    = delta_mv / _sensitivityMvPerA;
 
     _lastCurrentA = current;
     _updateOverCurrentStateLocked(current, millis());
 
     unlock();
-    //return 4.0;
     return current;
 }
 
@@ -335,11 +362,7 @@ bool CurrentSensor::startCapture(size_t maxSamples) {
     }
 
     if (_captureBuf != nullptr) {
-#ifdef ESP32
         heap_caps_free(_captureBuf);
-#else
-        free(_captureBuf);
-#endif
         _captureBuf      = nullptr;
         _captureCapacity = 0;
         _captureCount    = 0;
@@ -349,7 +372,6 @@ bool CurrentSensor::startCapture(size_t maxSamples) {
         maxSamples = CURRENT_CAPTURE_MAX_SAMPLES;
     }
 
-#ifdef ESP32
     _captureBuf = static_cast<Sample*>(
         heap_caps_malloc(maxSamples * sizeof(Sample),
                          MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
@@ -358,9 +380,6 @@ bool CurrentSensor::startCapture(size_t maxSamples) {
             heap_caps_malloc(maxSamples * sizeof(Sample),
                              MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
     }
-#else
-    _captureBuf = static_cast<Sample*>(malloc(maxSamples * sizeof(Sample)));
-#endif
 
     if (_captureBuf == nullptr) {
         _captureCapacity = 0;
@@ -459,11 +478,7 @@ void CurrentSensor::freeCaptureBuffer() {
     _capturing = false;
 
     if (_captureBuf != nullptr) {
-#ifdef ESP32
         heap_caps_free(_captureBuf);
-#else
-        free(_captureBuf);
-#endif
         _captureBuf = nullptr;
     }
 
@@ -619,16 +634,22 @@ void CurrentSensor::calibrateZeroCurrent(uint16_t samples, uint16_t settleMs)
     for (uint16_t i = 0; i < samples; ++i) {
         int adc = analogRead(ACS_LOAD_CURRENT_VOUT_PIN);
         sum += (uint32_t)adc;
-#ifdef ESP32
         ets_delay_us(100);
-#else
-        delayMicroseconds(100);
-#endif
     }
 
     int avgAdc = (int)(sum / samples);
     // Reuse middle-point helper so all zero-point handling stays in one place.
     setMiddlePoint(avgAdc);
+    if (lock()) {
+        _zeroCalibrated = true;
+        _maSum = 0.0f;
+        _maIndex = 0;
+        _maCount = 0;
+        for (uint8_t i = 0; i < CURRENT_MOVING_AVG_SAMPLES; ++i) {
+            _maBuf[i] = 0.0f;
+        }
+        unlock();
+    }
     DEBUG_PRINTF("[CurrentSensor] Zero-current calibrated from avg ADC=%d\n", avgAdc);
 }
 

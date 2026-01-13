@@ -1,10 +1,10 @@
-﻿#include "services/PowerTracker.h"
-#include "services/NVSManager.h"
+﻿#include <PowerTracker.hpp>
+#include <NVSManager.hpp>
 
 #include <FS.h>
 #include <SPIFFS.h>
 #include <ArduinoJson.h>
-#include "sensing/BusSampler.h"
+#include <BusSampler.hpp>
 
 // -----------------------------------------------------------------------------
 // NVS helpers
@@ -230,129 +230,56 @@ void PowerTracker::startSession(float nominalBusV, float idleCurrentA) {
     DEBUG_PRINTLN("[PowerTracker] Session started");
 }
 
-void PowerTracker::update(CurrentSensor& cs) {
+void PowerTracker::update() {
     if (!_active) return;
 
-    // If continuous sampling isn't running, approximate using last current.
-    if (!cs.isContinuousRunning()) {
-        uint32_t now = millis();
-        float I = fabsf(cs.getLastCurrent());
-        // Ignore samples taken before the session start timestamp.
-        if (now < _startMs) {
+    if (!BUS_SAMPLER) {
+        return;
+    }
+
+    BusSampler::Sample vbuf[64];
+    uint32_t newBusSeq = _lastBusSeq;
+    size_t nv = BUS_SAMPLER->getHistorySince(_lastBusSeq, vbuf, (size_t)64, newBusSeq);
+    if (nv == 0) {
+        _lastBusSeq = newBusSeq;
+        return;
+    }
+
+    for (size_t i = 0; i < nv; ++i) {
+        const uint32_t ts = vbuf[i].timestampMs;
+        const float V = vbuf[i].voltageV;
+        const float I = fabsf(vbuf[i].currentA);
+        if (!isfinite(V) || !isfinite(I)) continue;
+
+        if (ts < _startMs) {
             _lastSampleTsMs = 0;
-            return;
+            continue;
         }
 
         if (_lastSampleTsMs == 0 || _lastSampleTsMs < _startMs) {
-            _lastSampleTsMs = now;
-            return;
-        }
-
-        float dt_s = (now - _lastSampleTsMs) * 0.001f;
-        _lastSampleTsMs = now;
-        if (dt_s <= 0.0f) return;
-
-        float netI = I - _idleCurrentA;
-        if (netI < 0.0f) netI = 0.0f;
-
-        if (_nominalBusV > 0.0f && netI > 0.0f) {
-            float P      = _nominalBusV * netI;
-            float dE_Wh  = (P * dt_s) / 3600.0f;
-            _sessionEnergy_Wh += dE_Wh;
-            if (I > _sessionPeakCurrent_A) _sessionPeakCurrent_A = I;
-            if (P > _sessionPeakPower_W)   _sessionPeakPower_W   = P;
-        }
-        return;
-    }
-
-    // Prefer BusSampler V/I history if available for accurate power.
-    bool usedBusHistory = false;
-    if (BUS_SAMPLER) {
-        BusSampler::Sample vbuf[64];
-        uint32_t newBusSeq = _lastBusSeq;
-        size_t nv = BUS_SAMPLER->getHistorySince(_lastBusSeq, vbuf, (size_t)64, newBusSeq);
-        if (nv > 0) {
-            usedBusHistory = true;
-            for (size_t i = 0; i < nv; ++i) {
-                const uint32_t ts = vbuf[i].timestampMs;
-                float V = vbuf[i].voltageV;
-                float I = fabsf(vbuf[i].currentA);
-                if (!isfinite(V) || !isfinite(I)) continue;
-                if (ts < _startMs) { _lastSampleTsMs = 0; continue; }
-                if (_lastSampleTsMs == 0 || _lastSampleTsMs < _startMs) {
-                    _lastSampleTsMs = ts;
-                    if (I > _sessionPeakCurrent_A) _sessionPeakCurrent_A = I;
-                    continue;
-                }
-                float dt_s = (ts - _lastSampleTsMs) * 0.001f;
-                if (dt_s <= 0.0f) {
-                    if (I > _sessionPeakCurrent_A) _sessionPeakCurrent_A = I;
-                    continue;
-                }
-                _lastSampleTsMs = ts;
-                float netI = I - _idleCurrentA;
-                if (netI < 0.0f) netI = 0.0f;
-                if (netI <= 0.0f) continue;
-                const float P     = V * netI;
-                const float dE_Wh = (P * dt_s) / 3600.0f;
-                _sessionEnergy_Wh += dE_Wh;
-                if (I > _sessionPeakCurrent_A) _sessionPeakCurrent_A = I;
-                if (P > _sessionPeakPower_W)   _sessionPeakPower_W   = P;
-            }
-            _lastBusSeq = newBusSeq;
-        }
-    }
-
-    // Fallback: CurrentSensor-only integration with nominal bus voltage.
-    CurrentSensor::Sample buf[64];
-    uint32_t newSeq = _lastHistorySeq;
-    size_t n = cs.getHistorySince(_lastHistorySeq, buf, (size_t)64, newSeq);
-
-    if (!usedBusHistory && n == 0) {
-        _lastHistorySeq = newSeq;
-        return;
-    }
-
-    if (!usedBusHistory) {
-        for (size_t i = 0; i < n; ++i) {
-            const uint32_t ts = buf[i].timestampMs;
-            float I = fabsf(buf[i].currentA);
-
-            if (ts < _startMs) {
-                _lastSampleTsMs = 0;
-                continue;
-            }
-
-            if (_lastSampleTsMs == 0 || _lastSampleTsMs < _startMs) {
-                _lastSampleTsMs = ts;
-                if (I > _sessionPeakCurrent_A) _sessionPeakCurrent_A = I;
-                continue;
-            }
-
-            float dt_s = (ts - _lastSampleTsMs) * 0.001f;
-            if (dt_s <= 0.0f) {
-                if (I > _sessionPeakCurrent_A) _sessionPeakCurrent_A = I;
-                continue;
-            }
-
             _lastSampleTsMs = ts;
-
-            float netI = I - _idleCurrentA;
-            if (netI < 0.0f) netI = 0.0f;
-
-            if (_nominalBusV > 0.0f && netI > 0.0f) {
-                const float P     = _nominalBusV * netI;
-                const float dE_Wh = (P * dt_s) / 3600.0f;
-
-                _sessionEnergy_Wh += dE_Wh;
-
-                if (I > _sessionPeakCurrent_A) _sessionPeakCurrent_A = I;
-                if (P > _sessionPeakPower_W)   _sessionPeakPower_W   = P;
-            }
+            if (I > _sessionPeakCurrent_A) _sessionPeakCurrent_A = I;
+            continue;
         }
+
+        float dt_s = (ts - _lastSampleTsMs) * 0.001f;
+        if (dt_s <= 0.0f) {
+            if (I > _sessionPeakCurrent_A) _sessionPeakCurrent_A = I;
+            continue;
+        }
+
+        _lastSampleTsMs = ts;
+        if (I <= 0.0f) continue;
+
+        const float P     = V * I;
+        const float dE_Wh = (P * dt_s) / 3600.0f;
+
+        _sessionEnergy_Wh += dE_Wh;
+        if (I > _sessionPeakCurrent_A) _sessionPeakCurrent_A = I;
+        if (P > _sessionPeakPower_W)   _sessionPeakPower_W   = P;
     }
 
-    _lastHistorySeq = newSeq;
+    _lastBusSeq = newBusSeq;
 }
 
 void PowerTracker::endSession(bool success) {

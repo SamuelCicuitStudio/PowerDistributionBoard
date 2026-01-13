@@ -1,4 +1,4 @@
-﻿#include "control/CpDischg.h"
+﻿#include <CpDischg.hpp>
 #include <float.h>
 #include <math.h>
 
@@ -7,7 +7,6 @@
 // Monitor behavior constants
 static constexpr uint16_t MONITOR_WINDOW_MS       = 300;   // integration window
 static constexpr uint16_t MONITOR_SAMPLE_DELAY_MS = 2;     // between samples
-static constexpr uint16_t MONITOR_STALE_MS        = 1000;  // if no update >1s â†’ restart
 
 // ============================================================================
 // Public API
@@ -41,12 +40,10 @@ void CpDischg::begin() {
         {
             lastMinBusVoltage = v;
             lastRawAdc        = raw;
-            lastSampleTick    = xTaskGetTickCount();
             xSemaphoreGive(voltageMutex);
         } else {
             lastMinBusVoltage = v;
             lastRawAdc        = raw;
-            lastSampleTick    = xTaskGetTickCount();
         }
     }
 
@@ -79,46 +76,15 @@ void CpDischg::discharge() {
     }
 }
 
-float CpDischg::readCapVoltage() {
-    float      v   = lastMinBusVoltage;
-    TickType_t age = 0;
-    TickType_t now = xTaskGetTickCount();
+float CpDischg::readCapVoltage()
+{
+    float v = lastMinBusVoltage;
 
     if (voltageMutex &&
         xSemaphoreTake(voltageMutex, pdMS_TO_TICKS(5)) == pdTRUE)
     {
-        v   = lastMinBusVoltage;
-        age = now - lastSampleTick;
+        v = lastMinBusVoltage;
         xSemaphoreGive(voltageMutex);
-    } else {
-        age = now - lastSampleTick;
-    }
-
-    if (age > pdMS_TO_TICKS(MONITOR_STALE_MS)) {
-        if ((now - lastStaleWarnTick) > pdMS_TO_TICKS(MONITOR_STALE_MS)) {
-            DEBUG_PRINTLN("[CpDischg] Stale voltage reading detected  ensure monitor running");
-            lastStaleWarnTick = now;
-        }
-
-        const uint16_t raw = analogRead(CAPACITOR_ADC_PIN);
-        const float freshV = adcCodeToBusVolts(raw);
-        const TickType_t sampleTick = xTaskGetTickCount();
-        if (isfinite(freshV)) {
-            if (voltageMutex &&
-                xSemaphoreTake(voltageMutex, pdMS_TO_TICKS(5)) == pdTRUE)
-            {
-                lastMinBusVoltage = freshV;
-                lastRawAdc        = raw;
-                lastSampleTick    = sampleTick;
-                xSemaphoreGive(voltageMutex);
-            } else {
-                lastMinBusVoltage = freshV;
-                lastRawAdc        = raw;
-                lastSampleTick    = sampleTick;
-            }
-            v = freshV;
-        }
-        ensureMonitorTask();
     }
 
     return v;
@@ -225,15 +191,14 @@ void CpDischg::ensureMonitorTask() {
 // ============================================================================
 void CpDischg::monitorTaskThunk(void* param) {
     auto* self = static_cast<CpDischg*>(param);
-    self->monitorTask(MONITOR_WINDOW_MS, MONITOR_SAMPLE_DELAY_MS, MONITOR_STALE_MS);
+    self->monitorTask(MONITOR_WINDOW_MS, MONITOR_SAMPLE_DELAY_MS);
     self->monitorTaskHandle = nullptr;
     DEBUG_PRINTLN("[CpDischg] monitorTask exited unexpectedly ");
     vTaskDelete(nullptr);
 }
 
 void CpDischg::monitorTask(uint16_t windowMs,
-                           uint16_t sampleDelayMs,
-                           uint16_t /*staleWatchdogMs*/)
+                           uint16_t sampleDelayMs)
 {
     const TickType_t windowTicks = pdMS_TO_TICKS(windowMs);
     const TickType_t delayTicks  = pdMS_TO_TICKS(sampleDelayMs);
@@ -274,12 +239,10 @@ void CpDischg::monitorTask(uint16_t windowMs,
         {
             lastMinBusVoltage = minV;
             lastRawAdc        = minRaw;
-            lastSampleTick    = xTaskGetTickCount();
             xSemaphoreGive(voltageMutex);
         } else {
             lastMinBusVoltage = minV;
             lastRawAdc        = minRaw;
-            lastSampleTick    = xTaskGetTickCount();
         }
     }
 }
@@ -320,7 +283,7 @@ void CpDischg::setEmpiricalGain(float gain, bool persist) {
     if (persist && CONF) {
         CONF->PutFloat(CP_EMP_GAIN_KEY, g);
     }
-}
+} 
 
 void CpDischg::loadEmpiricalGainFromConfig() {
     float g = CAP_EMP_GAIN;

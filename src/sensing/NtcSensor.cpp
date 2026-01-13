@@ -1,4 +1,4 @@
-#include "sensing/NtcSensor.h"
+#include <NtcSensor.hpp>
 #include <math.h>
 
 NtcSensor* NtcSensor::s_instance = nullptr;
@@ -30,28 +30,13 @@ void NtcSensor::begin(uint8_t pin) {
     float shA = DEFAULT_NTC_SH_A;
     float shB = DEFAULT_NTC_SH_B;
     float shC = DEFAULT_NTC_SH_C;
-    int model = DEFAULT_NTC_MODEL;
+    int model = static_cast<int>(Model::Beta);
     float pressMv = DEFAULT_NTC_PRESS_MV;
     float releaseMv = DEFAULT_NTC_RELEASE_MV;
     float minC = DEFAULT_NTC_MIN_C;
     float maxC = DEFAULT_NTC_MAX_C;
     int samples = DEFAULT_NTC_SAMPLES;
     int debounceMs = DEFAULT_NTC_DEBOUNCE_MS;
-    if (CONF) {
-        beta = CONF->GetFloat(NTC_BETA_KEY, DEFAULT_NTC_BETA);
-        r0   = CONF->GetFloat(NTC_R0_KEY, DEFAULT_NTC_R0_OHMS);
-        rFixed   = CONF->GetFloat(NTC_FIXED_RES_KEY, DEFAULT_NTC_FIXED_RES_OHMS);
-        shA   = CONF->GetFloat(NTC_SH_A_KEY, DEFAULT_NTC_SH_A);
-        shB   = CONF->GetFloat(NTC_SH_B_KEY, DEFAULT_NTC_SH_B);
-        shC   = CONF->GetFloat(NTC_SH_C_KEY, DEFAULT_NTC_SH_C);
-        model = CONF->GetInt(NTC_MODEL_KEY, DEFAULT_NTC_MODEL);
-        pressMv  = CONF->GetFloat(NTC_PRESS_MV_KEY, DEFAULT_NTC_PRESS_MV);
-        releaseMv= CONF->GetFloat(NTC_RELEASE_MV_KEY, DEFAULT_NTC_RELEASE_MV);
-        minC     = CONF->GetFloat(NTC_MIN_C_KEY, DEFAULT_NTC_MIN_C);
-        maxC     = CONF->GetFloat(NTC_MAX_C_KEY, DEFAULT_NTC_MAX_C);
-        samples  = CONF->GetInt(NTC_SAMPLES_KEY, DEFAULT_NTC_SAMPLES);
-        debounceMs = CONF->GetInt(NTC_DEBOUNCE_MS_KEY, DEFAULT_NTC_DEBOUNCE_MS);
-    }
     if (!isfinite(beta) || beta <= 0.0f) beta = DEFAULT_NTC_BETA;
     if (!isfinite(r0)   || r0   <= 0.0f) r0   = DEFAULT_NTC_R0_OHMS;
     if (!isfinite(rFixed) || rFixed <= 0.0f) rFixed = DEFAULT_NTC_FIXED_RES_OHMS;
@@ -68,10 +53,7 @@ void NtcSensor::begin(uint8_t pin) {
     }
     if (samples <= 0) samples = DEFAULT_NTC_SAMPLES;
     if (debounceMs < 0) debounceMs = DEFAULT_NTC_DEBOUNCE_MS;
-    if (model != static_cast<int>(Model::Beta) &&
-        model != static_cast<int>(Model::Steinhart)) {
-        model = DEFAULT_NTC_MODEL;
-    }
+    model = static_cast<int>(Model::Beta);
 
     if (lock()) {
         _beta  = beta;
@@ -84,7 +66,7 @@ void NtcSensor::begin(uint8_t pin) {
         _shA = shA;
         _shB = shB;
         _shC = shC;
-        _shValid = isSteinhartValid(shA, shB, shC);
+        _shValid = false;
         _model = static_cast<Model>(model);
 
         _pressV   = pressMv / 1000.0f;
@@ -99,6 +81,8 @@ void NtcSensor::begin(uint8_t pin) {
         _last = Sample{};
         _lastValidTempC = NAN;
         _lastValid = false;
+        _emaTempC = NAN;
+        _emaValid = false;
         unlock();
     }
 
@@ -111,7 +95,7 @@ void NtcSensor::update() {
 
     if (!lock()) return;
 
-    const uint16_t adc = sampleAdcAveraged();
+    const uint16_t adc = sampleAdcMedian9();
     const uint32_t nowMs = millis();
     const float volts = adcToVolts(adc);
 
@@ -125,8 +109,15 @@ void NtcSensor::update() {
     if (!pressed) {
         rNtc = computeResistance(volts);
         if (isfinite(rNtc) && rNtc > 0.0f) {
-            tempC = computeTempC(rNtc);
-            if (isfinite(tempC) && tempC >= _minTempC && tempC <= _maxTempC) {
+            const float rawTempC = computeTempC(rNtc);
+            if (isfinite(rawTempC) && rawTempC >= _minTempC && rawTempC <= _maxTempC) {
+                if (!_emaValid) {
+                    _emaTempC = rawTempC;
+                    _emaValid = true;
+                } else {
+                    _emaTempC = (_emaAlpha * rawTempC) + ((1.0f - _emaAlpha) * _emaTempC);
+                }
+                tempC = _emaTempC;
                 valid = true;
                 _lastValidTempC = tempC;
                 _lastValid = true;
@@ -180,9 +171,6 @@ void NtcSensor::setBeta(float beta, bool persist) {
         _beta = beta;
         unlock();
     }
-    if (persist && CONF) {
-        CONF->PutFloat(NTC_BETA_KEY, beta);
-    }
 }
 
 void NtcSensor::setR0(float r0Ohm, bool persist) {
@@ -190,9 +178,6 @@ void NtcSensor::setR0(float r0Ohm, bool persist) {
     if (lock()) {
         _r0Ohm = r0Ohm;
         unlock();
-    }
-    if (persist && CONF) {
-        CONF->PutFloat(NTC_R0_KEY, r0Ohm);
     }
 }
 
@@ -202,9 +187,6 @@ void NtcSensor::setFixedRes(float rFixedOhm, bool persist) {
         _rFixedOhm = rFixedOhm;
         unlock();
     }
-    if (persist && CONF) {
-        CONF->PutFloat(NTC_FIXED_RES_KEY, rFixedOhm);
-    }
 }
 
 void NtcSensor::setSampleCount(uint8_t samples, bool persist) {
@@ -212,9 +194,6 @@ void NtcSensor::setSampleCount(uint8_t samples, bool persist) {
     if (lock()) {
         _samples = samples;
         unlock();
-    }
-    if (persist && CONF) {
-        CONF->PutInt(NTC_SAMPLES_KEY, samples);
     }
 }
 
@@ -224,10 +203,6 @@ void NtcSensor::setTempLimits(float minC, float maxC, bool persist) {
         _minTempC = minC;
         _maxTempC = maxC;
         unlock();
-    }
-    if (persist && CONF) {
-        CONF->PutFloat(NTC_MIN_C_KEY, minC);
-        CONF->PutFloat(NTC_MAX_C_KEY, maxC);
     }
 }
 
@@ -240,37 +215,22 @@ void NtcSensor::setButtonThresholdsMv(float pressMv, float releaseMv, uint32_t d
         _debounceMs = debounceMs;
         unlock();
     }
-    if (persist && CONF) {
-        CONF->PutFloat(NTC_PRESS_MV_KEY, pressMv);
-        CONF->PutFloat(NTC_RELEASE_MV_KEY, releaseMv);
-        CONF->PutInt(NTC_DEBOUNCE_MS_KEY, static_cast<int>(debounceMs));
-    }
 }
 
 bool NtcSensor::setSteinhartCoefficients(float a, float b, float c, bool persist) {
-    if (!isSteinhartValid(a, b, c)) return false;
-    if (lock()) {
-        _shA = a;
-        _shB = b;
-        _shC = c;
-        _shValid = true;
-        unlock();
-    }
-    if (persist && CONF) {
-        CONF->PutFloat(NTC_SH_A_KEY, a);
-        CONF->PutFloat(NTC_SH_B_KEY, b);
-        CONF->PutFloat(NTC_SH_C_KEY, c);
-    }
-    return true;
+    (void)a;
+    (void)b;
+    (void)c;
+    (void)persist;
+    return false;
 }
 
 void NtcSensor::setModel(Model model, bool persist) {
+    (void)model;
+    (void)persist;
     if (lock()) {
-        _model = model;
+        _model = Model::Beta;
         unlock();
-    }
-    if (persist && CONF) {
-        CONF->PutInt(NTC_MODEL_KEY, static_cast<int>(model));
     }
 }
 
@@ -335,12 +295,7 @@ float NtcSensor::getFixedRes() const {
 }
 
 NtcSensor::Model NtcSensor::getModel() const {
-    Model m = Model::Beta;
-    if (const_cast<NtcSensor*>(this)->lock()) {
-        m = _model;
-        const_cast<NtcSensor*>(this)->unlock();
-    }
-    return m;
+    return Model::Beta;
 }
 
 bool NtcSensor::getSteinhartCoefficients(float& a, float& b, float& c) const {
@@ -385,6 +340,28 @@ uint16_t NtcSensor::sampleAdcAveraged() const {
     return static_cast<uint16_t>(sum / samples);
 }
 
+uint16_t NtcSensor::sampleAdcMedian9() const {
+    constexpr uint8_t kSamples = 9;
+    uint16_t buf[kSamples] = {};
+
+    for (uint8_t i = 0; i < kSamples; ++i) {
+        buf[i] = analogRead(_pin);
+        delayMicroseconds(80);
+    }
+
+    for (uint8_t i = 1; i < kSamples; ++i) {
+        uint16_t key = buf[i];
+        int j = static_cast<int>(i) - 1;
+        while (j >= 0 && buf[j] > key) {
+            buf[j + 1] = buf[j];
+            j--;
+        }
+        buf[j + 1] = key;
+    }
+
+    return buf[kSamples / 2];
+}
+
 float NtcSensor::adcToVolts(uint16_t adc) const {
     if (adc > _adcMax) {
         adc = static_cast<uint16_t>(_adcMax);
@@ -394,7 +371,12 @@ float NtcSensor::adcToVolts(uint16_t adc) const {
 }
 
 float NtcSensor::computeResistance(float volts) const {
-    if (!isfinite(volts) || volts <= 0.0f || volts >= _vRef) return NAN;
+    if (!isfinite(volts)) return NAN;
+    if (!isfinite(_vRef) || _vRef <= 0.0f) return NAN;
+    if (!isfinite(_rFixedOhm) || _rFixedOhm <= 0.0f) return NAN;
+    if (volts <= 0.0f || volts >= _vRef) return NAN;
+
+    // Divider: 3.3V -> Rfixed -> ADC -> NTC -> GND.
     const float denom = (_vRef - volts);
     if (denom <= 0.0f) return NAN;
     return (_rFixedOhm * volts) / denom;
@@ -402,14 +384,6 @@ float NtcSensor::computeResistance(float volts) const {
 
 float NtcSensor::computeTempC(float rNtcOhm) const {
     if (!isfinite(rNtcOhm) || rNtcOhm <= 0.0f) return NAN;
-    if (_model == Model::Steinhart && _shValid) {
-        const float lnR = logf(rNtcOhm);
-        const float lnR3 = lnR * lnR * lnR;
-        const float invT = _shA + (_shB * lnR) + (_shC * lnR3);
-        if (!isfinite(invT) || invT <= 0.0f) return NAN;
-        const float tempK = 1.0f / invT;
-        return tempK - 273.15f;
-    }
     if (!isfinite(_r0Ohm) || _r0Ohm <= 0.0f) return NAN;
     if (!isfinite(_beta) || _beta <= 0.0f) return NAN;
 

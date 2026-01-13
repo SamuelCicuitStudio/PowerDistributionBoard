@@ -1,6 +1,7 @@
-#include "system/Device.h"
-#include "sensing/NtcSensor.h"
+#include <Device.hpp>
+#include <NtcSensor.hpp>
 #include <math.h>
+#include <string.h>
 
 #ifndef CONTROL_TASK_STACK_SIZE
 #define CONTROL_TASK_STACK_SIZE 4096
@@ -28,10 +29,20 @@ static float materialBaseC(int matCode) {
     }
 }
 
+static uint8_t resolveNtcGateIndex() {
+    int idx = DEFAULT_NTC_GATE_INDEX;
+    if (CONF) {
+        idx = CONF->GetInt(NTC_GATE_INDEX_KEY, DEFAULT_NTC_GATE_INDEX);
+    }
+    if (idx < 1) idx = 1;
+    if (idx > HeaterManager::kWireCount) idx = HeaterManager::kWireCount;
+    return static_cast<uint8_t>(idx);
+}
+
 static uint8_t resolveWireIndex(uint8_t requested) {
     int idx = static_cast<int>(requested);
-    if (idx <= 0 && CONF) {
-        idx = CONF->GetInt(NTC_GATE_INDEX_KEY, DEFAULT_NTC_GATE_INDEX);
+    if (idx <= 0) {
+        idx = resolveNtcGateIndex();
     }
     if (idx < 1) idx = 1;
     if (idx > HeaterManager::kWireCount) idx = HeaterManager::kWireCount;
@@ -105,7 +116,13 @@ bool Device::startWireTargetTest(float targetC, uint8_t wireIndex) {
         controlMtx = xSemaphoreCreateMutex();
     }
 
+    uint8_t idx = resolveNtcGateIndex();
     (void)wireIndex;
+
+    if (idx < 1 || idx > HeaterManager::kWireCount) {
+        return false;
+    }
+    allowedOverrideMask = static_cast<uint16_t>(1u << (idx - 1));
 
     float maxWireC = WIRE_T_MAX_C;
     if (CONF) {
@@ -116,21 +133,20 @@ bool Device::startWireTargetTest(float targetC, uint8_t wireIndex) {
     if (targetC > maxWireC) targetC = maxWireC;
 
     checkAllowedOutputs();
-    bool anyAllowed = false;
-    for (uint8_t i = 0; i < HeaterManager::kWireCount; ++i) {
-        if (!allowedOutputs[i]) continue;
-        WireInfo wi = WIRE->getWireInfo(i + 1);
-        if (!wi.connected) continue;
-        anyAllowed = true;
-        break;
+    if (!allowedOutputs[idx - 1]) {
+        allowedOverrideMask = 0;
+        return false;
     }
-    if (!anyAllowed) {
+    WireInfo wi = WIRE->getWireInfo(idx);
+    if (!wi.connected) {
+        allowedOverrideMask = 0;
         return false;
     }
 
     if (controlMtx && xSemaphoreTake(controlMtx, pdMS_TO_TICKS(50)) == pdTRUE) {
         if (wireTargetStatus.active) {
             xSemaphoreGive(controlMtx);
+            allowedOverrideMask = 0;
             return false;
         }
         wireTargetStatus.active = true;
@@ -138,13 +154,12 @@ bool Device::startWireTargetTest(float targetC, uint8_t wireIndex) {
         wireTargetStatus.targetC = targetC;
         wireTargetStatus.ntcTempC = NAN;
         wireTargetStatus.activeTempC = NAN;
-        wireTargetStatus.activeWire = 0;
+        wireTargetStatus.activeWire = idx;
         wireTargetStatus.packetMs = 0;
         wireTargetStatus.frameMs = 0;
         wireTargetStatus.updatedMs = millis();
         xSemaphoreGive(controlMtx);
     }
-    allowedOverrideMask = 0;
 
     if (wireTestTaskHandle == nullptr) {
         BaseType_t ok = xTaskCreate(
@@ -155,18 +170,7 @@ bool Device::startWireTargetTest(float targetC, uint8_t wireIndex) {
                     return;
                 }
 
-                // Ensure model/sensors update while testing.
-                if (self->currentSensor && !self->currentSensor->isContinuousRunning()) {
-                    int hz = DEFAULT_AC_FREQUENCY;
-                    if (CONF) {
-                        hz = CONF->GetInt(AC_FREQUENCY_KEY, DEFAULT_AC_FREQUENCY);
-                    }
-                    if (hz < 50) hz = 50;
-                    if (hz > 500) hz = 500;
-                    int periodMs = (hz > 0) ? static_cast<int>(lroundf(1000.0f / hz)) : 2;
-                    if (periodMs < 2) periodMs = 2;
-                    self->currentSensor->startContinuous(static_cast<uint32_t>(periodMs));
-                }
+                // Ensure thermal integration keeps up while testing.
                 if (self->thermalTaskHandle == nullptr) {
                     self->startThermalTask();
                 }
@@ -177,14 +181,23 @@ bool Device::startWireTargetTest(float targetC, uint8_t wireIndex) {
 
                 self->StartLoop();
 
-                if (self->currentSensor) {
-                    self->currentSensor->stopContinuous();
-                }
                 self->stopTemperatureMonitor();
                 if (WIRE) {
                     WIRE->disableAll();
                 }
-                self->setState(DeviceState::Idle);
+                if (self->indicator) {
+                    self->indicator->clearAll();
+                }
+                if (self->relayControl) {
+                    self->relayControl->turnOff();
+                    if (RGB) {
+                        RGB->postOverlay(OverlayEvent::RELAY_OFF);
+                        RGB->setOff();
+                    }
+                }
+                if (self->getState() != DeviceState::Error) {
+                    self->setState(DeviceState::Shutdown);
+                }
 
                 if (self->controlMtx &&
                     xSemaphoreTake(self->controlMtx, pdMS_TO_TICKS(50)) == pdTRUE)
@@ -230,6 +243,7 @@ bool Device::startWireTargetTest(float targetC, uint8_t wireIndex) {
     WIRE->disableAll();
     return true;
 }
+
 
 bool Device::startEnergyCalibration(float targetC, uint8_t wireIndex, EnergyRunPurpose purpose) {
     if (purpose != EnergyRunPurpose::ModelCal &&
@@ -245,6 +259,14 @@ bool Device::startEnergyCalibration(float targetC, uint8_t wireIndex, EnergyRunP
     }
 
     uint8_t idx = resolveWireIndex(wireIndex);
+    if (purpose == EnergyRunPurpose::ModelCal ||
+        purpose == EnergyRunPurpose::NtcCal) {
+        idx = resolveNtcGateIndex();
+    }
+    if (idx < 1 || idx > HeaterManager::kWireCount) {
+        return false;
+    }
+    allowedOverrideMask = static_cast<uint16_t>(1u << (idx - 1));
 
     float maxWireC = WIRE_T_MAX_C;
     if (CONF) {
@@ -255,20 +277,20 @@ bool Device::startEnergyCalibration(float targetC, uint8_t wireIndex, EnergyRunP
     if (targetC > maxWireC) targetC = maxWireC;
 
     checkAllowedOutputs();
-    if (idx < 1 || idx > HeaterManager::kWireCount) {
-        return false;
-    }
     if (!allowedOutputs[idx - 1]) {
+        allowedOverrideMask = 0;
         return false;
     }
     WireInfo wi = WIRE->getWireInfo(idx);
     if (!wi.connected) {
+        allowedOverrideMask = 0;
         return false;
     }
 
     if (controlMtx && xSemaphoreTake(controlMtx, pdMS_TO_TICKS(50)) == pdTRUE) {
         if (wireTargetStatus.active) {
             xSemaphoreGive(controlMtx);
+            allowedOverrideMask = 0;
             return false;
         }
         wireTargetStatus.active = true;
@@ -276,14 +298,12 @@ bool Device::startEnergyCalibration(float targetC, uint8_t wireIndex, EnergyRunP
         wireTargetStatus.targetC = targetC;
         wireTargetStatus.ntcTempC = NAN;
         wireTargetStatus.activeTempC = NAN;
-        wireTargetStatus.activeWire = 0;
+        wireTargetStatus.activeWire = idx;
         wireTargetStatus.packetMs = 0;
         wireTargetStatus.frameMs = 0;
         wireTargetStatus.updatedMs = millis();
         xSemaphoreGive(controlMtx);
     }
-
-    allowedOverrideMask = (1u << (idx - 1));
 
     if (wireTestTaskHandle == nullptr) {
         BaseType_t ok = xTaskCreate(
@@ -294,18 +314,7 @@ bool Device::startEnergyCalibration(float targetC, uint8_t wireIndex, EnergyRunP
                     return;
                 }
 
-                // Ensure model/sensors update while testing.
-                if (self->currentSensor && !self->currentSensor->isContinuousRunning()) {
-                    int hz = DEFAULT_AC_FREQUENCY;
-                    if (CONF) {
-                        hz = CONF->GetInt(AC_FREQUENCY_KEY, DEFAULT_AC_FREQUENCY);
-                    }
-                    if (hz < 50) hz = 50;
-                    if (hz > 500) hz = 500;
-                    int periodMs = (hz > 0) ? static_cast<int>(lroundf(1000.0f / hz)) : 2;
-                    if (periodMs < 2) periodMs = 2;
-                    self->currentSensor->startContinuous(static_cast<uint32_t>(periodMs));
-                }
+                // Ensure thermal integration keeps up while testing.
                 if (self->thermalTaskHandle == nullptr) {
                     self->startThermalTask();
                 }
@@ -316,14 +325,23 @@ bool Device::startEnergyCalibration(float targetC, uint8_t wireIndex, EnergyRunP
 
                 self->StartLoop();
 
-                if (self->currentSensor) {
-                    self->currentSensor->stopContinuous();
-                }
                 self->stopTemperatureMonitor();
                 if (WIRE) {
                     WIRE->disableAll();
                 }
-                self->setState(DeviceState::Idle);
+                if (self->indicator) {
+                    self->indicator->clearAll();
+                }
+                if (self->relayControl) {
+                    self->relayControl->turnOff();
+                    if (RGB) {
+                        RGB->postOverlay(OverlayEvent::RELAY_OFF);
+                        RGB->setOff();
+                    }
+                }
+                if (self->getState() != DeviceState::Error) {
+                    self->setState(DeviceState::Shutdown);
+                }
 
                 if (self->controlMtx &&
                     xSemaphoreTake(self->controlMtx, pdMS_TO_TICKS(50)) == pdTRUE)
@@ -370,8 +388,13 @@ bool Device::startEnergyCalibration(float targetC, uint8_t wireIndex, EnergyRunP
     return true;
 }
 
+
 void Device::stopWireTargetTest() {
+    bool wasActive = false;
+    EnergyRunPurpose purpose = EnergyRunPurpose::None;
     if (controlMtx && xSemaphoreTake(controlMtx, pdMS_TO_TICKS(50)) == pdTRUE) {
+        wasActive = wireTargetStatus.active;
+        purpose = wireTargetStatus.purpose;
         wireTargetStatus.active = false;
         wireTargetStatus.purpose = EnergyRunPurpose::None;
         wireTargetStatus.targetC = NAN;
@@ -385,12 +408,40 @@ void Device::stopWireTargetTest() {
     }
     allowedOverrideMask = 0;
 
-    if (gEvt) {
-        xEventGroupSetBits(gEvt, EVT_STOP_REQ);
-    }
-
     if (WIRE) {
         WIRE->disableAll();
+    }
+
+    if (!wasActive) {
+        return;
+    }
+
+    if (wasActive &&
+        (purpose == EnergyRunPurpose::WireTest ||
+         purpose == EnergyRunPurpose::ModelCal ||
+         purpose == EnergyRunPurpose::NtcCal)) {
+        if (getState() == DeviceState::Running) {
+            setLastStopReason("Targeted run stopped");
+            if (indicator) indicator->clearAll();
+            if (relayControl) {
+                relayControl->turnOff();
+                if (RGB) {
+                    RGB->postOverlay(OverlayEvent::RELAY_OFF);
+                    RGB->setOff();
+                }
+            }
+            if (getState() != DeviceState::Error) {
+                setState(DeviceState::Shutdown);
+            }
+        }
+        if (gEvt) {
+            xEventGroupSetBits(gEvt, EVT_STOP_REQ);
+        }
+        return;
+    }
+
+    if (gEvt) {
+        xEventGroupSetBits(gEvt, EVT_STOP_REQ);
     }
 }
 
@@ -405,6 +456,39 @@ Device::WireTargetStatus Device::getWireTargetStatus() const {
         out = wireTargetStatus;
     }
     return out;
+}
+
+Device::AmbientWaitStatus Device::getAmbientWaitStatus() const {
+    AmbientWaitStatus out{};
+    if (const_cast<Device*>(this)->controlMtx &&
+        xSemaphoreTake(const_cast<Device*>(this)->controlMtx, pdMS_TO_TICKS(25)) == pdTRUE)
+    {
+        out = ambientWaitStatus;
+        xSemaphoreGive(const_cast<Device*>(this)->controlMtx);
+    } else {
+        out = ambientWaitStatus;
+    }
+    return out;
+}
+
+void Device::setAmbientWaitStatus(bool active, float tolC, const char* reason) {
+    AmbientWaitStatus next{};
+    next.active = active;
+    next.tolC = tolC;
+    next.sinceMs = active ? millis() : 0;
+    if (reason && reason[0]) {
+        strncpy(next.reason, reason, sizeof(next.reason) - 1);
+        next.reason[sizeof(next.reason) - 1] = '\0';
+    } else {
+        next.reason[0] = '\0';
+    }
+
+    if (controlMtx && xSemaphoreTake(controlMtx, pdMS_TO_TICKS(25)) == pdTRUE) {
+        ambientWaitStatus = next;
+        xSemaphoreGive(controlMtx);
+    } else {
+        ambientWaitStatus = next;
+    }
 }
 
 void Device::updateWireTestStatus(uint8_t wireIndex,

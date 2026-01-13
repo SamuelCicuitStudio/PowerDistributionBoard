@@ -6,9 +6,9 @@
  *  Portfolio   : https://www.freelancer.com/u/tshibsamuel477
  *  Phone       : +216 54 429 793
  **************************************************************/
-#include "services/ThermalEstimator.h"
-#include "services/CalibrationRecorder.h"
-#include "system/Config.h"
+#include <ThermalEstimator.hpp>
+#include <CalibrationRecorder.hpp>
+#include <Config.hpp>
 #include <math.h>
 
 ThermalEstimator* ThermalEstimator::Get() {
