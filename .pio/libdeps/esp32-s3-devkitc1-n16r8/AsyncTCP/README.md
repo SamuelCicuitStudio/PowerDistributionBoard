@@ -1,55 +1,49 @@
-![https://avatars.githubusercontent.com/u/195753706?s=96&v=4](https://avatars.githubusercontent.com/u/195753706?s=96&v=4)
-
 # AsyncTCP
-
-[![License: LGPL 3.0](https://img.shields.io/badge/License-LGPL%203.0-yellow.svg)](https://opensource.org/license/lgpl-3-0/)
-[![Continuous Integration](https://github.com/ESP32Async/AsyncTCP/actions/workflows/ci.yml/badge.svg)](https://github.com/ESP32Async/AsyncTCP/actions/workflows/ci.yml)
-[![PlatformIO Registry](https://badges.registry.platformio.org/packages/ESP32Async/library/AsyncTCP.svg)](https://registry.platformio.org/libraries/ESP32Async/AsyncTCP)
-
-Discord Server: [https://discord.gg/X7zpGdyUcY](https://discord.gg/X7zpGdyUcY)
 
 ## Async TCP Library for ESP32 Arduino
 
-This is a fully asynchronous TCP library, aimed at enabling trouble-free, multi-connection network environment for Espressif's ESP32 MCUs.
+This is a fully asynchronous TCP library much like the original, apart form the fact that it works properly.
 
-This library is the base for [ESPAsyncWebServer](https://github.com/ESP32Async/ESPAsyncWebServer)
+---
 
-## How to install
+## If you are able, please [Support me on Patreon](https://patreon.com/esparto) and/or subscribe to my [Youtube channel (instructional videos)](https://www.youtube.com/channel/UCYi-Ko76_3p9hBUtleZRY6g)
 
-The library can be downloaded from the releases page at [https://github.com/ESP32Async/AsyncTCP/releases](https://github.com/ESP32Async/AsyncTCP/releases).
+---
 
-It is also deployed in these registries:
+## What's fixed
 
-- Arduino Library Registry: [https://github.com/arduino/library-registry](https://github.com/arduino/library-registry)
+95% of the API is the same as ESPAsyncTCP (the ESP8266 version) apart from one minor problem: This lib does not pass through the TCP PSH flag, which means you can never receive more than N buffers' worth of data (where N is implementation-dependent) because you cannot tell which is the last packet in a multi-packet > buffer size set of data. Clue: It's the one with the PSH flag set. See the problem?
 
-- ESP Component Registry [https://components.espressif.com/components/esp32async/asynctcp/](https://components.espressif.com/components/esp32async/asynctcp/)
+So, PSH flag collected on TCP recv, saved and made available to new API call (same as ESPAsyncTCP)
 
-- PlatformIO Registry: [https://registry.platformio.org/libraries/esp32async/AsyncTCP](https://registry.platformio.org/libraries/esp32async/AsyncTCP)
-
-  - Use: `lib_deps=ESP32Async/AsyncTCP` to point to latest version
-  - Use: `lib_deps=ESP32Async/AsyncTCP @ ^<x.y.z>` to point to latest version with the same major version
-  - Use: `lib_deps=ESP32Async/AsyncTCP @ <x.y.z>` to always point to the same version (reproductible build)
-
-## AsyncClient and AsyncServer
-
-The base classes on which everything else is built. They expose all possible scenarios, but are really raw and require more skills to use.
-
-## Important recommendations
-
-Most of the crashes are caused by improper configuration of the library for the project.
-Here are some recommendations to avoid them.
-
-I personally use the following configuration in my projects:
-
-```c++
-  -D CONFIG_ASYNC_TCP_MAX_ACK_TIME=5000 // (keep default)
-  -D CONFIG_ASYNC_TCP_PRIORITY=10 // (keep default)
-  -D CONFIG_ASYNC_TCP_QUEUE_SIZE=64 // (keep default)
-  -D CONFIG_ASYNC_TCP_RUNNING_CORE=1 // force async_tcp task to be on same core as the app (default is core 0)
-  -D CONFIG_ASYNC_TCP_STACK_SIZE=4096 // reduce the stack size (default is 16K)
+```cpp
+bool isRecvPush(); // is the PSH flag set, i.e. is this the last packet?
 ```
 
-## Compatibility
+---
 
-- ESP32
-- Arduino Core 2.x and 3.x
+# Installation
+
+Please see [H4 Installer](https://github.com/philbowles/h4installer)
+# Issues
+
+## If you want a *quick* resolution, please follow these rules:
+
+1. As with all H4 and H4Plugins libraries, please make sure you have read *all* the relevant documentation relating to the issue and watched any videos on the [Youtube channel (instructional videos)](https://www.youtube.com/channel/UCYi-Ko76_3p9hBUtleZRY6g). Please also subscribe to the channel for notifications of news and updates.
+
+2. If you still think there is a problem, then join the [Facebook H4  Support / Discussion](https://www.facebook.com/groups/444344099599131/) group and report the issue briefly there. This is because I visit the group every day, whereas I do not have time to visit 11 github repos every day. Furthermore, it alerts other users to potential problems and allows an initial assessment. 
+
+3. If there is a genuine issue then you will be referred to [Raising H4/H4Plugins issues](https://github.com/philbowles/h4plugins/blob/master/docs/issues.md) after which you are advised to create a full github issue report.
+
+4. Failing to make an initial report in the [Facebook H4  Support / Discussion](https://www.facebook.com/groups/444344099599131/) group and simply starting with a github issue, or failing to include all of the information required in [Raising H4/H4Plugins issues](https://github.com/philbowles/h4plugins/blob/master/docs/issues.md) is likely to result in a ***long*** delay before it gets picked up.
+
+---
+
+(c) 2021 Phil Bowles h4plugins@gmail.com
+
+* [Support me on Patreon](https://patreon.com/esparto)
+* [Youtube channel (instructional videos)](https://www.youtube.com/channel/UCYi-Ko76_3p9hBUtleZRY6g)
+* [Facebook H4  Support / Discussion](https://www.facebook.com/groups/444344099599131/)
+* [Facebook General ESP8266 / ESP32](https://www.facebook.com/groups/2125820374390340/)
+* [Facebook ESP8266 Programming Questions](https://www.facebook.com/groups/esp8266questions/)
+* [Facebook ESP Developers (moderator)](https://www.facebook.com/groups/ESP8266/)

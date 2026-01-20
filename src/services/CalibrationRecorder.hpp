@@ -18,13 +18,14 @@
 
 class CalibrationRecorder {
 public:
-    enum class Mode : uint8_t { None = 0, Ntc = 1, Model = 2 };
+    enum class Mode : uint8_t { None = 0, Ntc = 1, Model = 2, Floor = 3 };
 
     struct Sample {
         uint32_t tMs      = 0;   // time since start
         float    voltageV = NAN;
         float    currentA = NAN;
         float    tempC    = NAN; // NTC-based temperature
+        float    roomTempC = NAN; // Heatsink/ambient temperature
         float    ntcVolts = NAN;
         float    ntcOhm   = NAN;
         uint16_t ntcAdc   = 0;
@@ -57,7 +58,7 @@ public:
                uint8_t wireIndex);
     void stop();
     bool stopAndSave(uint32_t timeoutMs = 1500);
-    bool saveToFile(const char* path = CALIB_MODEL_JSON_FILE);
+    bool saveToFile(const char* path = CALIB_MODEL_CBOR_FILE);
     void clear();
 
     bool isRunning() const;
@@ -108,6 +109,6 @@ private:
     static CalibrationRecorder* s_instance;
 };
 
-#define CALIB CalibrationRecorder::Get()
+#define CALREC CalibrationRecorder::Get()
 
 #endif // CALIBRATION_RECORDER_H

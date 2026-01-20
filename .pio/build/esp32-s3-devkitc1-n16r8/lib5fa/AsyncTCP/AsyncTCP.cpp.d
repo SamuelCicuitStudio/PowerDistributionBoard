@@ -1,17 +1,7 @@
 .pio/build/esp32-s3-devkitc1-n16r8/lib5fa/AsyncTCP/AsyncTCP.cpp.o: \
  .pio/libdeps/esp32-s3-devkitc1-n16r8/AsyncTCP/src/AsyncTCP.cpp \
- .pio/libdeps/esp32-s3-devkitc1-n16r8/AsyncTCP/src/AsyncTCP.h \
- .pio/libdeps/esp32-s3-devkitc1-n16r8/AsyncTCP/src/AsyncTCPVersion.h \
- C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/cores/esp32/IPAddress.h \
- C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/cores/esp32/WString.h \
- C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/cores/esp32/pgmspace.h \
- C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/cores/esp32/Printable.h \
- C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/cores/esp32/IPv6Address.h \
- C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/lwip/lwip/src/include/lwip/ip6_addr.h \
- C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/lwip/lwip/src/include/lwip/opt.h \
- C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/lwip/port/esp32/include/lwipopts.h \
- C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/newlib/platform_include/sys/ioctl.h \
- C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/esp_system/include/esp_task.h \
+ C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/cores/esp32/Arduino.h \
+ C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/cores/esp32/esp_arduino_version.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/freertos/include/freertos/FreeRTOS.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/freertos/include/esp_additions/freertos/FreeRTOSConfig.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/esp_common/include/esp_compiler.h \
@@ -77,36 +67,12 @@
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/xtensa/include/xtensa/xtensa_context.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/freertos/port/xtensa/include/freertos/portmacro_deprecated.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/freertos/include/freertos/mpu_wrappers.h \
- C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/freertos/include/esp_additions/freertos/FreeRTOSConfig.h \
- C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/lwip/port/esp32/include/netif/dhcp_state.h \
- C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/lwip/port/esp32/include/sntp/sntp_get_set_time.h \
- C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/lwip/lwip/src/include/lwip/debug.h \
- C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/lwip/lwip/src/include/lwip/arch.h \
- C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/lwip/port/esp32/include/arch/cc.h \
- C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/newlib/platform_include/errno.h \
- C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/lwip/port/esp32/include/arch/sys_arch.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/freertos/include/freertos/task.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/freertos/include/freertos/list.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/freertos/include/esp_additions/freertos/task_snapshot.h \
- C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/freertos/include/freertos/queue.h \
- C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/freertos/include/freertos/task.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/freertos/include/freertos/semphr.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/freertos/include/freertos/queue.h \
- C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/lwip/port/esp32/include/arch/vfs_lwip.h \
- C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/lwip/lwip/src/include/lwip/def.h \
- C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/lwip/lwip/src/include/lwip/ip6_zone.h \
- C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/lwip/lwip/src/include/lwip/ip_addr.h \
- C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/lwip/lwip/src/include/lwip/def.h \
- C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/lwip/lwip/src/include/lwip/ip4_addr.h \
- C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/lwip/lwip/src/include/lwip/pbuf.h \
- C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/lwip/lwip/src/include/lwip/err.h \
- .pio/libdeps/esp32-s3-devkitc1-n16r8/AsyncTCP/src/AsyncTCPLogging.h \
- C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/cores/esp32/esp32-hal-log.h \
- C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/log/include/esp_log.h \
- C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/log/include/esp_log_internal.h \
- .pio/libdeps/esp32-s3-devkitc1-n16r8/AsyncTCP/src/AsyncTCPSimpleIntrusiveList.h \
- C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/cores/esp32/Arduino.h \
- C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/cores/esp32/esp_arduino_version.h \
+ C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/freertos/include/freertos/task.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/cores/esp32/esp32-hal.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/esp_hw_support/include/esp_sleep.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/hal/include/hal/touch_sensor_types.h \
@@ -116,9 +82,12 @@
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/soc/esp32s3/include/soc/gpio_struct.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/soc/esp32s3/include/soc/gpio_reg.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/soc/esp32s3/include/soc/gpio_sig_map.h \
+ C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/freertos/include/freertos/queue.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/freertos/include/freertos/event_groups.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/freertos/include/freertos/timers.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/cores/esp32/esp32-hal-log.h \
+ C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/log/include/esp_log.h \
+ C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/log/include/esp_log_internal.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/cores/esp32/esp32-hal-matrix.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/cores/esp32/esp32-hal-uart.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/hal/include/hal/uart_types.h \
@@ -146,14 +115,18 @@
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/cores/esp32/binary.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/cores/esp32/WCharacter.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/cores/esp32/WString.h \
+ C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/cores/esp32/pgmspace.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/cores/esp32/Stream.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/cores/esp32/Print.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/cores/esp32/Printable.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/cores/esp32/IPAddress.h \
+ C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/cores/esp32/WString.h \
+ C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/cores/esp32/Printable.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/cores/esp32/Client.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/cores/esp32/Server.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/cores/esp32/Udp.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/cores/esp32/Stream.h \
+ C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/cores/esp32/IPAddress.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/cores/esp32/HardwareSerial.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/cores/esp32/HWCDC.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/esp_event/include/esp_event.h \
@@ -175,7 +148,26 @@
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/esp_eth/include/esp_eth_phy.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/tcpip_adapter/include/tcpip_adapter.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/tcpip_adapter/include/tcpip_adapter_types.h \
+ C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/lwip/lwip/src/include/lwip/ip_addr.h \
+ C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/lwip/lwip/src/include/lwip/opt.h \
+ C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/lwip/port/esp32/include/lwipopts.h \
+ C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/newlib/platform_include/sys/ioctl.h \
+ C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/esp_system/include/esp_task.h \
+ C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/freertos/include/esp_additions/freertos/FreeRTOSConfig.h \
+ C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/lwip/port/esp32/include/netif/dhcp_state.h \
+ C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/lwip/port/esp32/include/sntp/sntp_get_set_time.h \
+ C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/lwip/lwip/src/include/lwip/debug.h \
+ C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/lwip/lwip/src/include/lwip/arch.h \
+ C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/lwip/port/esp32/include/arch/cc.h \
+ C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/lwip/port/esp32/include/arch/sys_arch.h \
+ C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/lwip/port/esp32/include/arch/vfs_lwip.h \
+ C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/lwip/lwip/src/include/lwip/def.h \
+ C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/lwip/lwip/src/include/lwip/ip4_addr.h \
+ C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/lwip/lwip/src/include/lwip/ip6_addr.h \
+ C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/lwip/lwip/src/include/lwip/def.h \
+ C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/lwip/lwip/src/include/lwip/ip6_zone.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/lwip/include/apps/dhcpserver/dhcpserver.h \
+ C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/lwip/lwip/src/include/lwip/err.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/esp_netif/include/esp_netif_sta_list.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/cores/esp32/USBCDC.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/cores/esp32/Esp.h \
@@ -188,8 +180,8 @@
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/esp_hw_support/include/soc/esp32/spiram.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/cores/esp32/io_pin_remap.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/cores/esp32/Arduino.h \
- C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/lwip/lwip/src/include/lwip/dns.h \
- C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/lwip/lwip/src/include/lwip/inet.h \
+ .pio/libdeps/esp32-s3-devkitc1-n16r8/AsyncTCP/src/AsyncTCP.h \
+ C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/lwip/lwip/src/include/lwip/pbuf.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/lwip/lwip/src/include/lwip/tcp.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/lwip/lwip/src/include/lwip/tcpbase.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/lwip/lwip/src/include/lwip/mem.h \
@@ -209,7 +201,10 @@
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/lwip/lwip/src/include/lwip/prot/icmp.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/lwip/lwip/src/include/lwip/icmp6.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/lwip/lwip/src/include/lwip/prot/icmp6.h \
+ C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/lwip/lwip/src/include/lwip/inet.h \
+ C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/lwip/lwip/src/include/lwip/dns.h \
+ C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/esp_system/include/esp_task_wdt.h \
+ C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/lwip/lwip/src/include/lwip/priv/tcpip_priv.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/lwip/lwip/src/include/lwip/tcpip.h \
  C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/lwip/lwip/src/include/lwip/timeouts.h \
- C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/lwip/lwip/src/include/lwip/sys.h \
- C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/lwip/lwip/src/include/lwip/priv/tcpip_priv.h
+ C:/Users/Samuel\ Tshibangu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/lwip/lwip/src/include/lwip/sys.h

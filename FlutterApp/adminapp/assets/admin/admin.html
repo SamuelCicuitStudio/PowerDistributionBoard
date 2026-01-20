@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -7,259 +7,7 @@
     <meta http-equiv="Expires" content="0" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Admin Dashboard</title>
-    <link rel="stylesheet" href="css/admin.css?v=2" />
-    <style>
-      .user-status-global {
-        position: absolute;
-        top: 10px;
-        right: 20px;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        z-index: 1000;
-      }
-      .user-menu {
-        position: absolute;
-        top: 35px;
-        right: 0;
-        display: none;
-        background: rgba(0, 0, 0, 0.7);
-        border-radius: 8px;
-        padding: 10px;
-        box-shadow: 0 0 8px rgba(0, 0, 0, 0.4);
-      }
-      .user-menu button {
-        background: none;
-        border: none;
-        color: white;
-        cursor: pointer;
-      }
-      /* === Device Settings: scoped, compact, no vertical scroll === */
-      #deviceSettingsTab.content,
-      #deviceSettingsTab .content {
-        /* in case a theme sets scroll on .content, force this tab to fit */
-        padding: 14px 18px 10px;
-        overflow-y: hidden;
-      }
-      /* Make the single box fill available width and fit the frame height */
-      .user-modal-content.device-settings-box {
-        width: 100%;
-        max-width: 720px;
-        max-height: 540px;
-        margin: 0 auto;
-        display: flex;
-        flex-direction: column; /* grid + actions stacked */
-        gap: 16px;
-        overflow: hidden; /* scrolling happens inside .device-grid */
-      }
-      .ds-group-title {
-        grid-column: 1 / -1;
-        margin-top: 10px;
-        padding: 8px 10px;
-        border-radius: 10px;
-        border: 1px solid rgba(255, 255, 255, 0.12);
-        border-left: 4px solid var(--ds-accent, rgba(255, 255, 255, 0.35));
-        background: rgba(255, 255, 255, 0.06);
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        font-size: 12px;
-        font-weight: 800;
-        letter-spacing: 0.3px;
-        color: rgba(255, 255, 255, 0.95);
-        box-shadow: 0 0 10px rgba(0, 0, 0, 0.22);
-      }
-      .ds-group-icon {
-        width: 14px;
-        height: 14px;
-        flex: 0 0 auto;
-        color: var(--ds-accent, rgba(255, 255, 255, 0.8));
-        opacity: 0.95;
-        filter: drop-shadow(0 0 6px rgba(0, 0, 0, 0.35));
-      }
-      .ds-group-title span {
-        min-width: 0;
-        flex: 1 1 auto;
-      }
-      .ds-group-title.ds-power {
-        --ds-accent: #ff3b30;
-        background: rgba(255, 59, 48, 0.12);
-      }
-      .ds-group-title.ds-thermal-safety {
-        --ds-accent: #ffb020;
-        background: rgba(255, 176, 32, 0.12);
-      }
-      .ds-group-title.ds-thermal-model {
-        --ds-accent: #a855f7;
-        background: rgba(168, 85, 247, 0.12);
-      }
-      .ds-group-title.ds-control {
-        --ds-accent: #4d9efc;
-        background: rgba(77, 158, 252, 0.12);
-      }
-      .ds-group-title.ds-floor {
-        --ds-accent: #10b981;
-        background: rgba(16, 185, 129, 0.12);
-      }
-      .ds-group-title.ds-nichrome {
-        --ds-accent: #f97316;
-        background: rgba(249, 115, 22, 0.12);
-      }
-      .ds-group-title.ds-loop-timing {
-        --ds-accent: #20c997;
-        background: rgba(32, 201, 151, 0.12);
-      }
-      /* Two-column grid inside the box */
-      .device-settings-box .device-grid {
-        display: grid;
-        grid-template-columns: 1.05fr 1.15fr; /* left: device fields | right: nichrome */
-        grid-template-rows: minmax(0, 1fr);
-        gap: 18px 28px; /* row gap | column gap */
-        align-items: stretch;
-        min-width: 0;
-        min-height: 0;
-        flex: 1 1 auto;
-        overflow: hidden; /* each column scrolls independently */
-      }
-      .device-settings-box .device-col {
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-        min-width: 0;
-        min-height: 0;
-        padding: 12px 12px 14px;
-        border-radius: 16px;
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        background: rgba(0, 0, 0, 0.32);
-        box-shadow: inset 0 0 0 1px rgba(0, 255, 174, 0.04);
-        overflow-y: auto;
-        overscroll-behavior: contain;
-        scrollbar-width: thin;
-        scrollbar-color: rgba(0, 255, 180, 0.32) rgba(0, 0, 0, 0.8);
-      }
-      .device-settings-box .device-col::-webkit-scrollbar {
-        width: 10px;
-      }
-      .device-settings-box .device-col::-webkit-scrollbar-track {
-        background: rgba(0, 0, 0, 0.7);
-        border-radius: 10px;
-      }
-      .device-settings-box .device-col::-webkit-scrollbar-thumb {
-        background: rgba(0, 255, 180, 0.24);
-        border-radius: 10px;
-        box-shadow: inset 0 0 6px rgba(0, 255, 180, 0.22);
-      }
-      .device-settings-box .device-col::-webkit-scrollbar-thumb:hover {
-        background: rgba(0, 255, 180, 0.5);
-        box-shadow: inset 0 0 8px rgba(0, 255, 180, 0.35);
-      }
-      .device-settings-box .ds-col-heading {
-        grid-column: 1 / -1;
-        margin: 0 0 8px;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        font-size: 14px;
-        font-weight: 900;
-        letter-spacing: 0.3px;
-        color: #f8fafc;
-      }
-      .device-settings-box .ds-col-icon {
-        width: 18px;
-        height: 18px;
-        flex: 0 0 auto;
-        color: rgba(0, 255, 174, 0.95);
-        filter: drop-shadow(0 0 6px rgba(0, 255, 174, 0.14));
-      }
-      .device-settings-box .ds-col-heading--nichrome .ds-col-icon {
-        color: rgba(249, 115, 22, 0.95);
-        filter: drop-shadow(0 0 6px rgba(249, 115, 22, 0.18));
-      }
-      /* Left column (Device Settings) as a compact 2-column grid */
-      .device-settings-box .device-grid > .device-col:first-child {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 10px 16px;
-      }
-      .device-settings-box .device-grid > .device-col:first-child h3 {
-        grid-column: 1 / -1;
-        margin: 0 0 10px;
-        font-size: 15px;
-      }
-      .mixed-only {
-        display: none;
-      }
-      /* Inputs with right-side unit tag */
-      .input-with-unit {
-        position: relative;
-      }
-      .input-with-unit input {
-        width: 100%;
-        padding-right: 42px; /* space for unit */
-      }
-      .unit-label {
-        position: absolute;
-        right: 10px;
-        top: 50%;
-        transform: translateY(-50%);
-        font-size: 12px;
-        opacity: 0.75;
-        pointer-events: none;
-      }
-      /* Nichrome calibration grid: 5 x 2 for R01..R10 + 1 full-width target row */
-      .nichrome-grid {
-        display: grid;
-        grid-template-columns: repeat(5, minmax(0, 1fr));
-        gap: 10px 12px;
-      }
-      .nichrome-meta {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 10px 12px;
-      }
-      .nichrome-meta .ds-field {
-        min-width: 0;
-      }
-      .nichrome-grid .field {
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-      }
-      .nichrome-grid .field label {
-        font-size: 11px;
-        opacity: 0.85;
-      }
-      .nichrome-grid .field input {
-        padding: 8px;
-      }
-      .nichrome-grid .field.target {
-        grid-column: 1 / -1; /* span entire row */
-      }
-      /* Actions always visible and tidy */
-      .device-settings-actions {
-        margin-top: 8px;
-        padding-top: 10px;
-        border-top: 1px solid rgba(255, 255, 255, 0.06);
-        flex: 0 0 auto; /* always visible under the scroll area */
-        justify-content: flex-end;
-      }
-      /* Optional: tiny responsive fallback if viewport is very short or narrow */
-      @media (max-height: 640px) {
-        .user-modal-content.device-settings-box {
-          max-height: 440px;
-        }
-      }
-      @media (max-width: 980px) {
-        .user-modal-content.device-settings-box {
-          max-width: 600px;
-        }
-      }
-      @media (max-width: 860px) {
-        .device-settings-box .device-grid {
-          grid-template-columns: 1fr; /* stack columns on very narrow view */
-        }
-      }
-    </style>
+    <link rel="stylesheet" href="css/admin.css?v=6" />
   </head>
   <body>
     <div class="ui-container">
@@ -445,7 +193,13 @@
         </div>
       </div>
 
-      <div id="eventToast" class="event-toast" role="status" aria-live="assertive">
+
+      <div
+        id="eventToast"
+        class="event-toast"
+        role="status"
+        aria-live="assertive"
+      >
         <div class="event-toast-main">
           <span id="eventToastKind" class="event-toast-kind">ERROR</span>
           <span id="eventToastReason" class="event-toast-reason">--</span>
@@ -454,6 +208,332 @@
           View
         </button>
       </div>
+
+
+      <div
+
+        id="setupWizardOverlay"
+
+        class="setup-wizard-overlay"
+
+        aria-hidden="true"
+
+      >
+
+        <div class="setup-wizard-shell">
+
+          <div class="setup-wizard-header">
+
+            <div class="setup-wizard-title">Setup Wizard</div>
+
+            <div id="setupWizardStepTitle" class="setup-wizard-step-title">
+
+              --
+
+            </div>
+
+            <div id="setupWizardStepDesc" class="setup-wizard-step-desc">
+
+              --
+
+            </div>
+
+            <div class="setup-wizard-pill-row">
+
+              <div id="setupWizardConfigPill" class="setup-pill">
+
+                Config: --
+
+              </div>
+
+              <div id="setupWizardCalibPill" class="setup-pill">
+
+                Calibration: --
+
+              </div>
+
+            </div>
+
+          </div>
+
+
+
+          <div class="setup-wizard-body">
+
+            <div id="setupWizardRail" class="setup-wizard-rail"></div>
+
+            <div class="setup-wizard-panel">
+
+                            <section id="wizardStepIntro" class="wizard-step">
+                <h3>Welcome</h3>
+                <p>
+                  Complete the required setup steps before running the device.
+                </p>
+                <div class="wizard-missing-grid">
+                  <div>
+                    <div class="setup-list-title">Missing config</div>
+                    <ul id="wizardMissingConfigList" class="setup-list"></ul>
+                  </div>
+                  <div>
+                    <div class="setup-list-title">Missing calibration</div>
+                    <ul id="wizardMissingCalibList" class="setup-list"></ul>
+                  </div>
+                </div>
+              </section>
+
+
+
+
+                            <section id="wizardStepCredentials" class="wizard-step">
+                <h3>Credentials</h3>
+                <p>
+                  Set admin and user accounts. Use the Save buttons in each
+                  card.
+                </p>
+                <div id="wizardMountCredentials" class="wizard-mount"></div>
+                <div id="wizardMountUser" class="wizard-mount"></div>
+              </section>
+
+
+
+
+                            <section id="wizardStepWifi" class="wizard-step">
+                <h3>Wi-Fi</h3>
+                <p>Configure the station and access point settings.</p>
+                <div id="wizardMountWifiStation" class="wizard-mount"></div>
+                <div id="wizardMountWifiAp" class="wizard-mount"></div>
+              </section>
+
+
+
+
+                            <section id="wizardStepOutputs" class="wizard-step">
+                <h3>Output Selection</h3>
+                <p>Select which outputs are enabled for setup and runtime.</p>
+                <div id="wizardMountOutputs" class="wizard-mount"></div>
+              </section>
+
+
+
+
+                            <section id="wizardStepPresence" class="wizard-step">
+                <h3>Presence Check</h3>
+                <p>
+                  Run the voltage-drop presence probe to confirm connected
+                  wires.
+                </p>
+                <div id="wizardMountPresence" class="wizard-mount"></div>
+              </section>
+
+
+
+
+                            <section id="wizardStepNtcParams" class="wizard-step">
+                <h3>NTC Parameters</h3>
+                <p>Confirm the NTC beta, T0, and resistance values.</p>
+                <div class="wizard-mount">
+                  <div
+                    class="user-modal-content zoom-box settings-card wizard-ntc-card"
+                  >
+                    <div id="wizardMountNtcParams"></div>
+                    <div
+                      class="device-settings-actions settings-actions wizard-ntc-actions"
+                    >
+                      <button
+                        type="button"
+                        class="settings-btn settings-btn-primary"
+                        onclick="saveDeviceAndNichrome()"
+                        title="Save NTC parameters"
+                      >
+                        <svg
+                          class="settings-btn-icon"
+                          viewBox="0 0 24 24"
+                          aria-hidden="true"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        >
+                          <path d="M20 6L9 17l-5-5"></path>
+                        </svg>
+                        Save NTC
+                      </button>
+                      <button
+                        type="button"
+                        class="settings-btn"
+                        onclick="resetDeviceAndNichrome()"
+                        title="Reset NTC parameters to last loaded values"
+                      >
+                        <svg
+                          class="settings-btn-icon"
+                          viewBox="0 0 24 24"
+                          aria-hidden="true"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        >
+                          <path d="M3 12a9 9 0 1 0 3-6.7"></path>
+                          <polyline points="3 3 3 9 9 9"></polyline>
+                        </svg>
+                        Reset
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+
+
+
+                            <section id="wizardStepDevice" class="wizard-step">
+                <h3>Device Settings</h3>
+                <p>
+                  Fill in the required device, safety, wire, and floor values.
+                </p>
+                <div id="wizardMountDevice" class="wizard-mount"></div>
+              </section>
+
+
+
+
+                            <section id="wizardStepWireCal" class="wizard-step">
+                <h3>Wire Calibration</h3>
+                <p>
+                  Select a wire, start calibration, or skip and return later.
+                </p>
+                <div class="wizard-calib-status">
+                  Status: <span id="wizardWireCalStatus">--</span>
+                </div>
+                <button
+                  id="wizardOpenWireCalBtn"
+                  type="button"
+                  class="settings-btn settings-btn-primary"
+                >
+                  Open Calibration
+                </button>
+              </section>
+
+
+
+
+                            <section id="wizardStepFloorCal" class="wizard-step">
+                <h3>Floor Calibration</h3>
+                <p>
+                  Calibrate the floor model after wire calibration completes.
+                </p>
+                <div id="wizardFloorGateNote" class="wizard-calib-status">
+                  Wire calibration must be complete before floor calibration.
+                </div>
+                <div class="wizard-floor-actions">
+                  <button
+                    id="wizardFloorGoWireBtn"
+                    type="button"
+                    class="settings-btn"
+                  >
+                    Back to wire calibration
+                  </button>
+                  <button
+                    id="wizardFloorGoNtcBtn"
+                    type="button"
+                    class="settings-btn"
+                  >
+                    Edit NTC parameters
+                  </button>
+                </div>
+                <div class="wizard-calib-status">
+                  Status: <span id="wizardFloorCalStatus">--</span>
+                </div>
+                <button
+                  id="wizardOpenFloorCalBtn"
+                  type="button"
+                  class="settings-btn settings-btn-primary"
+                >
+                  Open Calibration
+                </button>
+              </section>
+
+
+
+
+                            <section id="wizardStepFinish" class="wizard-step">
+                <h3>Finish</h3>
+                <p>Confirm setup completion and review calibration status.</p>
+                <div class="wizard-summary">
+                  <div>
+                    Configuration: <span id="wizardSummaryConfig">--</span>
+                  </div>
+                  <div>
+                    Calibration: <span id="wizardSummaryCalib">--</span>
+                  </div>
+                </div>
+              </section>
+
+
+            </div>
+
+          </div>
+
+
+
+          <div class="setup-wizard-footer">
+
+            <div id="setupWizardNote" class="setup-wizard-note">--</div>
+
+            <div class="setup-wizard-actions">
+
+              <button id="wizardBackBtn" type="button" class="settings-btn">
+
+                Back
+
+              </button>
+
+              <button id="wizardSkipBtn" type="button" class="settings-btn">
+
+                Skip for now
+
+              </button>
+
+              <button
+
+                id="wizardNextBtn"
+
+                type="button"
+
+                class="settings-btn settings-btn-primary"
+
+              >
+
+                Next
+
+              </button>
+
+              <button
+
+                id="wizardFinishBtn"
+
+                type="button"
+
+                class="settings-btn settings-btn-primary"
+
+              >
+
+                Finish Setup
+
+              </button>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+
+
 
       <!-- Sidebar -->
       <div class="sidebar">
@@ -474,7 +554,7 @@
           </svg>
           <span>Dashboard</span>
         </div>
-        <div class="tab" onclick="switchTab(1)">
+        <div class="tab" id="userTabBtn" onclick="switchTab(1)">
           <svg
             class="tab-icon"
             viewBox="0 0 24 24"
@@ -568,7 +648,7 @@
           <span>Live</span>
         </div>
 
-        <!-- SINGLE vertical stack of 4 buttons -->
+        <!-- SINGLE vertical stack of 5 buttons -->
         <div class="sidebar-controls-vertical">
           <!-- 1) Mute -->
           <div
@@ -606,8 +686,51 @@
         </div>
       </div>
 
+
+      <div
+        id="wiresCoolPrompt"
+        class="wires-cool-prompt"
+        role="status"
+        aria-live="polite"
+      >
+        <span>Wires assumed hot. Confirm if cool.</span>
+        <button
+          id="wiresCoolConfirmBtn"
+          type="button"
+          class="settings-btn settings-btn-primary"
+        >
+          Confirm
+        </button>
+      </div>
+
+
       <!-- Dashboard Tab -->
       <div class="content active" id="dashboardTab">
+        <div id="setupBanner" class="setup-banner" aria-live="polite">
+          <div class="setup-banner-main">
+            <div id="setupBannerTitle" class="setup-banner-title">
+              Setup required
+            </div>
+            <div class="setup-banner-text">
+              <span id="setupBannerMainText">
+                Complete the setup wizard before running the device.
+              </span>
+              <span id="setupBannerDetail">Missing: --</span>
+            </div>
+          </div>
+          <div class="setup-banner-actions">
+            <button
+              id="setupBannerOpenBtn"
+              type="button"
+              class="settings-btn settings-btn-primary"
+            >
+              Open Setup
+            </button>
+            <button id="setupBannerCalibBtn" type="button" class="settings-btn">
+              Calibration
+            </button>
+          </div>
+        </div>
         <div class="dashboard-panels dashboard-panels-top">
           <section
             class="user-modal-content zoom-box dashboard-card dashboard-clock"
@@ -879,62 +1002,6 @@
             </div>
 
             <div class="mode-toggle">
-              <div class="mode-group mode-group-mode" aria-label="System mode">
-                <div class="mode-group-label">Mode</div>
-                <div class="mode-group-controls">
-                  <span
-                    id="modeAutoPill"
-                    class="mode-pill mode-pill-auto"
-                    title="Auto mode"
-                  >
-                    <svg
-                      class="mode-pill-icon"
-                      viewBox="0 0 24 24"
-                      aria-hidden="true"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <path d="M21 12a9 9 0 1 1-2.64-6.36"></path>
-                      <polyline points="21 3 21 9 15 9"></polyline>
-                    </svg>
-                    <span class="mode-pill-text">Auto</span>
-                  </span>
-                  <label class="switch">
-                    <input
-                      type="checkbox"
-                      id="modeToggle"
-                      onchange="toggleMode()"
-                    />
-                    <span class="slider"></span>
-                  </label>
-                  <span
-                    id="modeManualPill"
-                    class="mode-pill mode-pill-manual"
-                    title="Manual mode"
-                  >
-                    <svg
-                      class="mode-pill-icon"
-                      viewBox="0 0 24 24"
-                      aria-hidden="true"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <path
-                        d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"
-                      ></path>
-                      <circle cx="12" cy="7" r="4"></circle>
-                    </svg>
-                    <span class="mode-pill-text">Manual</span>
-                  </span>
-                </div>
-              </div>
-
               <div
                 class="mode-group mode-group-feedback"
                 aria-label="LED feedback"
@@ -1567,6 +1634,7 @@
         </div>
       </div>
 
+
       <!-- User Settings Tab -->
       <div class="content" id="userSettingsTab">
         <div class="content-header">
@@ -1714,6 +1782,7 @@
         </div>
       </div>
 
+
       <!-- Manual Control Tab -->
       <div class="content" id="manualControlTab">
         <div class="content-header">
@@ -1838,6 +1907,7 @@
         </div>
       </div>
 
+
       <!-- Admin Settings Tab -->
       <div class="content" id="adminSettingsTab">
         <div class="content-header">
@@ -1845,6 +1915,144 @@
         </div>
 
         <div class="admin-settings-layout">
+          <section
+            class="user-modal-content zoom-box settings-card setup-wizard-card"
+          >
+            <div class="settings-card-header">
+              <div class="settings-card-title">
+                <svg
+                  class="settings-card-icon"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <circle cx="12" cy="12" r="9"></circle>
+                  <path d="M8 12l2.5 2.5 5-5"></path>
+                </svg>
+                <span>Setup Wizard</span>
+              </div>
+              <div class="settings-card-subtitle">
+                Track required configuration and calibration before RUN.
+              </div>
+            </div>
+
+            <div class="setup-wizard-body">
+              <div class="setup-wizard-status">
+                <div id="setupDonePill" class="setup-pill">Setup: --</div>
+                <div id="setupConfigPill" class="setup-pill">Config: --</div>
+                <div id="setupCalibPill" class="setup-pill">
+                  Calibration: --
+                </div>
+                <div id="setupRunPill" class="setup-pill">Run: --</div>
+              </div>
+
+              <div class="setup-progress-grid">
+                <div class="settings-field">
+                  <label for="setupStageInput">Stage</label>
+                  <input type="number" id="setupStageInput" min="0" step="1" />
+                </div>
+                <div class="settings-field">
+                  <label for="setupSubstageInput">Substage</label>
+                  <input
+                    type="number"
+                    id="setupSubstageInput"
+                    min="0"
+                    step="1"
+                  />
+                </div>
+                <div class="settings-field">
+                  <label for="setupWireIndexInput">Wire index</label>
+                  <input
+                    type="number"
+                    id="setupWireIndexInput"
+                    min="0"
+                    max="10"
+                    step="1"
+                  />
+                </div>
+              </div>
+
+              <div class="setup-progress-actions">
+                <button
+                  type="button"
+                  id="setupUpdateBtn"
+                  class="settings-btn settings-btn-primary"
+                >
+                  Update Stage
+                </button>
+                <button type="button" id="setupDoneBtn" class="settings-btn">
+                  Mark Setup Done
+                </button>
+                <button
+                  type="button"
+                  id="setupClearDoneBtn"
+                  class="settings-btn"
+                >
+                  Clear Setup Done
+                </button>
+                <button type="button" id="setupRefreshBtn" class="settings-btn">
+                  Refresh
+                </button>
+              </div>
+
+              <div class="setup-missing-grid">
+                <div class="setup-missing-block">
+                  <div class="setup-list-title">Missing config</div>
+                  <ul id="setupMissingConfigList" class="setup-list"></ul>
+                </div>
+                <div class="setup-missing-block">
+                  <div class="setup-list-title">Missing calibration</div>
+                  <ul id="setupMissingCalibList" class="setup-list"></ul>
+                </div>
+              </div>
+
+              <div class="setup-status-grid">
+                <div class="setup-status-card">
+                  <div class="setup-status-label">Floor</div>
+                  <div id="setupFloorStatus" class="setup-status-value">--</div>
+                </div>
+                <div class="setup-status-card">
+                  <div class="setup-status-label">Presence</div>
+                  <div id="setupPresenceStatus" class="setup-status-value">
+                    --
+                  </div>
+                </div>
+                <div class="setup-status-card">
+                  <div class="setup-status-label">Cap bank</div>
+                  <div id="setupCapStatus" class="setup-status-value">--</div>
+                </div>
+              </div>
+
+              <div class="setup-wire-grid" id="setupWireGrid"></div>
+
+              <div class="setup-reset-row">
+                <label class="setup-reset-option">
+                  <input type="checkbox" id="setupResetClearModels" />
+                  Clear models
+                </label>
+                <label class="setup-reset-option">
+                  <input type="checkbox" id="setupResetClearWire" />
+                  Clear wire params
+                </label>
+                <label class="setup-reset-option">
+                  <input type="checkbox" id="setupResetClearFloor" />
+                  Clear floor params
+                </label>
+                <button
+                  type="button"
+                  id="setupResetBtn"
+                  class="settings-btn settings-btn-danger"
+                >
+                  Reset Setup
+                </button>
+              </div>
+            </div>
+          </section>
+
           <section
             class="user-modal-content zoom-box settings-card admin-credentials-card"
           >
@@ -2146,25 +2354,30 @@
         </div>
       </div>
 
+
       <!-- Device Settings Tab -->
+
       <div class="content" id="deviceSettingsTab">
+
         <div class="content-header">
+
           <h2></h2>
+
         </div>
 
-        <div
-          style="
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: calc(100% - 80px);
-          "
-        >
+
+
+        <div class="device-settings-center">
+
           <!-- Device Settings: ONE SINGLE BOX -->
+
           <div class="user-modal-content zoom-box device-settings-box">
+
             <div class="device-grid">
+
               <!-- Left column: existing device fields -->
-              <section class="device-col device-col--left">
+
+                            <section class="device-col device-col--left">
                 <h3 class="ds-col-heading ds-col-heading--device">
                   <svg
                     class="ds-col-icon"
@@ -2229,6 +2442,14 @@
                     <input type="number" id="currLimit" step="0.1" />
                     <span class="unit-label">A</span>
                   </div>
+                </div>
+
+                <div class="ds-field">
+                  <label for="currentSource">Current Source</label>
+                  <select id="currentSource">
+                    <option value="1">ACS Sensor</option>
+                    <option value="0">CSP Discharge Estimate</option>
+                  </select>
                 </div>
 
                 <div class="ds-group-title ds-thermal-safety">
@@ -2300,40 +2521,134 @@
                 </div>
 
                 <div class="ds-field">
-                  <label for="idleCurrentA">Idle Current Baseline</label>
-                  <div class="input-with-unit">
-                    <input type="number" id="idleCurrentA" step="0.01" />
-                    <span class="unit-label">A</span>
-                  </div>
+                  <label for="modelParamTarget">Model Target</label>
+                  <select id="modelParamTarget">
+                    <option value="wire1">Wire 1</option>
+                    <option value="wire2">Wire 2</option>
+                    <option value="wire3">Wire 3</option>
+                    <option value="wire4">Wire 4</option>
+                    <option value="wire5">Wire 5</option>
+                    <option value="wire6">Wire 6</option>
+                    <option value="wire7">Wire 7</option>
+                    <option value="wire8">Wire 8</option>
+                    <option value="wire9">Wire 9</option>
+                    <option value="wire10">Wire 10</option>
+                    <option value="floor">Floor</option>
+                  </select>
                 </div>
 
                 <div class="ds-field">
-                  <label for="wireTauSec">Wire Tau (time constant)</label>
+                  <label for="modelTau">Tau</label>
                   <div class="input-with-unit">
-                    <input type="number" id="wireTauSec" step="0.01" />
+                    <input type="number" id="modelTau" step="0.01" />
                     <span class="unit-label">s</span>
                   </div>
                 </div>
 
                 <div class="ds-field">
-                  <label for="wireKLoss">Heat Loss k</label>
+                  <label for="modelK">K Loss</label>
                   <div class="input-with-unit">
-                    <input type="number" id="wireKLoss" step="0.001" />
+                    <input type="number" id="modelK" step="0.001" />
                     <span class="unit-label">W/K</span>
                   </div>
                 </div>
 
                 <div class="ds-field">
-                  <label for="wireThermalC">Thermal Mass C</label>
+                  <label for="modelC">Thermal C</label>
                   <div class="input-with-unit">
-                    <input type="number" id="wireThermalC" step="0.01" />
+                    <input type="number" id="modelC" step="0.01" />
                     <span class="unit-label">J/K</span>
+                  </div>
+                </div>
+
+                <div id="ntcParamsCard">
+                  <div class="ds-group-title ds-ntc">
+                    <svg
+                      class="ds-group-icon"
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M14 14.76V3.5a2 2 0 0 0-4 0v11.26"></path>
+                      <circle cx="12" cy="17" r="4"></circle>
+                    </svg>
+                    <span>NTC Parameters</span>
+                  </div>
+
+                  <div class="ds-field">
+                    <label for="ntcBeta">Beta</label>
+                    <input type="number" id="ntcBeta" step="1" min="1" />
+                  </div>
+
+                  <div class="ds-field">
+                    <label for="ntcT0C">T0</label>
+                    <div class="input-with-unit">
+                      <input type="number" id="ntcT0C" step="0.1" />
+                      <span class="unit-label">C</span>
+                    </div>
+                  </div>
+
+                  <div class="ds-field">
+                    <label for="ntcR0">R0 / R25</label>
+                    <div class="input-with-unit">
+                      <input type="number" id="ntcR0" step="1" />
+                      <span class="unit-label">&Omega;</span>
+                    </div>
+                  </div>
+
+                  <div class="ds-field">
+                    <label for="ntcFixedRes">Fixed Pull-up Resistor</label>
+                    <div class="input-with-unit">
+                      <input type="number" id="ntcFixedRes" step="1" />
+                      <span class="unit-label">&Omega;</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="ds-group-title ds-presence">
+                  <svg
+                    class="ds-group-icon"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <circle cx="12" cy="12" r="9"></circle>
+                    <path d="M12 7v5"></path>
+                    <path d="M12 16h.01"></path>
+                  </svg>
+                  <span>Presence</span>
+                </div>
+
+                <div class="ds-field">
+                  <label for="presenceMinDropV"
+                    >Presence Min Voltage Drop</label
+                  >
+                  <div class="input-with-unit">
+                    <input
+                      type="number"
+                      id="presenceMinDropV"
+                      step="0.01"
+                      min="0"
+                    />
+                    <span class="unit-label">V</span>
                   </div>
                 </div>
               </section>
 
+
+
+
               <!-- Right column: Nichrome -->
-              <section class="device-col device-col--right">
+
+                            <section class="device-col device-col--right">
                 <h3 class="ds-col-heading ds-col-heading--nichrome">
                   <svg
                     class="ds-col-icon"
@@ -2500,6 +2815,19 @@
                           <span class="unit-label">C</span>
                         </div>
                       </div>
+                      <div class="ds-field">
+                        <label for="floorSwitchMarginC"
+                          >Floor Switch Margin</label
+                        >
+                        <div class="input-with-unit">
+                          <input
+                            type="number"
+                            id="floorSwitchMarginC"
+                            step="0.1"
+                          />
+                          <span class="unit-label">C</span>
+                        </div>
+                      </div>
                     </div>
                     <div class="ds-group-title ds-nichrome">
                       <svg
@@ -2649,117 +2977,6 @@
                         <span>Energy Control</span>
                       </div>
 
-                      <div class="ds-field" id="mixFrameField">
-                        <label for="mixFrameMs">Energy Frame</label>
-                        <div class="input-with-unit">
-                          <input
-                            type="number"
-                            id="mixFrameMs"
-                            min="10"
-                            max="300"
-                          />
-                          <span class="unit-label">ms</span>
-                        </div>
-                      </div>
-
-                      <div class="ds-field">
-                        <label for="mixRefOnMs">Reference On-Time</label>
-                        <div class="input-with-unit">
-                          <input type="number" id="mixRefOnMs" min="1" />
-                          <span class="unit-label">ms</span>
-                        </div>
-                      </div>
-
-                      <div class="ds-field">
-                        <label for="mixRefResOhm">Reference Resistance</label>
-                        <div class="input-with-unit">
-                          <input type="number" id="mixRefResOhm" step="0.1" />
-                          <span class="unit-label">Ohm</span>
-                        </div>
-                      </div>
-
-                      <div class="ds-field">
-                        <label for="mixBoostK">Boost Gain</label>
-                        <input
-                          type="number"
-                          id="mixBoostK"
-                          step="0.01"
-                          min="0"
-                        />
-                      </div>
-
-                      <div class="ds-field">
-                        <label for="mixBoostMs">Boost Duration</label>
-                        <div class="input-with-unit">
-                          <input type="number" id="mixBoostMs" min="0" />
-                          <span class="unit-label">ms</span>
-                        </div>
-                      </div>
-
-                      <div class="ds-field">
-                        <label for="mixPreDeltaC">Boost Exit Delta</label>
-                        <div class="input-with-unit">
-                          <input
-                            type="number"
-                            id="mixPreDeltaC"
-                            step="0.1"
-                            min="0"
-                          />
-                          <span class="unit-label">C</span>
-                        </div>
-                      </div>
-
-                      <div class="ds-field">
-                        <label for="mixHoldUpdateSec">Thermal Update</label>
-                        <div class="input-with-unit">
-                          <input
-                            type="number"
-                            id="mixHoldUpdateSec"
-                            min="0.5"
-                            max="5"
-                            step="0.1"
-                          />
-                          <span class="unit-label">s</span>
-                        </div>
-                      </div>
-
-                      <div class="ds-field">
-                        <label for="mixHoldGain">Hold Gain</label>
-                        <div class="input-with-unit">
-                          <input
-                            type="number"
-                            id="mixHoldGain"
-                            step="0.01"
-                            min="0"
-                          />
-                          <span class="unit-label">ms/C</span>
-                        </div>
-                      </div>
-
-                      <div class="ds-field">
-                        <label for="mixMinOnMs">Min Packet</label>
-                        <div class="input-with-unit">
-                          <input type="number" id="mixMinOnMs" min="0" />
-                          <span class="unit-label">ms</span>
-                        </div>
-                      </div>
-
-                      <div class="ds-field">
-                        <label for="mixMaxOnMs">Max Packet</label>
-                        <div class="input-with-unit">
-                          <input type="number" id="mixMaxOnMs" min="1" />
-                          <span class="unit-label">ms</span>
-                        </div>
-                      </div>
-
-                      <div class="ds-field">
-                        <label for="mixMaxAvgMs">Max Avg / sec</label>
-                        <div class="input-with-unit">
-                          <input type="number" id="mixMaxAvgMs" min="0" />
-                          <span class="unit-label">ms</span>
-                        </div>
-                      </div>
-
                       <div class="ds-field">
                         <label for="wireGauge">Wire Gauge (AWG)</label>
                         <input
@@ -2775,64 +2992,124 @@
                   </div>
                 </div>
               </section>
+
+
             </div>
+
+
 
             <div class="device-settings-actions settings-actions">
+
               <button
+
                 type="button"
+
                 class="settings-btn settings-btn-primary"
+
                 onclick="saveDeviceAndNichrome()"
+
                 title="Save device + nichrome settings"
+
               >
+
                 <svg
+
                   class="settings-btn-icon"
+
                   viewBox="0 0 24 24"
+
                   aria-hidden="true"
+
                   fill="none"
+
                   stroke="currentColor"
+
                   stroke-width="2"
+
                   stroke-linecap="round"
+
                   stroke-linejoin="round"
+
                 >
+
                   <path d="M20 6L9 17l-5-5"></path>
+
                 </svg>
+
                 Save
+
               </button>
+
               <button
+
                 type="button"
+
                 class="settings-btn"
+
                 onclick="resetDeviceAndNichrome()"
+
                 title="Reset to last loaded values"
+
               >
+
                 <svg
+
                   class="settings-btn-icon"
+
                   viewBox="0 0 24 24"
+
                   aria-hidden="true"
+
                   fill="none"
+
                   stroke="currentColor"
+
                   stroke-width="2"
+
                   stroke-linecap="round"
+
                   stroke-linejoin="round"
+
                 >
+
                   <path d="M3 12a9 9 0 1 0 3-6.7"></path>
+
                   <polyline points="3 3 3 9 9 9"></polyline>
+
                 </svg>
+
                 Reset
+
               </button>
+
             </div>
+
           </div>
+
         </div>
+
       </div>
 
+
+
+
       <!-- Live Tab -->
+
       <!-- Live Tab -->
+
       <div class="content" id="liveTab">
+
         <div class="content-header">
+
           <h2></h2>
+
         </div>
 
+
+
         <div class="live-wrap">
-          <!-- Legend -->
+
+                    <!-- Legend -->
           <div class="live-legend">
             <span class="chip on-chip">
               <span class="dot-sample on"></span>
@@ -2848,7 +3125,9 @@
             </span>
           </div>
 
-          <!-- Centralized radial stage -->
+
+
+                    <!-- Centralized radial stage -->
           <div class="live-stage">
             <!-- SVG: traces + dots + temp circles -->
             <svg
@@ -3111,7 +3390,9 @@
             </div>
           </div>
 
-          <!-- Session History modal (unchanged skeleton, just kept below) -->
+
+
+                    <!-- Session History modal (unchanged skeleton, just kept below) -->
           <div id="sessionHistoryModal" class="session-history-modal">
             <div
               class="session-history-backdrop"
@@ -3150,7 +3431,10 @@
             </div>
           </div>
 
-          <!-- Calibration modal -->
+
+
+
+                    <!-- Calibration modal -->
           <div id="calibrationModal" class="calibration-modal">
             <div
               class="calibration-backdrop"
@@ -3159,12 +3443,11 @@
             <div class="calibration-content">
               <div class="calibration-header">
                 <h3>Calibration</h3>
-                <div style="display: flex; align-items: center; gap: 8px">
+                <div class="calibration-header-actions">
                   <button
                     id="calibrationInfoBtn"
                     type="button"
                     class="calib-btn"
-                    style="padding: 4px 8px; min-width: 32px"
                   >
                     ?
                   </button>
@@ -3216,6 +3499,16 @@
                           history.
                         </div>
                       </div>
+                      <div class="calibration-info-card">
+                        <div class="calibration-info-icon">3</div>
+                        <div class="calibration-info-card-title">
+                          Floor model calibration
+                        </div>
+                        <div class="calibration-info-card-text">
+                          Logs floor response using NTC (floor) and heatsink
+                          (ambient) to estimate floor tau/k/C.
+                        </div>
+                      </div>
                     </div>
 
                     <div class="calibration-info-actions">
@@ -3228,6 +3521,14 @@
                         <li>
                           <strong>Start/Stop Wire Test:</strong> Run the energy
                           loop across all allowed outputs to hold the target.
+                        </li>
+                        <li>
+                          <strong>Floor Model Calibration:</strong> Run floor
+                          capture to save the floor model parameters.
+                        </li>
+                        <li>
+                          <strong>Presence Probe:</strong> Detect connected
+                          wires and update presence calibration.
                         </li>
                         <li>
                           <strong>Load History / Resume Live:</strong> View
@@ -3262,6 +3563,15 @@
                         <span class="hint"
                           >Hold a target temp and verify the energy loop (no
                           logging).</span
+                        >
+                      </p>
+                    </div>
+                    <div class="cal-step">
+                      <span class="dot">3</span>
+                      <p>
+                        Floor model<br />
+                        <span class="hint"
+                          >Capture floor response with NTC + heatsink.</span
                         >
                       </p>
                     </div>
@@ -3474,61 +3784,147 @@
                   </div>
                 </div>
 
-                <div class="calib-model-card">
-                  <div class="calib-model-header">
-                    <div>
-                      <div class="calib-chart-title">Model suggestions</div>
-                      <div class="calib-chart-sub">
-                        Based on last calibration samples (power) and current
-                        thermal params.
+                <div class="calibration-section">
+                  <div class="calibration-section-header">
+                    <h4>Floor Model Calibration</h4>
+                    <span class="calibration-section-note"
+                      >Use NTC as floor sensor and heatsink as ambient.</span
+                    >
+                  </div>
+                  <div class="calibration-wire-test floor-calibration-grid">
+                    <div class="ds-field">
+                      <label for="floorCalTargetC">Target Temp</label>
+                      <div class="input-with-unit">
+                        <input type="number" id="floorCalTargetC" step="0.1" />
+                        <span class="unit-label">C</span>
                       </div>
                     </div>
-                    <div class="calib-chart-controls">
+                    <div class="ds-field">
+                      <label for="floorCalDutyPct">Duty</label>
+                      <div class="input-with-unit">
+                        <input
+                          type="number"
+                          id="floorCalDutyPct"
+                          step="1"
+                          min="5"
+                          max="100"
+                        />
+                        <span class="unit-label">%</span>
+                      </div>
+                    </div>
+                    <div class="ds-field">
+                      <label for="floorCalAmbientMin">Ambient</label>
+                      <div class="input-with-unit">
+                        <input
+                          type="number"
+                          id="floorCalAmbientMin"
+                          step="1"
+                          min="1"
+                        />
+                        <span class="unit-label">min</span>
+                      </div>
+                    </div>
+                    <div class="ds-field">
+                      <label for="floorCalHeatMin">Heat</label>
+                      <div class="input-with-unit">
+                        <input
+                          type="number"
+                          id="floorCalHeatMin"
+                          step="1"
+                          min="1"
+                        />
+                        <span class="unit-label">min</span>
+                      </div>
+                    </div>
+                    <div class="ds-field">
+                      <label for="floorCalCoolMin">Cool</label>
+                      <div class="input-with-unit">
+                        <input
+                          type="number"
+                          id="floorCalCoolMin"
+                          step="1"
+                          min="0"
+                        />
+                        <span class="unit-label">min</span>
+                      </div>
+                    </div>
+                    <div class="ds-field">
+                      <label for="floorCalIntervalMs">Interval</label>
+                      <div class="input-with-unit">
+                        <input
+                          type="number"
+                          id="floorCalIntervalMs"
+                          step="50"
+                          min="50"
+                          max="5000"
+                        />
+                        <span class="unit-label">ms</span>
+                      </div>
+                    </div>
+                    <div class="ds-field">
+                      <label for="floorCalWireIndex">Wire index</label>
+                      <input
+                        type="number"
+                        id="floorCalWireIndex"
+                        step="1"
+                        min="1"
+                        max="10"
+                      />
+                    </div>
+                    <div class="ds-field">
                       <button
-                        id="calibSuggestRefresh"
+                        id="startFloorCalibBtn"
                         type="button"
-                        class="calib-secondary"
+                        class="calib-btn"
                       >
-                        Refresh
-                      </button>
-                      <button
-                        id="calibSuggestFromHistory"
-                        type="button"
-                        class="calib-secondary"
-                      >
-                        Use Saved History
-                      </button>
-                      <button
-                        id="calibPersistBtn"
-                        type="button"
-                        class="calib-secondary calib-save"
-                      >
-                        Persist &amp; Reload
+                        Start Floor Cal
                       </button>
                     </div>
                   </div>
+                  <div class="calibration-status floor-cal-status">
+                    <div class="calib-stat">
+                      Stage: <span id="floorCalStageText">--</span>
+                    </div>
+                    <div class="calib-stat">
+                      Running: <span id="floorCalRunningText">--</span>
+                    </div>
+                    <div class="calib-stat">
+                      Calibrated: <span id="floorCalDoneText">--</span>
+                    </div>
+                    <div class="calib-stat">
+                      Tau: <span id="floorCalTauText">--</span>
+                    </div>
+                    <div class="calib-stat">
+                      K: <span id="floorCalKText">--</span>
+                    </div>
+                    <div class="calib-stat">
+                      C: <span id="floorCalCText">--</span>
+                    </div>
+                  </div>
+                </div>
 
-                  <div class="calib-model-grid">
-                    <div class="calib-stat-card">
-                      <div class="calib-stat-label">Thermal model</div>
-                      <div class="calib-stat-row">
-                        Ï„: <span id="calibTauText">--</span> s
-                      </div>
-                      <div class="calib-stat-row">
-                        k loss: <span id="calibKText">--</span> W/K
-                      </div>
-                      <div class="calib-stat-row">
-                        C: <span id="calibCText">--</span> J/K
-                      </div>
-                      <div class="calib-stat-row">
-                        Max P (calib): <span id="calibPmaxText">--</span> W
-                      </div>
+                <div id="presenceProbeSection" class="calibration-section">
+                  <div class="calibration-section-header">
+                    <h4>Presence Probe</h4>
+                    <span class="calibration-section-note"
+                      >Detect connected wires while idle.</span
+                    >
+                  </div>
+                  <div class="calibration-wire-test presence-probe-row">
+                    <div class="ds-field">
+                      <button
+                        id="presenceProbeBtn"
+                        type="button"
+                        class="calib-secondary"
+                      >
+                        Run Presence Probe
+                      </button>
+                    </div>
+                    <div class="ds-field status-line">
+                      Status: <span id="presenceProbeStatusText">--</span>
                     </div>
                   </div>
-                  <div class="calib-model-note">
-                    Click Persist &amp; Reload to save suggested values into NVS
-                    and reload settings.
-                  </div>
+                  <div id="presenceProbeGrid" class="presence-probe-grid"></div>
                 </div>
 
                 <div class="calibration-chart">
@@ -3592,8 +3988,14 @@
               </div>
             </div>
           </div>
+
+
         </div>
+
       </div>
+
+
+
 
       <!-- Live control view modal -->
       <div id="liveControlModal" class="live-control-modal">
@@ -3681,23 +4083,49 @@
         </div>
       </div>
 
+
       <!-- Footer -->
       <div class="footer">&copy; 2025 Power Distribution Admin Interface</div>
     </div>
 
-    <!-- enable/disable: set window.USE_MOCK=true/false before mock.js -->
-    <script>
-      window.USE_MOCK = false;
-    </script>
     <script src="js/base.js"></script>
-    <script src="js/admin.js"></script>
+    <script src="js/boot.js"></script>
+    <script src="js/tabs.js"></script>
+    <script src="js/state.js"></script>
+    <script src="js/tooltips.js"></script>
+    <script src="js/clock.js"></script>
+    <script src="js/setup_wizard.js"></script>
+    <script src="js/confirm_modal.js"></script>
+    <script src="js/safety.js"></script>
+    <script src="js/power_ui.js"></script>
+    <script src="js/user_menu.js"></script>
+    <script src="js/outputs.js"></script>
+    <script src="js/lt_toggle.js"></script>
+    <script src="js/manual_outputs.js"></script>
+    <script src="js/system_commands.js"></script>
+    <script src="js/heartbeat.js"></script>
+    <script src="js/control_api.js"></script>
+    <script src="js/device_settings.js"></script>
+    <script src="js/load_controls.js"></script>
+    <script src="js/user_settings.js"></script>
+    <script src="js/admin_settings.js"></script>
+    <script src="js/wifi_settings.js"></script>
+    <script src="js/live_overlay.js"></script>
+    <script src="js/session_events.js"></script>
+    <script src="js/calibration_ui.js"></script>
+    <script src="js/calibration_actions.js"></script>
+    <script src="js/wire_test.js"></script>
+    <script src="js/calibration_data.js"></script>
+    <script src="js/calibration_chart.js"></script>
+    <script src="js/live_control.js"></script>
+    <script src="js/monitor_gauges.js"></script>
+    <script src="js/logout.js"></script>
+    <script src="js/init.js"></script>
+    <script src="js/exports.js"></script>
 
     <!-- Confirm dialog -->
-    <div id="confirmModal" class="user-modal" style="display: none">
-      <div
-        class="user-modal-content zoom-box"
-        style="max-width: 380px; text-align: center"
-      >
+    <div id="confirmModal" class="user-modal">
+      <div class="user-modal-content zoom-box">
         <h3 id="confirmTitle">Confirm Action</h3>
         <p id="confirmMessage">Are you sure?</p>
 
@@ -3708,45 +4136,4 @@
       </div>
     </div>
   </body>
-
-  <style>
-    /* === Fixed App Stage (change these if you want another size) === */
-    :root {
-      --APP_W: 980px;
-      --APP_H: 640px;
-    }
-    /* Don't let the layout collapse below the fixed stage */
-    html,
-    body {
-      min-width: var(--APP_W);
-      min-height: var(--APP_H);
-      overflow: auto; /* scrollbars if window is smaller */
-    }
-    /* Pin the whole admin UI to a fixed box */
-    .ui-container {
-      width: var(--APP_W);
-      height: var(--APP_H);
-      min-width: var(--APP_W);
-      min-height: var(--APP_H);
-      max-width: var(--APP_W);
-      max-height: var(--APP_H);
-      margin: 0 auto; /* centered if window gets wider */
-      overflow: hidden; /* avoid inner jiggle/resizes */
-      box-sizing: border-box;
-    }
-    /* Neutralize narrow/short responsive fallbacks */
-    @media (max-width: 99999px) {
-      /* keep two columns in device settings even on small windows */
-      .device-settings-box .device-grid {
-        grid-template-columns: 1fr 1fr !important;
-      }
-    }
-    @media (max-width: 980px), (max-height: 640px) {
-      /* keep the same fixed size even if viewport goes below */
-      .ui-container {
-        width: var(--APP_W);
-        height: var(--APP_H);
-      }
-    }
-  </style>
 </html>

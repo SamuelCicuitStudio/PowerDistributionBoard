@@ -6,7 +6,7 @@
  *  - Runtime wire state
  *  - Thermal integration (virtual temperatures)
  *  - Presence detection
- *  - Telemetry adapter (StatusSnapshot / JSON)
+ *  - Telemetry adapter (StatusSnapshot)
  *
  * NOTE: This header is designed to be integrated gradually.
  *       It does not change existing behavior until you call it
@@ -22,7 +22,6 @@
 #include <StatusSnapshot.hpp>
 #include <Config.hpp>
 #include <math.h>
-#include <ArduinoJson.h>
 // ======================================================================
 // CapModel – simple R-C prediction helpers
 // ======================================================================
@@ -212,7 +211,7 @@ public:
     void integrate(const CurrentSensor::Sample* curBuf, size_t nCur,
                    const CpDischg::Sample*     voltBuf, size_t nVolt,
                    const HeaterManager::OutputEvent* outBuf, size_t nOut,
-                   double idleCurrentA, double ambientC,
+                   double ambientC,
                    WireStateModel& runtime, HeaterManager& heater);
 
     // Variant that uses only current history (no voltage) to estimate
@@ -238,6 +237,10 @@ public:
 
     double getWireTemp(uint8_t index) const;
     void   setThermalParams(double tauSec, double kLoss, double thermalMassC);
+    void   setWireThermalParams(uint8_t index,
+                                double tauSec,
+                                double kLoss,
+                                double thermalMassC);
     bool   applyExternalWireTemp(uint8_t index, double tempC, uint32_t tsMs,
                                 WireStateModel& runtime, HeaterManager& heater);
 
@@ -248,17 +251,23 @@ private:
         uint32_t lastUpdateMs    = 0;
         bool     locked          = false;
         uint32_t cooldownReleaseMs = 0;
+        double   tauSec          = DEFAULT_WIRE_MODEL_TAU;
+        double   kLoss           = DEFAULT_WIRE_MODEL_K;
+        double   capC            = DEFAULT_WIRE_MODEL_C;
     };
 
     double wireResistanceAtTemp(uint8_t idx) const;
     void   advanceWireTemp(WireThermalState& ws, double ambientC, double powerW, double dtS);
+    void   applyThermalGuards(WireThermalState& ws,
+                              WireRuntimeState& rt,
+                              uint32_t tsMs);
 
     WireThermalState _state[HeaterManager::kWireCount];
     double           _ambientC      = 25.0;
     bool             _initialized   = false;
-    double           _tauSec        = DEFAULT_WIRE_TAU_SEC;
-    double           _heatLossK     = DEFAULT_WIRE_K_LOSS;
-    double           _thermalMassC  = DEFAULT_WIRE_THERMAL_C;
+    double           _tauSec        = DEFAULT_WIRE_MODEL_TAU;
+    double           _heatLossK     = DEFAULT_WIRE_MODEL_K;
+    double           _thermalMassC  = DEFAULT_WIRE_MODEL_C;
 
     // Pulse state for integrateCapModel()
     bool     _pulseActive   = false;
@@ -269,32 +278,7 @@ private:
 };
 
 // ======================================================================
-// WirePresenceManager – presence detection
-// ======================================================================
-
-class WirePresenceManager {
-public:
-    void probeAll(HeaterManager& heater,
-                  WireStateModel& state,
-                  CurrentSensor& cs,
-                  float busVoltage,
-                  float minValidFraction = 0.25f,
-                  float maxValidFraction = 4.0f,
-                  uint16_t settleMs = 30,
-                  uint8_t samples = 10);
-
-    void updatePresenceFromMask(HeaterManager& heater,
-                                WireStateModel& state,
-                                uint16_t mask,
-                                float totalCurrentA,
-                                float busVoltage,
-                                float minValidRatio = 0.20f);
-
-    bool hasAnyConnected(const WireStateModel& state) const;
-};
-
-// ======================================================================
-// WireTelemetryAdapter – wire → StatusSnapshot / JSON
+// WireTelemetryAdapter – wire → StatusSnapshot
 // ======================================================================
 
 class WireTelemetryAdapter {
@@ -302,9 +286,6 @@ public:
     void fillSnapshot(StatusSnapshot& out,
                       const WireConfigStore& cfg,
                       const WireStateModel&  state) const;
-
-    void writeMonitorJson(JsonObject& root,
-                          const StatusSnapshot& snap) const;
 };
 
 #endif // WIRE_SUBSYSTEM_H

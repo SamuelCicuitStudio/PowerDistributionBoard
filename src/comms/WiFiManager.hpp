@@ -1,4 +1,4 @@
-﻿/**************************************************************
+/**************************************************************
  *  Author      : Tshibangu Samuel
  *  Role        : Freelance Embedded Systems Engineer
  *  Expertise   : Secure IoT Systems, Embedded C++, RTOS, Control Logic
@@ -11,11 +11,11 @@
 
 #include <WiFi.h>
 #include <ESPAsyncWebServer.h>
-#include <ArduinoJson.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <freertos/semphr.h>
 #include <freertos/queue.h>
+#include <vector>
 
 #include <Device.hpp>
 #include <Config.hpp>
@@ -24,9 +24,11 @@
 #include <StatusSnapshot.hpp>
 #include <WifiEnpoin.hpp>
 
+struct CborEncoder;
+
 // ================= Build-time Wi-Fi mode selection =================
-// If 1 â†’ start in Station (STA) mode using creds/macros below.
-// If 0 â†’ start in Access Point (AP) mode.
+// If 1 -> start in Station (STA) mode using creds/macros below.
+// If 0 -> start in Access Point (AP) mode.
 #define WIFI_START_IN_STA 1
 
 // 1 = fixed hostname "powerboard"
@@ -133,7 +135,7 @@ private:
     TaskHandle_t      snapshotTaskHandle = nullptr;
     SemaphoreHandle_t _snapMtx           = nullptr;
     StatusSnapshot    _snap; // guarded by _snapMtx
-    String            _monitorJson;
+    std::vector<uint8_t> _monitorCbor;
 
     // ===== State streaming (SSE) =====
     AsyncEventSource stateSse{EP_STATE_STREAM};
@@ -165,12 +167,12 @@ private:
     void pushLiveSample(const StatusSnapshot& s);
     void startLiveStreamTask(uint32_t emitPeriodMs = 150);
     static void liveStreamTask(void* pv);
-    bool buildLiveBatch(JsonArray& items, uint32_t sinceSeq, uint32_t& seqStart, uint32_t& seqEnd);
+    bool buildLiveBatch(CborEncoder* items, uint32_t sinceSeq, uint32_t& seqStart, uint32_t& seqEnd);
 
     static void snapshotTask(void* param);
     void startSnapshotTask(uint32_t periodMs = 250);
     bool getSnapshot(StatusSnapshot& out);
-    bool getMonitorJson(String& out);
+    bool getMonitorCbor(std::vector<uint8_t>& out);
 
     // ================= Control command queue =================
     enum CtrlType : uint8_t {
@@ -182,7 +184,6 @@ private:
         CTRL_AC_FREQ,           // i1
         CTRL_CHARGE_RES,        // f1
         CTRL_ACCESS_BOOL,       // i1=index(1..10), b1=flag
-        CTRL_SET_MODE,          // b1: true=manual, false=auto
         CTRL_SYSTEM_START,
         CTRL_SYSTEM_WAKE,
         CTRL_SYSTEM_SHUTDOWN,
@@ -192,6 +193,7 @@ private:
         CTRL_WIRE_OHM_PER_M,    // f1
         CTRL_WIRE_GAUGE,        // i1=awg gauge
         CTRL_CURR_LIMIT,        // f1: over-current trip [A]
+        CTRL_CONFIRM_WIRES_COOL,// confirm wires cool before RUN
         CTRL_CALIBRATE,         // manual calibration sequence
     };
 

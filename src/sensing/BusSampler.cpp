@@ -1,6 +1,7 @@
 #include <BusSampler.hpp>
 #include <HeaterManager.hpp>
 #include <NtcSensor.hpp>
+#include <Config.hpp>
 #include <math.h>
 
 static float median3(float a, float b, float c) {
@@ -31,6 +32,29 @@ static float estimateBusCurrent(float busVoltage) {
     if (!WIRE) return NAN;
     const uint16_t mask = WIRE->getOutputMask();
     return WIRE->estimateCurrentFromVoltage(busVoltage, mask);
+}
+
+static int getCurrentSourceSetting() {
+    int src = DEFAULT_CURRENT_SOURCE;
+    if (CONF) {
+        src = CONF->GetInt(CURRENT_SOURCE_KEY, DEFAULT_CURRENT_SOURCE);
+    }
+    if (src != CURRENT_SRC_ACS) {
+        src = CURRENT_SRC_ESTIMATE;
+    }
+    return src;
+}
+
+static float sampleBusCurrent(CurrentSensor* cs, float busVoltage) {
+    if (getCurrentSourceSetting() == CURRENT_SRC_ACS) {
+        if (cs) {
+            const float i = cs->readCurrent();
+            if (isfinite(i)) {
+                return i;
+            }
+        }
+    }
+    return estimateBusCurrent(busVoltage);
 }
 
 BusSampler* BusSampler::Get() {
@@ -76,8 +100,8 @@ bool BusSampler::sampleNow(SyncSample& out) {
 
     if (cpDischg) {
         out.voltageV = sampleBusVoltage(cpDischg);
-        out.currentA = estimateBusCurrent(out.voltageV);
     }
+    out.currentA = sampleBusCurrent(currentSensor, out.voltageV);
 
     if (ntcSensor) {
         ntcSensor->update();
@@ -112,7 +136,7 @@ void BusSampler::taskLoop(uint32_t periodMs) {
         if (cpDischg) {
             v = sampleBusVoltage(cpDischg);
         }
-        i = estimateBusCurrent(v);
+        i = sampleBusCurrent(currentSensor, v);
 
         pushSample(ts, v, i);
         vTaskDelay(delayTicks);

@@ -1,6 +1,12 @@
 ﻿#include <Buzzer.hpp>
 #include <NVSManager.hpp>   // for CONF
 #include <Utils.hpp>
+namespace {
+constexpr uint32_t kAlertWarnRepeatMs = 10000;
+constexpr uint32_t kAlertCritRepeatMs = 4000;
+constexpr uint32_t kAlertPollMs = 200;
+}
+
 // ===== Singleton backing =====
 Buzzer* Buzzer::s_inst = nullptr;
 
@@ -141,6 +147,29 @@ void Buzzer::setMuted(bool on) {
   storeToPrefs_();
 }
 
+void Buzzer::setAlert(AlertLevel level) {
+  if (_mtx) xSemaphoreTake(_mtx, portMAX_DELAY);
+  if (_alertLevel == level) {
+    if (_mtx) xSemaphoreGive(_mtx);
+    return;
+  }
+
+  _alertLevel = level;
+  switch (level) {
+    case AlertLevel::WARNING:
+      _alertRepeatMs = kAlertWarnRepeatMs;
+      break;
+    case AlertLevel::CRITICAL:
+      _alertRepeatMs = kAlertCritRepeatMs;
+      break;
+    default:
+      _alertRepeatMs = 0;
+      break;
+  }
+  _alertNextMs = millis();
+  if (_mtx) xSemaphoreGive(_mtx);
+}
+
 // ===== Public API (enqueue) =====
 void Buzzer::bip()                   { enqueue(Mode::BIP); }
 void Buzzer::successSound()          { enqueue(Mode::SUCCESS); }
@@ -180,10 +209,38 @@ void Buzzer::taskThunk(void* arg) {
 void Buzzer::taskLoop() {
   for (;;) {
     Mode m;
-    // Blocks forever until something is enqueued (enqueue is a no-op when muted)
-    if (xQueueReceive(_queue, &m, portMAX_DELAY) == pdTRUE) {
+    AlertLevel alertLevel = AlertLevel::NONE;
+    uint32_t alertNextMs = 0;
+    uint32_t alertRepeatMs = 0;
+
+    if (_mtx) xSemaphoreTake(_mtx, portMAX_DELAY);
+    alertLevel = _alertLevel;
+    alertNextMs = _alertNextMs;
+    alertRepeatMs = _alertRepeatMs;
+    if (_mtx) xSemaphoreGive(_mtx);
+
+    TickType_t waitTicks = pdMS_TO_TICKS(kAlertPollMs);
+    if (alertLevel != AlertLevel::NONE) {
+      uint32_t now = millis();
+      uint32_t untilMs = (alertNextMs > now) ? (alertNextMs - now) : 0;
+      if (untilMs < kAlertPollMs) waitTicks = pdMS_TO_TICKS(untilMs);
+    }
+
+    if (xQueueReceive(_queue, &m, waitTicks) == pdTRUE) {
       playMode(m);
       idleOff();
+    }
+
+    if (alertLevel != AlertLevel::NONE) {
+      uint32_t now = millis();
+      if (now >= alertNextMs) {
+        playAlert(alertLevel);
+        if (_mtx) xSemaphoreTake(_mtx, portMAX_DELAY);
+        if (_alertLevel == alertLevel) {
+          _alertNextMs = now + alertRepeatMs;
+        }
+        if (_mtx) xSemaphoreGive(_mtx);
+      }
     }
   }
 }
@@ -217,6 +274,27 @@ void Buzzer::playTone(int freqHz, int durationMs) {
   }
 
   ledcWriteTone(BUZZER_PWM_CHANNEL, 0);
+  idleOff();
+}
+
+void Buzzer::playAlert(AlertLevel level) {
+  if (_muted || _pin < 0) return;
+  switch (level) {
+    case AlertLevel::WARNING:
+      playTone(1400, 70);
+      vTaskDelay(pdMS_TO_TICKS(60));
+      playTone(1400, 70);
+      break;
+    case AlertLevel::CRITICAL:
+      playTone(400, 100);
+      vTaskDelay(pdMS_TO_TICKS(60));
+      playTone(400, 100);
+      vTaskDelay(pdMS_TO_TICKS(60));
+      playTone(400, 140);
+      break;
+    default:
+      break;
+  }
   idleOff();
 }
 

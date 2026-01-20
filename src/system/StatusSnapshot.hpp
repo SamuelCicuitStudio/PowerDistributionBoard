@@ -18,10 +18,12 @@ struct StatusSnapshot {
     float capVoltage   = 0.0f;
     float capAdcScaled = 0.0f;  // raw ADC code / 100.0 (e.g., 4095 -> 40.95)
     float current      = 0.0f;
+    float currentAcs   = 0.0f;
 
     float temps[MAX_TEMP_SENSORS] = {0};                    // DS18B20s (cached)
     double wireTemps[HeaterManager::kWireCount] = {0};      // virtual wire temps
     bool  outputs[HeaterManager::kWireCount]   = {false};   // output states
+    bool  wirePresent[HeaterManager::kWireCount] = {false}; // presence flags
 
     bool  relayOn   = false;
     bool  acPresent = false;

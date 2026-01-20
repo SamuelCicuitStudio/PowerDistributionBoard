@@ -4,14 +4,14 @@
 - **NTC Calibration**: recompute NTC R0 from a reference temp (heatsink if left blank). No heating.
 - **Temp Model Calibration**: heat the NTC-attached wire to a target, then log the heat-up and cool-down curve (saved to SPIFFS).
 - **Wire Test**: use the NTC-attached wire as feedback to hold a target temp (no logging).
-- **Model suggestions**: compute tau/k/C from the latest calibration buffer + current settings; optionally persist to NVS.
 - **Floor Model Calibration**: estimate floor thermal parameters using NTC as floor temp and heatsink DS18B20 as room/ambient temp.
 - Tests/calibrations return to Shutdown (relay off) when stopped or finished.
 
 ## How sampling works
 - When you start NTC or Model calibration, the recorder samples at the requested interval (default 500 ms, up to 2048 samples).
 - Each sample stores: `t_ms`, `voltageV`, `currentA`, `tempC` (NTC), `ntcVolts`, `ntcOhm`, `ntcAdc`, validity/press flags.
-- Model mode also starts the energy-based calibration run so the curve captures heat-up/cool-down under a repeatable drive.
+- `currentA` follows `CURRENT_SOURCE_KEY`; in estimate mode it includes the charge/discharge resistor path.
+- Model mode starts a fixed-duty calibration run so the curve captures heat-up/cool-down under a repeatable drive.
 - Data is paged via `/calib_data?offset=&count=` and summarized by `/calib_status`.
 
 ## Per-wire thermal model calibration (Wire1..Wire10)
@@ -39,6 +39,12 @@
    - `k = P / deltaT_inf`
    - `C = k * tau`
 6) Store per-wire `tau/k/C` in NVS for Wire1..Wire10.
+
+## Presence calibration (wire connectivity)
+- Presence calibration defines thresholds used to detect wire disconnects during heating.
+- Run a presence probe in a safe idle state (relay on, outputs off) and store:
+  - `CALPRS`, `PMINR`, `PWIN`, `PFAIL`.
+- Full procedure and runtime behavior are specified in `readme/WireThermalAndPresence.md`.
 
 ## Floor model calibration (NTC floor + heatsink ambient)
 This calibration builds a first-order floor model at the NTC location using:
@@ -110,26 +116,20 @@ E) Thermal capacitance:
 Store `k_f` and `tau_f` (or `C_f`) in NVS.
 
 ## Normal run behavior
-- **Control target**: the NTC temperature is the floor target used to decide boost/hold behavior.
-- **Energy distribution**: packets are balanced per wire (using resistance) so allowed outputs heat at roughly the same rate.
-- **Thermal model**: used only for UI display and a hard safety cap (estimated wire temp <= 150 C).
+- **Control target**: the NTC temperature is the floor target; boost switches to equilibrium when the floor is close to target (using `FLOOR_SWITCH_MARGIN_C_KEY`).
+- **Boost**: raise wire temps as fast as possible up to `NICHROME_FINAL_TEMP_C_KEY` while distributing energy across wires and respecting the floor guard.
+- **Equilibrium**: hold the floor target smoothly while keeping wire estimates under the cap.
+- **Thermal model**: used only for UI display and a hard safety cap (estimated wire temp <= 150 C or `NICHROME_FINAL_TEMP_C_KEY`).
 
 ## Parameters
 - Thermal model (per wire): tau/k/C stored for each wire (Wire1..Wire10).
 - Floor model (device-level): `FLTAU/FLKLS/FLCAP` for the NTC floor model.
-- Safety: `tempWarnC`, `tempTripC`, `floorMaxC`, `nichromeFinalTempC`.
-
-## Thermal suggestions flow
-- Click **Refresh** (Model suggestions) to call `/calib_pi_suggest`, which uses:
-  - Current tau/k/C for the selected wire
-  - Max observed power from the latest calibration buffer (or a conservative guess)
-- Click **Persist & Reload** to POST `/calib_pi_save`, write tau/k/C for that wire to NVS, then reload settings in the UI.
+- Safety: `tempWarnC`, `tempTripC`, `floorMaxC`, `nichromeFinalTempC`, `floorSwitchMarginC`.
 
 ## Step-by-step
 1) Open **Calibration** (Live tab).
 2) (Optional) **NTC Calibration** with a reference temp (blank = heatsink).
 3) **Temp Model Calibration** to log a heating/cooling curve.
-4) **Refresh** suggestions to see tau/k/C.
-5) **Persist & Reload** to save them and repopulate settings.
-6) **Wire Test** to verify holding a target temperature.
-7) **Floor Model Calibration** to capture floor response and save floor params.
+4) Compute tau/k/C from the captured data and store per-wire values in NVS.
+5) **Wire Test** to verify holding a target temperature.
+6) **Floor Model Calibration** to capture floor response and save floor params.

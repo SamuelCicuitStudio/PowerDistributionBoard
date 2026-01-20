@@ -53,7 +53,6 @@ HeaterManager::HeaterManager()
         wires[i].massKg             = 0.0f;
         wires[i].temperatureC       = NAN;
         wires[i].connected          = true;   // default: unknown / not confirmed
-        wires[i].presenceCurrentA   = 0.0f;
         wires[i].lastOnMs           = 0;
     }
 }
@@ -350,7 +349,7 @@ float HeaterManager::estimateCurrentFromVoltage(float busVoltage, uint16_t mask)
     if (!isfinite(busVoltage)) {
         return NAN;
     }
-    if (busVoltage <= 0.0f || mask == 0) {
+    if (busVoltage <= 0.0f) {
         return 0.0f;
     }
     if (!lock()) {
@@ -367,6 +366,14 @@ float HeaterManager::estimateCurrentFromVoltage(float busVoltage, uint16_t mask)
     }
 
     unlock();
+
+    float rCharge = DEFAULT_CHARGE_RESISTOR_OHMS;
+    if (CONF) {
+        rCharge = CONF->GetFloat(CHARGE_RESISTOR_KEY, DEFAULT_CHARGE_RESISTOR_OHMS);
+    }
+    if (isfinite(rCharge) && rCharge > 0.0f) {
+        gTot += 1.0 / rCharge;
+    }
 
     if (!(gTot > 0.0)) {
         return 0.0f;
@@ -522,6 +529,16 @@ WireInfo HeaterManager::getWireInfo(uint8_t index) const {
     return out;
 }
 
+void HeaterManager::setWirePresence(uint8_t index, bool present) {
+    if (index == 0 || index > kWireCount) {
+        return;
+    }
+    const uint8_t i = index - 1;
+    if (!lock()) return;
+    wires[i].connected = present;
+    unlock();
+}
+
 void HeaterManager::setWireEstimatedTemp(uint8_t index, float tempC) {
     if (index == 0 || index > kWireCount) return;
     const uint8_t i = index - 1;
@@ -557,80 +574,4 @@ void HeaterManager::resetAllEstimatedTemps(float ambientC) {
     unlock();
 }
 
-void HeaterManager::setWirePresence(uint8_t index, bool connected, float presenceCurrentA) {
-    if (index == 0 || index > kWireCount) return;
-    const uint8_t i = index - 1;
 
-    if (!lock()) return;
-
-    wires[i].connected        = connected;
-    wires[i].presenceCurrentA = presenceCurrentA;
-
-    unlock();
-}
-
-void HeaterManager::probeWirePresence(CurrentSensor& cs,
-                                      float busVoltage,
-                                      float minValidFraction,
-                                      float maxValidFraction,
-                                      uint16_t settleMs,
-                                      uint8_t samples)
-{
-    Device* dev = DEVICE;
-    if (!dev) {
-        return;
-    }
-
-    if (busVoltage <= 0.0f && CONF) {
-        busVoltage = DEFAULT_DC_VOLTAGE;
-    }
-
-    if (busVoltage <= 0.0f) {
-        DEBUG_PRINTLN("[HeaterManager] probeWirePresence: No valid bus voltage, abort.");
-        return;
-    }
-
-    dev->getWirePresenceManager().probeAll(*this,
-                                           dev->getWireStateModel(),
-                                           cs,
-                                           busVoltage,
-                                           minValidFraction,
-                                           maxValidFraction,
-                                           settleMs,
-                                           samples);
-}
-
-void HeaterManager::updatePresenceFromMask(uint16_t mask,
-                                           float totalCurrentA,
-                                           float busVoltage,
-                                           float minValidRatio)
-{
-    Device* dev = DEVICE;
-    if (!dev || mask == 0) {
-        return;
-    }
-    if (totalCurrentA < 0.0f) {
-        totalCurrentA = 0.0f;
-    }
-
-    if (busVoltage <= 0.0f && CONF) {
-        busVoltage = DEFAULT_DC_VOLTAGE;
-    }
-    if (busVoltage <= 0.0f) {
-        return;
-    }
-
-    dev->getWirePresenceManager().updatePresenceFromMask(*this,
-                                                         dev->getWireStateModel(),
-                                                         mask,
-                                                         totalCurrentA,
-                                                         busVoltage,
-                                                         minValidRatio);
-}
-
-bool HeaterManager::hasAnyConnected() const {
-    for (uint8_t i = 0; i < kWireCount; ++i) {
-        if (wires[i].connected) return true;
-    }
-    return false;
-}

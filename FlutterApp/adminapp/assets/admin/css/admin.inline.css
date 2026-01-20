@@ -1,0 +1,318 @@
+/* Moved from admin.html inline styles */
+.user-status-global {
+  position: absolute;
+  top: 10px;
+  right: 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  z-index: 1000;
+}
+.user-menu {
+  position: absolute;
+  top: 35px;
+  right: 0;
+  display: none;
+  background: rgba(0, 0, 0, 0.7);
+  border-radius: 8px;
+  padding: 10px;
+  box-shadow: 0 0 8px rgba(0, 0, 0, 0.4);
+}
+.user-menu button {
+  background: none;
+  border: none;
+  color: white;
+  cursor: pointer;
+}
+/* === Device Settings: scoped, compact, no vertical scroll === */
+#deviceSettingsTab.content,
+#deviceSettingsTab .content {
+  /* in case a theme sets scroll on .content, force this tab to fit */
+  padding: 14px 18px 10px;
+  overflow-y: hidden;
+}
+/* Make the single box fill available width and fit the frame height */
+.user-modal-content.device-settings-box {
+  width: 100%;
+  max-width: 720px;
+  max-height: 540px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column; /* grid + actions stacked */
+  gap: 16px;
+  overflow: hidden; /* scrolling happens inside .device-grid */
+}
+.ds-group-title {
+  grid-column: 1 / -1;
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-left: 4px solid var(--ds-accent, rgba(255, 255, 255, 0.35));
+  background: rgba(255, 255, 255, 0.06);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+  color: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.22);
+}
+.ds-group-icon {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  color: var(--ds-accent, rgba(255, 255, 255, 0.8));
+  opacity: 0.95;
+  filter: drop-shadow(0 0 6px rgba(0, 0, 0, 0.35));
+}
+.ds-group-title span {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.ds-group-title.ds-power {
+  --ds-accent: #ff3b30;
+  background: rgba(255, 59, 48, 0.12);
+}
+.ds-group-title.ds-thermal-safety {
+  --ds-accent: #ffb020;
+  background: rgba(255, 176, 32, 0.12);
+}
+.ds-group-title.ds-thermal-model {
+  --ds-accent: #a855f7;
+  background: rgba(168, 85, 247, 0.12);
+}
+.ds-group-title.ds-presence {
+  --ds-accent: #22c55e;
+  background: rgba(34, 197, 94, 0.12);
+}
+.ds-group-title.ds-control {
+  --ds-accent: #4d9efc;
+  background: rgba(77, 158, 252, 0.12);
+}
+.ds-group-title.ds-floor {
+  --ds-accent: #10b981;
+  background: rgba(16, 185, 129, 0.12);
+}
+.ds-group-title.ds-nichrome {
+  --ds-accent: #f97316;
+  background: rgba(249, 115, 22, 0.12);
+}
+.ds-group-title.ds-loop-timing {
+  --ds-accent: #20c997;
+  background: rgba(32, 201, 151, 0.12);
+}
+/* Two-column grid inside the box */
+.device-settings-box .device-grid {
+  display: grid;
+  grid-template-columns: 1.05fr 1.15fr; /* left: device fields | right: nichrome */
+  grid-template-rows: minmax(0, 1fr);
+  gap: 18px 28px; /* row gap | column gap */
+  align-items: stretch;
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: hidden; /* each column scrolls independently */
+}
+.device-settings-box .device-col {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  min-height: 0;
+  padding: 12px 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.32);
+  box-shadow: inset 0 0 0 1px rgba(0, 255, 174, 0.04);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 255, 180, 0.32) rgba(0, 0, 0, 0.8);
+}
+.device-settings-box .device-col::-webkit-scrollbar {
+  width: 10px;
+}
+.device-settings-box .device-col::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.7);
+  border-radius: 10px;
+}
+.device-settings-box .device-col::-webkit-scrollbar-thumb {
+  background: rgba(0, 255, 180, 0.24);
+  border-radius: 10px;
+  box-shadow: inset 0 0 6px rgba(0, 255, 180, 0.22);
+}
+.device-settings-box .device-col::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 255, 180, 0.5);
+  box-shadow: inset 0 0 8px rgba(0, 255, 180, 0.35);
+}
+.device-settings-box .ds-col-heading {
+  grid-column: 1 / -1;
+  margin: 0 0 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: 0.3px;
+  color: #f8fafc;
+}
+.device-settings-box .ds-col-icon {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  color: rgba(0, 255, 174, 0.95);
+  filter: drop-shadow(0 0 6px rgba(0, 255, 174, 0.14));
+}
+.device-settings-box .ds-col-heading--nichrome .ds-col-icon {
+  color: rgba(249, 115, 22, 0.95);
+  filter: drop-shadow(0 0 6px rgba(249, 115, 22, 0.18));
+}
+/* Left column (Device Settings) as a compact 2-column grid */
+.device-settings-box .device-grid > .device-col:first-child {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 16px;
+}
+.device-settings-box .device-grid > .device-col:first-child h3 {
+  grid-column: 1 / -1;
+  margin: 0 0 10px;
+  font-size: 15px;
+}
+.mixed-only {
+  display: none;
+}
+/* Inputs with right-side unit tag */
+.input-with-unit {
+  position: relative;
+}
+.input-with-unit input {
+  width: 100%;
+  padding-right: 42px; /* space for unit */
+}
+.unit-label {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 12px;
+  opacity: 0.75;
+  pointer-events: none;
+}
+/* Nichrome calibration grid: 5 x 2 for R01..R10 + 1 full-width target row */
+.nichrome-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px 12px;
+}
+.nichrome-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 12px;
+}
+.nichrome-meta .ds-field {
+  min-width: 0;
+}
+.nichrome-grid .field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.nichrome-grid .field label {
+  font-size: 11px;
+  opacity: 0.85;
+}
+.nichrome-grid .field input {
+  padding: 8px;
+}
+.nichrome-grid .field.target {
+  grid-column: 1 / -1; /* span entire row */
+}
+/* Actions always visible and tidy */
+.device-settings-actions {
+  margin-top: 8px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  flex: 0 0 auto; /* always visible under the scroll area */
+  justify-content: flex-end;
+}
+/* Optional: tiny responsive fallback if viewport is very short or narrow */
+@media (max-height: 640px) {
+  .user-modal-content.device-settings-box {
+    max-height: 440px;
+  }
+}
+@media (max-width: 980px) {
+  .user-modal-content.device-settings-box {
+    max-width: 600px;
+  }
+}
+@media (max-width: 860px) {
+  .device-settings-box .device-grid {
+    grid-template-columns: 1fr; /* stack columns on very narrow view */
+  }
+}
+
+/* === Fixed App Stage (change these if you want another size) === */
+:root {
+  --APP_W: 980px;
+  --APP_H: 640px;
+}
+/* Don't let the layout collapse below the fixed stage */
+html,
+body {
+  min-width: var(--APP_W);
+  min-height: var(--APP_H);
+  overflow: auto; /* scrollbars if window is smaller */
+}
+/* Pin the whole admin UI to a fixed box */
+.ui-container {
+  width: var(--APP_W);
+  height: var(--APP_H);
+  min-width: var(--APP_W);
+  min-height: var(--APP_H);
+  max-width: var(--APP_W);
+  max-height: var(--APP_H);
+  margin: 0 auto; /* centered if window gets wider */
+  overflow: hidden; /* avoid inner jiggle/resizes */
+  box-sizing: border-box;
+}
+/* Neutralize narrow/short responsive fallbacks */
+@media (max-width: 99999px) {
+  /* keep two columns in device settings even on small windows */
+  .device-settings-box .device-grid {
+    grid-template-columns: 1fr 1fr !important;
+  }
+}
+@media (max-width: 980px), (max-height: 640px) {
+  /* keep the same fixed size even if viewport goes below */
+  .ui-container {
+    width: var(--APP_W);
+    height: var(--APP_H);
+  }
+}
+
+/* Inline style replacements */
+.device-settings-center {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: calc(100% - 80px);
+}
+
+.calibration-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#calibrationInfoBtn {
+  padding: 4px 8px;
+  min-width: 32px;
+}
+
+#confirmModal .user-modal-content {
+  max-width: 380px;
+  text-align: center;
+}

@@ -7,7 +7,7 @@
     <meta http-equiv="Expires" content="0" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>User Dashboard</title>
-    <link rel="stylesheet" href="css/user.css?v=2" />
+    <link rel="stylesheet" href="css/user.css?v=3" />
     <style>
       .user-status-global {
         position: absolute;
@@ -74,7 +74,16 @@
           "
         >
           <div
+            class="round-button confirm"
+            id="confirmCoolBtn"
+            onclick="confirmWiresCool()"
+            title="Confirm wires are cool before start"
+          >
+            <img src="icons/ok_tank.png" alt="Confirm Cool" />
+          </div>
+          <div
             class="round-button start"
+            id="startBtn"
             onclick="startSystem()"
             title="Start System"
           >
@@ -82,6 +91,7 @@
           </div>
           <div
             class="round-button stop"
+            id="stopBtn"
             onclick="shutdownSystem()"
             title="Shutdown System"
           >
@@ -96,17 +106,20 @@
           <h2>Dashboard</h2>
         </div>
 
+        <div class="status-banner" id="setupNotice" style="display: none">
+          <strong>Setup incomplete.</strong>
+          <span id="setupNoticeText">Ask an admin to finish setup before running.</span>
+        </div>
+
+        <div class="status-banner warning" id="cooldownNotice" style="display: none">
+          <strong>Cooling to ambient.</strong>
+          <span id="cooldownNoticeText">Waiting for wires to cool.</span>
+        </div>
+
         <div
           class="mode-toggle"
           style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap"
         >
-          <label>Auto</label>
-          <label class="switch">
-            <input type="checkbox" id="modeToggle" onchange="toggleMode()" />
-            <span class="slider"></span>
-          </label>
-          <label>Manual</label>
-
           <label style="margin-left: 20px">LT</label>
           <label class="switch">
             <input type="checkbox" id="ltToggle" onchange="toggleLT()" />
@@ -133,6 +146,29 @@
               border-radius: 50%;
             "
           ></div>
+        </div>
+
+        <div class="status-row">
+          <div class="status-card">
+            <div class="status-title">State</div>
+            <div class="status-value" id="stateValue">--</div>
+            <div class="status-sub" id="stateDetail">--</div>
+          </div>
+          <div class="status-card">
+            <div class="status-title">Wire Target</div>
+            <div class="status-value" id="wireTargetValue">--</div>
+            <div class="status-sub" id="wireTargetSub">--</div>
+          </div>
+          <div class="status-card">
+            <div class="status-title">Floor</div>
+            <div class="status-value" id="floorTempValue">--</div>
+            <div class="status-sub" id="floorTargetValue">--</div>
+          </div>
+          <div class="status-card">
+            <div class="status-title">Session</div>
+            <div class="status-value" id="sessionEnergyValue">--</div>
+            <div class="status-sub" id="sessionTimeValue">--</div>
+          </div>
         </div>
 
         <div class="gauges">
@@ -308,7 +344,7 @@
                 </text>
               </svg>
             </div>
-            <div class="gauge-label">Temp 4</div>
+            <div class="gauge-label">Floor</div>
           </div>
         </div>
       </div>
@@ -317,6 +353,9 @@
       <div class="content" id="manualTab">
         <div class="content-header">
           <h2>Manual Control</h2>
+        </div>
+        <div class="manual-empty" id="manualEmpty">
+          Manual control is disabled by admin.
         </div>
         <div class="manual-outputs" id="manualOutputs"></div>
       </div>
@@ -346,7 +385,7 @@
 
     <div class="footer">&copy; 2025 Power Distribution Interface</div>
 
-    <script src="js/user.js?v=2"></script>
+    <script src="js/user.js?v=3"></script>
   </body>
   <style>
     /* === Fixed App Stage (change these if you want another size) === */
@@ -361,7 +400,7 @@
       min-height: var(--APP_H);
       overflow: auto; /* scrollbars if window is smaller */
     }
-    /* Pin the whole admin UI to a fixed box */
+    /* Pin the whole UI to a fixed box */
     .ui-container {
       width: var(--APP_W);
       height: var(--APP_H);

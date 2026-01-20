@@ -18,145 +18,90 @@
 // Single, shared instances (linked once)
 
 SemaphoreHandle_t gStateMtx = nullptr;
-
 EventGroupHandle_t gEvt     = nullptr;
-
-
 
 // Map of output keys (0-indexed for outputs 1 to 10)
 
 const char* outputKeys[10] = {
 
     OUT01_ACCESS_KEY, OUT02_ACCESS_KEY, OUT03_ACCESS_KEY, OUT04_ACCESS_KEY, OUT05_ACCESS_KEY,
-
     OUT06_ACCESS_KEY, OUT07_ACCESS_KEY, OUT08_ACCESS_KEY, OUT09_ACCESS_KEY, OUT10_ACCESS_KEY
-
 };
 
 
 
 // ===== Singleton storage & accessors =====
-
 Device* Device::instance = nullptr;
-
-
 
 void Device::Init(TempSensor* temp,CurrentSensor* current,Relay* relay,CpDischg* discharger,Indicator* ledIndicator)
 
 {
-
     if (!instance) {
-
         instance = new Device(temp, current, relay, discharger, ledIndicator);
-
     }
-
 }
-
-
 
 Device* Device::Get() {
-
     return instance; // nullptr until Init(), or set in begin() below if constructed manually
-
 }
 
-
-
 Device::StateSnapshot Device::getStateSnapshot() const {
-
     StateSnapshot snap{};
-
     if (gStateMtx && xSemaphoreTake(gStateMtx, portMAX_DELAY) == pdTRUE) {
-
         snap.state    = currentState;
-
         snap.sinceMs  = stateSinceMs;
-
         snap.seq      = stateSeq;
-
         xSemaphoreGive(gStateMtx);
 
     } else {
 
         snap.state   = currentState;
-
         snap.sinceMs = stateSinceMs;
-
         snap.seq     = stateSeq;
-
     }
 
     return snap;
-
 }
-
-
 
 DeviceState Device::getState() const {
-
     return currentState;
-
 }
-
-
 
 bool Device::waitForStateEvent(StateSnapshot& out, TickType_t toTicks) {
 
     if (!stateEvtQueue) {
-
         // queue not ready yet; wait and report false
-
         vTaskDelay(toTicks);
-
         return false;
-
     }
-
     return xQueueReceive(stateEvtQueue, &out, toTicks) == pdTRUE;
-
 }
 
 bool Device::waitForEventNotice(EventNotice& out, TickType_t toTicks) {
 
     if (!eventEvtQueue) {
-
         vTaskDelay(toTicks);
-
         return false;
-
     }
-
     return xQueueReceive(eventEvtQueue, &out, toTicks) == pdTRUE;
 
 }
 
-
-
 bool Device::waitForCommandAck(DevCommandAck& ack, TickType_t toTicks) {
 
     if (!ackQueue) {
-
         vTaskDelay(toTicks);
-
         return false;
 
     }
-
     return xQueueReceive(ackQueue, &ack, toTicks) == pdTRUE;
 
 }
 
-
-
 bool Device::submitCommand(DevCommand& cmd) {
-
     if (!cmdQueue) return false;
-
     DevCommand c = cmd;
-
     // assign id
-
     if (gStateMtx && xSemaphoreTake(gStateMtx, pdMS_TO_TICKS(50)) == pdTRUE) {
 
         cmdSeq++;
@@ -475,17 +420,6 @@ void Device::handleCommand(const DevCommand& cmd) {
 
         }
 
-        case DevCmdType::SET_MANUAL_MODE:
-
-            manualMode = cmd.b1;
-
-            if (manualMode && gEvt) {
-
-                xEventGroupSetBits(gEvt, EVT_STOP_REQ);
-
-            }
-
-            break;
 
         case DevCmdType::SET_CURR_LIMIT: {
 
@@ -1197,8 +1131,15 @@ void Device::checkAllowedOutputs() {
 
         WireRuntimeState& ws = wireStateModel.wire(i + 1);
 
-        const bool overrideAllowed = (overrideMask & (1u << i)) != 0;
-        const bool cfgAllowed  = ws.allowedByAccess || overrideAllowed;
+        const bool overrideActive = (overrideMask != 0);
+        const bool overrideAllowed =
+            overrideActive && ((overrideMask & (1u << i)) != 0);
+        if (overrideActive) {
+            ws.allowedByAccess = overrideAllowed;
+        } else {
+            ws.allowedByAccess = wireConfigStore.getAccessFlag(i + 1);
+        }
+        const bool cfgAllowed = ws.allowedByAccess;
 
         const bool thermLocked = ws.locked ||
 
@@ -1236,6 +1177,29 @@ void Device::checkAllowedOutputs() {
         }
     }
 
+}
+
+bool Device::probeWirePresence() {
+    if (!WIRE || !discharger) return false;
+    if (getState() != DeviceState::Idle) return false;
+
+    if (indicator) indicator->clearAll();
+    WIRE->disableAll();
+    if (relayControl) {
+        relayControl->turnOn();
+        if (xTaskGetSchedulerState() != taskSCHEDULER_NOT_STARTED) {
+            vTaskDelay(pdMS_TO_TICKS(300));
+        } else {
+            delay(300);
+        }
+    }
+
+    const bool ok = wirePresenceManager.probeAll(*WIRE,
+                                                 wireStateModel,
+                                                 wireConfigStore,
+                                                 discharger);
+    checkAllowedOutputs();
+    return ok;
 }
 
 
@@ -1566,8 +1530,20 @@ void Device::handle12VDrop() {
         float vcap = NAN;
         float curA = NAN;
         if (discharger) vcap = discharger->readCapVoltage();
-        if (WIRE && isfinite(vcap)) {
-            curA = WIRE->estimateCurrentFromVoltage(vcap, WIRE->getOutputMask());
+        if (isfinite(vcap)) {
+            int src = DEFAULT_CURRENT_SOURCE;
+            if (CONF) {
+                src = CONF->GetInt(CURRENT_SOURCE_KEY, DEFAULT_CURRENT_SOURCE);
+            }
+            if (src == CURRENT_SRC_ACS && currentSensor) {
+                const float i = currentSensor->readCurrent();
+                if (isfinite(i)) {
+                    curA = i;
+                }
+            }
+            if (!isfinite(curA) && WIRE) {
+                curA = WIRE->estimateCurrentFromVoltage(vcap, WIRE->getOutputMask());
+            }
         }
         char reason[96] = {0};
         if (isfinite(vcap) && isfinite(curA)) {
@@ -1721,13 +1697,111 @@ bool Device::dischargeCapBank(float thresholdV, uint8_t maxRounds) {
 }
 
 bool Device::calibrateCapacitance() {
-    // Bypass measurement: fixed bank is 4 mF (four 1000 uF caps in parallel).
-    static constexpr float kFixedCapF = 0.004f;
-    capBankCapF = kFixedCapF;
+    if (!discharger || !relayControl || !WIRE) return false;
+
+    uint16_t dischargeMask = 0;
+    double gTot = 0.0;
+    for (uint8_t i = 1; i <= HeaterManager::kWireCount; ++i) {
+        if (!wireConfigStore.getAccessFlag(i)) continue;
+        WireInfo wi = WIRE->getWireInfo(i);
+        if (!isfinite(wi.resistanceOhm) || wi.resistanceOhm <= 0.01f) {
+            continue;
+        }
+        gTot += 1.0 / static_cast<double>(wi.resistanceOhm);
+        dischargeMask |= static_cast<uint16_t>(1u << (i - 1));
+    }
+    if (!(gTot > 0.0) || dischargeMask == 0) {
+        return false;
+    }
+
+    const double rLoad = 1.0 / gTot;
+    const bool relayWasOn = relayControl->isOn();
+
+    auto restore = [&]() {
+        if (WIRE) WIRE->disableAll();
+        if (relayControl) {
+            if (relayWasOn) relayControl->turnOn();
+            else relayControl->turnOff();
+        }
+    };
+
+    if (WIRE) WIRE->disableAll();
+    relayControl->turnOff();
+    if (!delayWithPowerWatch(20)) {
+        restore();
+        return false;
+    }
+
+    const float v0 = discharger->sampleVoltageNow();
+    if (!isfinite(v0) || v0 <= 0.0f) {
+        restore();
+        return false;
+    }
+
+    double capGuess = capBankCapF;
+    if (!isfinite(capGuess) || capGuess <= 0.0) {
+        capGuess = DEFAULT_CAP_BANK_CAP_F;
+    }
+    double dtS = 0.2;
+    const double tau = rLoad * capGuess;
+    if (isfinite(tau) && tau > 0.0) {
+        dtS = tau * 0.35;
+    }
+    if (dtS < 0.05) dtS = 0.05;
+    if (dtS > 0.6) dtS = 0.6;
+    uint32_t dischargeMs = static_cast<uint32_t>(dtS * 1000.0);
+    if (dischargeMs < 20) dischargeMs = 20;
+
+    for (uint8_t i = 1; i <= HeaterManager::kWireCount; ++i) {
+        if (dischargeMask & (1u << (i - 1))) {
+            WIRE->setOutput(i, true);
+        }
+    }
+
+    if (!delayWithPowerWatch(dischargeMs)) {
+        restore();
+        return false;
+    }
+
+    const float v1 = discharger->sampleVoltageNow();
+    if (WIRE) WIRE->disableAll();
+
+    if (!isfinite(v1) || v1 <= 0.0f || v1 >= v0) {
+        restore();
+        return false;
+    }
+
+    const double ratio = static_cast<double>(v1) / static_cast<double>(v0);
+    if (!isfinite(ratio) || ratio <= 0.05 || ratio >= 0.98) {
+        restore();
+        return false;
+    }
+
+    const double lnRatio = log(ratio);
+    if (!isfinite(lnRatio) || lnRatio >= 0.0) {
+        restore();
+        return false;
+    }
+
+    const double capF = -dtS / (rLoad * lnRatio);
+    if (!isfinite(capF) || capF <= 0.0) {
+        restore();
+        return false;
+    }
+
+    capBankCapF = static_cast<float>(capF);
     if (CONF) {
         CONF->PutFloat(CAP_BANK_CAP_F_KEY, capBankCapF);
     }
-    DEBUG_PRINTF("[Device] Capacitance forced to %.6f F (fixed configuration)\n", (double)capBankCapF);
+
+    DEBUG_PRINTF("[Device] Capacitance calibrated: V0=%.2fV V1=%.2fV dt=%.3fs R=%.2f ohm C=%.6fF\n",
+                 (double)v0,
+                 (double)v1,
+                 (double)dtS,
+                 (double)rLoad,
+                 (double)capBankCapF);
+
+    restore();
     return true;
 }
 
@@ -1835,6 +1909,20 @@ bool Device::runCalibrationsStandalone(uint32_t timeoutMs) {
 
     }
 
+    if (CONF) {
+        CONF->PutBool(CALIB_CAP_DONE_KEY, true);
+    }
+    if (currentSensor) {
+        if (WIRE) WIRE->disableAll();
+        if (relayControl) relayControl->turnOff();
+        if (!delayWithPowerWatch(50)) {
+            return failSafe("[Device] Calibration aborted (power/watch stop)");
+        }
+        currentSensor->calibrateZeroCurrent();
+        if (timedOut()) return failSafe("[Device] Calibration timeout (current sensor)");
+        if (relayControl) relayControl->turnOn();
+    }
+
     if (timedOut()) return failSafe("[Device] Calibration timeout (capacitance)");
 
 
@@ -1891,77 +1979,6 @@ bool Device::runCalibrationsStandalone(uint32_t timeoutMs) {
 
 
 
-void Device::calibrateIdleCurrent() {
-
-    if (!currentSensor) {
-
-        DEBUG_PRINTLN("[Device] Idle current calibration skipped (no CurrentSensor) ");
-
-        return;
-
-    }
-
-
-
-    // Ensure all heater outputs are OFF during calibration
-
-    if (WIRE) {
-
-        WIRE->disableAll();
-
-    }
-
-    if (indicator) {
-
-        indicator->clearAll();
-
-    }
-
-
-
-    // Short settle to let caps / relay stabilize
-
-    vTaskDelay(pdMS_TO_TICKS(50));
-
-
-
-    const uint16_t samples = 64;          // Enough to smooth noise
-    const uint16_t settleUs = 500;        // Keep calibration under prep timeout
-
-    float sum = 0.0f;
-
-
-
-    for (uint16_t i = 0; i < samples; ++i) {
-
-        float I = currentSensor->readCurrent();  // Uses its own averaging
-
-        sum += I;
-
-        delayMicroseconds(settleUs);
-
-    }
-
-
-
-    float idle = sum / samples;
-
-    if (idle < 0.0f) idle = 0.0f;
-
-
-
-    // Store in NVS so applyHeatingFromCapture() can use it.
-
-    CONF->PutFloat(IDLE_CURR_KEY, idle);
-
-
-
-    DEBUG_PRINTF("[Device] Idle current calibrated: %.4f A (relay+AC, no heaters)\n", idle);
-
-}
-
-
-
 void Device::handleOverCurrentFault()
 
 {
@@ -1970,10 +1987,22 @@ void Device::handleOverCurrentFault()
     {
         float curA = NAN;
         float limitA = DEFAULT_CURR_LIMIT_A;
-        if (WIRE && discharger) {
+        if (discharger) {
             const float vcap = discharger->readCapVoltage();
             if (isfinite(vcap)) {
-                curA = WIRE->estimateCurrentFromVoltage(vcap, WIRE->getOutputMask());
+                int src = DEFAULT_CURRENT_SOURCE;
+                if (CONF) {
+                    src = CONF->GetInt(CURRENT_SOURCE_KEY, DEFAULT_CURRENT_SOURCE);
+                }
+                if (src == CURRENT_SRC_ACS && currentSensor) {
+                    const float i = currentSensor->readCurrent();
+                    if (isfinite(i)) {
+                        curA = i;
+                    }
+                }
+                if (!isfinite(curA) && WIRE) {
+                    curA = WIRE->estimateCurrentFromVoltage(vcap, WIRE->getOutputMask());
+                }
             }
         }
         if (CONF) limitA = CONF->GetFloat(CURR_LIMIT_KEY, DEFAULT_CURR_LIMIT_A);
@@ -2248,39 +2277,6 @@ void Device::fanControlTask(void* param) {
 
 
 
-void Device::refreshThermalParams() {
-    double tau = DEFAULT_WIRE_TAU_SEC;
-    double k   = DEFAULT_WIRE_K_LOSS;
-    double C   = DEFAULT_WIRE_THERMAL_C;
-
-    if (CONF) {
-        tau = CONF->GetDouble(WIRE_TAU_KEY, DEFAULT_WIRE_TAU_SEC);
-        k   = CONF->GetDouble(WIRE_K_LOSS_KEY, DEFAULT_WIRE_K_LOSS);
-        C   = CONF->GetDouble(WIRE_C_TH_KEY, DEFAULT_WIRE_THERMAL_C);
-    }
-
-    bool tauOk = isfinite(tau) && tau > 0.05f;
-    bool kOk   = isfinite(k)   && k > 0.0f;
-    bool cOk   = isfinite(C)   && C > 0.0f;
-
-    if (!cOk) C = DEFAULT_WIRE_THERMAL_C;
-
-    if (!kOk && tauOk) {
-        k = C / tau;
-    } else if (!tauOk && kOk) {
-        tau = C / k;
-    } else if (!kOk && !tauOk) {
-        tau = DEFAULT_WIRE_TAU_SEC;
-        k   = C / tau;
-    }
-
-    if (!isfinite(tau) || tau < 0.05f) tau = DEFAULT_WIRE_TAU_SEC;
-    if (!isfinite(k) || k <= 0.0f)     k   = DEFAULT_WIRE_K_LOSS;
-    if (!isfinite(C) || C <= 0.0f)     C   = DEFAULT_WIRE_THERMAL_C;
-
-    wireThermalModel.setThermalParams(tau, k, C);
-}
-
 void Device::loadRuntimeSettings() {
     if (CONF) {
         capBankCapF = CONF->GetFloat(CAP_BANK_CAP_F_KEY, DEFAULT_CAP_BANK_CAP_F);
@@ -2290,5 +2286,29 @@ void Device::loadRuntimeSettings() {
         capBankCapF = DEFAULT_CAP_BANK_CAP_F;
     }
 
-    refreshThermalParams();
+    applyWireModelParamsFromNvs();
+}
+
+void Device::applyWireModelParamsFromNvs() {
+    if (!CONF) return;
+
+    static const char* kTauKeys[HeaterManager::kWireCount] = {
+        W1TAU_KEY, W2TAU_KEY, W3TAU_KEY, W4TAU_KEY, W5TAU_KEY,
+        W6TAU_KEY, W7TAU_KEY, W8TAU_KEY, W9TAU_KEY, W10TAU_KEY
+    };
+    static const char* kKKeys[HeaterManager::kWireCount] = {
+        W1KLS_KEY, W2KLS_KEY, W3KLS_KEY, W4KLS_KEY, W5KLS_KEY,
+        W6KLS_KEY, W7KLS_KEY, W8KLS_KEY, W9KLS_KEY, W10KLS_KEY
+    };
+    static const char* kCKeys[HeaterManager::kWireCount] = {
+        W1CAP_KEY, W2CAP_KEY, W3CAP_KEY, W4CAP_KEY, W5CAP_KEY,
+        W6CAP_KEY, W7CAP_KEY, W8CAP_KEY, W9CAP_KEY, W10CAP_KEY
+    };
+
+    for (uint8_t i = 0; i < HeaterManager::kWireCount; ++i) {
+        double tau = CONF->GetDouble(kTauKeys[i], DEFAULT_WIRE_MODEL_TAU);
+        double k = CONF->GetDouble(kKKeys[i], DEFAULT_WIRE_MODEL_K);
+        double c = CONF->GetDouble(kCKeys[i], DEFAULT_WIRE_MODEL_C);
+        wireThermalModel.setWireThermalParams(i + 1, tau, k, c);
+    }
 }

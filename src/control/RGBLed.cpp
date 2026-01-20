@@ -127,6 +127,45 @@ void RGBLed::showErrorCode(uint32_t color,
   playPattern(Pattern::CODE, o);
 }
 
+void RGBLed::setAlert(AlertLevel level, uint32_t color) {
+  if (level == AlertLevel::NONE) {
+    clearAlert();
+    return;
+  }
+
+  PatternOpts o{};
+  Pattern pat = Pattern::BLINK;
+
+  if (level == AlertLevel::WARN) {
+    pat = Pattern::BLINK;
+    o.color = (color != 0) ? color : RGB_OVR_TEMP_WARN;
+    o.periodMs = 700;
+    o.onMs = 250;
+    o.priority = PRIO_ALERT;
+  } else {
+    pat = Pattern::STROBE;
+    o.color = (color != 0) ? color : RGB_OVR_TEMP_CRIT;
+    o.onMs = 70;
+    o.periodMs = 140;
+    o.priority = PRIO_CRITICAL;
+  }
+
+  o.durationMs = 0;
+  o.preempt = true;
+
+  Cmd c{};
+  c.type = CmdType::SET_ALERT;
+  c.pattern = pat;
+  c.opts = o;
+  sendCmd(c, 0);
+}
+
+void RGBLed::clearAlert() {
+  Cmd c{};
+  c.type = CmdType::CLEAR_ALERT;
+  sendCmd(c, 0);
+}
+
 void RGBLed::off(uint8_t priority, bool preempt) {
   PatternOpts o{};
   o.color    = RGB_OFF;
@@ -442,6 +481,11 @@ void RGBLed::applyBackground(DevState s) {
     return;
   }
 
+  if (_alertActive) {
+    setActivePattern(_alertPat, _alertOpts);
+    return;
+  }
+
   PatternOpts o{};
   Pattern pat = Pattern::OFF;
   o.priority = PRIO_BACKGROUND;
@@ -525,6 +569,18 @@ void RGBLed::taskLoop() {
       switch (c.type) {
         case CmdType::SET_BACKGROUND:
           applyBackground(c.bgState);
+          break;
+        case CmdType::SET_ALERT: {
+          _alertActive = true;
+          _alertPat = c.pattern;
+          _alertOpts = c.opts;
+          bool accept = (!_haveCurrent || _currentPrio <= _alertOpts.priority);
+          if (accept) setActivePattern(_alertPat, _alertOpts);
+          break;
+        }
+        case CmdType::CLEAR_ALERT:
+          _alertActive = false;
+          applyBackground();
           break;
         case CmdType::PLAY: {
           bool expired = (_haveCurrent && _currentOpts.durationMs > 0 &&

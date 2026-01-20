@@ -93,6 +93,13 @@ enum class ErrorCategory : uint8_t {
   COMMS       // cyan
 };
 
+// ---------- Latched alert levels ----------
+enum class AlertLevel : uint8_t {
+  NONE,
+  WARN,
+  CRITICAL
+};
+
 // ---------- Pattern options payload ----------
 struct PatternOpts {
   uint32_t color      = RGB_HEX(255,255,255);
@@ -162,12 +169,17 @@ public:
                      bool preempt = true,
                      uint32_t durationMs = 0);
 
+  // Latched alert (warning/critical) shown until cleared.
+  void setAlert(AlertLevel level, uint32_t color = 0);
+  void clearAlert();
+  bool hasAlert() const { return _alertActive; }
+
   // Pins (Blue is expected; pass pinB = -1 only if unwired)
   void attachPins(int pinR, int pinG, int pinB = -1, bool activeLow = true);
 
 private:
   // ----- Internal command wire -----
-  enum class CmdType : uint8_t { SET_BACKGROUND, PLAY, STOP, SHUTDOWN };
+  enum class CmdType : uint8_t { SET_BACKGROUND, SET_ALERT, CLEAR_ALERT, PLAY, STOP, SHUTDOWN };
   struct Cmd {
     CmdType     type;
     DevState    bgState;
@@ -219,6 +231,11 @@ private:
 
   // background (worker owns)
   DevState _bgState = DevState::START;
+
+  // latched alert (worker owns)
+  bool       _alertActive = false;
+  Pattern    _alertPat    = Pattern::OFF;
+  PatternOpts _alertOpts  {};
 };
 
 #define RGB RGBLed::Get()  // convenience

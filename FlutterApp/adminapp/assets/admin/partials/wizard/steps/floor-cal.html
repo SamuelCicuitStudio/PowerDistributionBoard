@@ -1,0 +1,35 @@
+              <section id="wizardStepFloorCal" class="wizard-step">
+                <h3>Floor Calibration</h3>
+                <p>
+                  Calibrate the floor model after wire calibration completes.
+                </p>
+                <div id="wizardFloorGateNote" class="wizard-calib-status">
+                  Wire calibration must be complete before floor calibration.
+                </div>
+                <div class="wizard-floor-actions">
+                  <button
+                    id="wizardFloorGoWireBtn"
+                    type="button"
+                    class="settings-btn"
+                  >
+                    Back to wire calibration
+                  </button>
+                  <button
+                    id="wizardFloorGoNtcBtn"
+                    type="button"
+                    class="settings-btn"
+                  >
+                    Edit NTC parameters
+                  </button>
+                </div>
+                <div class="wizard-calib-status">
+                  Status: <span id="wizardFloorCalStatus">--</span>
+                </div>
+                <button
+                  id="wizardOpenFloorCalBtn"
+                  type="button"
+                  class="settings-btn settings-btn-primary"
+                >
+                  Open Calibration
+                </button>
+              </section>

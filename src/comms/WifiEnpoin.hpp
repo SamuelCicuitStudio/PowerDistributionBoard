@@ -14,7 +14,7 @@
 
 // ===== Endpoints (HTTP/SSE) =====
 #define EP_LOGIN              "/login"               // Login page
-#define EP_DEVICE_INFO        "/device_info"         // Device identity/version (JSON)
+#define EP_DEVICE_INFO        "/device_info"         // Device identity/version (CBOR)
 #define EP_HEARTBEAT          "/heartbeat"           // Session keep-alive ping
 #define EP_CONNECT            "/connect"             // POST credentials to start a session
 #define EP_DISCONNECT         "/disconnect"          // POST to end session and redirect to login
@@ -25,8 +25,8 @@
 #define EP_MONITOR            "/monitor"             // Telemetry snapshot (caps, temps, outputs, session stats)
 #define EP_CONTROL            "/control"             // Control commands (set/get)
 #define EP_LOAD_CONTROLS      "/load_controls"       // Load persisted control/config values
-#define EP_SESSION_HISTORY    "/session_history"     // Live history JSON (from tracker)
-#define EP_HISTORY_JSON       "/History.json"        // Static history file fallback
+#define EP_SESSION_HISTORY    "/session_history"     // Live history (CBOR, from tracker)
+#define EP_HISTORY_FILE       "/History.cbor"        // History file (CBOR)
 #define EP_DEVICE_LOG         "/device_log"          // Device log readout
 #define EP_DEVICE_LOG_CLEAR   "/device_log_clear"    // Clear device log
 #define EP_CALIB_STATUS       "/calib_status"        // Calibration recorder status
@@ -34,14 +34,16 @@
 #define EP_CALIB_STOP         "/calib_stop"          // Stop calibration recorder
 #define EP_CALIB_CLEAR        "/calib_clear"         // Clear calibration recorder data
 #define EP_CALIB_DATA         "/calib_data"          // Calibration recorder data
-#define EP_CALIB_FILE         "/calib_file"          // Calibration recorder JSON file
-#define EP_CALIB_HISTORY_LIST "/calib_history_list"  // Calibration history list
-#define EP_CALIB_HISTORY_FILE "/calib_history_file"  // Calibration history file fetch
-#define EP_CALIB_PI_SUGGEST   "/calib_pi_suggest"    // Thermal model suggestion
-#define EP_CALIB_PI_SAVE      "/calib_pi_save"       // Thermal model save
+#define EP_CALIB_FILE         "/calib_file"          // Calibration recorder file (CBOR payload)
+#define EP_CALIB_HISTORY_LIST "/calib_history_list"  // Calibration history list (CBOR)
+#define EP_CALIB_HISTORY_FILE "/calib_history_file"  // Calibration history file fetch (CBOR payload)
 #define EP_WIRE_TEST_STATUS   "/wire_test_status"    // Wire test status
 #define EP_WIRE_TEST_START    "/wire_test_start"     // Wire test start
 #define EP_WIRE_TEST_STOP     "/wire_test_stop"      // Wire test stop
+#define EP_PRESENCE_PROBE     "/presence_probe"      // Presence probe
+#define EP_SETUP_STATUS       "/setup_status"        // Setup wizard status
+#define EP_SETUP_UPDATE       "/setup_update"        // Setup wizard progress update
+#define EP_SETUP_RESET        "/setup_reset"         // Setup wizard reset
 #define EP_NTC_CALIBRATE      "/ntc_calibrate"       // NTC multi-point calibration
 #define EP_NTC_BETA_CALIBRATE "/ntc_beta_calibrate"  // NTC single-point beta calibration
 #define EP_NTC_CAL_STATUS     "/ntc_cal_status"      // NTC calibration status
@@ -65,7 +67,7 @@
 #define URL_LOGIN_REDIRECT    "http://powerboard.local/login"
 
 // ===== Content types =====
-#define CT_APP_JSON           "application/json"
+#define CT_APP_CBOR           "application/cbor"
 #define CT_TEXT_PLAIN         "text/plain"
 #define CT_TEXT_HTML          "text/html"
 
@@ -85,12 +87,14 @@
 #define MODE_ENERGY           "energy"
 #define MODE_NTC              "ntc"
 #define MODE_MODEL            "model"
+#define MODE_FLOOR            "floor"
 #define MODE_NONE             "none"
 
 #define PURPOSE_NONE          "none"
 #define PURPOSE_WIRE_TEST     "wire_test"
 #define PURPOSE_MODEL_CAL     "model_cal"
 #define PURPOSE_NTC_CAL       "ntc_cal"
+#define PURPOSE_FLOOR_CAL     "floor_cal"
 
 // ===== Device state strings =====
 #define STATE_IDLE            "Idle"
@@ -109,7 +113,7 @@
 
 // ===== Error codes (response values) =====
 #define ERR_ALREADY_CONNECTED       "Already connected"
-#define ERR_INVALID_JSON            "Invalid JSON"
+#define ERR_INVALID_CBOR            "Invalid CBOR"
 #define ERR_INVALID_ACTION          "Invalid action"
 #define ERR_INVALID_ACTION_TARGET   "Invalid action or target"
 #define ERR_MISSING_FIELDS          "Missing fields"
@@ -140,6 +144,8 @@
 #define ERR_PERSIST_FAILED          "persist_failed"
 #define ERR_FAILED                 "failed"
 #define ERR_SENSOR_MISSING          "sensor_missing"
+#define ERR_SETUP_INCOMPLETE       "setup_incomplete"
+#define ERR_SETUP_REQUIRED         "setup_required"
 #define ERR_SNAPSHOT_BUSY           "snapshot_busy"
 #define ERR_START_FAILED            "start_failed"
 #define ERR_STATUS_UNAVAILABLE      "status_unavailable"
@@ -152,57 +158,6 @@
 
 // ===== Response body helpers =====
 #define RESP_ALIVE                  "alive"
-#define RESP_OK_TRUE                "{\"ok\":true}"
-#define RESP_HISTORY_EMPTY          "{\"history\":[]}"
-#define RESP_STATUS_IDLE            "{\"status\":\"" STATUS_IDLE "\"}"
-#define RESP_STATUS_STOPPING        "{\"status\":\"" STATUS_STOPPING "\"}"
-#define RESP_STATUS_OK_APPLIED      "{\"status\":\"" STATUS_OK "\",\"applied\":true}"
-#define RESP_STATUS_OK_QUEUED       "{\"status\":\"" STATUS_OK "\",\"queued\":true}"
-#define RESP_STATUS_OK_RUNNING_TRUE "{\"status\":\"" STATUS_OK "\",\"running\":true}"
-#define RESP_STATUS_OK_RUNNING_FALSE "{\"status\":\"" STATUS_OK "\",\"running\":false}"
-
-#define RESP_STATUS_OK_RUNNING_FALSE_SAVED_PREFIX \
-  "{\"status\":\"" STATUS_OK "\",\"running\":false,\"saved\":"
-#define RESP_STATUS_OK_CLEARED_FILE_PREFIX \
-  "{\"status\":\"" STATUS_OK "\",\"cleared\":true,\"file_removed\":"
-#define RESP_HISTORY_REMOVED_PREFIX ",\"history_removed\":"
-
-#define RESP_STATE_JSON_PREFIX      "{\"state\":\""
-#define RESP_STATE_JSON_MID         "\",\"seq\":"
-#define RESP_STATE_JSON_TAIL        ",\"sinceMs\":"
-#define RESP_STATE_JSON_SUFFIX      "}"
-
-#define JSON_TRUE                   "true"
-#define JSON_FALSE                  "false"
-
-#define RESP_ERR_ALREADY_CONNECTED  "{\"error\":\"" ERR_ALREADY_CONNECTED "\"}"
-#define RESP_ERR_INVALID_JSON       "{\"error\":\"" ERR_INVALID_JSON "\"}"
-#define RESP_ERR_INVALID_ACTION     "{\"error\":\"" ERR_INVALID_ACTION "\"}"
-#define RESP_ERR_INVALID_ACTION_TARGET "{\"error\":\"" ERR_INVALID_ACTION_TARGET "\"}"
-#define RESP_ERR_MISSING_FIELDS     "{\"error\":\"" ERR_MISSING_FIELDS "\"}"
-#define RESP_ERR_NOT_AUTHENTICATED  "{\"error\":\"" ERR_NOT_AUTHENTICATED "\"}"
-#define RESP_ERR_UNKNOWN_TARGET     "{\"error\":\"" ERR_UNKNOWN_TARGET "\"}"
-#define RESP_ERR_ALLOC_FAILED       "{\"error\":\"" ERR_ALLOC_FAILED "\"}"
-#define RESP_ERR_BAD_PASSWORD       "{\"error\":\"" ERR_BAD_PASSWORD "\"}"
-#define RESP_ERR_CALIBRATION_BUSY   "{\"error\":\"" ERR_CALIBRATION_BUSY "\"}"
-#define RESP_ERR_CALIBRATION_FAILED "{\"error\":\"" ERR_CALIBRATION_FAILED "\"}"
-#define RESP_ERR_CTRL_QUEUE_FULL    "{\"error\":\"" ERR_CTRL_QUEUE_FULL "\"}"
-#define RESP_ERR_DEVICE_MISSING     "{\"error\":\"" ERR_DEVICE_MISSING "\"}"
-#define RESP_ERR_DEVICE_NOT_IDLE    "{\"error\":\"" ERR_DEVICE_NOT_IDLE "\"}"
-#define RESP_ERR_INVALID_COEFFS     "{\"error\":\"" ERR_INVALID_COEFFS "\"}"
-#define RESP_ERR_INVALID_NAME       "{\"error\":\"" ERR_INVALID_NAME "\"}"
-#define RESP_ERR_INVALID_REF_TEMP   "{\"error\":\"" ERR_INVALID_REF_TEMP "\"}"
-#define RESP_ERR_INVALID_TARGET     "{\"error\":\"" ERR_INVALID_TARGET "\"}"
-#define RESP_ERR_MISSING_NAME       "{\"error\":\"" ERR_MISSING_NAME "\"}"
-#define RESP_ERR_NOT_FOUND          "{\"error\":\"" ERR_NOT_FOUND "\"}"
-#define RESP_ERR_NTC_MISSING        "{\"error\":\"" ERR_NTC_MISSING "\"}"
-#define RESP_ERR_SNAPSHOT_BUSY      "{\"error\":\"" ERR_SNAPSHOT_BUSY "\"}"
-#define RESP_ERR_START_FAILED       "{\"error\":\"" ERR_START_FAILED "\"}"
-#define RESP_ERR_STATUS_UNAVAILABLE "{\"error\":\"" ERR_STATUS_UNAVAILABLE "\"}"
-#define RESP_ERR_TASK_FAILED        "{\"error\":\"" ERR_TASK_FAILED "\"}"
-#define RESP_ERR_WIRE_ACCESS_BLOCKED "{\"error\":\"" ERR_WIRE_ACCESS_BLOCKED "\"}"
-#define RESP_ERR_WIRE_NOT_CONNECTED "{\"error\":\"" ERR_WIRE_NOT_CONNECTED "\"}"
-#define RESP_ERR_WIRE_SUBSYSTEM_MISSING "{\"error\":\"" ERR_WIRE_SUBSYSTEM_MISSING "\"}"
 
 
 #endif // WIFIENPOIN_H

@@ -1,0 +1,38 @@
+          <!-- Session History modal (unchanged skeleton, just kept below) -->
+          <div id="sessionHistoryModal" class="session-history-modal">
+            <div
+              class="session-history-backdrop"
+              onclick="closeSessionHistory()"
+            ></div>
+            <div class="session-history-content">
+              <div class="session-history-header">
+                <h3>Session History</h3>
+                <button
+                  type="button"
+                  class="session-history-close"
+                  onclick="closeSessionHistory()"
+                >
+                  âœ•
+                </button>
+              </div>
+              <div class="session-history-body">
+                <p class="session-history-placeholder">
+                  No history loaded yet. Backend will populate this table.
+                </p>
+                <table class="session-history-table">
+                  <thead>
+                    <tr>
+                      <th>Time</th>
+                      <th>Duration</th>
+                      <th>Energy (Wh)</th>
+                      <th>Peak P (W)</th>
+                      <th>Peak I (A)</th>
+                    </tr>
+                  </thead>
+                  <tbody id="sessionHistoryTableBody">
+                    <!-- rows from backend -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>

@@ -14,10 +14,10 @@
 #include <ConfigNVS.hpp>
 
 // Calibration data storage (model calibration history)
-#define CALIB_MODEL_JSON_FILE          "/CalibModle.json"
+#define CALIB_MODEL_CBOR_FILE          "/CalibModle.cbor"
 #define CALIB_HISTORY_DIR              "/calib_history"
 #define CALIB_HISTORY_PREFIX           "/calib_history/"
-#define CALIB_HISTORY_EXT              ".json"
+#define CALIB_HISTORY_EXT              ".cbor"
 
 // ==================================================
 // APMODE Definitions

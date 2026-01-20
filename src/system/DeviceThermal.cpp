@@ -85,14 +85,10 @@ void Device::initWireThermalModelOnce() {
         ws.R0 = (wi.resistanceOhm > 0.01f) ? wi.resistanceOhm : 1.0f;
 
         // Thermal parameters (global first-order model)
-        double cTh = DEFAULT_WIRE_THERMAL_C;
-        double tau = DEFAULT_WIRE_TAU_SEC;
-        if (CONF) {
-            cTh = CONF->GetDouble(WIRE_C_TH_KEY, DEFAULT_WIRE_THERMAL_C);
-            tau = CONF->GetDouble(WIRE_TAU_KEY, DEFAULT_WIRE_TAU_SEC);
-        }
-        if (!isfinite(cTh) || cTh <= 0.0f) cTh = DEFAULT_WIRE_THERMAL_C;
-        if (!isfinite(tau) || tau < 0.05f) tau = DEFAULT_WIRE_TAU_SEC;
+        double cTh = DEFAULT_WIRE_MODEL_C;
+        double tau = DEFAULT_WIRE_MODEL_TAU;
+        if (!isfinite(cTh) || cTh <= 0.0f) cTh = DEFAULT_WIRE_MODEL_C;
+        if (!isfinite(tau) || tau < 0.05f) tau = DEFAULT_WIRE_MODEL_TAU;
         ws.C_th = cTh;
         ws.tau  = tau;
 
@@ -105,7 +101,7 @@ void Device::initWireThermalModelOnce() {
     }
 
     wireThermalModel.init(*WIRE, ambientC);
-    refreshThermalParams();
+    applyWireModelParamsFromNvs();
 
     lastAmbientUpdateMs = now;
 
@@ -320,12 +316,6 @@ void Device::updateWireThermalFromHistory() {
     }
 
     // Refresh tunables that may be changed via UI / NVS at runtime.
-    if (CONF) {
-        float idle = CONF->GetFloat(IDLE_CURR_KEY, DEFAULT_IDLE_CURR);
-        if (!isfinite(idle) || idle < 0.0f) idle = 0.0f;
-        idleCurrentA = idle;
-    }
-    refreshThermalParams();
 
     // Refresh ambient slowly.
     updateAmbientFromSensors(false);
@@ -497,10 +487,10 @@ void Device::updateWireThermalFromHistory() {
         }
     } else {
         if (nVolt > 0) {
-            wireThermalModel.integrate(curBuf, nCur,
+                wireThermalModel.integrate(curBuf, nCur,
                                        voltBuf, nVolt,
                                        outBuf, nOut,
-                                       idleCurrentA, ambientC,
+                                       ambientC,
                                        wireStateModel,
                                        *WIRE);
 
@@ -516,7 +506,7 @@ void Device::updateWireThermalFromHistory() {
             }
         } else {
             // No new samples or output events: still decay temperatures so
-            // lockouts can clear and sequential/advanced loops keep working.
+            // lockouts can clear and the heating loop remains safe.
             wireThermalModel.coolingOnlyTick(ambientC, wireStateModel, *WIRE);
             outputHistorySeq = newOutSeq;
             lastHeaterMask   = wireStateModel.getLastMask();

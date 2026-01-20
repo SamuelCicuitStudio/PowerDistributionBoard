@@ -15,7 +15,7 @@
  * @brief Main heating loop & RTOS-oriented coordination.
  *
  * Once the device enters DeviceState::Running, the Device class coordinates
- * nichrome heater drive using an energy-based sequential scheduler.
+ * nichrome heater drive using a fast warm-up + equilibrium scheduler.
  *
  * The responsibilities are cleanly split:
  *
@@ -36,10 +36,10 @@
  *      - For each time segment, applies:
  *          - first-order thermal model using tau/k/C,
  *          - heating based on measured I(t), active mask, and R(T),
- *          - clamping at 150Â°C and re-enable hysteresis.
+ *          - clamping at 150 C and re-enable hysteresis.
  *      - Publishes results via HeaterManager::setWireEstimatedTemp().
  *
- *  - Device loop (energy-based sequential):
+ *  - Device loop (fast warm-up + equilibrium):
  *      - Uses checkAllowedOutputs() (config + thermal lockout) to determine
  *        eligible wires.
  *      - Allocates one energy packet per wire per frame (full voltage when ON).
@@ -74,6 +74,7 @@
 #include <Buzzer.hpp>
 #include <PowerTracker.hpp>
 #include <WireSubsystem.hpp>
+#include <WirePresenceManager.hpp>
 #include <BusSampler.hpp>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
@@ -106,7 +107,7 @@ extern EventGroupHandle_t gEvt;
 static inline bool StateLock()   { return xSemaphoreTake(gStateMtx, portMAX_DELAY) == pdTRUE; }
 static inline void StateUnlock() { xSemaphoreGive(gStateMtx); }
 
-// ===== Fan control thresholds (Â°C) and timing =====
+// ===== Fan control thresholds (C) and timing =====
 #define HS_FAN_ON_C         45.0f   // start ramp for heatsink
 #define HS_FAN_FULL_C       75.0f   // full speed by this temp
 #define HS_FAN_OFF_C        40.0f   // off below (hysteresis)
@@ -146,9 +147,8 @@ enum class RechargeMode : uint8_t {
  *      - temperature monitoring,
  *      - thermal integration task (history-based),
  *      - LED / indicator task.
- *  - Execute sequential / advanced heater loops using:
+ *  - Execute fast warm-up + equilibrium heating using:
  *      - HeaterManager for mask control,
- *      - planner helpers for group selection,
  *      - thermal model outputs for safety decisions.
  */
 class Device {
@@ -203,7 +203,6 @@ public:
         SET_WIRE_OHM_PER_M,
         SET_WIRE_GAUGE,
         SET_BUZZER_MUTE,
-        SET_MANUAL_MODE,
         SET_CURR_LIMIT,
         SET_RELAY,
         SET_OUTPUT,
@@ -251,7 +250,7 @@ public:
            Indicator* ledIndicator);
 
     void begin();                     ///< System startup and initialization.
-    void StartLoop();                 ///< Main heating loop (sequential/advanced).
+    void StartLoop();                 ///< Main heating loop (fast warm-up + equilibrium).
     void shutdown();                  ///< Safe shutdown and discharge.
     void checkAllowedOutputs();       ///< Refresh allowedOutputs[] from config + thermal.
 
@@ -327,7 +326,6 @@ public:
     void initWireThermalModelOnce();            ///< Initialize virtual wire states.
     float wireResistanceAtTemp(uint8_t idx, float T) const;
     uint16_t getActiveMaskFromHeater() const;   ///< Convenience: read current mask.
-    void calibrateIdleCurrent();                ///< Measure & store baseline idle current.
     bool calibrateCapacitance();                ///< Calibrate capacitor bank capacitance by timed discharge.
     bool runCalibrationsStandalone(uint32_t timeoutMs = 10000); ///< Full calibration without starting loop.
 
@@ -360,7 +358,8 @@ public:
         None = 0,
         WireTest = 1,
         ModelCal = 2,
-        NtcCal = 3
+        NtcCal = 3,
+        FloorCal = 4
     };
 
     struct WireTargetStatus {
@@ -369,6 +368,7 @@ public:
         float    targetC     = NAN;
         float    ntcTempC    = NAN;
         float    activeTempC = NAN;
+        float    dutyFrac    = 1.0f;
         uint8_t  activeWire  = 0;
         uint32_t packetMs    = 0;
         uint32_t frameMs     = 0;
@@ -402,8 +402,15 @@ public:
     FloorControlStatus getFloorControlStatus() const;
     LoopTargetStatus getLoopTargetStatus() const;
     AmbientWaitStatus getAmbientWaitStatus() const;
+    bool confirmWiresCool();
+    bool consumeWiresCoolConfirmation();
+    bool isWiresCoolConfirmed() const;
+    bool probeWirePresence();
 
-    bool startEnergyCalibration(float targetC, uint8_t wireIndex, EnergyRunPurpose purpose);
+    bool startEnergyCalibration(float targetC,
+                                uint8_t wireIndex,
+                                EnergyRunPurpose purpose,
+                                float dutyFrac = 1.0f);
     void startControlTask();
     static void controlTaskWrapper(void* param);
     void controlTask();
@@ -424,7 +431,6 @@ public:
     WireConfigStore&      getWireConfigStore()      { return wireConfigStore; }
     WireStateModel&       getWireStateModel()       { return wireStateModel; }
     WireThermalModel&     getWireThermalModel()     { return wireThermalModel; }
-    WirePresenceManager&  getWirePresenceManager()  { return wirePresenceManager; }
     WireTelemetryAdapter& getWireTelemetryAdapter() { return wireTelemetryAdapter; }
     float                 getCapBankCapF() const    { return capBankCapF; }
 
@@ -453,7 +459,7 @@ private:
     // ---------------------------------------------------------------------
 
     struct WireThermalState {
-        float     T;                 ///< Last estimated temperature [Â°C].
+        float     T;                 ///< Last estimated temperature [C].
         uint32_t  lastUpdateMs;      ///< Last integration time.
         float     R0;                ///< Cold resistance [Î©].
         float     C_th;              ///< Thermal capacity [J/K].
@@ -479,9 +485,6 @@ private:
     bool     thermalInitDone     = false;
     uint32_t lastAmbientUpdateMs = 0;
 
-    // Baseline current (non-heater loads), set by calibrateIdleCurrent().
-    float    idleCurrentA        = 0.0f;
-
     // Capacitor bank capacitance (Farads), set by calibrateCapacitance().
     float    capBankCapF         = DEFAULT_CAP_BANK_CAP_F;
 
@@ -505,7 +508,6 @@ private:
     QueueHandle_t         cmdQueue       = nullptr;
     QueueHandle_t         ackQueue       = nullptr;
     TaskHandle_t          cmdTaskHandle  = nullptr;
-    bool                  manualMode     = false;
     SemaphoreHandle_t     eventMtx       = nullptr;
     char                  lastErrorReason[96] = {0};
     uint32_t              lastErrorMs    = 0;
@@ -532,13 +534,13 @@ private:
     uint8_t lastCapFanPct = 0;
     uint8_t lastHsFanPct  = 0;
     // ---------------------------------------------------------------------
-    // Wire subsystem helpers (config + runtime + planner + telemetry)
+    // Wire subsystem helpers (config + runtime + telemetry)
     // ---------------------------------------------------------------------
     WireConfigStore      wireConfigStore;
     WireStateModel       wireStateModel;
     WireThermalModel     wireThermalModel;
-    WirePresenceManager  wirePresenceManager;
     WireTelemetryAdapter wireTelemetryAdapter;
+    WirePresenceManager  wirePresenceManager;
     BusSampler*          busSampler = nullptr;
 
     SemaphoreHandle_t    controlMtx = nullptr;
@@ -546,6 +548,8 @@ private:
     FloorControlStatus   floorControlStatus{};
     LoopTargetStatus     loopTargetStatus{};
     AmbientWaitStatus    ambientWaitStatus{};
+    bool                 wiresCoolConfirmed = false;
+    uint32_t             wiresCoolConfirmMs = 0;
     void updateWireTestStatus(uint8_t wireIndex,
                               uint32_t packetMs,
                               uint32_t frameMs);
@@ -556,7 +560,7 @@ private:
                                  const char* reason = nullptr);
     void setAmbientWaitStatus(bool active, float tolC, const char* reason);
     void loadRuntimeSettings();
-    void refreshThermalParams();
+    void applyWireModelParamsFromNvs();
     bool pushEventNotice(const EventNotice& note);
     static void pushEventUnlocked(Device* self,
                                   EventKind kind,

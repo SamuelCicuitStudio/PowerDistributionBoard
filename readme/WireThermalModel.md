@@ -5,9 +5,8 @@ Numerically integrates virtual wire temperatures from bus history and output his
 Each wire has its own calibrated model parameters stored in NVS after installation.
 
 ## Inputs
-- `BusSampler::Sample[]`: timestamped voltage/current samples (current derived from bus voltage and the active output mask).
+- `BusSampler::Sample[]`: timestamped voltage/current samples (current from selected source; estimate mode includes the charge/discharge resistor path).
 - `HeaterManager::OutputEvent[]`: timestamped output mask transitions.
-- `idleCurrentA`: baseline current to subtract from the measurements.
 - `ambientC`: current ambient estimate.
 - Per-wire cold resistance `R0` and mass (from `HeaterManager::getWireInfo`).
 - Per-wire thermal parameters `tau/k/C` loaded from NVS.
@@ -94,6 +93,7 @@ Initialization:
 ## Safety
 - Temperature clamp at `WIRE_T_MAX_C` (150 C).
 - Lockout/resume handled via `locked`/`cooldownReleaseMs` (consumers can set/clear based on policy).
+- Presence detection is handled separately; see `readme/WireThermalAndPresence.md`.
 
 ## Where it runs
 - `DeviceThermal.cpp::updateWireThermalFromHistory` pulls history from `BusSampler` and `HeaterManager`, then calls `WireThermalModel::integrate`.

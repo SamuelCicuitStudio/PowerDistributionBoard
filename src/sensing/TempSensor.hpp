@@ -68,7 +68,7 @@ public:
     void stopTemperatureTask();
     void startTemperatureTask(uint32_t intervalMs = TEMP_SENSOR_UPDATE_INTERVAL_MS);
 
-    // Cached read (Â°C), NON-BLOCKING
+    // Cached read (C), NON-BLOCKING
     float   getTemperature(uint8_t index);
     uint8_t getSensorCount();
 

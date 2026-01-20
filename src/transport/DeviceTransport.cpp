@@ -3,6 +3,141 @@
 DeviceTransport* DeviceTransport::s_inst = nullptr;
 static TaskHandle_t s_calTaskHandle = nullptr;
 
+namespace {
+static const char* kWireAccessKeys[HeaterManager::kWireCount] = {
+  OUT01_ACCESS_KEY, OUT02_ACCESS_KEY, OUT03_ACCESS_KEY, OUT04_ACCESS_KEY, OUT05_ACCESS_KEY,
+  OUT06_ACCESS_KEY, OUT07_ACCESS_KEY, OUT08_ACCESS_KEY, OUT09_ACCESS_KEY, OUT10_ACCESS_KEY
+};
+static const char* kWireResKeys[HeaterManager::kWireCount] = {
+  R01OHM_KEY, R02OHM_KEY, R03OHM_KEY, R04OHM_KEY, R05OHM_KEY,
+  R06OHM_KEY, R07OHM_KEY, R08OHM_KEY, R09OHM_KEY, R10OHM_KEY
+};
+static const char* kWireCalibDoneKeys[HeaterManager::kWireCount] = {
+  CALIB_W1_DONE_KEY, CALIB_W2_DONE_KEY, CALIB_W3_DONE_KEY, CALIB_W4_DONE_KEY, CALIB_W5_DONE_KEY,
+  CALIB_W6_DONE_KEY, CALIB_W7_DONE_KEY, CALIB_W8_DONE_KEY, CALIB_W9_DONE_KEY, CALIB_W10_DONE_KEY
+};
+
+static bool setupConfigOk() {
+  if (!CONF) return false;
+
+  const String devId = CONF->GetString(DEV_ID_KEY, "");
+  const String adminId = CONF->GetString(ADMIN_ID_KEY, "");
+  const String adminPass = CONF->GetString(ADMIN_PASS_KEY, "");
+  const String staSsid = CONF->GetString(STA_SSID_KEY, "");
+  const String staPass = CONF->GetString(STA_PASS_KEY, "");
+  const String apName = CONF->GetString(DEVICE_WIFI_HOTSPOT_NAME_KEY, "");
+  const String apPass = CONF->GetString(DEVICE_AP_AUTH_PASS_KEY, "");
+  if (devId.isEmpty() || adminId.isEmpty() || adminPass.isEmpty() ||
+      staSsid.isEmpty() || staPass.isEmpty() || apName.isEmpty() || apPass.isEmpty()) {
+    return false;
+  }
+
+  const float tempTrip = CONF->GetFloat(TEMP_THRESHOLD_KEY, DEFAULT_TEMP_THRESHOLD);
+  const float tempWarn = CONF->GetFloat(TEMP_WARN_KEY, DEFAULT_TEMP_WARN_C);
+  const float floorMax = CONF->GetFloat(FLOOR_MAX_C_KEY, DEFAULT_FLOOR_MAX_C);
+  const float nichromeMax =
+      CONF->GetFloat(NICHROME_FINAL_TEMP_C_KEY, DEFAULT_NICHROME_FINAL_TEMP_C);
+  const float floorMargin =
+      CONF->GetFloat(FLOOR_SWITCH_MARGIN_C_KEY, DEFAULT_FLOOR_SWITCH_MARGIN_C);
+  const float currLimit = CONF->GetFloat(CURR_LIMIT_KEY, DEFAULT_CURR_LIMIT_A);
+  if (!isfinite(tempTrip) || tempTrip <= 0.0f ||
+      !isfinite(tempWarn) || tempWarn <= 0.0f ||
+      !isfinite(floorMax) || floorMax <= 0.0f ||
+      !isfinite(nichromeMax) || nichromeMax <= 0.0f ||
+      !isfinite(floorMargin) || floorMargin <= 0.0f ||
+      !isfinite(currLimit) || currLimit < 0.0f) {
+    return false;
+  }
+
+  const int currentSource = CONF->GetInt(CURRENT_SOURCE_KEY, DEFAULT_CURRENT_SOURCE);
+  if (currentSource != CURRENT_SRC_ACS && currentSource != CURRENT_SRC_ESTIMATE) {
+    return false;
+  }
+
+  const int acFreq = CONF->GetInt(AC_FREQUENCY_KEY, DEFAULT_AC_FREQUENCY);
+  const float acVolt = CONF->GetFloat(AC_VOLTAGE_KEY, DEFAULT_AC_VOLTAGE);
+  const float chargeRes = CONF->GetFloat(CHARGE_RESISTOR_KEY, DEFAULT_CHARGE_RESISTOR_OHMS);
+  if (acFreq <= 0 || !isfinite(acVolt) || acVolt <= 0.0f ||
+      !isfinite(chargeRes) || chargeRes <= 0.0f) {
+    return false;
+  }
+
+  const float ohmPerM = CONF->GetFloat(WIRE_OHM_PER_M_KEY, DEFAULT_WIRE_OHM_PER_M);
+  const int gauge = CONF->GetInt(WIRE_GAUGE_KEY, DEFAULT_WIRE_GAUGE);
+  if (!isfinite(ohmPerM) || ohmPerM <= 0.0f || gauge <= 0) {
+    return false;
+  }
+
+  const int ntcGate = CONF->GetInt(NTC_GATE_INDEX_KEY, DEFAULT_NTC_GATE_INDEX);
+  if (ntcGate < 1 || ntcGate > HeaterManager::kWireCount) {
+    return false;
+  }
+
+  const float ntcBeta = CONF->GetFloat(NTC_BETA_KEY, DEFAULT_NTC_BETA);
+  if (!isfinite(ntcBeta) || ntcBeta <= 0.0f) {
+    return false;
+  }
+  const float ntcT0C = CONF->GetFloat(NTC_T0_C_KEY, DEFAULT_NTC_T0_C);
+  if (!isfinite(ntcT0C)) {
+    return false;
+  }
+  const float ntcR0 = CONF->GetFloat(NTC_R0_KEY, DEFAULT_NTC_R0_OHMS);
+  if (!isfinite(ntcR0) || ntcR0 <= 0.0f) {
+    return false;
+  }
+  const float ntcFixed = CONF->GetFloat(NTC_FIXED_RES_KEY, DEFAULT_NTC_FIXED_RES_OHMS);
+  if (!isfinite(ntcFixed) || ntcFixed <= 0.0f) {
+    return false;
+  }
+
+  const float minDropV =
+      CONF->GetFloat(PRESENCE_MIN_DROP_V_KEY, DEFAULT_PRESENCE_MIN_DROP_V);
+  if (!isfinite(minDropV) || minDropV <= 0.0f) {
+    return false;
+  }
+
+  bool anyEnabled = false;
+  for (uint8_t i = 0; i < HeaterManager::kWireCount; ++i) {
+    const bool allowed = CONF->GetBool(kWireAccessKeys[i], false);
+    if (!allowed) continue;
+    anyEnabled = true;
+    const float r = CONF->GetFloat(kWireResKeys[i], DEFAULT_WIRE_RES_OHMS);
+    if (!isfinite(r) || r <= 0.01f) {
+      return false;
+    }
+  }
+  if (!anyEnabled) return false;
+
+  return true;
+}
+
+static bool setupCalibOk() {
+  if (!CONF) return false;
+  if (!CONF->GetBool(CALIB_CAP_DONE_KEY, DEFAULT_CALIB_CAP_DONE)) return false;
+  const float capF = CONF->GetFloat(CAP_BANK_CAP_F_KEY, DEFAULT_CAP_BANK_CAP_F);
+  if (!isfinite(capF) || capF <= 0.0f) return false;
+
+  for (uint8_t i = 0; i < HeaterManager::kWireCount; ++i) {
+    const bool allowed = CONF->GetBool(kWireAccessKeys[i], false);
+    if (!allowed) continue;
+    if (!CONF->GetBool(kWireCalibDoneKeys[i], DEFAULT_CALIB_W_DONE)) {
+      return false;
+    }
+  }
+  if (!CONF->GetBool(CALIB_PRESENCE_DONE_KEY, DEFAULT_CALIB_PRESENCE_DONE)) return false;
+  if (!CONF->GetBool(CALIB_FLOOR_DONE_KEY, DEFAULT_CALIB_FLOOR_DONE)) return false;
+
+  return true;
+}
+
+static bool setupRunAllowed() {
+  if (!CONF) return false;
+  const bool setupDone = CONF->GetBool(SETUP_DONE_KEY, DEFAULT_SETUP_DONE);
+  if (!setupDone) return false;
+  return setupConfigOk() && setupCalibOk();
+}
+} // namespace
+
 DeviceTransport* DeviceTransport::Get() {
   if (!s_inst) s_inst = new DeviceTransport();
   return s_inst;
@@ -19,10 +154,6 @@ Device::StateSnapshot DeviceTransport::getStateSnapshot() const {
   return DEVICE->getStateSnapshot();
 }
 
-bool DeviceTransport::isManualMode() const {
-  return DEVICE ? DEVICE->manualMode : false;
-}
-
 bool DeviceTransport::waitForStateEvent(Device::StateSnapshot& out, TickType_t toTicks) {
   if (!DEVICE) {
     vTaskDelay(toTicks);
@@ -33,6 +164,10 @@ bool DeviceTransport::waitForStateEvent(Device::StateSnapshot& out, TickType_t t
 
 bool DeviceTransport::requestRun() {
   if (!DEVICE || !gEvt) return false;
+  if (!setupRunAllowed()) {
+    DEVICE->setLastStopReason("Setup incomplete");
+    return false;
+  }
   DEVICE->stopWireTargetTest();
   ensureLoopTask();
   xEventGroupSetBits(gEvt, EVT_WAKE_REQ | EVT_RUN_REQ);
@@ -154,7 +289,6 @@ bool DeviceTransport::setWireGaugeAwg(int awg) {
   return sendCommandAndWait(Device::DevCmdType::SET_WIRE_GAUGE, awg);
 }
 bool DeviceTransport::setBuzzerMute(bool on)            { return sendCommandAndWait(Device::DevCmdType::SET_BUZZER_MUTE, 0, 0.0f, on); }
-bool DeviceTransport::setManualMode(bool manual)        { return sendCommandAndWait(Device::DevCmdType::SET_MANUAL_MODE, 0, 0.0f, manual); }
 bool DeviceTransport::setCurrentLimitA(float limitA)    { return sendCommandAndWait(Device::DevCmdType::SET_CURR_LIMIT, 0, limitA); }
 bool DeviceTransport::requestResetFlagAndRestart() {
   return sendCommandAndWait(Device::DevCmdType::REQUEST_RESET);
@@ -211,9 +345,22 @@ bool DeviceTransport::getFloorControlStatus(Device::FloorControlStatus& out) con
   return true;
 }
 
-bool DeviceTransport::startEnergyCalibration(float targetC, uint8_t wireIndex, Device::EnergyRunPurpose purpose) {
+bool DeviceTransport::startEnergyCalibration(float targetC,
+                                             uint8_t wireIndex,
+                                             Device::EnergyRunPurpose purpose,
+                                             float dutyFrac) {
   if (!DEVICE) return false;
-  return DEVICE->startEnergyCalibration(targetC, wireIndex, purpose);
+  return DEVICE->startEnergyCalibration(targetC, wireIndex, purpose, dutyFrac);
+}
+
+bool DeviceTransport::probeWirePresence() {
+  if (!DEVICE) return false;
+  return DEVICE->probeWirePresence();
+}
+
+bool DeviceTransport::confirmWiresCool() {
+  if (!DEVICE) return false;
+  return DEVICE->confirmWiresCool();
 }
 
 bool DeviceTransport::sendCommandAndWait(Device::DevCmdType t, int32_t i1, float f1, bool b1, TickType_t to) {

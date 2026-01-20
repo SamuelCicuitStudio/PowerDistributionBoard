@@ -19,7 +19,7 @@
 // ----------------------------------------------------------------------------
 
 #define POWERTRACKER_HISTORY_MAX   800
-#define POWERTRACKER_HISTORY_FILE  "/History.json"
+#define POWERTRACKER_HISTORY_FILE  "/History.cbor"
 
 class PowerTracker {
 public:
@@ -44,7 +44,7 @@ public:
     }
 
     // Load persisted totals & last session stats from NVS.
-    // Also loads history from /History.json (SPIFFS) if present.
+    // Also loads history from /History.cbor (SPIFFS) if present.
     void begin();
 
     // Start a new heating session.

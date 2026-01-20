@@ -39,25 +39,10 @@
 #define CHARGE_RESISTOR_KEY            "CHRES"     // Charge resistor value key
 #define AC_FREQUENCY_KEY               "ACFRQ"     // Sampling rate key (Hz)
 #define AC_VOLTAGE_KEY                 "ACVLT"     // AC line voltage key
+#define CURRENT_SOURCE_KEY             "CSRC"     // int: 0=estimate from Vdrop, 1=ACS sensor
 #define CP_EMP_GAIN_KEY                "CPEMGN"    // Empirical capacitor ADC gain key
 #define CAP_BANK_CAP_F_KEY             "CPCAPF"    // Capacitor bank capacitance [F] key
-#define MIX_FRAME_MS_KEY               "MXFRM"    // int: frame length for mixed scheduling [ms]
-#define MIX_REF_ON_MS_KEY              "MXREF"    // int: reference on-time for R_ref [ms]
-#define MIX_REF_RES_OHM_KEY            "MXRRF"    // float: reference resistance [ohm]
-#define MIX_BOOST_K_KEY                "MXBSK"    // float: boost gain multiplier
-#define MIX_BOOST_MS_KEY               "MXBSMS"   // int: boost duration [ms]
-#define MIX_PRE_DELTA_C_KEY            "MXDTPR"   // float: preheat delta [C]
-#define MIX_HOLD_UPDATE_MS_KEY         "MXHUPD"   // int: hold control update interval [ms]
-#define MIX_HOLD_GAIN_KEY              "MXHGN"    // float: hold gain [ms per C]
-#define MIX_MIN_ON_MS_KEY              "MXMIN"    // int: min on-time per packet [ms]
-#define MIX_MAX_ON_MS_KEY              "MXMAX"    // int: max on-time per packet [ms]
-#define MIX_MAX_AVG_MS_KEY             "MXAVG"    // int: max average on-time per second [ms]
-#define TIMING_MODE_KEY                "TMMODE"    // int: 0=preset, 1=manual
-#define TIMING_PROFILE_KEY             "TMPROF"    // int: 0=hot, 1=medium, 2=gentle
 #define CURR_LIMIT_KEY                 "CURRLT"   // float: over-current trip threshold [A]
-#define WIRE_TAU_KEY                   "TAUSEC"   // double: thermal time constant tau [s]
-#define WIRE_K_LOSS_KEY                "WKLOS"    // double: heat loss coefficient k [W/K]
-#define WIRE_C_TH_KEY                  "WCTH"     // double: thermal mass C [J/K]
 #define TEMP_SENSOR_COUNT_KEY          "TMNT"    // Number of temperature sensors detected
 #define RTC_CURRENT_EPOCH_KEY          "RCUR"    // Last known epoch persisted
 #define RTC_PRESLEEP_EPOCH_KEY         "RSLP"   // Epoch saved before deep sleep
@@ -65,8 +50,26 @@
 #define FLOOR_THICKNESS_MM_KEY         "FLTHK"   // float: floor thickness [mm]
 #define FLOOR_MATERIAL_KEY             "FLMAT"   // int: floor material code
 #define FLOOR_MAX_C_KEY                "FLMAX"   // float: max floor temp [C]
+#define FLOOR_SWITCH_MARGIN_C_KEY      "FLMRG"   // float: floor margin for boost->equilibrium switch [C]
 #define NICHROME_FINAL_TEMP_C_KEY      "NCFIN"   // float: target final nichrome temp [C]
 #define NTC_GATE_INDEX_KEY             "NTCGT"   // int: wire index tied to NTC
+#define NTC_T0_C_KEY                   "NTCT0"   // float: NTC T0 reference temp [C]
+#define NTC_R0_KEY                     "NTCR0"   // float: NTC R0 at T0 [ohms]
+#define NTC_BETA_KEY                   "NTCBT"   // float: NTC beta constant
+#define NTC_FIXED_RES_KEY              "NTCFR"   // float: NTC divider fixed resistor [ohms]
+#define NTC_MODEL_KEY                  "NTCMD"   // int: NTC model (0=beta, 1=steinhart)
+#define NTC_SH_A_KEY                   "NTCSA"   // float: Steinhart-Hart A
+#define NTC_SH_B_KEY                   "NTCSB"   // float: Steinhart-Hart B
+#define NTC_SH_C_KEY                   "NTCSC"   // float: Steinhart-Hart C
+#define NTC_MIN_C_KEY                  "NTCMIN"  // float: NTC min temp [C]
+#define NTC_MAX_C_KEY                  "NTCMAX"  // float: NTC max temp [C]
+#define NTC_SAMPLES_KEY                "NTCSMP"  // int: NTC samples per update
+#define NTC_PRESS_MV_KEY               "NTCPR"   // float: NTC press threshold [mV]
+#define NTC_RELEASE_MV_KEY             "NTCRL"   // float: NTC release threshold [mV]
+#define NTC_DEBOUNCE_MS_KEY            "NTCDB"   // int: NTC debounce [ms]
+#define NTC_CAL_TARGET_C_KEY           "NTCTG"   // float: NTC calibration target temp [C]
+#define NTC_CAL_SAMPLE_MS_KEY          "NTCMS"   // int: NTC calibration sample interval [ms]
+#define NTC_CAL_TIMEOUT_MS_KEY         "NTCTO"   // int: NTC calibration timeout [ms]
 
 // ---------- Setup Wizard / Calibration Progress ----------
 #define SETUP_DONE_KEY                 "SETUP"   // bool: setup completed
@@ -74,7 +77,6 @@
 #define SETUP_SUBSTAGE_KEY             "SUBSTG"  // int: last completed wizard sub-step
 #define SETUP_WIRE_INDEX_KEY           "STWIRE"  // int: wire index currently calibrating
 #define CALIB_CAP_DONE_KEY             "CALCAP"  // bool: cap bank calibration done
-#define CALIB_IDLE_DONE_KEY            "CALIDC"  // bool: idle current calibration done
 #define CALIB_NTC_DONE_KEY             "CALNTC"  // bool: NTC calibration done
 #define CALIB_W1_DONE_KEY              "CALW1"   // bool: wire 1 calibration done
 #define CALIB_W2_DONE_KEY              "CALW2"   // bool: wire 2 calibration done
@@ -87,6 +89,11 @@
 #define CALIB_W9_DONE_KEY              "CALW9"   // bool: wire 9 calibration done
 #define CALIB_W10_DONE_KEY             "CALW10"  // bool: wire 10 calibration done
 #define CALIB_FLOOR_DONE_KEY           "CALFLR"  // bool: floor calibration done
+#define CALIB_PRESENCE_DONE_KEY        "CALPRS"  // bool: presence calibration done
+#define PRESENCE_MIN_DROP_V_KEY        "PMIND"   // float: min voltage drop [V]
+#define PRESENCE_MIN_RATIO_KEY         "PMINR"   // float: min ratio for presence checks
+#define PRESENCE_WINDOW_MS_KEY         "PWIN"    // int: averaging window [ms]
+#define PRESENCE_FAIL_COUNT_KEY        "PFAIL"   // int: consecutive failures before missing
 #define CALIB_W1_STAGE_KEY             "W1STG"   // int: wire 1 calibration stage
 #define CALIB_W2_STAGE_KEY             "W2STG"   // int: wire 2 calibration stage
 #define CALIB_W3_STAGE_KEY             "W3STG"   // int: wire 3 calibration stage
@@ -171,35 +178,37 @@
 ASSERT_NVS_KEY_LEN(DEV_ID_KEY);
 ASSERT_NVS_KEY_LEN(DEV_SW_KEY);
 ASSERT_NVS_KEY_LEN(DEV_HW_KEY);
-ASSERT_NVS_KEY_LEN(TIMING_MODE_KEY);
-ASSERT_NVS_KEY_LEN(TIMING_PROFILE_KEY);
-ASSERT_NVS_KEY_LEN(MIX_FRAME_MS_KEY);
-ASSERT_NVS_KEY_LEN(MIX_REF_ON_MS_KEY);
-ASSERT_NVS_KEY_LEN(MIX_REF_RES_OHM_KEY);
-ASSERT_NVS_KEY_LEN(MIX_BOOST_K_KEY);
-ASSERT_NVS_KEY_LEN(MIX_BOOST_MS_KEY);
-ASSERT_NVS_KEY_LEN(MIX_PRE_DELTA_C_KEY);
-ASSERT_NVS_KEY_LEN(MIX_HOLD_UPDATE_MS_KEY);
-ASSERT_NVS_KEY_LEN(MIX_HOLD_GAIN_KEY);
-ASSERT_NVS_KEY_LEN(MIX_MIN_ON_MS_KEY);
-ASSERT_NVS_KEY_LEN(MIX_MAX_ON_MS_KEY);
-ASSERT_NVS_KEY_LEN(MIX_MAX_AVG_MS_KEY);
+ASSERT_NVS_KEY_LEN(CURRENT_SOURCE_KEY);
 ASSERT_NVS_KEY_LEN(CURR_LIMIT_KEY);
 ASSERT_NVS_KEY_LEN(TEMP_WARN_KEY);
-ASSERT_NVS_KEY_LEN(WIRE_TAU_KEY);
-ASSERT_NVS_KEY_LEN(WIRE_K_LOSS_KEY);
-ASSERT_NVS_KEY_LEN(WIRE_C_TH_KEY);
 ASSERT_NVS_KEY_LEN(FLOOR_THICKNESS_MM_KEY);
 ASSERT_NVS_KEY_LEN(FLOOR_MATERIAL_KEY);
 ASSERT_NVS_KEY_LEN(FLOOR_MAX_C_KEY);
+ASSERT_NVS_KEY_LEN(FLOOR_SWITCH_MARGIN_C_KEY);
 ASSERT_NVS_KEY_LEN(NICHROME_FINAL_TEMP_C_KEY);
 ASSERT_NVS_KEY_LEN(NTC_GATE_INDEX_KEY);
+ASSERT_NVS_KEY_LEN(NTC_T0_C_KEY);
+ASSERT_NVS_KEY_LEN(NTC_R0_KEY);
+ASSERT_NVS_KEY_LEN(NTC_BETA_KEY);
+ASSERT_NVS_KEY_LEN(NTC_FIXED_RES_KEY);
+ASSERT_NVS_KEY_LEN(NTC_MODEL_KEY);
+ASSERT_NVS_KEY_LEN(NTC_SH_A_KEY);
+ASSERT_NVS_KEY_LEN(NTC_SH_B_KEY);
+ASSERT_NVS_KEY_LEN(NTC_SH_C_KEY);
+ASSERT_NVS_KEY_LEN(NTC_MIN_C_KEY);
+ASSERT_NVS_KEY_LEN(NTC_MAX_C_KEY);
+ASSERT_NVS_KEY_LEN(NTC_SAMPLES_KEY);
+ASSERT_NVS_KEY_LEN(NTC_PRESS_MV_KEY);
+ASSERT_NVS_KEY_LEN(NTC_RELEASE_MV_KEY);
+ASSERT_NVS_KEY_LEN(NTC_DEBOUNCE_MS_KEY);
+ASSERT_NVS_KEY_LEN(NTC_CAL_TARGET_C_KEY);
+ASSERT_NVS_KEY_LEN(NTC_CAL_SAMPLE_MS_KEY);
+ASSERT_NVS_KEY_LEN(NTC_CAL_TIMEOUT_MS_KEY);
 ASSERT_NVS_KEY_LEN(SETUP_DONE_KEY);
 ASSERT_NVS_KEY_LEN(SETUP_STAGE_KEY);
 ASSERT_NVS_KEY_LEN(SETUP_SUBSTAGE_KEY);
 ASSERT_NVS_KEY_LEN(SETUP_WIRE_INDEX_KEY);
 ASSERT_NVS_KEY_LEN(CALIB_CAP_DONE_KEY);
-ASSERT_NVS_KEY_LEN(CALIB_IDLE_DONE_KEY);
 ASSERT_NVS_KEY_LEN(CALIB_NTC_DONE_KEY);
 ASSERT_NVS_KEY_LEN(CALIB_W1_DONE_KEY);
 ASSERT_NVS_KEY_LEN(CALIB_W2_DONE_KEY);
@@ -212,6 +221,11 @@ ASSERT_NVS_KEY_LEN(CALIB_W8_DONE_KEY);
 ASSERT_NVS_KEY_LEN(CALIB_W9_DONE_KEY);
 ASSERT_NVS_KEY_LEN(CALIB_W10_DONE_KEY);
 ASSERT_NVS_KEY_LEN(CALIB_FLOOR_DONE_KEY);
+ASSERT_NVS_KEY_LEN(CALIB_PRESENCE_DONE_KEY);
+ASSERT_NVS_KEY_LEN(PRESENCE_MIN_DROP_V_KEY);
+ASSERT_NVS_KEY_LEN(PRESENCE_MIN_RATIO_KEY);
+ASSERT_NVS_KEY_LEN(PRESENCE_WINDOW_MS_KEY);
+ASSERT_NVS_KEY_LEN(PRESENCE_FAIL_COUNT_KEY);
 ASSERT_NVS_KEY_LEN(CALIB_W1_STAGE_KEY);
 ASSERT_NVS_KEY_LEN(CALIB_W2_STAGE_KEY);
 ASSERT_NVS_KEY_LEN(CALIB_W3_STAGE_KEY);
@@ -325,8 +339,7 @@ ASSERT_NVS_KEY_LEN(W10CAP_KEY);
 #define R09OHM_KEY  "R09OHM"
 #define R10OHM_KEY  "R10OHM"
 
-#define IDLE_CURR_KEY "IIDLE"
-#define DEFAULT_IDLE_CURR 0.0f
+// Idle current calibration removed (no key)
 #define WIRE_OHM_PER_M_KEY               "WOPERM"    // float: Ω per meter for installed nichrome
 #define DEFAULT_WIRE_OHM_PER_M           2.0f        // 2 Ω/m nichrome (your current wire)
 #define WIRE_GAUGE_KEY                   "WIREG"     // int: AWG gauge for installed nichrome
@@ -376,33 +389,20 @@ ASSERT_NVS_KEY_LEN(W10CAP_KEY);
 #define DEFAULT_AC_FREQUENCY           500              // Hz sampling rate (50..500)
 #define DEFAULT_AC_VOLTAGE             230.0f           // Volts
 #define DEFAULT_DC_VOLTAGE             325.0f           // Volts (fixed target)
+#define CURRENT_SRC_ESTIMATE           0                // estimate current from voltage drop
+#define CURRENT_SRC_ACS                1                // ACS hall-effect current sensor
+#define DEFAULT_CURRENT_SOURCE         CURRENT_SRC_ESTIMATE
 #define DEFAULT_CAP_EMP_GAIN           (321.0f / 1.90f) // Default empirical ADC->bus gain
 #define DEFAULT_CAP_BANK_CAP_F         0.0f             // Farads (0 => unknown until calibrated)
 #define DEFAULT_TEMP_SENSOR_COUNT      12               // Default to 12 sensors unless discovered otherwise
-#define DEFAULT_MIX_FRAME_MS           120              // ms: mixed scheduling frame length
-#define DEFAULT_MIX_REF_ON_MS          12               // ms: reference on-time for R_ref
-#define DEFAULT_MIX_REF_RES_OHM        DEFAULT_WIRE_RES_OHMS // ohm: reference resistance
-#define DEFAULT_MIX_BOOST_K            1.7f             // boost gain multiplier
-#define DEFAULT_MIX_BOOST_MS           5000             // ms: boost duration
-#define DEFAULT_MIX_PRE_DELTA_C        5.0f             // C: boost exit delta
-#define DEFAULT_MIX_HOLD_UPDATE_MS     1000             // ms: hold control update interval
-#define DEFAULT_MIX_HOLD_GAIN          0.5f             // ms per C: hold adjustment gain
-#define DEFAULT_MIX_MIN_ON_MS          2                // ms: minimum on-time per packet
-#define DEFAULT_MIX_MAX_ON_MS          40               // ms: maximum on-time per packet
-#define DEFAULT_MIX_MAX_AVG_MS         200              // ms per second: max average on-time
-#define DEFAULT_TIMING_MODE            0                // 0=preset, 1=manual
-#define DEFAULT_TIMING_PROFILE         1                // 0=hot, 1=medium, 2=gentle
 #define DEFAULT_CURR_LIMIT_A           36.0f            // Default over-current trip [A]
-#define DEFAULT_WIRE_TAU_SEC           35.0f            // Default thermal time constant [s] (empirical)
-#define DEFAULT_WIRE_THERMAL_C         1.0f             // Default thermal mass [J/K]
-#define DEFAULT_WIRE_K_LOSS            (DEFAULT_WIRE_THERMAL_C / DEFAULT_WIRE_TAU_SEC) // Default k [W/K]
 #define DEFAULT_WIRE_GAUGE             20               // AWG number for installed nichrome
 // NTC / analog power button defaults
 #define NTC_ADC_REF_VOLTAGE            3.3f             // ADC reference [V]
 #define NTC_ADC_MAX                    4095.0f          // 12-bit ADC full scale
 #define DEFAULT_NTC_FIXED_RES_OHMS     9700.0f         // Divider fixed resistor [ohms]
-#define DEFAULT_NTC_R0_OHMS            8863.0f         // NTC R0 at T0 [ohms]
-#define DEFAULT_NTC_BETA               3950.0f          // Beta constant
+#define DEFAULT_NTC_R0_OHMS            8063.0f         // NTC R0 at T0 [ohms]
+#define DEFAULT_NTC_BETA               3977.0f          // Beta constant
 #define DEFAULT_NTC_MODEL              0                // 0=beta, 1=steinhart
 #define DEFAULT_NTC_SH_A               NAN              // Steinhart-Hart A (unset)
 #define DEFAULT_NTC_SH_B               NAN              // Steinhart-Hart B (unset)
@@ -415,10 +415,14 @@ ASSERT_NVS_KEY_LEN(W10CAP_KEY);
 #define DEFAULT_NTC_DEBOUNCE_MS        40               // Debounce duration [ms]
 #define DEFAULT_NTC_SAMPLES            8                // ADC samples per update
 #define DEFAULT_NTC_GATE_INDEX         1                // Wire index tied to NTC by default
+#define DEFAULT_NTC_CAL_TARGET_C       100.0f           // NTC calibration target temp [C]
+#define DEFAULT_NTC_CAL_SAMPLE_MS      500              // NTC calibration sample interval [ms]
+#define DEFAULT_NTC_CAL_TIMEOUT_MS     1200000          // NTC calibration timeout [ms]
 #define FLOOR_THICKNESS_MIN_MM         20.0f            // 2 cm minimum
 #define FLOOR_THICKNESS_MAX_MM         50.0f            // 5 cm maximum
 #define DEFAULT_FLOOR_THICKNESS_MM     0.0f             // Floor thickness [mm] (0 = unset)
 #define DEFAULT_FLOOR_MAX_C            35.0f            // Max floor temperature [C]
+#define DEFAULT_FLOOR_SWITCH_MARGIN_C  1.0f             // Floor margin for boost->equilibrium switch [C]
 #define DEFAULT_NICHROME_FINAL_TEMP_C  0.0f             // Final temp [C] (0 = unset)
 
 // Setup wizard defaults
@@ -427,10 +431,14 @@ ASSERT_NVS_KEY_LEN(W10CAP_KEY);
 #define DEFAULT_SETUP_SUBSTAGE         0
 #define DEFAULT_SETUP_WIRE_INDEX       0
 #define DEFAULT_CALIB_CAP_DONE         false
-#define DEFAULT_CALIB_IDLE_DONE        false
 #define DEFAULT_CALIB_NTC_DONE         false
 #define DEFAULT_CALIB_W_DONE           false
 #define DEFAULT_CALIB_FLOOR_DONE       false
+#define DEFAULT_CALIB_PRESENCE_DONE    false
+#define DEFAULT_PRESENCE_MIN_RATIO     0.70f
+#define DEFAULT_PRESENCE_MIN_DROP_V    5.0f
+#define DEFAULT_PRESENCE_WINDOW_MS     200
+#define DEFAULT_PRESENCE_FAIL_COUNT    3
 #define DEFAULT_CALIB_W_STAGE          0
 #define DEFAULT_CALIB_W_RUNNING        false
 #define DEFAULT_CALIB_W_TS             0
@@ -441,9 +449,9 @@ ASSERT_NVS_KEY_LEN(W10CAP_KEY);
 #define DEFAULT_FLOOR_MODEL_TAU        0.0
 #define DEFAULT_FLOOR_MODEL_K          0.0
 #define DEFAULT_FLOOR_MODEL_C          0.0
-#define DEFAULT_WIRE_MODEL_TAU         DEFAULT_WIRE_TAU_SEC
-#define DEFAULT_WIRE_MODEL_K           DEFAULT_WIRE_K_LOSS
-#define DEFAULT_WIRE_MODEL_C           DEFAULT_WIRE_THERMAL_C
+#define DEFAULT_WIRE_MODEL_TAU         35.0
+#define DEFAULT_WIRE_MODEL_C           1.0
+#define DEFAULT_WIRE_MODEL_K           (DEFAULT_WIRE_MODEL_C / DEFAULT_WIRE_MODEL_TAU)
 
 // Floor material codes
 #define FLOOR_MAT_WOOD                 0

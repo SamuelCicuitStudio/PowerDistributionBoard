@@ -3,8 +3,50 @@
 
 #include <FS.h>
 #include <SPIFFS.h>
-#include <ArduinoJson.h>
+#include <cbor.h>
+#include <CborStream.hpp>
+#include <vector>
 #include <BusSampler.hpp>
+
+namespace {
+constexpr size_t kHistoryCborKeyMax = 32;
+constexpr size_t kHistoryCborMaxBytes = 131072;
+
+bool readCborUInt_(CborValue* it, uint64_t& value) {
+    if (!cbor_value_is_integer(it)) return false;
+    if (cbor_value_get_uint64(it, &value) != CborNoError) return false;
+    return cbor_value_advance(it) == CborNoError;
+}
+
+bool readCborDouble_(CborValue* it, double& value) {
+    if (cbor_value_is_double(it)) {
+        if (cbor_value_get_double(it, &value) != CborNoError) return false;
+        return cbor_value_advance(it) == CborNoError;
+    }
+    if (cbor_value_is_float(it)) {
+        float tmp = 0.0f;
+        if (cbor_value_get_float(it, &tmp) != CborNoError) return false;
+        value = tmp;
+        return cbor_value_advance(it) == CborNoError;
+    }
+    if (cbor_value_is_integer(it)) {
+        int64_t iv = 0;
+        if (cbor_value_get_int64(it, &iv) != CborNoError) return false;
+        value = static_cast<double>(iv);
+        return cbor_value_advance(it) == CborNoError;
+    }
+    return false;
+}
+
+bool skipCborValue_(CborValue* it) {
+    return cbor_value_advance(it) == CborNoError;
+}
+
+bool advanceIfNull_(CborValue* it) {
+    if (!cbor_value_is_null(it)) return false;
+    return cbor_value_advance(it) == CborNoError;
+}
+} // namespace
 
 // -----------------------------------------------------------------------------
 // NVS helpers
@@ -74,37 +116,48 @@ bool PowerTracker::saveHistoryToFile() const {
         return false;
     }
 
-    // 500 entries x small objects -> 32KB is plenty.
-    DynamicJsonDocument doc(32768);
-    JsonArray arr = doc.createNestedArray("history");
-
-    if (_historyCount > 0) {
-        const uint16_t count = _historyCount;
-        // Oldest entry index
+    const uint16_t count = _historyCount;
+    uint16_t validCount = 0;
+    if (count > 0) {
         uint16_t idx = (_historyHead + POWERTRACKER_HISTORY_MAX - count) % POWERTRACKER_HISTORY_MAX;
-
         for (uint16_t i = 0; i < count; ++i) {
+            if (_history[idx].valid) validCount++;
+            idx = (idx + 1) % POWERTRACKER_HISTORY_MAX;
+        }
+    }
+
+    bool ok = true;
+    ok = ok && CborStream::writeMapHeader(f, 1);
+    ok = ok && CborStream::writeText(f, "history");
+    ok = ok && CborStream::writeArrayHeader(f, validCount);
+
+    if (count > 0) {
+        uint16_t idx = (_historyHead + POWERTRACKER_HISTORY_MAX - count) % POWERTRACKER_HISTORY_MAX;
+        for (uint16_t i = 0; i < count && ok; ++i) {
             const HistoryEntry& h = _history[idx];
             if (h.valid) {
-                JsonObject row = arr.createNestedObject();
-                row["start_ms"]      = h.startMs;
-                row["duration_s"]    = h.stats.duration_s;
-                row["energy_Wh"]     = h.stats.energy_Wh;
-                row["peakPower_W"]   = h.stats.peakPower_W;
-                row["peakCurrent_A"] = h.stats.peakCurrent_A;
+                ok = ok && CborStream::writeMapHeader(f, 5);
+                ok = ok && CborStream::writeText(f, "start_ms");
+                ok = ok && CborStream::writeUInt(f, h.startMs);
+                ok = ok && CborStream::writeText(f, "duration_s");
+                ok = ok && CborStream::writeUInt(f, h.stats.duration_s);
+                ok = ok && CborStream::writeText(f, "energy_Wh");
+                ok = ok && CborStream::writeFloatOrNull(f, h.stats.energy_Wh);
+                ok = ok && CborStream::writeText(f, "peakPower_W");
+                ok = ok && CborStream::writeFloatOrNull(f, h.stats.peakPower_W);
+                ok = ok && CborStream::writeText(f, "peakCurrent_A");
+                ok = ok && CborStream::writeFloatOrNull(f, h.stats.peakCurrent_A);
             }
             idx = (idx + 1) % POWERTRACKER_HISTORY_MAX;
         }
     }
 
-    if (serializeJson(doc, f) == 0) {
-        DEBUG_PRINTLN("[PowerTracker] Failed to serialize history JSON.");
-        f.close();
+    f.close();
+    if (!ok) {
+        DEBUG_PRINTLN("[PowerTracker] Failed to serialize history CBOR.");
         SPIFFS.remove(tmpPath);
         return false;
     }
-
-    f.close();
 
     SPIFFS.remove(POWERTRACKER_HISTORY_FILE);
     if (!SPIFFS.rename(tmpPath, POWERTRACKER_HISTORY_FILE)) {
@@ -112,7 +165,7 @@ bool PowerTracker::saveHistoryToFile() const {
         return false;
     }
 
-    DEBUG_PRINTF("[PowerTracker] History saved (%u entries).\n", (unsigned)_historyCount);
+    DEBUG_PRINTF("[PowerTracker] History saved (%u entries).\n", (unsigned)validCount);
     return true;
 }
 
@@ -126,46 +179,173 @@ void PowerTracker::loadHistoryFromFile() {
     }
 
     if (!SPIFFS.exists(POWERTRACKER_HISTORY_FILE)) {
-        DEBUG_PRINTLN("[PowerTracker] No existing /History.json, starting empty.");
+        DEBUG_PRINTLN("[PowerTracker] No existing history file, starting empty.");
         return;
     }
 
     File f = SPIFFS.open(POWERTRACKER_HISTORY_FILE, "r");
     if (!f) {
-        DEBUG_PRINTLN("[PowerTracker] Failed to open /History.json.");
+        DEBUG_PRINTLN("[PowerTracker] Failed to open history file.");
         return;
     }
 
-    DynamicJsonDocument doc(32768);
-    DeserializationError err = deserializeJson(doc, f);
+    const size_t size = f.size();
+    if (size == 0 || size > kHistoryCborMaxBytes) {
+        DEBUG_PRINTLN("[PowerTracker] History file size invalid.");
+        f.close();
+        return;
+    }
+
+    std::vector<uint8_t> buf(size);
+    const size_t read = f.read(buf.data(), size);
     f.close();
 
-    if (err) {
-        DEBUG_PRINT("[PowerTracker] Failed to parse /History.json: ");
-        DEBUG_PRINTLN(err.c_str());
+    if (read != size) {
+        DEBUG_PRINTLN("[PowerTracker] Failed to read history file.");
         return;
     }
 
-    JsonArray arr = doc["history"].as<JsonArray>();
-    if (arr.isNull()) {
-        DEBUG_PRINTLN("[PowerTracker] /History.json missing 'history' array.");
+    CborParser parser;
+    CborValue it;
+    if (cbor_parser_init(buf.data(), buf.size(), 0, &parser, &it) != CborNoError) {
+        DEBUG_PRINTLN("[PowerTracker] Failed to parse history CBOR.");
         return;
     }
 
-    for (JsonObject obj : arr) {
-        if (_historyCount >= POWERTRACKER_HISTORY_MAX) break;
+    if (!cbor_value_is_map(&it)) {
+        DEBUG_PRINTLN("[PowerTracker] History CBOR root is not a map.");
+        return;
+    }
 
-        HistoryEntry e;
-        e.valid = true;
+    CborValue mapIt;
+    if (cbor_value_enter_container(&it, &mapIt) != CborNoError) {
+        DEBUG_PRINTLN("[PowerTracker] Failed to enter history CBOR map.");
+        return;
+    }
 
-        // Accept both snakeCase and camelCase flavors if they ever appear.
-        e.startMs              = obj["start_ms"]      | obj["startMs"]      | 0;
-        e.stats.duration_s     = obj["duration_s"]    | obj["durationS"]    | 0;
-        e.stats.energy_Wh      = obj["energy_Wh"]     | obj["energyWh"]     | 0.0f;
-        e.stats.peakPower_W    = obj["peakPower_W"]   | obj["peakPowerW"]   | 0.0f;
-        e.stats.peakCurrent_A  = obj["peakCurrent_A"] | obj["peakCurrentA"] | 0.0f;
+    bool found = false;
+    while (!cbor_value_at_end(&mapIt)) {
+        if (!cbor_value_is_text_string(&mapIt)) {
+            DEBUG_PRINTLN("[PowerTracker] Invalid history CBOR key.");
+            return;
+        }
+        char key[kHistoryCborKeyMax];
+        size_t keyLen = sizeof(key) - 1;
+        if (cbor_value_copy_text_string(&mapIt, key, &keyLen, &mapIt) != CborNoError) {
+            DEBUG_PRINTLN("[PowerTracker] Failed to read history CBOR key.");
+            return;
+        }
+        key[keyLen] = '\0';
 
-        appendHistoryEntry(e);
+        if (strcmp(key, "history") == 0) {
+            found = true;
+            if (!cbor_value_is_array(&mapIt)) {
+                DEBUG_PRINTLN("[PowerTracker] History CBOR missing array.");
+                return;
+            }
+            CborValue arrIt;
+            if (cbor_value_enter_container(&mapIt, &arrIt) != CborNoError) {
+                DEBUG_PRINTLN("[PowerTracker] Failed to enter history array.");
+                return;
+            }
+            while (!cbor_value_at_end(&arrIt)) {
+                if (_historyCount >= POWERTRACKER_HISTORY_MAX) {
+                    break;
+                }
+                if (!cbor_value_is_map(&arrIt)) {
+                    if (!skipCborValue_(&arrIt)) {
+                        DEBUG_PRINTLN("[PowerTracker] Failed to skip history item.");
+                        return;
+                    }
+                    continue;
+                }
+                CborValue rowIt;
+                if (cbor_value_enter_container(&arrIt, &rowIt) != CborNoError) {
+                    DEBUG_PRINTLN("[PowerTracker] Failed to enter history row.");
+                    return;
+                }
+
+                HistoryEntry e{};
+                e.valid = true;
+
+                while (!cbor_value_at_end(&rowIt)) {
+                    if (!cbor_value_is_text_string(&rowIt)) {
+                        DEBUG_PRINTLN("[PowerTracker] Invalid history row key.");
+                        return;
+                    }
+                    char rowKey[kHistoryCborKeyMax];
+                    size_t rowLen = sizeof(rowKey) - 1;
+                    if (cbor_value_copy_text_string(&rowIt, rowKey, &rowLen, &rowIt) != CborNoError) {
+                        DEBUG_PRINTLN("[PowerTracker] Failed to read history row key.");
+                        return;
+                    }
+                    rowKey[rowLen] = '\0';
+
+                    if (strcmp(rowKey, "start_ms") == 0 || strcmp(rowKey, "startMs") == 0) {
+                        if (advanceIfNull_(&rowIt)) continue;
+                        uint64_t v = 0;
+                        if (readCborUInt_(&rowIt, v)) {
+                            e.startMs = static_cast<uint32_t>(v);
+                            continue;
+                        }
+                    } else if (strcmp(rowKey, "duration_s") == 0 || strcmp(rowKey, "durationS") == 0) {
+                        if (advanceIfNull_(&rowIt)) continue;
+                        uint64_t v = 0;
+                        if (readCborUInt_(&rowIt, v)) {
+                            e.stats.duration_s = static_cast<uint32_t>(v);
+                            continue;
+                        }
+                    } else if (strcmp(rowKey, "energy_Wh") == 0 || strcmp(rowKey, "energyWh") == 0) {
+                        if (advanceIfNull_(&rowIt)) continue;
+                        double v = 0.0;
+                        if (readCborDouble_(&rowIt, v)) {
+                            e.stats.energy_Wh = static_cast<float>(v);
+                            continue;
+                        }
+                    } else if (strcmp(rowKey, "peakPower_W") == 0 || strcmp(rowKey, "peakPowerW") == 0) {
+                        if (advanceIfNull_(&rowIt)) continue;
+                        double v = 0.0;
+                        if (readCborDouble_(&rowIt, v)) {
+                            e.stats.peakPower_W = static_cast<float>(v);
+                            continue;
+                        }
+                    } else if (strcmp(rowKey, "peakCurrent_A") == 0 || strcmp(rowKey, "peakCurrentA") == 0) {
+                        if (advanceIfNull_(&rowIt)) continue;
+                        double v = 0.0;
+                        if (readCborDouble_(&rowIt, v)) {
+                            e.stats.peakCurrent_A = static_cast<float>(v);
+                            continue;
+                        }
+                    }
+
+                    if (!skipCborValue_(&rowIt)) {
+                        DEBUG_PRINTLN("[PowerTracker] Failed to skip history row value.");
+                        return;
+                    }
+                }
+
+                if (cbor_value_leave_container(&arrIt, &rowIt) != CborNoError) {
+                    DEBUG_PRINTLN("[PowerTracker] Failed to exit history row.");
+                    return;
+                }
+
+                appendHistoryEntry(e);
+            }
+            if (cbor_value_leave_container(&mapIt, &arrIt) != CborNoError) {
+                DEBUG_PRINTLN("[PowerTracker] Failed to exit history array.");
+                return;
+            }
+        } else {
+            if (!skipCborValue_(&mapIt)) {
+                DEBUG_PRINTLN("[PowerTracker] Failed to skip history CBOR value.");
+                return;
+            }
+        }
+    }
+
+    if (!found) {
+        DEBUG_PRINTLN("[PowerTracker] History CBOR missing 'history' array.");
+        return;
     }
 
     DEBUG_PRINTF("[PowerTracker] Loaded %u history entries from SPIFFS.\n",

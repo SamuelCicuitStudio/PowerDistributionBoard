@@ -33,7 +33,6 @@ public:
 
   // Telemetry snapshot reused by WiFiManager snapshot task
   bool getTelemetry(StatusSnapshot& out) const;
-  bool isManualMode() const;
 
   // Output / relay helpers for UI control paths
   bool setRelay(bool on, bool waitAck = true);
@@ -49,7 +48,6 @@ public:
   bool setWireOhmPerM(float ohmsPerM);
   bool setWireGaugeAwg(int awg);
   bool setBuzzerMute(bool on);
-  bool setManualMode(bool manual);
   bool setCurrentLimitA(float limitA);
   bool requestResetFlagAndRestart();
   bool startCalibrationTask(uint32_t timeoutMs = 10000);
@@ -58,7 +56,12 @@ public:
   void stopWireTargetTest();
   bool getWireTargetStatus(Device::WireTargetStatus& out) const;
   bool getFloorControlStatus(Device::FloorControlStatus& out) const;
-  bool startEnergyCalibration(float targetC, uint8_t wireIndex, Device::EnergyRunPurpose purpose);
+  bool startEnergyCalibration(float targetC,
+                              uint8_t wireIndex,
+                              Device::EnergyRunPurpose purpose,
+                              float dutyFrac = 1.0f);
+  bool probeWirePresence();
+  bool confirmWiresCool();
 
 private:
   bool sendCommandAndWait(Device::DevCmdType t, int32_t i1 = 0, float f1 = 0.0f, bool b1 = false, TickType_t to = pdMS_TO_TICKS(500));

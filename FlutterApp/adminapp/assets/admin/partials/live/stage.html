@@ -1,0 +1,263 @@
+          <!-- Centralized radial stage -->
+          <div class="live-stage">
+            <!-- SVG: traces + dots + temp circles -->
+            <svg
+              class="live-overlay"
+              viewBox="0 0 100 100"
+              preserveAspectRatio="xMidYMid meet"
+            ></svg>
+
+            <!-- Center core: current session data -->
+            <div class="live-core">
+              <svg
+                class="live-core-sigil"
+                viewBox="0 0 120 120"
+                aria-hidden="true"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <circle cx="60" cy="60" r="42" opacity="0.35"></circle>
+                <circle cx="60" cy="60" r="30" opacity="0.18"></circle>
+                <path d="M18 60h18l7-18 12 36 7-18h40" opacity="0.55"></path>
+                <path d="M34 36h14M72 84h14" opacity="0.22"></path>
+                <circle cx="36" cy="36" r="2.2" opacity="0.35"></circle>
+                <circle cx="84" cy="84" r="2.2" opacity="0.35"></circle>
+              </svg>
+              <div class="live-core-header">
+                <div class="live-core-label">
+                  <svg
+                    class="live-core-label-icon"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M4 20V4"></path>
+                    <path d="M4 20H20"></path>
+                    <polyline points="5 14 9 10 13 13 20 7"></polyline>
+                  </svg>
+                  <span>Current Session</span>
+                </div>
+                <div class="live-core-indicator" title="Live monitor">
+                  <span class="live-core-dot" aria-hidden="true"></span>
+                  <span class="live-core-indicator-text">LIVE</span>
+                </div>
+              </div>
+
+              <div
+                id="sessionStatus"
+                class="session-status session-status-idle"
+              >
+                No active session
+              </div>
+
+              <div class="live-core-metrics">
+                <div class="metric">
+                  <div class="metric-label">
+                    <svg
+                      class="metric-icon"
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <polygon
+                        points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"
+                      ></polygon>
+                    </svg>
+                    <span>Energy</span>
+                  </div>
+                  <div id="sessionEnergy" class="metric-value">-- Wh</div>
+                </div>
+                <div class="metric">
+                  <div class="metric-label">
+                    <svg
+                      class="metric-icon"
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <circle cx="12" cy="12" r="9"></circle>
+                      <polyline points="12 7 12 12 15 15"></polyline>
+                    </svg>
+                    <span>Duration</span>
+                  </div>
+                  <div id="sessionDuration" class="metric-value">-- s</div>
+                </div>
+                <div class="metric">
+                  <div class="metric-label">
+                    <svg
+                      class="metric-icon"
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <line x1="18" y1="20" x2="18" y2="10"></line>
+                      <line x1="12" y1="20" x2="12" y2="4"></line>
+                      <line x1="6" y1="20" x2="6" y2="14"></line>
+                    </svg>
+                    <span>Peak Power</span>
+                  </div>
+                  <div id="sessionPeakPower" class="metric-value">-- W</div>
+                </div>
+                <div class="metric">
+                  <div class="metric-label">
+                    <svg
+                      class="metric-icon"
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <polyline
+                        points="22 12 18 12 15 21 9 3 6 12 2 12"
+                      ></polyline>
+                    </svg>
+                    <span>Peak Current</span>
+                  </div>
+                  <div id="sessionPeakCurrent" class="metric-value">-- A</div>
+                </div>
+              </div>
+
+              <div class="live-core-actions">
+                <button
+                  id="sessionHistoryBtn"
+                  type="button"
+                  class="session-history-btn"
+                >
+                  <svg
+                    class="live-core-btn-icon"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <circle cx="4" cy="6" r="1"></circle>
+                    <circle cx="4" cy="12" r="1"></circle>
+                    <circle cx="4" cy="18" r="1"></circle>
+                    <line x1="8" y1="6" x2="21" y2="6"></line>
+                    <line x1="8" y1="12" x2="21" y2="12"></line>
+                    <line x1="8" y1="18" x2="21" y2="18"></line>
+                  </svg>
+                  <span>History</span>
+                </button>
+                <button
+                  id="calibrationBtn"
+                  type="button"
+                  class="session-history-btn session-calib-btn"
+                >
+                  <svg
+                    class="live-core-btn-icon"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <line x1="4" y1="6" x2="20" y2="6"></line>
+                    <circle cx="9" cy="6" r="2"></circle>
+                    <line x1="4" y1="12" x2="20" y2="12"></line>
+                    <circle cx="15" cy="12" r="2"></circle>
+                    <line x1="4" y1="18" x2="20" y2="18"></line>
+                    <circle cx="11" cy="18" r="2"></circle>
+                  </svg>
+                  <span>Calibration</span>
+                </button>
+                <button
+                  id="liveControlBtn"
+                  type="button"
+                  class="session-history-btn session-live-btn"
+                >
+                  <svg
+                    class="live-core-btn-icon"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M4 20V4"></path>
+                    <path d="M4 20H20"></path>
+                    <polyline points="5 14 9 10 13 13 20 7"></polyline>
+                  </svg>
+                  <span>Live Control</span>
+                </button>
+                <button
+                  id="errorBtn"
+                  type="button"
+                  class="session-history-btn session-error-btn"
+                >
+                  <svg
+                    class="live-core-btn-icon"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path
+                      d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
+                    ></path>
+                    <line x1="12" y1="9" x2="12" y2="13"></line>
+                    <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                  </svg>
+                  <span>Error</span>
+                </button>
+                <button
+                  id="logBtn"
+                  type="button"
+                  class="session-history-btn session-log-btn"
+                >
+                  <svg
+                    class="live-core-btn-icon"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path
+                      d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
+                    ></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                    <line x1="10" y1="9" x2="8" y2="9"></line>
+                  </svg>
+                  <span>Log</span>
+                </button>
+              </div>
+            </div>
+          </div>
+

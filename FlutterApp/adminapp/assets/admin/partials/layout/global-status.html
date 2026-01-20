@@ -1,0 +1,182 @@
+      <!-- Global User Icon / Menu -->
+      <div class="user-status-global">
+        <div class="status-dot" title="Auto Mode"></div>
+        <div id="wifiSignal" class="wifi-signal" title="WiFi signal">
+          <img
+            id="wifiSignalIcon"
+            src="icons/wifi-0-bars.png"
+            alt="WiFi signal"
+          />
+        </div>
+        <div id="boardTempChip" class="temp-chip" title="Board temperature">
+          <img src="icons/thermoBoard.png" alt="Board temp" />
+          <span id="boardTempText">--?C</span>
+        </div>
+        <div
+          id="heatsinkTempChip"
+          class="temp-chip"
+          title="Heatsink temperature"
+        >
+          <img src="icons/thermoHeatsink.png" alt="Heatsink temp" />
+          <span id="heatsinkTempText">--?C</span>
+        </div>
+        <div id="dcVoltageChip" class="temp-chip" title="DC bus voltage">
+          <span class="chip-label">DC</span>
+          <span id="dcVoltageText">--V</span>
+        </div>
+        <div id="dcCurrentChip" class="temp-chip" title="DC current">
+          <span class="chip-label">I</span>
+          <span id="dcCurrentText">--A</span>
+        </div>
+        <div id="eventBadge" class="event-badge" title="New warnings/errors">
+          <span
+            id="eventWarnBtn"
+            class="event-pill warn"
+            role="button"
+            tabindex="0"
+          >
+            <img src="icons/Warning.png" alt="Warning" />
+            <span id="eventWarnCount">0</span>
+          </span>
+          <span
+            id="eventErrBtn"
+            class="event-pill err"
+            role="button"
+            tabindex="0"
+          >
+            <img src="icons/Error.png" alt="Error" />
+            <span id="eventErrCount">0</span>
+          </span>
+        </div>
+        <div id="runModeBadge" class="run-mode-badge" title="Loop running">
+          <svg
+            class="rm-icon"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <circle cx="12" cy="12" r="9"></circle>
+            <polygon points="11 8 16 12 11 16"></polygon>
+          </svg>
+          <span class="rm-label">Run</span>
+        </div>
+        <div
+          id="testModeBadge"
+          class="test-mode-badge"
+          title="Test mode active"
+        >
+          <svg
+            class="tm-icon"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M3 12h4l2-6 4 12 2-6h6"></path>
+          </svg>
+          <span class="tm-label">TEST MODE</span>
+          <span class="tm-mode">--</span>
+        </div>
+        <div
+          id="ambientWaitBadge"
+          class="cooldown-badge"
+          title="Cooling to ambient"
+        >
+          <svg
+            class="cw-icon"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M6 3h12M6 21h12"></path>
+            <path d="M8 7h8l-2.5 4 2.5 4H8l2.5-4L8 7z"></path>
+          </svg>
+          <span class="cw-label">COOLING</span>
+          <span class="cw-mode">--</span>
+        </div>
+        <div id="statusActions" class="status-actions">
+          <button
+            id="topStopTestBtn"
+            type="button"
+            class="status-action-btn status-stop-btn"
+            aria-label="Stop active test"
+          >
+            <svg
+              class="status-action-icon"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <rect x="7" y="7" width="10" height="10" rx="2"></rect>
+            </svg>
+            <span class="status-action-text">Stop</span>
+          </button>
+          <button
+            id="topCalibBtn"
+            type="button"
+            class="status-action-btn status-calib-btn"
+            aria-label="Open calibration"
+          >
+            <svg
+              class="status-action-icon"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <line x1="4" y1="6" x2="20" y2="6"></line>
+              <circle cx="9" cy="6" r="2"></circle>
+              <line x1="4" y1="12" x2="20" y2="12"></line>
+              <circle cx="15" cy="12" r="2"></circle>
+              <line x1="4" y1="18" x2="20" y2="18"></line>
+              <circle cx="11" cy="18" r="2"></circle>
+            </svg>
+            <span class="status-action-text">Calibration</span>
+          </button>
+          <button
+            id="topLiveControlBtn"
+            type="button"
+            class="status-action-btn status-live-btn"
+            aria-label="Open live control"
+          >
+            <svg
+              class="status-action-icon"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M4 20V4"></path>
+              <path d="M4 20H20"></path>
+              <polyline points="5 14 9 10 13 13 20 7"></polyline>
+            </svg>
+            <span class="status-action-text">Live Control</span>
+          </button>
+        </div>
+        <div class="user-icon" onclick="toggleUserMenu()">&#128100;</div>
+        <div class="user-menu" id="userMenu">
+          <button id="disconnectBtn" type="button">Disconnect</button>
+        </div>
+      </div>
+

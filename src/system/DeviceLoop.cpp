@@ -2,7 +2,11 @@
 #include <Utils.hpp>
 #include <RGBLed.hpp>
 #include <Buzzer.hpp>
+#include <NtcSensor.hpp>
 #include <SleepTimer.hpp>
+#include <WireSafetyPolicy.hpp>
+#include <WireActuator.hpp>
+#include <WireScheduler.hpp>
 #include <math.h>
 #include <stdio.h>
 
@@ -30,16 +34,23 @@ static constexpr uint32_t WAIT_12V_TIMEOUT_MS = 10000;
 // HARD SAFETY RULES:
 //  - Only called from StartLoop() while in DeviceState::Running.
 //  - Never called from ctor/begin/Idle/power-tracking/thermal code.
-//  - Uses HeaterManager::setOutputMask(mask) once, then ALWAYS back to 0.
+//  - Uses WireActuator to apply the mask once, then ALWAYS back to 0.
 //  - Uses delayWithPowerWatch() for STOP/12V/OC abort.
-//  - On successful pulse, calls updatePresenceFromMask() (logic-only).
 //  - Never touches PowerTracker (separation of concerns).
 // ============================================================================
+
+struct PulseStats {
+    float    busVoltageStart = NAN;
+    float    busVoltage = NAN;
+    float    currentA   = NAN;
+    uint16_t appliedMask = 0;
+};
 
 static bool _runMaskedPulse(Device* self,
                             uint16_t mask,
                             uint32_t onTimeMs,
-                            bool ledFeedback)
+                            bool ledFeedback,
+                            PulseStats* stats = nullptr)
 {
     if (!self || !WIRE)              return true;
     if (mask == 0 || onTimeMs == 0)  return true;
@@ -48,13 +59,39 @@ static bool _runMaskedPulse(Device* self,
         return false;
     }
 
+    if (stats) {
+        stats->busVoltageStart = NAN;
+        stats->busVoltage = NAN;
+        stats->currentA = NAN;
+        stats->appliedMask = 0;
+    }
+
+    WireSafetyPolicy safety;
+    WireActuator actuator;
+    WireConfigStore& cfg = self->getWireConfigStore();
+    WireStateModel& state = self->getWireStateModel();
+
+    const uint16_t safeMask =
+        safety.filterMask(mask, cfg, state, self->getState(), false);
+    if (safeMask == 0) {
+        return true;
+    }
+
+    double vStart = NAN;
+    if (self->discharger) {
+        vStart = self->discharger->sampleVoltageNow();
+    }
+    if (stats) {
+        stats->busVoltageStart = static_cast<float>(vStart);
+    }
+
     // Predict bus droop/energy using calibrated capacitance (before energizing).
     if (self->discharger && self->relayControl) {
         const float capF = self->getCapBankCapF();
         if (isfinite(capF) && capF > 0.0f) {
             double Gtot = 0.0;
             for (uint8_t i = 0; i < HeaterManager::kWireCount; ++i) {
-                if (!(mask & (1u << i))) continue;
+                if (!(safeMask & (1u << i))) continue;
                 float R = WIRE->getWireInfo(i + 1).resistanceOhm;
                 if (R > 0.01f && isfinite(R)) {
                     Gtot += 1.0 / R;
@@ -73,13 +110,16 @@ static bool _runMaskedPulse(Device* self,
             // If input relay is open, model "no source".
             const double rChargeEff = self->relayControl->isOn() ? rChg : INFINITY;
 
-            const double v0 = self->discharger->sampleVoltageNow();
+            const double v0 = isfinite(vStart) ? vStart : self->discharger->sampleVoltageNow();
+            if (stats) {
+                stats->busVoltageStart = static_cast<float>(v0);
+            }
             const double dtS = onTimeMs * 0.001;
             const double v1 = CapModel::predictVoltage(v0, dtS, capF, Rload, vSrc, rChargeEff);
             const double eJ = CapModel::energyToLoadJ(v0, dtS, capF, Rload, vSrc, rChargeEff);
 
             DEBUG_PRINTF("[Pulse] pre: mask=0x%03X V0=%.2fV -> V1(pred)=%.2fV  E(pred)=%.2fJ  C=%.6fF\n",
-                         (unsigned)mask,
+                         (unsigned)safeMask,
                          (double)v0,
                          (double)v1,
                          (double)eJ,
@@ -87,13 +127,21 @@ static bool _runMaskedPulse(Device* self,
         }
     }
 
-    // Apply mask atomically.
-    WIRE->setOutputMask(mask);
+    // Apply mask atomically via safety/actuator.
+    uint16_t appliedMask =
+        actuator.applyRequestedMask(safeMask, *WIRE, cfg, state, safety,
+                                    self->getState(), false);
+    if (stats) {
+        stats->appliedMask = appliedMask;
+    }
+    if (appliedMask == 0) {
+        return true;
+    }
 
     // Optional LED mirror.
     if (ledFeedback && self->indicator) {
         for (uint8_t i = 0; i < 10; ++i) {
-            self->indicator->setLED(i + 1, (mask & (1u << i)) != 0);
+            self->indicator->setLED(i + 1, (appliedMask & (1u << i)) != 0);
         }
     }
 
@@ -101,12 +149,30 @@ static bool _runMaskedPulse(Device* self,
     uint8_t pulseVSamples = 0;
     BusSampler* sampler = BUS_SAMPLER;
 
+    int currentSource = DEFAULT_CURRENT_SOURCE;
+    if (CONF) {
+        currentSource = CONF->GetInt(CURRENT_SOURCE_KEY, DEFAULT_CURRENT_SOURCE);
+    }
+    if (currentSource != CURRENT_SRC_ACS) {
+        currentSource = CURRENT_SRC_ESTIMATE;
+    }
+
+    auto samplePulseCurrent = [&](float v) -> float {
+        if (currentSource == CURRENT_SRC_ACS && self->currentSensor) {
+            const float i = self->currentSensor->readCurrent();
+            if (isfinite(i)) {
+                return i;
+            }
+        }
+        return WIRE->estimateCurrentFromVoltage(v, appliedMask);
+    };
+
     auto recordPulseSample = [&](float v) {
         if (!isfinite(v)) return;
         pulseVSum += v;
         pulseVSamples++;
         if (sampler) {
-            const float i = WIRE->estimateCurrentFromVoltage(v, mask);
+            const float i = samplePulseCurrent(v);
             sampler->recordSample(millis(), v, i);
         }
     };
@@ -152,15 +218,19 @@ static bool _runMaskedPulse(Device* self,
         } else if (self->discharger) {
             V_bus = self->discharger->sampleVoltageNow();
         }
-        const float Itot = (WIRE ? WIRE->estimateCurrentFromVoltage(V_bus, mask) : NAN);
+        const float Itot = (WIRE ? samplePulseCurrent(V_bus) : NAN);
+        if (stats) {
+            stats->busVoltage = V_bus;
+            stats->currentA = Itot;
+        }
         DEBUG_PRINTF("[Pulse] end: mask=0x%03X Vbus=%.2fV Iest=%.3fA\n",
-                     (unsigned)mask,
+                     (unsigned)appliedMask,
                      (double)V_bus,
                      (double)Itot);
         if (isfinite(V_bus) && V_bus > 0.0f) {
             for (uint8_t i = 0; i < HeaterManager::kWireCount; ++i) {
                 uint16_t bit = (1u << i);
-                if (!(mask & bit)) continue;
+                if (!(appliedMask & bit)) continue;
                 WireInfo wi = WIRE->getWireInfo(i + 1);
                 float R = wi.resistanceOhm;
                 if (!(R > 0.01f && isfinite(R))) continue;
@@ -174,7 +244,8 @@ static bool _runMaskedPulse(Device* self,
     }
 
     // ALWAYS ensure outputs are OFF (success or abort).
-    WIRE->setOutputMask(0);
+    actuator.applyRequestedMask(0, *WIRE, cfg, state, safety,
+                                self->getState(), false);
     if (ledFeedback && self->indicator) {
         self->indicator->clearAll();
     }
@@ -560,7 +631,7 @@ struct RunSessionGuard {
 };
 
 // ============================================================================
-// StartLoop(): main heating behavior (energy-based sequential)
+// StartLoop(): main heating behavior (fast warm-up + equilibrium)
 // ============================================================================
 
 void Device::StartLoop() {
@@ -571,8 +642,6 @@ void Device::StartLoop() {
     DEBUG_PRINTLN("-----------------------------------------------------------");
     DEBUG_PRINTLN("[Device] StartLoop: entering main heating loop");
     DEBUG_PRINTLN("-----------------------------------------------------------");
-
-    manualMode = false; // auto loop enforces model updates
 
     // Current sensor is not used for power calculations during RUN.
 
@@ -591,19 +660,33 @@ void Device::StartLoop() {
     }
     const bool shouldWait =
         (waitPurpose == EnergyRunPurpose::None) ||
-        (waitPurpose == EnergyRunPurpose::ModelCal) ||
-        (waitPurpose == EnergyRunPurpose::NtcCal);
-    if (shouldWait) {
+        (waitPurpose == EnergyRunPurpose::NtcCal) ||
+        (waitPurpose == EnergyRunPurpose::FloorCal);
+    const bool coolConfirmed = shouldWait ? consumeWiresCoolConfirmation() : false;
+    if (shouldWait && !coolConfirmed) {
         const char* waitReason =
             (waitPurpose == EnergyRunPurpose::ModelCal) ? "model_cal" :
             (waitPurpose == EnergyRunPurpose::NtcCal)   ? "ntc_cal"   :
+            (waitPurpose == EnergyRunPurpose::FloorCal) ? "floor_cal" :
                                                         "run";
+        if (WIRE) {
+            const uint32_t nowMs = millis();
+            for (uint8_t i = 0; i < HeaterManager::kWireCount; ++i) {
+                wireThermalModel.applyExternalWireTemp(
+                    static_cast<uint8_t>(i + 1),
+                    WIRE_T_MAX_C,
+                    nowMs,
+                    wireStateModel,
+                    *WIRE);
+            }
+        }
         waitForWiresNearAmbient(5.0f, 0, waitReason);
     } else {
-        setAmbientWaitStatus(false, 0.0f, "none");
+        setAmbientWaitStatus(false, 0.0f, coolConfirmed ? "confirmed" : "none");
     }
 
-    // 2) Presence check disabled.
+    // 2) Presence runtime checks (reset counters at run start).
+    wirePresenceManager.resetFailures();
 
     // 3) Start thermal integration (observers only).
     if (thermalTaskHandle == nullptr) {
@@ -620,11 +703,7 @@ void Device::StartLoop() {
     // 6) Setup PowerTracker session (no control over outputs).
     float busV = DEFAULT_DC_VOLTAGE;
 
-    float idleA = DEFAULT_IDLE_CURR;
-    if (CONF) {
-        idleA = CONF->GetFloat(IDLE_CURR_KEY, DEFAULT_IDLE_CURR);
-    }
-    if (idleA < 0.0f) idleA = 0.0f;
+    float idleA = 0.0f;
 
     RunSessionGuard session(this);
     session.begin(busV, idleA);
@@ -638,37 +717,19 @@ void Device::StartLoop() {
     // ====================== ENERGY MODE ======================
     //
     // Energy packets serialized inside a fixed frame:
-    //  - Each allowed wire gets one packet per frame.
-    //  - Packet size is normalized by resistance and adjusted by temperature error.
-    //  - Global boost phase breaks plateaus, then a hold phase maintains Tset.
+    //  - Total ON time derives from control error (floor NTC or wire target).
+    //  - WireScheduler distributes ON time across eligible wires.
     // ========================================================
 
-    int frameI       = CONF ? CONF->GetInt(MIX_FRAME_MS_KEY, DEFAULT_MIX_FRAME_MS) : DEFAULT_MIX_FRAME_MS;
-    int refOnI       = CONF ? CONF->GetInt(MIX_REF_ON_MS_KEY, DEFAULT_MIX_REF_ON_MS) : DEFAULT_MIX_REF_ON_MS;
-    float refRes     = CONF ? CONF->GetFloat(MIX_REF_RES_OHM_KEY, DEFAULT_MIX_REF_RES_OHM) : DEFAULT_MIX_REF_RES_OHM;
-    float boostK     = CONF ? CONF->GetFloat(MIX_BOOST_K_KEY, DEFAULT_MIX_BOOST_K) : DEFAULT_MIX_BOOST_K;
-    int boostMsI     = CONF ? CONF->GetInt(MIX_BOOST_MS_KEY, DEFAULT_MIX_BOOST_MS) : DEFAULT_MIX_BOOST_MS;
-    float preDeltaC  = CONF ? CONF->GetFloat(MIX_PRE_DELTA_C_KEY, DEFAULT_MIX_PRE_DELTA_C) : DEFAULT_MIX_PRE_DELTA_C;
-    int holdUpdateI  = CONF ? CONF->GetInt(MIX_HOLD_UPDATE_MS_KEY, DEFAULT_MIX_HOLD_UPDATE_MS) : DEFAULT_MIX_HOLD_UPDATE_MS;
-    float holdGain   = CONF ? CONF->GetFloat(MIX_HOLD_GAIN_KEY, DEFAULT_MIX_HOLD_GAIN) : DEFAULT_MIX_HOLD_GAIN;
-    int minOnI       = CONF ? CONF->GetInt(MIX_MIN_ON_MS_KEY, DEFAULT_MIX_MIN_ON_MS) : DEFAULT_MIX_MIN_ON_MS;
-    int maxOnI       = CONF ? CONF->GetInt(MIX_MAX_ON_MS_KEY, DEFAULT_MIX_MAX_ON_MS) : DEFAULT_MIX_MAX_ON_MS;
-    int maxAvgI      = CONF ? CONF->GetInt(MIX_MAX_AVG_MS_KEY, DEFAULT_MIX_MAX_AVG_MS) : DEFAULT_MIX_MAX_AVG_MS;
+    int frameI   = 120;
+    float holdGain = 0.6f;
+    int minOnI   = 60;
+    int maxOnI   = 900;
+    int maxAvgI  = 1200;
 
     if (frameI < 10) frameI = 10;
     if (frameI > 300) frameI = 300;
-    if (refOnI < 1) refOnI = 1;
-    if (refOnI > frameI) refOnI = frameI;
-    if (!isfinite(refRes) || refRes <= 0.0f) refRes = DEFAULT_MIX_REF_RES_OHM;
-    if (!isfinite(boostK) || boostK <= 0.0f) boostK = DEFAULT_MIX_BOOST_K;
-    if (boostK > 5.0f) boostK = 5.0f;
-    if (boostMsI < 0) boostMsI = 0;
-    if (boostMsI > 600000) boostMsI = 600000;
-    if (!isfinite(preDeltaC) || preDeltaC < 0.0f) preDeltaC = DEFAULT_MIX_PRE_DELTA_C;
-    if (preDeltaC > 30.0f) preDeltaC = 30.0f;
-    if (holdUpdateI < 200) holdUpdateI = 200;
-    if (holdUpdateI > 5000) holdUpdateI = 5000;
-    if (!isfinite(holdGain) || holdGain < 0.0f) holdGain = DEFAULT_MIX_HOLD_GAIN;
+    if (holdGain < 0.0f) holdGain = 0.0f;
     if (holdGain > 5.0f) holdGain = 5.0f;
     if (minOnI < 0) minOnI = 0;
     if (minOnI > frameI) minOnI = frameI;
@@ -678,56 +739,94 @@ void Device::StartLoop() {
     if (maxAvgI > 1000) maxAvgI = 1000;
 
     const float frameMs = static_cast<float>(frameI);
-    const float refOnMs = static_cast<float>(refOnI);
-    const uint32_t boostMs = static_cast<uint32_t>(boostMsI);
-    const uint32_t holdUpdateMs = static_cast<uint32_t>(holdUpdateI);
     const float minOnMs = static_cast<float>(minOnI);
     const float maxOnMs = static_cast<float>(maxOnI);
+    const float maxAvgPerFrame = (maxAvgI > 0)
+                                     ? (static_cast<float>(maxAvgI) * frameMs / 1000.0f)
+                                     : frameMs;
 
-    float targetC = WIRE_T_MAX_C;
-    float defaultTargetC = WIRE_T_MAX_C;
-    EnergyRunPurpose targetPurpose = EnergyRunPurpose::None;
-    uint8_t targetWire = 0;
+    float wireMaxC = WIRE_T_MAX_C;
     if (CONF) {
         float v = CONF->GetFloat(NICHROME_FINAL_TEMP_C_KEY,
                                  DEFAULT_NICHROME_FINAL_TEMP_C);
-        if (isfinite(v) && v > 0.0f) defaultTargetC = v;
+        if (isfinite(v) && v > 0.0f) wireMaxC = v;
     }
-    targetC = defaultTargetC;
-    if (controlMtx &&
-        xSemaphoreTake(controlMtx, pdMS_TO_TICKS(10)) == pdTRUE)
-    {
-        if (wireTargetStatus.active && isfinite(wireTargetStatus.targetC)) {
-            targetC = wireTargetStatus.targetC;
-            targetPurpose = wireTargetStatus.purpose;
-            targetWire = wireTargetStatus.activeWire;
-        } else if (floorControlStatus.active &&
-                   isfinite(floorControlStatus.wireTargetC)) {
-            targetC = floorControlStatus.wireTargetC;
+    if (wireMaxC > WIRE_T_MAX_C) wireMaxC = WIRE_T_MAX_C;
+    if (wireMaxC < 0.0f) wireMaxC = 0.0f;
+
+    float floorSwitchMarginC = DEFAULT_FLOOR_SWITCH_MARGIN_C;
+    if (CONF) {
+        float v = CONF->GetFloat(FLOOR_SWITCH_MARGIN_C_KEY,
+                                 DEFAULT_FLOOR_SWITCH_MARGIN_C);
+        if (isfinite(v) && v > 0.0f) floorSwitchMarginC = v;
+    }
+    if (!isfinite(floorSwitchMarginC) || floorSwitchMarginC <= 0.0f) {
+        floorSwitchMarginC = DEFAULT_FLOOR_SWITCH_MARGIN_C;
+    }
+
+    double floorTau = DEFAULT_FLOOR_MODEL_TAU;
+    double floorK = DEFAULT_FLOOR_MODEL_K;
+    double floorC = DEFAULT_FLOOR_MODEL_C;
+    if (CONF) {
+        floorTau = CONF->GetDouble(FLOOR_MODEL_TAU_KEY, DEFAULT_FLOOR_MODEL_TAU);
+        floorK = CONF->GetDouble(FLOOR_MODEL_K_KEY, DEFAULT_FLOOR_MODEL_K);
+        floorC = CONF->GetDouble(FLOOR_MODEL_C_KEY, DEFAULT_FLOOR_MODEL_C);
+    }
+    if (!isfinite(floorK) || floorK <= 0.0) {
+        floorK = DEFAULT_FLOOR_MODEL_K;
+    }
+    if (!isfinite(floorC) || floorC < 0.0) {
+        floorC = DEFAULT_FLOOR_MODEL_C;
+    }
+    if (!isfinite(floorTau) || floorTau <= 0.0) {
+        if (isfinite(floorK) && floorK > 0.0 && isfinite(floorC) && floorC > 0.0) {
+            floorTau = floorC / floorK;
         }
-        xSemaphoreGive(controlMtx);
     }
-    if (targetC > WIRE_T_MAX_C) targetC = WIRE_T_MAX_C;
-    if (targetC < 0.0f) targetC = 0.0f;
-    const float boostExitC = targetC - preDeltaC;
+    const bool floorModelValid = isfinite(floorTau) && floorTau > 0.0 &&
+                                 isfinite(floorK) && floorK > 0.0;
 
-    bool targetedRun = false;
-    if (controlMtx &&
-        xSemaphoreTake(controlMtx, pdMS_TO_TICKS(10)) == pdTRUE)
+    WireScheduler scheduler;
+    WirePacket packets[HeaterManager::kWireCount]{};
+    auto sumOnOverR = [&](const WirePacket* list, size_t count) -> double {
+        if (!list || count == 0) return 0.0;
+        double sum = 0.0;
+        for (size_t i = 0; i < count; ++i) {
+            const WirePacket& pkt = list[i];
+            if (pkt.onMs == 0 || pkt.mask == 0) continue;
+            for (uint8_t b = 0; b < HeaterManager::kWireCount; ++b) {
+                if (!(pkt.mask & (1u << b))) continue;
+                float r = wireConfigStore.getWireResistance(b + 1);
+                if (!isfinite(r) || r <= 0.01f) r = DEFAULT_WIRE_RES_OHMS;
+                sum += static_cast<double>(pkt.onMs) / static_cast<double>(r);
+            }
+        }
+        return sum;
+    };
+
+    auto predictFloorNext = [&](double sumOnOverR,
+                                float busV,
+                                float roomC,
+                                float tNowC) -> double {
+        if (!(sumOnOverR > 0.0)) return NAN;
+        if (!isfinite(busV) || busV <= 0.0f) return NAN;
+        if (!isfinite(roomC) || !isfinite(tNowC)) return NAN;
+        if (!(floorTau > 0.0) || !(floorK > 0.0)) return NAN;
+        const double dtS = static_cast<double>(frameMs) * 0.001;
+        if (dtS <= 0.0) return NAN;
+        const double decay = exp(-dtS / floorTau);
+        const double pAvg =
+            (static_cast<double>(busV) * static_cast<double>(busV) * sumOnOverR) /
+            static_cast<double>(frameMs);
+        const double tRoom = static_cast<double>(roomC);
+        const double tNow = static_cast<double>(tNowC);
+        return tRoom + (tNow - tRoom) * decay + (pAvg / floorK) * (1.0 - decay);
+    };
+    bool targetedMode = false;
     {
-        targetedRun = wireTargetStatus.active &&
-                      (wireTargetStatus.purpose != EnergyRunPurpose::None);
-        xSemaphoreGive(controlMtx);
-    } else {
-        targetedRun = wireTargetStatus.active &&
-                      (wireTargetStatus.purpose != EnergyRunPurpose::None);
+        const WireTargetStatus wt = getWireTargetStatus();
+        targetedMode = wt.active && (wt.purpose != EnergyRunPurpose::None);
     }
-
-    float holdMs[HeaterManager::kWireCount] = {0.0f};
-    bool  holdInit = false;
-    uint32_t lastHoldUpdate = 0;
-    uint8_t rotateOffset = 0;
-    const uint32_t boostDeadline = millis() + boostMs;
 
     while (getState() == DeviceState::Running) {
         if (!is12VPresent()) {
@@ -737,7 +836,7 @@ void Device::StartLoop() {
         if (gEvt) {
             EventBits_t bits = xEventGroupGetBits(gEvt);
             if (bits & EVT_STOP_REQ) {
-                DEBUG_PRINTLN("[Device] STOP -> exit MIXED loop");
+                DEBUG_PRINTLN("[Device] STOP -> exit ENERGY loop");
                 xEventGroupClearBits(gEvt, EVT_STOP_REQ);
                 setLastStopReason("Stop requested");
                 setState(DeviceState::Shutdown);
@@ -745,88 +844,220 @@ void Device::StartLoop() {
             }
         }
 
-        if (targetedRun) {
-            bool active = false;
-            if (controlMtx &&
-                xSemaphoreTake(controlMtx, pdMS_TO_TICKS(10)) == pdTRUE)
-            {
-                active = wireTargetStatus.active;
-                xSemaphoreGive(controlMtx);
-            } else {
-                active = wireTargetStatus.active;
-            }
-            if (!active) {
-                DEBUG_PRINTLN("[Device] Targeted run stopped -> exit MIXED loop");
-                setLastStopReason("Targeted run stopped");
-                setState(DeviceState::Shutdown);
-                break;
-            }
-        }
-
         checkAllowedOutputs();
 
-        uint8_t allowedIdx[HeaterManager::kWireCount];
-        float   baseMs[HeaterManager::kWireCount] = {0.0f};
-        float   tempC[HeaterManager::kWireCount] = {0.0f};
-        size_t  allowedCount = 0;
-        bool    anyAtTarget = false;
-
-        for (uint8_t i = 0; i < HeaterManager::kWireCount; ++i) {
-            if (!allowedOutputs[i]) continue;
-            WireInfo wi = WIRE->getWireInfo(i + 1);
-            if (!wi.connected) continue;
-            float t = WIRE->getWireEstimatedTemp(i + 1);
-            if (!isfinite(t)) continue;
-            tempC[i] = t;
-            if (t >= boostExitC) {
-                anyAtTarget = true;
-            }
-            float r = wi.resistanceOhm;
-            if (!isfinite(r) || r <= 0.0f) r = refRes;
-            float base = refOnMs * (r / refRes);
-            if (!isfinite(base) || base <= 0.0f) base = refOnMs;
-            baseMs[i] = base;
-            allowedIdx[allowedCount++] = i;
+        const WireTargetStatus wt = getWireTargetStatus();
+        if (targetedMode && !wt.active) {
+            DEBUG_PRINTLN("[Device] Targeted run stopped -> exit loop");
+            setLastStopReason("Targeted run stopped");
+            setState(DeviceState::Shutdown);
+            break;
         }
-
-        if (targetedRun && isfinite(targetC) && targetC > 0.0f)
-        {
-            EnergyRunPurpose runPurpose = targetPurpose;
-            uint8_t runWire = targetWire;
-            if (controlMtx &&
-                xSemaphoreTake(controlMtx, pdMS_TO_TICKS(10)) == pdTRUE)
-            {
-                if (wireTargetStatus.active) {
-                    runPurpose = wireTargetStatus.purpose;
-                    runWire = wireTargetStatus.activeWire;
-                }
-                xSemaphoreGive(controlMtx);
-            }
-
-            if (runPurpose == EnergyRunPurpose::ModelCal) {
-                bool reached = false;
-                if (runWire >= 1 && runWire <= HeaterManager::kWireCount) {
-                    const float t = tempC[runWire - 1];
-                    reached = isfinite(t) && t >= targetC;
-                } else {
-                    for (size_t i = 0; i < allowedCount; ++i) {
-                        const uint8_t idx = allowedIdx[i];
-                        const float t = tempC[idx];
-                        if (isfinite(t) && t >= targetC) {
-                            reached = true;
-                            break;
-                        }
-                    }
-                }
-                if (reached) {
+        if (targetedMode &&
+            wt.active &&
+            wt.purpose == EnergyRunPurpose::ModelCal) {
+            const uint8_t activeWire = wt.activeWire;
+            if (activeWire > 0) {
+                const WireRuntimeState& ws = wireStateModel.wire(activeWire);
+                if (!ws.present) {
                     stopWireTargetTest();
+                    setLastStopReason("Wire not present");
                     break;
                 }
             }
         }
 
-        if (allowedCount == 0) {
-            if (!delayWithPowerWatch(100)) {
+        const FloorControlStatus fc = getFloorControlStatus();
+        float targetC = NAN;
+        float controlTempC = NAN;
+        EnergyRunPurpose runPurpose = wt.purpose;
+        float fixedDutyFrac = 1.0f;
+
+        if (targetedMode) {
+            targetC = wt.targetC;
+            if (NTC) {
+                controlTempC = NTC->getLastTempC();
+            }
+            if (isfinite(targetC) && targetC > wireMaxC) targetC = wireMaxC;
+            if (runPurpose == EnergyRunPurpose::FloorCal) {
+                fixedDutyFrac = wt.dutyFrac;
+                if (!isfinite(fixedDutyFrac) || fixedDutyFrac <= 0.0f) {
+                    fixedDutyFrac = 1.0f;
+                }
+                if (fixedDutyFrac > 1.0f) fixedDutyFrac = 1.0f;
+            }
+        } else {
+            if (fc.active && isfinite(fc.targetC)) {
+                targetC = fc.targetC;
+            }
+            if (NTC) {
+                controlTempC = NTC->getLastTempC();
+            }
+        }
+
+        if (targetedMode &&
+            (runPurpose == EnergyRunPurpose::ModelCal ||
+             runPurpose == EnergyRunPurpose::FloorCal) &&
+            isfinite(targetC) &&
+            isfinite(controlTempC) &&
+            controlTempC >= targetC)
+        {
+            stopWireTargetTest();
+            break;
+        }
+
+        if (!isfinite(targetC) || targetC <= 0.0f) {
+            if (targetedMode) {
+                setLastStopReason("Target temp invalid");
+            } else {
+                setLastStopReason("Floor target unset");
+            }
+            setState(DeviceState::Shutdown);
+            break;
+        }
+
+        if (!isfinite(controlTempC)) {
+            setLastErrorReason(targetedMode ? "NTC invalid"
+                                            : "Floor NTC invalid");
+            setState(DeviceState::Error);
+            break;
+        }
+
+        float errorC = targetC - controlTempC;
+        if (errorC < 0.0f) errorC = 0.0f;
+
+        const float guardC = targetC - floorSwitchMarginC;
+        float roomC = NAN;
+        float busV = NAN;
+        if (!targetedMode && floorModelValid) {
+            roomC = ambientC;
+            if (!isfinite(roomC) && tempSensor) {
+                roomC = tempSensor->getHeatsinkTemp();
+            }
+            if (!isfinite(roomC)) {
+                roomC = controlTempC;
+            }
+            if (discharger) {
+                busV = discharger->sampleVoltageNow();
+            }
+        }
+
+        const bool fixedDuty =
+            targetedMode && (runPurpose == EnergyRunPurpose::ModelCal ||
+                             runPurpose == EnergyRunPurpose::FloorCal);
+        bool boostActive = fixedDuty || (errorC > floorSwitchMarginC);
+
+        if (!fixedDuty && boostActive && !targetedMode && floorModelValid &&
+            isfinite(guardC) && isfinite(roomC) && isfinite(busV) && busV > 0.0f) {
+            float boostBudgetMs = frameMs;
+            if (maxAvgPerFrame < boostBudgetMs) boostBudgetMs = maxAvgPerFrame;
+            if (boostBudgetMs > 0.0f) {
+                const uint16_t boostOnMs =
+                    static_cast<uint16_t>(lroundf(boostBudgetMs));
+                if (boostOnMs > 0) {
+                    WirePacket probePackets[HeaterManager::kWireCount]{};
+                    const size_t probeCount = scheduler.buildSchedule(
+                        wireConfigStore,
+                        wireStateModel,
+                        static_cast<uint16_t>(frameI),
+                        boostOnMs,
+                        wireMaxC,
+                        static_cast<uint16_t>(minOnMs),
+                        static_cast<uint16_t>(maxOnMs),
+                        probePackets,
+                        HeaterManager::kWireCount);
+                    const double sumOnR = sumOnOverR(probePackets, probeCount);
+                    const double nextT = predictFloorNext(sumOnR, busV, roomC, controlTempC);
+                    if (isfinite(nextT) && nextT > static_cast<double>(guardC)) {
+                        boostActive = false;
+                    }
+                }
+            }
+        }
+
+        float demandMs = 0.0f;
+        if (errorC > 0.0f) {
+            if (fixedDuty) {
+                demandMs = frameMs * fixedDutyFrac;
+            } else if (boostActive) {
+                demandMs = frameMs;
+            } else {
+                const float denom =
+                    (floorSwitchMarginC > 0.1f) ? floorSwitchMarginC : 0.1f;
+                float frac = errorC / denom;
+                if (frac > 1.0f) frac = 1.0f;
+                demandMs = frameMs * frac * holdGain;
+            }
+        }
+
+        if (demandMs > maxAvgPerFrame) demandMs = maxAvgPerFrame;
+        if (demandMs > frameMs) demandMs = frameMs;
+        if (demandMs < 0.0f) demandMs = 0.0f;
+
+        uint16_t totalOnMs = static_cast<uint16_t>(lroundf(demandMs));
+        size_t packetCount = 0;
+        if (totalOnMs > 0) {
+            packetCount = scheduler.buildSchedule(
+                wireConfigStore,
+                wireStateModel,
+                static_cast<uint16_t>(frameI),
+                totalOnMs,
+                wireMaxC,
+                static_cast<uint16_t>(minOnMs),
+                static_cast<uint16_t>(maxOnMs),
+                packets,
+                HeaterManager::kWireCount);
+        }
+
+        if (!targetedMode && floorModelValid && packetCount > 0 &&
+            isfinite(guardC) && isfinite(roomC) && isfinite(busV) && busV > 0.0f) {
+            const double sumOnR = sumOnOverR(packets, packetCount);
+            const double nextT = predictFloorNext(sumOnR, busV, roomC, controlTempC);
+            if (isfinite(nextT) && nextT > static_cast<double>(guardC)) {
+                const double dtS = static_cast<double>(frameMs) * 0.001;
+                const double decay = (dtS > 0.0 && floorTau > 0.0)
+                                        ? exp(-dtS / floorTau)
+                                        : 0.0;
+                const double denom = 1.0 - decay;
+                if (denom > 0.0) {
+                    const double tRoom = static_cast<double>(roomC);
+                    const double tNow = static_cast<double>(controlTempC);
+                    double pReq = floorK * ((static_cast<double>(guardC) - tRoom) -
+                                           (tNow - tRoom) * decay) / denom;
+                    if (pReq < 0.0) pReq = 0.0;
+                    const double pAvg =
+                        (static_cast<double>(busV) * static_cast<double>(busV) * sumOnR) /
+                        static_cast<double>(frameMs);
+                    const double perMs = pAvg / static_cast<double>(totalOnMs);
+                    if (perMs > 0.0) {
+                        uint16_t newTotal =
+                            static_cast<uint16_t>(floor(pReq / perMs));
+                        if (newTotal < totalOnMs) {
+                            totalOnMs = newTotal;
+                            if (totalOnMs > static_cast<uint16_t>(frameI)) {
+                                totalOnMs = static_cast<uint16_t>(frameI);
+                            }
+                            packetCount = 0;
+                            if (totalOnMs > 0) {
+                                packetCount = scheduler.buildSchedule(
+                                    wireConfigStore,
+                                    wireStateModel,
+                                    static_cast<uint16_t>(frameI),
+                                    totalOnMs,
+                                    wireMaxC,
+                                    static_cast<uint16_t>(minOnMs),
+                                    static_cast<uint16_t>(maxOnMs),
+                                    packets,
+                                    HeaterManager::kWireCount);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if (packetCount == 0) {
+            if (!delayWithPowerWatch(static_cast<uint32_t>(frameMs))) {
                 if (!is12VPresent()) handle12VDrop();
                 else {
                     xEventGroupClearBits(gEvt, EVT_STOP_REQ);
@@ -838,102 +1069,63 @@ void Device::StartLoop() {
             continue;
         }
 
-        const uint32_t nowMs = millis();
-        const bool boostActive = (boostMs > 0) &&
-                                 ((int32_t)(boostDeadline - nowMs) > 0) &&
-                                 (!anyAtTarget);
-
-        if (!boostActive) {
-            if (!holdInit || (nowMs - lastHoldUpdate) >= holdUpdateMs) {
-                lastHoldUpdate = nowMs;
-                holdInit = true;
-                for (size_t i = 0; i < allowedCount; ++i) {
-                    const uint8_t idx = allowedIdx[i];
-                    const float err = targetC - tempC[idx];
-                    float t = baseMs[idx] + (holdGain * err);
-                    if (!isfinite(t)) t = baseMs[idx];
-                    holdMs[idx] = t;
-                }
-            }
-        }
-
-        float packetMs[HeaterManager::kWireCount] = {0.0f};
-        float sumMs = 0.0f;
-        float minTotal = minOnMs * static_cast<float>(allowedCount);
-        const float maxAvgPerFrame = (maxAvgI > 0)
-                                         ? (static_cast<float>(maxAvgI) * frameMs / 1000.0f)
-                                         : maxOnMs;
-        const float hardMax = (maxAvgPerFrame < maxOnMs) ? maxAvgPerFrame : maxOnMs;
-
-        for (size_t i = 0; i < allowedCount; ++i) {
-            const uint8_t idx = allowedIdx[i];
-            float t = boostActive ? (baseMs[idx] * boostK) : holdMs[idx];
-            if (!isfinite(t)) t = baseMs[idx];
-            if (t < minOnMs) t = minOnMs;
-            if (t > hardMax) t = hardMax;
-            if (t > frameMs) t = frameMs;
-            packetMs[idx] = t;
-            sumMs += t;
-        }
-
-        if (minTotal > frameMs) {
-            const float each = frameMs / static_cast<float>(allowedCount);
-            for (size_t i = 0; i < allowedCount; ++i) {
-                packetMs[allowedIdx[i]] = each;
-            }
-        } else if (sumMs > frameMs) {
-            float extraSum = 0.0f;
-            for (size_t i = 0; i < allowedCount; ++i) {
-                const uint8_t idx = allowedIdx[i];
-                float extra = packetMs[idx] - minOnMs;
-                if (extra < 0.0f) extra = 0.0f;
-                extraSum += extra;
-            }
-            const float avail = frameMs - minTotal;
-            const float scale = (extraSum > 0.0f) ? (avail / extraSum) : 0.0f;
-            for (size_t i = 0; i < allowedCount; ++i) {
-                const uint8_t idx = allowedIdx[i];
-                float extra = packetMs[idx] - minOnMs;
-                if (extra < 0.0f) extra = 0.0f;
-                packetMs[idx] = minOnMs + (extra * scale);
-            }
-        }
-
         const uint32_t frameStartMs = millis();
         bool abortMixed = false;
+        bool reevalAllowed = false;
 
-        if (allowedCount > 0) {
-            rotateOffset = static_cast<uint8_t>((rotateOffset + 1) % allowedCount);
-        }
+        for (size_t oi = 0; oi < packetCount; ++oi) {
+            const WirePacket& pkt = packets[oi];
+            if (pkt.onMs == 0 || pkt.mask == 0) continue;
 
-        for (size_t oi = 0; oi < allowedCount; ++oi) {
-            const uint8_t idx = allowedIdx[(oi + rotateOffset) % allowedCount];
-            const uint32_t pulseMs = static_cast<uint32_t>(lroundf(packetMs[idx]));
-            if (pulseMs == 0) continue;
-
-            const uint16_t mask = (1u << idx);
-            bool testActive = false;
-            if (controlMtx &&
-                xSemaphoreTake(controlMtx, pdMS_TO_TICKS(5)) == pdTRUE)
-            {
-                testActive = wireTargetStatus.active;
-                xSemaphoreGive(controlMtx);
+            if (targetedMode) {
+                uint8_t wireIndex = 0;
+                for (uint8_t b = 0; b < HeaterManager::kWireCount; ++b) {
+                    if (pkt.mask & (1u << b)) {
+                        wireIndex = static_cast<uint8_t>(b + 1);
+                        break;
+                    }
+                }
+                if (wireIndex > 0) {
+                    updateWireTestStatus(wireIndex,
+                                         pkt.onMs,
+                                         static_cast<uint32_t>(frameMs));
+                }
             }
-            if (testActive) {
-                updateWireTestStatus(static_cast<uint8_t>(idx + 1),
-                                     pulseMs,
-                                     static_cast<uint32_t>(frameMs));
-            }
-            if (!_runMaskedPulse(this, mask, pulseMs, ledFeedback)) {
+
+            PulseStats pulseStats{};
+            if (!_runMaskedPulse(this, pkt.mask, pkt.onMs, ledFeedback, &pulseStats)) {
                 if (!is12VPresent()) handle12VDrop();
                 else setState(DeviceState::Shutdown);
                 abortMixed = true;
                 break;
             }
+            if (pulseStats.appliedMask != 0) {
+                const bool changed =
+                    wirePresenceManager.updatePresenceFromMask(
+                        *WIRE,
+                        wireStateModel,
+                        pulseStats.appliedMask,
+                        pulseStats.busVoltageStart,
+                        pulseStats.busVoltage);
+                if (changed) {
+                    checkAllowedOutputs();
+                    if (!wirePresenceManager.hasAnyConnected(wireStateModel)) {
+                        setLastStopReason("No wires present");
+                        setState(DeviceState::Shutdown);
+                        abortMixed = true;
+                        break;
+                    }
+                    reevalAllowed = true;
+                    break;
+                }
+            }
             session.tick();
         }
 
         if (abortMixed) break;
+        if (reevalAllowed) {
+            continue;
+        }
 
         const uint32_t elapsed = millis() - frameStartMs;
         if (elapsed < static_cast<uint32_t>(frameMs)) {

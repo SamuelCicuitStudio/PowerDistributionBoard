@@ -68,7 +68,7 @@ flutter:
     - assets/admin/js/
     - assets/admin/icons/
     - assets/admin/fonts/
-    - assets/admin/calib_history/
+    - assets/admin/partials/
 
   # To add assets to your application, add an assets section, like this:
   # assets:

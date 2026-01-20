@@ -26,7 +26,6 @@
 #include <Utils.hpp>
 #include <NVSManager.hpp>
 #include <Config.hpp>  // Rxx keys, WIRE_OHM_PER_M_KEY, defaults
-#include <CurrentSensor.hpp>
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
 // ---------------------------------------------------------------------
@@ -49,9 +48,8 @@ struct WireInfo {
     float   massKg;              ///< Mass [kg]
     float   temperatureC;        ///< Last estimated wire temperature [°C]
     bool    connected;           ///< true if last probe saw a plausible load
-    float   presenceCurrentA;    ///< last measured current during probe [A]
     uint32_t lastOnMs;           ///< millis() when this wire was last turned ON
-};
+  };
 
 
 class HeaterManager {
@@ -224,6 +222,11 @@ public:
     WireInfo getWireInfo(uint8_t index) const;
 
     /**
+     * @brief Update cached presence/connection state for a wire.
+     */
+    void setWirePresence(uint8_t index, bool present);
+
+    /**
      * @brief Set last estimated temperature for a given wire (°C).
      *
      * Typically called by the thermal model / safety logic.
@@ -242,62 +245,6 @@ public:
     void resetAllEstimatedTemps(float ambientC);
 
     // ---------------------------------------------------------------------
-    // Wire presence detection
-    // ---------------------------------------------------------------------
-
-    /**
-     * @brief Probe each wire to determine if a load is present.
-     *
-     * How it works:
-     *  - Saves current output mask.
-     *  - For each channel:
-     *      * Enables only that channel for a short pulse.
-     *      * Samples current via @p cs.
-     *      * Declares presence if net current is above @p minValidFraction.
-     *      * Sets wires[i].connected + presenceCurrentA accordingly.
-     *  - Restores the original mask at the end.
-     *
-     * Call when the system is IDLE / safe (no other loads toggling).
-     *
-     * @param cs                 CurrentSensor instance (already begin()).
-     * @param busVoltage         Supply/bus voltage in volts.
-     *                           Uses fixed DEFAULT_DC_VOLTAGE baseline.
-     * @param minValidFraction   Minimum net current (A) to accept as connected.
-     * @param maxValidFraction   Reserved for future ratio checks (ignored).
-     * @param settleMs           Wait after switching before sampling.
-     * @param samples            Number of samples to average per channel.
-     */
-    void probeWirePresence(CurrentSensor& cs,
-                           float busVoltage = 0.0f,
-                           float minValidFraction = 0.25f,
-                           float maxValidFraction = 4.0f,
-                           uint16_t settleMs = 30,
-                           uint8_t samples = 10);
-
-    /**
-     * @brief Update presence flags based on measured total current
-     *        while a given mask is active.
-     *
-     * Use this during the main loop (e.g. from _runMaskedPulse) to
-     * dynamically detect removed / open wires.
-     *
-     * Logic:
-     *  - Measure total current while @p mask is active.
-     *  - After subtracting leakage, if net current is below @p minValidRatio,
-     *    mark all wires in @p mask as disconnected; otherwise mark them present.
-     */
-    void updatePresenceFromMask(uint16_t mask,
-                                float totalCurrentA,
-                                float busVoltage = 0.0f,
-                                float minValidRatio = 0.20f);
-
-    /// @return true if at least one wire is still marked connected.
-    bool hasAnyConnected() const;
-    /**
-     * @brief Update cached presence info for a single wire.
-     */
-    void setWirePresence(uint8_t index, bool connected, float presenceCurrentA);
-
 private:
     // ---------------------------------------------------------------------
     // Singleton internals

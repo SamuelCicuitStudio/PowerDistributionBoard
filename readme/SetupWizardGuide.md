@@ -22,7 +22,9 @@ These settings must be confirmed or set before calibration:
 3) Safety thresholds
 - Over-temp trip and warn: `TEMP_THRESHOLD_KEY`, `TEMP_WARN_KEY`
 - Floor max and nichrome target: `FLOOR_MAX_C_KEY`, `NICHROME_FINAL_TEMP_C_KEY`
+- Floor switch margin: `FLOOR_SWITCH_MARGIN_C_KEY`
 - Current limit: `CURR_LIMIT_KEY`
+- Current source selection: `CURRENT_SOURCE_KEY` (estimate vs ACS)
 
 4) Electrical baseline
 - AC frequency and voltage: `AC_FREQUENCY_KEY`, `AC_VOLTAGE_KEY`
@@ -34,21 +36,14 @@ These settings must be confirmed or set before calibration:
 - Per-wire resistance: `R01OHM_KEY`..`R10OHM_KEY`
 - Nichrome properties (global): `WIRE_OHM_PER_M_KEY`, `WIRE_GAUGE_KEY`
 - NTC wire index: `NTC_GATE_INDEX_KEY`
-
-6) Control timing (if exposed in UI)
-- Mixed/energy timing params: `MIX_FRAME_MS_KEY`, `MIX_MIN_ON_MS_KEY`, `MIX_MAX_ON_MS_KEY`, `MIX_MAX_AVG_MS_KEY`
-- Boost/hold tuning: `MIX_BOOST_K_KEY`, `MIX_BOOST_MS_KEY`, `MIX_HOLD_UPDATE_MS_KEY`, `MIX_HOLD_GAIN_KEY`
+- Presence calibration thresholds: `PMINR`, `PWIN`, `PFAIL`
 
 ## Calibration tasks (must be completed for RUN)
 1) Cap bank calibration (device-level)
 - Run the capacitance discharge calibration.
 - Saves `CAP_BANK_CAP_F_KEY` when complete.
 
-2) Idle current calibration (device-level)
-- Run idle current capture with relay on, heaters off.
-- Saves `IDLE_CURR_KEY` when complete.
-
-3) Per-wire thermal model calibration (wire-level)
+2) Per-wire thermal model calibration (wire-level)
 - For each enabled wire (Wire1..Wire10):
   - Ensure the wire is installed in its physical position.
   - Connect the wire to its assigned gate/output.
@@ -56,6 +51,10 @@ These settings must be confirmed or set before calibration:
   - Run the per-wire calibration procedure.
   - Store per-wire tau/k/C parameters in NVS.
   - Notify the admin when that wire calibration completes.
+
+3) Presence calibration (device-level)
+- Run the presence probe and store thresholds used for runtime checks.
+- Mark missing wires as not allowed outputs.
 
 4) Floor model calibration (device-level)
 - Use the NTC as the floor temperature sensor.
@@ -71,10 +70,13 @@ To track setup completion and allow exact-step resume, add these NVS keys (<= 6 
 - `SUBSTG` (int): last completed sub-step within the wizard step.
 - `STWIRE` (int): wire index currently being calibrated (0-based or 1-based, pick one).
 - `CALCAP` (bool): cap bank calibration done.
-- `CALIDC` (bool): idle current calibration done.
 - `CALNTC` (bool): NTC calibration done (if used).
 - `CALW1`..`CALW10` (bool): per-wire thermal calibration done.
 - `CALFLR` (bool): floor model calibration done.
+- `CALPRS` (bool): presence calibration done.
+- `PMINR` (float): min ratio for probe/runtime checks.
+- `PWIN` (int): probe window ms.
+- `PFAIL` (int): consecutive failures before missing.
 - `W1STG`..`W10STG` (int): per-wire calibration sub-step (ambient, heat, cool, save).
 - `W1RUN`..`W10RUN` (bool): per-wire calibration in-progress flag.
 - `W1TS`..`W10TS` (int): last calibration step timestamp (optional, seconds).
@@ -115,7 +117,6 @@ If a wire is disabled, the wizard may mark its `CALWn` as not-required.
 5) Electrical baseline
 - Set AC frequency/voltage and charge resistor.
 - Run cap bank calibration (set `CALCAP`).
-- Run idle current calibration (set `CALIDC`).
 
 6) Per-wire thermal calibration
 - For each enabled wire:
@@ -124,13 +125,17 @@ If a wire is disabled, the wizard may mark its `CALWn` as not-required.
   - Set `CALWn` for that wire.
   - Show a completion notification in the admin UI.
 
-7) Floor model calibration
+7) Presence calibration
+- Run the presence probe and store thresholds.
+- Set `CALPRS`.
+
+8) Floor model calibration
 - Confirm NTC is attached to the floor location and the heatsink sensor is in free air.
 - Run calibration and store `FLTAU/FLKLS/FLCAP`.
 - Set `CALFLR`.
 - Show a completion notification in the admin UI.
 
-8) Review and finish
+9) Review and finish
 - Show a checklist of required items and their status.
 - Set `SETUP = true` when all required steps are complete.
 
@@ -140,6 +145,7 @@ If a wire is disabled, the wizard may mark its `CALWn` as not-required.
 - If a calibration was interrupted, resume at that wire using `STWIRE` and `WnSTG`, and restart the pending calibration step.
 - If floor calibration was interrupted, resume using `FLSTG` and restart the pending floor calibration step.
 - User mode should be hidden/locked until setup is complete.
+- After any restart or power cycle, the system must wait for an explicit RUN command; no automatic start is allowed.
 - The "Run" action should be disabled unless:
   - all required config fields are present, and
   - required calibration flags are true.
@@ -147,7 +153,8 @@ If a wire is disabled, the wizard may mark its `CALWn` as not-required.
 ## Reset and re-calibration
 - Provide a "Reset setup" action that clears:
   - `SETUP`, `STAGE`, `SUBSTG`, `STWIRE`
-  - `CALCAP`, `CALIDC`, `CALNTC`, `CALW1`..`CALW10`, `CALFLR`
+  - `CALCAP`, `CALNTC`, `CALW1`..`CALW10`, `CALFLR`, `CALPRS`
+  - presence calibration keys (`PMINR`, `PWIN`, `PFAIL`)
   - `W1STG`..`W10STG`, `W1RUN`..`W10RUN`, `W1TS`..`W10TS`
   - `FLSTG`, `FLRUN`, `FLTS`
   - per-wire tau/k/C parameters (if re-calibration is requested)

@@ -1,11 +1,12 @@
 # Device Loop & Safety Guide
 
-This document describes how the device loop orchestrates outputs, reaches target resistance, monitors thermal limits, and enforces safety/transport-layer protections.
+This document describes how the device loop orchestrates outputs, monitors thermal limits, and enforces safety/transport-layer protections.
 
 ## Responsibilities
 - State machine: Shutdown -> Idle -> Running -> Error -> Shutdown.
-- Manage relay and up to 10 outputs to balance energy per wire using resistance (even heating).
+- Manage relay and up to 10 outputs to run fast warm-up + equilibrium control with per-wire balancing.
 - Estimate virtual temperatures per wire and the floor temperature model.
+- Run continuous presence checks whenever any heating is active; disable disconnected wires immediately.
 - Monitor temperatures (board + floor NTC + wire estimates) and enforce thermal limits.
 - Track session stats (energy, duration, peaks) via PowerTracker.
 - Obey access flags and transport-level commands; no direct external mutations.
@@ -15,6 +16,7 @@ This document describes how the device loop orchestrates outputs, reaches target
 - **Running**: Relay on, outputs pulsed sequentially; NTC floor temperature is the control target, wire model is display/safety only.
 - **Error**: Entered on critical fault (over-temp, over-current, invalid config). Relay and outputs are disabled.
 - **Shutdown**: Deep-off; used for sleep or stop/finish. Relay/outputs off, fans may stop, waits for wake.
+- After any restart or power cycle, the device stays in Shutdown/Idle and waits for an explicit RUN command; it never auto-resumes.
 - Transitions happen only inside `Device::setState()`; external classes cannot set state directly.
 
 ## Command Path (Transport-Layer Protection)
@@ -25,9 +27,10 @@ This document describes how the device loop orchestrates outputs, reaches target
 
 ## Energy Distribution & Balance
 - The scheduler allocates one energy packet per allowed wire per frame (sequential, one output at a time).
-- Packet size starts from resistance normalization so wires heat at similar rates.
-- Boost phase: allocate extra energy to wires with the largest temperature error to reach the per-wire max quickly.
-- Hold phase: once near max, distribute energy to keep the floor (NTC) at target while holding wire estimates under the cap.
+- Boost (fast warm-up): command high total demand to raise wire temps as fast as possible up to the wire max (`NICHROME_FINAL_TEMP_C_KEY`), while distributing energy so one wire cannot run away.
+- Floor guard: cap total demand so predicted `T_floor_next <= T_target - FLOOR_SWITCH_MARGIN_C_KEY`.
+- Equilibrium: once the floor is close to target, switch to smooth control to hold the floor target while keeping wires under the cap.
+- Presence checks run every heating tick; any wire marked missing is removed from allowed outputs.
 - If no valid outputs are allowed, the loop idles or exits safely.
 
 ## Temperature Tracking (Virtual & Physical)
@@ -42,12 +45,13 @@ This document describes how the device loop orchestrates outputs, reaches target
 - PowerTracker accumulates:
   - Current session energy (Wh), duration (s), peak power/current.
   - Lifetime totals and last session snapshot.
-- StatusSnapshot surfaces: capVoltage, current, temps[], wireTemps[], outputs[], relay, fan speed, session stats.
+- StatusSnapshot surfaces: capVoltage, current, temps[], wireTemps[], outputs[], wirePresent[], relay, fan speed, session stats.
 - SSE stream exposes `{state, seq, sinceMs}` for zero-lag UI updates.
 
 ## Safety & Fault Handling
 - Relay and outputs are forcibly turned off when:
   - Over-temp detected (board or any wire).
+  - Wire disconnect detected while active (presence check failure).
   - Invalid resistance configuration.
   - Transport command requests shutdown/stop.
   - Error state entered (e.g., hardware fault).
@@ -55,6 +59,7 @@ This document describes how the device loop orchestrates outputs, reaches target
 
 ## Access & Permissions
 - Each output has an access flag (OUT01_ACCESS_KEY ... OUT10_ACCESS_KEY). If false, that output is never enabled.
+- Presence flags gate outputs in addition to access flags; missing wires are not driven.
 - Only the device can change access flags via transport commands; UI/WiFiManager do not touch outputs directly.
 
 ## Fan & Thermal Aid

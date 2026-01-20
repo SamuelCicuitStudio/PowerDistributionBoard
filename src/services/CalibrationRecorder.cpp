@@ -1,9 +1,11 @@
 #include <CalibrationRecorder.hpp>
 #include <BusSampler.hpp>
 #include <NtcSensor.hpp>
+#include <Device.hpp>
 #include <HeaterManager.hpp>
 #include <NVSManager.hpp>
 #include <RTCManager.hpp>
+#include <CborStream.hpp>
 #include <math.h>
 #include <stdio.h>
 #include <FS.h>
@@ -256,59 +258,88 @@ bool CalibrationRecorder::saveToFile(const char* path) {
     const char* modeStr =
         (_mode == Mode::Ntc)   ? "ntc" :
         (_mode == Mode::Model) ? "model" :
+        (_mode == Mode::Floor) ? "floor" :
         "none";
 
     const bool saveOk = true;
 
-    auto writeFloat = [&](float v, uint8_t decimals) {
-        if (isfinite(v)) f.print(v, decimals);
-        else f.print("null");
-    };
+    uint8_t metaCount = 8;
+    if (_startEpoch > 0) metaCount++;
+    if (isfinite(_targetTempC)) metaCount++;
+    if (_wireIndex > 0) metaCount++;
+    if (_lastSaveEpoch > 0) metaCount++;
 
-    f.print("{\"meta\":{");
-    f.print("\"mode\":\""); f.print(modeStr); f.print("\"");
-    f.print(",\"running\":"); f.print(_running ? "true" : "false");
-    f.print(",\"count\":"); f.print(_count);
-    f.print(",\"capacity\":"); f.print(_capacity);
-    f.print(",\"interval_ms\":"); f.print(_intervalMs);
-    f.print(",\"start_ms\":"); f.print(_startMs);
+    bool ok = true;
+    ok = ok && CborStream::writeMapHeader(f, 2);
+    ok = ok && CborStream::writeText(f, "meta");
+    ok = ok && CborStream::writeMapHeader(f, metaCount);
+    ok = ok && CborStream::writeText(f, "mode");
+    ok = ok && CborStream::writeText(f, modeStr);
+    ok = ok && CborStream::writeText(f, "running");
+    ok = ok && CborStream::writeBool(f, _running);
+    ok = ok && CborStream::writeText(f, "count");
+    ok = ok && CborStream::writeUInt(f, _count);
+    ok = ok && CborStream::writeText(f, "capacity");
+    ok = ok && CborStream::writeUInt(f, _capacity);
+    ok = ok && CborStream::writeText(f, "interval_ms");
+    ok = ok && CborStream::writeUInt(f, _intervalMs);
+    ok = ok && CborStream::writeText(f, "start_ms");
+    ok = ok && CborStream::writeUInt(f, _startMs);
     if (_startEpoch > 0) {
-        f.print(",\"start_epoch\":");
-        f.print(_startEpoch);
+        ok = ok && CborStream::writeText(f, "start_epoch");
+        ok = ok && CborStream::writeUInt(f, _startEpoch);
     }
     if (isfinite(_targetTempC)) {
-        f.print(",\"target_c\":");
-        writeFloat(_targetTempC, 2);
+        ok = ok && CborStream::writeText(f, "target_c");
+        ok = ok && CborStream::writeDouble(f, _targetTempC);
     }
     if (_wireIndex > 0) {
-        f.print(",\"wire_index\":");
-        f.print(_wireIndex);
+        ok = ok && CborStream::writeText(f, "wire_index");
+        ok = ok && CborStream::writeUInt(f, _wireIndex);
     }
-    f.print(",\"saved\":"); f.print(saveOk ? "true" : "false");
-    f.print(",\"saved_ms\":"); f.print(_lastSaveMs);
+    ok = ok && CborStream::writeText(f, "saved");
+    ok = ok && CborStream::writeBool(f, saveOk);
+    ok = ok && CborStream::writeText(f, "saved_ms");
+    ok = ok && CborStream::writeUInt(f, _lastSaveMs);
     if (_lastSaveEpoch > 0) {
-        f.print(",\"saved_epoch\":");
-        f.print(_lastSaveEpoch);
+        ok = ok && CborStream::writeText(f, "saved_epoch");
+        ok = ok && CborStream::writeUInt(f, _lastSaveEpoch);
     }
-    f.print("},\"samples\":[");
 
-    for (uint16_t i = 0; i < _count; ++i) {
+    ok = ok && CborStream::writeText(f, "samples");
+    ok = ok && CborStream::writeArrayHeader(f, _count);
+
+    for (uint16_t i = 0; i < _count && ok; ++i) {
         const Sample& s = _buf[i];
-        if (i > 0) f.print(",");
-        f.print("{\"t_ms\":"); f.print(s.tMs);
-        f.print(",\"v\":"); writeFloat(s.voltageV, 3);
-        f.print(",\"i\":"); writeFloat(s.currentA, 3);
-        f.print(",\"temp_c\":"); writeFloat(s.tempC, 2);
-        f.print(",\"ntc_v\":"); writeFloat(s.ntcVolts, 4);
-        f.print(",\"ntc_ohm\":"); writeFloat(s.ntcOhm, 2);
-        f.print(",\"ntc_adc\":"); f.print(s.ntcAdc);
-        f.print(",\"ntc_ok\":"); f.print(s.ntcValid ? "true" : "false");
-        f.print(",\"pressed\":"); f.print(s.pressed ? "true" : "false");
-        f.print("}");
+        ok = ok && CborStream::writeMapHeader(f, 10);
+        ok = ok && CborStream::writeText(f, "t_ms");
+        ok = ok && CborStream::writeUInt(f, s.tMs);
+        ok = ok && CborStream::writeText(f, "v");
+        ok = ok && CborStream::writeFloatOrNull(f, s.voltageV);
+        ok = ok && CborStream::writeText(f, "i");
+        ok = ok && CborStream::writeFloatOrNull(f, s.currentA);
+        ok = ok && CborStream::writeText(f, "temp_c");
+        ok = ok && CborStream::writeFloatOrNull(f, s.tempC);
+        ok = ok && CborStream::writeText(f, "room_c");
+        ok = ok && CborStream::writeFloatOrNull(f, s.roomTempC);
+        ok = ok && CborStream::writeText(f, "ntc_v");
+        ok = ok && CborStream::writeFloatOrNull(f, s.ntcVolts);
+        ok = ok && CborStream::writeText(f, "ntc_ohm");
+        ok = ok && CborStream::writeFloatOrNull(f, s.ntcOhm);
+        ok = ok && CborStream::writeText(f, "ntc_adc");
+        ok = ok && CborStream::writeUInt(f, s.ntcAdc);
+        ok = ok && CborStream::writeText(f, "ntc_ok");
+        ok = ok && CborStream::writeBool(f, s.ntcValid);
+        ok = ok && CborStream::writeText(f, "pressed");
+        ok = ok && CborStream::writeBool(f, s.pressed);
     }
 
-    f.print("]}");
     f.close();
+    if (!ok) {
+        SPIFFS.remove(path);
+        unlock();
+        return false;
+    }
 
     unlock();
     return saveOk;
@@ -352,6 +383,11 @@ void CalibrationRecorder::taskLoop() {
             continue;
         }
 
+        float roomC = NAN;
+        if (DEVICE && DEVICE->tempSensor) {
+            roomC = DEVICE->tempSensor->getHeatsinkTemp();
+        }
+
         if (!lock()) {
             continue;
         }
@@ -371,6 +407,7 @@ void CalibrationRecorder::taskLoop() {
         dst.voltageV = s.voltageV;
         dst.currentA = s.currentA;
         dst.tempC    = s.tempC;
+        dst.roomTempC = roomC;
         dst.ntcVolts = s.ntcVolts;
         dst.ntcOhm   = s.ntcOhm;
         dst.ntcAdc   = s.ntcAdc;
@@ -410,7 +447,7 @@ bool CalibrationRecorder::saveToHistoryFiles() {
         unlock();
     }
 
-    bool okLatest = saveToFile(CALIB_MODEL_JSON_FILE);
+    bool okLatest = saveToFile(CALIB_MODEL_CBOR_FILE);
     bool okHistory = true;
 
     if (startEpoch > 0) {

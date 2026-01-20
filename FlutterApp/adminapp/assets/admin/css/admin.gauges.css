@@ -1,0 +1,83 @@
+/* Gauges */
+
+.gauges {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+  margin-top: 15px;
+}
+
+.gauge-card {
+  background: radial-gradient(
+      circle at top,
+      rgba(0, 255, 174, 0.04),
+      transparent
+    ),
+    rgba(3, 5, 7, 0.98);
+  border: 1px solid rgba(0, 255, 174, 0.11);
+  border-radius: 12px;
+  padding: 10px;
+  text-align: center;
+  transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+}
+
+.gauge-card:hover {
+  transform: scale(1.05);
+  box-shadow: 0 0 20px rgba(0, 255, 180, 0.24);
+  border-color: rgba(0, 255, 174, 0.32);
+}
+
+.gauge {
+  width: 100px;
+  height: 100px;
+  margin: 0 auto 8px;
+}
+
+.gauge-svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.gauge-bg {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.08);
+  stroke-width: 2.8;
+}
+
+.gauge-fg {
+  fill: none;
+  stroke-width: 2.8;
+  stroke-linecap: round;
+  transition: stroke-dasharray 0.4s ease, stroke 0.3s ease;
+}
+
+.gauge-fg.voltage {
+  stroke: #00e5ff;
+}
+
+.gauge-fg.current {
+  stroke: #ffb300;
+}
+
+.gauge-fg.temperature {
+  stroke: #ff5252;
+}
+
+.gauge-value {
+  fill: #ffffff;
+  font-size: 8px;
+  text-anchor: middle;
+  dominant-baseline: middle;
+}
+
+/* Gauge muted state */
+
+.gauge-card.muted .gauge-fg.voltage {
+  opacity: 0.35;
+}
+
+.gauge-card.muted .gauge-value {
+  opacity: 0.6;
+}
+

@@ -1,0 +1,124 @@
+      <!-- Manual Control Tab -->
+      <div class="content" id="manualControlTab">
+        <div class="content-header">
+          <h2></h2>
+        </div>
+
+        <div class="manual-control-layout">
+          <section
+            class="user-modal-content zoom-box settings-card manual-controls-card"
+          >
+            <div class="settings-card-header">
+              <div class="settings-card-title">
+                <svg
+                  class="settings-card-icon"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <line x1="4" y1="21" x2="4" y2="14"></line>
+                  <line x1="4" y1="10" x2="4" y2="3"></line>
+                  <line x1="12" y1="21" x2="12" y2="12"></line>
+                  <line x1="12" y1="8" x2="12" y2="3"></line>
+                  <line x1="20" y1="21" x2="20" y2="16"></line>
+                  <line x1="20" y1="12" x2="20" y2="3"></line>
+                  <line x1="1" y1="14" x2="7" y2="14"></line>
+                  <line x1="9" y1="8" x2="15" y2="8"></line>
+                  <line x1="17" y1="16" x2="23" y2="16"></line>
+                </svg>
+                <span>Manual Controls</span>
+              </div>
+              <div class="settings-card-subtitle">
+                Adjusting these will switch to manual mode (and abort auto loop
+                if running).
+              </div>
+            </div>
+
+            <div class="settings-form">
+              <div class="settings-field">
+                <div class="settings-field-row">
+                  <label for="fanSlider">Fan speed</label>
+                  <span id="fanSpeedValue" class="settings-field-value"
+                    >--%</span
+                  >
+                </div>
+                <input type="range" min="0" max="100" id="fanSlider" />
+              </div>
+
+              <div class="settings-field settings-field-inline">
+                <label for="relayToggle">Relay</label>
+                <label class="switch">
+                  <input type="checkbox" id="relayToggle" />
+                  <span class="slider"></span>
+                </label>
+              </div>
+
+              <div class="settings-divider"></div>
+
+              <div class="manual-device-info">
+                <div class="settings-field">
+                  <div class="settings-field-row">
+                    <label>Device Name/ID</label>
+                    <span id="deviceInfoId" class="settings-field-value"
+                      >--</span
+                    >
+                  </div>
+                </div>
+
+                <div class="settings-field">
+                  <div class="settings-field-row">
+                    <label>HW Version</label>
+                    <span id="deviceInfoHw" class="settings-field-value"
+                      >--</span
+                    >
+                  </div>
+                </div>
+
+                <div class="settings-field">
+                  <div class="settings-field-row">
+                    <label>SW Version</label>
+                    <span id="deviceInfoSw" class="settings-field-value"
+                      >--</span
+                    >
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section
+            class="user-modal-content zoom-box settings-card manual-outputs-card"
+          >
+            <div class="settings-card-header">
+              <div class="settings-card-title">
+                <svg
+                  class="settings-card-icon"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <rect x="3" y="3" width="8" height="8" rx="2"></rect>
+                  <rect x="13" y="3" width="8" height="8" rx="2"></rect>
+                  <rect x="3" y="13" width="8" height="8" rx="2"></rect>
+                  <rect x="13" y="13" width="8" height="8" rx="2"></rect>
+                </svg>
+                <span>Manual Outputs</span>
+              </div>
+              <div class="settings-card-subtitle">
+                Toggle outputs directly (manual mode).
+              </div>
+            </div>
+
+            <div id="manualOutputs" class="manual-output-grid"></div>
+          </section>
+        </div>
+      </div>
+

@@ -9,8 +9,35 @@
 
 // Thermal model constants (first-order)
 static constexpr double WIRE_T_MAX_C     = 150.0;
+static constexpr double WIRE_LOCK_MARGIN_C = 10.0;
+static constexpr double WIRE_LOCK_RELEASE_MARGIN_C = 5.0;
+static constexpr uint32_t WIRE_LOCK_MIN_COOLDOWN_MS = 500;
+static constexpr double WIRE_RES_SCALE_MIN = 0.2;
+static constexpr double WIRE_RES_SCALE_MAX = 3.0;
+static constexpr double WIRE_AMBIENT_CLAMP_C = 10.0;
+static constexpr double NICHROME_ALPHA = 0.00017;
 static constexpr double MAX_THERMAL_DT_S = 0.30;  // cap per-step dt for stability
 static constexpr double MAX_THERMAL_DT_TOTAL_S = 10.0; // guard against huge gaps that would spin watchdog
+
+static double resolveWireMaxTempC() {
+    static double cached = WIRE_T_MAX_C;
+    static uint32_t lastMs = 0;
+    const uint32_t nowMs = millis();
+    if (lastMs != 0 && (nowMs - lastMs) < 1000) {
+        return cached;
+    }
+    lastMs = nowMs;
+    double maxC = WIRE_T_MAX_C;
+    if (CONF) {
+        const float cfg = CONF->GetFloat(NICHROME_FINAL_TEMP_C_KEY,
+                                         DEFAULT_NICHROME_FINAL_TEMP_C);
+        if (isfinite(cfg) && cfg > 0.0f && cfg < maxC) {
+            maxC = cfg;
+        }
+    }
+    cached = maxC;
+    return cached;
+}
 
 // Helper: resolve ground-tie/charge resistor and sense-leak current
 static float _getGroundTieOhms() {
@@ -157,6 +184,17 @@ void WireThermalModel::init(const HeaterManager& heater, double ambientC) {
         ws.lastUpdateMs     = now;
         ws.locked           = false;
         ws.cooldownReleaseMs = 0;
+        ws.tauSec           = _tauSec;
+        ws.kLoss            = _heatLossK;
+        double capC = _thermalMassC;
+        if (isfinite(wi.massKg) && wi.massKg > 0.0f) {
+            const double cFromMass =
+                static_cast<double>(wi.massKg) * NICHROME_SPECIFIC_HEAT;
+            if (isfinite(cFromMass) && cFromMass > 0.0) {
+                capC = cFromMass;
+            }
+        }
+        ws.capC             = capC;
 
         // Also prime HeaterManager's cached temperature.
         const_cast<HeaterManager&>(heater).setWireEstimatedTemp(i + 1, ws.T);
@@ -167,8 +205,14 @@ void WireThermalModel::init(const HeaterManager& heater, double ambientC) {
 double WireThermalModel::wireResistanceAtTemp(uint8_t idx) const {
     if (idx >= HeaterManager::kWireCount) return 1e6;
     const WireThermalState& ws = _state[idx];
-    // Simplified: keep resistance fixed at the cold value.
-    return ws.R0;
+    double r0 = (isfinite(ws.R0) && ws.R0 > 0.01) ? ws.R0 : 1.0;
+    double t = ws.T;
+    if (!isfinite(t)) t = _ambientC;
+    const double dT = t - _ambientC;
+    double scale = 1.0 + NICHROME_ALPHA * dT;
+    if (scale < WIRE_RES_SCALE_MIN) scale = WIRE_RES_SCALE_MIN;
+    if (scale > WIRE_RES_SCALE_MAX) scale = WIRE_RES_SCALE_MAX;
+    return r0 * scale;
 }
 
 void WireThermalModel::advanceWireTemp(WireThermalState& ws, double ambientC, double powerW, double dtS) {
@@ -177,8 +221,8 @@ void WireThermalModel::advanceWireTemp(WireThermalState& ws, double ambientC, do
     double remaining = dtS;
     // Prevent excessive sub-steps if timestamps jump (keeps task watchdog happy).
     if (remaining > MAX_THERMAL_DT_TOTAL_S) remaining = MAX_THERMAL_DT_TOTAL_S;
-    const double C = _thermalMassC;
-    double k = _heatLossK;
+    double C = (isfinite(ws.capC) && ws.capC > 0.0) ? ws.capC : _thermalMassC;
+    double k = (isfinite(ws.kLoss) && ws.kLoss >= 0.0) ? ws.kLoss : _heatLossK;
     if (!isfinite(C) || C <= 0.0) return;
     if (!isfinite(k) || k < 0.0) k = 0.0;
 
@@ -189,6 +233,36 @@ void WireThermalModel::advanceWireTemp(WireThermalState& ws, double ambientC, do
         ws.T += dT;
         remaining -= step;
     }
+}
+
+void WireThermalModel::applyThermalGuards(WireThermalState& ws,
+                                          WireRuntimeState& rt,
+                                          uint32_t tsMs) {
+    const double maxC = resolveWireMaxTempC();
+    if (ws.T > maxC) ws.T = maxC;
+    if (ws.T < _ambientC - WIRE_AMBIENT_CLAMP_C) {
+        ws.T = _ambientC - WIRE_AMBIENT_CLAMP_C;
+    }
+
+    double lockTemp = maxC - WIRE_LOCK_MARGIN_C;
+    if (lockTemp < 0.0) lockTemp = maxC;
+    double releaseTemp = lockTemp - WIRE_LOCK_RELEASE_MARGIN_C;
+    if (releaseTemp < 0.0) releaseTemp = 0.0;
+
+    if (!ws.locked) {
+        if (ws.T >= lockTemp) {
+            ws.locked = true;
+            ws.cooldownReleaseMs = tsMs + WIRE_LOCK_MIN_COOLDOWN_MS;
+        }
+    } else {
+        if (tsMs >= ws.cooldownReleaseMs && ws.T <= releaseTemp) {
+            ws.locked = false;
+        }
+    }
+
+    rt.tempC     = ws.T;
+    rt.locked    = ws.locked;
+    rt.overTemp  = isfinite(ws.T) && ws.T >= maxC;
 }
 
 void WireThermalModel::integrateCurrentOnly(const CurrentSensor::Sample* curBuf, size_t nCur,
@@ -202,14 +276,6 @@ void WireThermalModel::integrateCurrentOnly(const CurrentSensor::Sample* curBuf,
 
     uint16_t currentMask = runtime.getLastMask();
     size_t   outIndex    = 0;
-
-    auto handleLockout = [&](uint8_t w,
-                             WireThermalState& ws,
-                             WireRuntimeState& rt) {
-        ws.locked = false; // disable latch; rely on PWM/error control
-        rt.locked   = false;
-        rt.overTemp = isfinite(rt.tempC) && rt.tempC >= WIRE_T_MAX_C;
-    };
 
     for (size_t i = 0; i < nCur; ++i) {
         const uint32_t ts    = curBuf[i].timestampMs;
@@ -262,14 +328,9 @@ void WireThermalModel::integrateCurrentOnly(const CurrentSensor::Sample* curBuf,
         // Clamp and publish temps after each current sample.
         for (uint8_t w = 0; w < HeaterManager::kWireCount; ++w) {
             WireThermalState& ws = _state[w];
-            if (ws.T > WIRE_T_MAX_C) ws.T = WIRE_T_MAX_C;
-            if (ws.T < _ambientC - 10.0) ws.T = _ambientC - 10.0;
-
             WireRuntimeState& rt = runtime.wire(w + 1);
-            rt.tempC        = ws.T;
+            applyThermalGuards(ws, rt, ts);
             rt.lastUpdateMs = ts;
-
-            handleLockout(w, ws, rt);
 
             heater.setWireEstimatedTemp(w + 1, ws.T);
             ws.lastUpdateMs = ts;
@@ -295,17 +356,10 @@ void WireThermalModel::coolingOnlyTick(double ambientC,
         double dt = (ws.lastUpdateMs == 0) ? 0.0 : (nowTs - ws.lastUpdateMs) * 0.001;
         advanceWireTemp(ws, _ambientC, 0.0, dt);
 
-        if (ws.T > WIRE_T_MAX_C) ws.T = WIRE_T_MAX_C;
-        if (ws.T < _ambientC - 10.0) ws.T = _ambientC - 10.0;
-
         WireRuntimeState& rt = runtime.wire(w + 1);
-        rt.tempC        = ws.T;
+        applyThermalGuards(ws, rt, nowTs);
         rt.lastPowerW   = 0.0;
         rt.lastUpdateMs = nowTs;
-
-        ws.locked = false;
-        rt.locked   = false;
-        rt.overTemp = isfinite(rt.tempC) && rt.tempC >= WIRE_T_MAX_C;
 
         heater.setWireEstimatedTemp(w + 1, ws.T);
         ws.lastUpdateMs = nowTs;
@@ -335,7 +389,7 @@ void WireThermalModel::integrateCapModel(const CpDischg::Sample* voltBuf, size_t
             ws.lastUpdateMs = nowTs;
             heater.setWireEstimatedTemp(w + 1, ws.T);
             WireRuntimeState& rt = runtime.wire(w + 1);
-            rt.tempC        = ws.T;
+            applyThermalGuards(ws, rt, nowTs);
             rt.lastUpdateMs = nowTs;
         }
         return;
@@ -348,14 +402,6 @@ void WireThermalModel::integrateCapModel(const CpDischg::Sample* voltBuf, size_t
     double vS = (isfinite(vSrc) && vSrc > 0.0) ? vSrc : 0.0;
 
     uint16_t currentMask = runtime.getLastMask();
-
-    auto handleLockout = [&](uint8_t w,
-                             WireThermalState& ws,
-                             WireRuntimeState& rt) {
-        ws.locked = false; // disable latch; rely on PWM/error control
-        rt.locked   = false;
-        rt.overTemp = isfinite(rt.tempC) && rt.tempC >= WIRE_T_MAX_C;
-    };
 
     auto applyCoolingTo = [&](uint32_t ts) {
         for (uint8_t w = 0; w < HeaterManager::kWireCount; ++w) {
@@ -409,8 +455,9 @@ void WireThermalModel::integrateCapModel(const CpDischg::Sample* voltBuf, size_t
             const double frac = Rpar / R; // (1/R)/Gtot
             double Ew = Eload * frac;
             if (!isfinite(Ew) || Ew < 0.0) Ew = 0.0;
-            if (_thermalMassC > 0.0 && isfinite(_thermalMassC)) {
-                ws.T += (Ew / _thermalMassC);
+            double capC = (isfinite(ws.capC) && ws.capC > 0.0) ? ws.capC : _thermalMassC;
+            if (capC > 0.0 && isfinite(capC)) {
+                ws.T += (Ew / capC);
             }
 
             WireRuntimeState& rt = runtime.wire(w + 1);
@@ -481,14 +528,9 @@ void WireThermalModel::integrateCapModel(const CpDischg::Sample* voltBuf, size_t
     // Clamp, publish, and enforce lockouts.
     for (uint8_t w = 0; w < HeaterManager::kWireCount; ++w) {
         WireThermalState& ws = _state[w];
-        if (ws.T > WIRE_T_MAX_C) ws.T = WIRE_T_MAX_C;
-        if (ws.T < _ambientC - 10.0) ws.T = _ambientC - 10.0;
-
         WireRuntimeState& rt = runtime.wire(w + 1);
-        rt.tempC        = ws.T;
+        applyThermalGuards(ws, rt, nowTs);
         rt.lastUpdateMs = nowTs;
-
-        handleLockout(w, ws, rt);
 
         heater.setWireEstimatedTemp(w + 1, ws.T);
         ws.lastUpdateMs = nowTs;
@@ -500,7 +542,7 @@ void WireThermalModel::integrateCapModel(const CpDischg::Sample* voltBuf, size_t
 void WireThermalModel::integrate(const CurrentSensor::Sample* curBuf, size_t nCur,
                                  const CpDischg::Sample*     voltBuf, size_t nVolt,
                                  const HeaterManager::OutputEvent* outBuf, size_t nOut,
-                                 double idleCurrentA, double ambientC,
+                                 double ambientC,
                                  WireStateModel& runtime, HeaterManager& heater) {
     if (!_initialized) {
         init(heater, ambientC);
@@ -562,15 +604,9 @@ void WireThermalModel::integrate(const CurrentSensor::Sample* curBuf, size_t nCu
         // Clamp and publish temps.
         for (uint8_t w = 0; w < HeaterManager::kWireCount; ++w) {
             WireThermalState& ws = _state[w];
-            if (ws.T > WIRE_T_MAX_C) ws.T = WIRE_T_MAX_C;
-            if (ws.T < _ambientC - 10.0) ws.T = _ambientC - 10.0;
-
             WireRuntimeState& rt = runtime.wire(w + 1);
-            rt.tempC        = ws.T;
+            applyThermalGuards(ws, rt, ts);
             rt.lastUpdateMs = ts;
-            ws.locked = false;
-            rt.locked   = false;
-            rt.overTemp = isfinite(rt.tempC) && rt.tempC >= WIRE_T_MAX_C;
 
             heater.setWireEstimatedTemp(w + 1, ws.T);
             ws.lastUpdateMs = ts;
@@ -587,17 +623,60 @@ double WireThermalModel::getWireTemp(uint8_t index) const {
 
 void WireThermalModel::setThermalParams(double tauSec, double kLoss, double thermalMassC) {
     if (!isfinite(tauSec) || tauSec <= 0.0) {
-        tauSec = DEFAULT_WIRE_TAU_SEC;
+        tauSec = DEFAULT_WIRE_MODEL_TAU;
     }
     if (!isfinite(kLoss) || kLoss < 0.0) {
-        kLoss = DEFAULT_WIRE_K_LOSS;
+        kLoss = DEFAULT_WIRE_MODEL_K;
     }
     if (!isfinite(thermalMassC) || thermalMassC <= 0.0) {
-        thermalMassC = DEFAULT_WIRE_THERMAL_C;
+        thermalMassC = DEFAULT_WIRE_MODEL_C;
     }
     _tauSec       = tauSec;
     _heatLossK    = kLoss;
     _thermalMassC = thermalMassC;
+}
+
+void WireThermalModel::setWireThermalParams(uint8_t index,
+                                            double tauSec,
+                                            double kLoss,
+                                            double thermalMassC) {
+    if (index == 0 || index > HeaterManager::kWireCount) return;
+
+    WireThermalState& ws = _state[index - 1];
+    double capFallback = ws.capC;
+    if (!isfinite(capFallback) || capFallback <= 0.0) {
+        capFallback = _thermalMassC;
+    }
+
+    if (!isfinite(kLoss) || kLoss <= 0.0) {
+        kLoss = ws.kLoss;
+    }
+    if (!isfinite(kLoss) || kLoss <= 0.0) {
+        kLoss = _heatLossK;
+    }
+    if (!isfinite(thermalMassC) || thermalMassC <= 0.0) {
+        thermalMassC = capFallback;
+    }
+    if (!isfinite(tauSec) || tauSec <= 0.0) {
+        if (isfinite(kLoss) && kLoss > 0.0 &&
+            isfinite(thermalMassC) && thermalMassC > 0.0) {
+            tauSec = thermalMassC / kLoss;
+        } else {
+            tauSec = ws.tauSec;
+        }
+    }
+    if (!isfinite(thermalMassC) || thermalMassC <= 0.0) {
+        if (isfinite(tauSec) && tauSec > 0.0 &&
+            isfinite(kLoss) && kLoss > 0.0) {
+            thermalMassC = tauSec * kLoss;
+        } else {
+            thermalMassC = capFallback;
+        }
+    }
+
+    ws.tauSec = tauSec;
+    ws.kLoss = kLoss;
+    ws.capC = thermalMassC;
 }
 
 bool WireThermalModel::applyExternalWireTemp(uint8_t index, double tempC, uint32_t tsMs,
@@ -609,153 +688,34 @@ bool WireThermalModel::applyExternalWireTemp(uint8_t index, double tempC, uint32
     const uint32_t ts = (tsMs != 0) ? tsMs : millis();
 
     ws.T = tempC;
-    if (ws.T > WIRE_T_MAX_C) ws.T = WIRE_T_MAX_C;
-    if (ws.T < _ambientC - 10.0) ws.T = _ambientC - 10.0;
     ws.lastUpdateMs = ts;
-    ws.locked = false;
 
     WireRuntimeState& rt = runtime.wire(index);
-    rt.tempC        = ws.T;
+    applyThermalGuards(ws, rt, ts);
     rt.lastUpdateMs = ts;
-    rt.locked       = false;
-    rt.overTemp     = isfinite(rt.tempC) && rt.tempC >= WIRE_T_MAX_C;
 
     heater.setWireEstimatedTemp(index, ws.T);
     return true;
 }
 
 // ======================================================================
-// WirePresenceManager
-// ======================================================================
 
-void WirePresenceManager::probeAll(HeaterManager& heater,
-                                   WireStateModel& state,
-                                   CurrentSensor& cs,
-                                   float busVoltage,
-                                   float minValidFraction,
-                                   float maxValidFraction,
-                                   uint16_t settleMs,
-                                   uint8_t samples) {
-    if (busVoltage <= 0.0f) return;
-    (void)maxValidFraction; // detection now hinges on absolute current
-
-    const bool forcePresence = (DEVICE_FORCE_ALL_WIRES_PRESENT != 0);
-    const float minDetectA = (minValidFraction > 0.0f) ? minValidFraction : 0.05f;
-
-    bool prevStates[HeaterManager::kWireCount];
-    for (uint8_t i = 0; i < HeaterManager::kWireCount; ++i) {
-        prevStates[i] = heater.getOutputState(i + 1);
-    }
-
-    heater.setOutputMask(0);
-    vTaskDelay(pdMS_TO_TICKS(settleMs));
-
-    for (uint8_t idx = 0; idx < HeaterManager::kWireCount; ++idx) {
-        const uint8_t wireIdx = idx + 1;
-        WireInfo wi = heater.getWireInfo(wireIdx);
-        float R = wi.resistanceOhm;
-        if (!isfinite(R) || R <= 0.01f) {
-            WireRuntimeState& rt = state.wire(wireIdx);
-            rt.present      = false;
-            rt.lastUpdateMs = millis();
-            heater.setWirePresence(wireIdx, false, 0.0f);
-            continue;
-        }
-
-        uint16_t mask = (1u << idx);
-        heater.setOutputMask(mask);
-        vTaskDelay(pdMS_TO_TICKS(settleMs));
-
-        float sumA = 0.0f;
-        for (uint8_t s = 0; s < samples; ++s) {
-            sumA += cs.readCurrent();
-            vTaskDelay(pdMS_TO_TICKS(2));
-        }
-        float Imeas = sumA / (float)samples;
-
-        const float leak = _senseLeakCurrent(busVoltage);
-        float ImeasNet = Imeas - leak;
-        if (ImeasNet < 0.0f) ImeasNet = 0.0f;
-
-        bool connected = forcePresence ||
-                         (isfinite(ImeasNet) && ImeasNet >= minDetectA);
-
-        heater.setWirePresence(wireIdx, connected, ImeasNet);
-
-        WireRuntimeState& rt = state.wire(wireIdx);
-        rt.present      = connected;
-        rt.lastUpdateMs = millis();
-
-        heater.setOutputMask(0);
-        vTaskDelay(pdMS_TO_TICKS(settleMs));
-    }
-
-    for (uint8_t i = 0; i < HeaterManager::kWireCount; ++i) {
-        if (prevStates[i]) heater.setOutput(i + 1, true);
-    }
-
-    state.setLastMask(heater.getOutputMask());
-}
-
-void WirePresenceManager::updatePresenceFromMask(HeaterManager& heater,
-                                                 WireStateModel& state,
-                                                 uint16_t mask,
-                                                 float totalCurrentA,
-                                                 float busVoltage,
-                                                 float minValidRatio) {
-    if (mask == 0) return;
-
-    const bool forcePresence = (DEVICE_FORCE_ALL_WIRES_PRESENT != 0);
-    const float minDetectA = (minValidRatio > 0.0f) ? minValidRatio : 0.05f;
-
-    float netCurrent = totalCurrentA - _senseLeakCurrent(busVoltage);
-    if (netCurrent < 0.0f) netCurrent = 0.0f;
-    const bool connected = forcePresence ||
-                           (isfinite(netCurrent) && netCurrent >= minDetectA);
-
-    const uint32_t now = millis();
-    for (uint8_t i = 0; i < HeaterManager::kWireCount; ++i) {
-        if (!(mask & (1u << i))) continue;
-        WireRuntimeState& rt = state.wire(i + 1);
-
-        rt.present      = connected;
-        rt.lastUpdateMs = now;
-        heater.setWirePresence(i + 1, connected, netCurrent);
-    }
-}
-
-bool WirePresenceManager::hasAnyConnected(const WireStateModel& state) const {
-    if (DEVICE_FORCE_ALL_WIRES_PRESENT != 0) return true;
-    for (uint8_t i = 0; i < HeaterManager::kWireCount; ++i) {
-        if (state.wire(i + 1).present) return true;
-    }
-    return false;
-}
 
 // ======================================================================
 // WireTelemetryAdapter
 // ======================================================================
 
 void WireTelemetryAdapter::fillSnapshot(StatusSnapshot& out,
-                                        const WireConfigStore& /*cfg*/,
+                                        const WireConfigStore& cfg,
                                         const WireStateModel&  state) const {
     double totalP = 0.0;
     for (uint8_t i = 0; i < HeaterManager::kWireCount; ++i) {
         const WireRuntimeState& rt = state.wire(i + 1);
-        out.wireTemps[i] = rt.tempC;
+        const bool allowed = cfg.getAccessFlag(i + 1);
+        out.wireTemps[i] = allowed ? rt.tempC : NAN;
         out.outputs[i]   = ((state.getLastMask() & (1u << i)) != 0);
+        out.wirePresent[i] = rt.present;
         totalP += rt.lastPowerW;
     }
     (void)totalP; // total power can be added to StatusSnapshot later if desired.
-}
-
-void WireTelemetryAdapter::writeMonitorJson(JsonObject& root,
-                                            const StatusSnapshot& snap) const {
-    JsonArray wireTemps = root.createNestedArray("wireTemps");
-    JsonObject outputs   = root.createNestedObject("outputs");
-
-    for (uint8_t i = 0; i < HeaterManager::kWireCount; ++i) {
-        wireTemps.add(snap.wireTemps[i]);
-        outputs[String("output") + String(i + 1)] = snap.outputs[i];
-    }
 }

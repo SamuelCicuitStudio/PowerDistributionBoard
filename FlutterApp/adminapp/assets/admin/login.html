@@ -101,27 +101,33 @@
         }
 
         try {
+          const headers = window.pbCborHeaders
+            ? window.pbCborHeaders()
+            : { "Content-Type": "application/cbor", Accept: "application/cbor" };
           const res = await fetch("/connect", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ username, password }),
+            headers,
+            body: window.pbEncodeCbor
+              ? window.pbEncodeCbor({ username, password })
+              : null,
           });
 
-          const data = await res.json().catch(() => ({}));
+          const data = window.pbReadCbor ? await window.pbReadCbor(res) : null;
+          const payload = data || {};
           if (!res.ok) {
-            alert(data.error || "Login failed.");
+            alert(payload.error || "Login failed.");
             return;
           }
-          if (!data.token) {
+          if (!payload.token) {
             alert("Missing session token.");
             return;
           }
-          if (data.role !== "admin") {
+          if (payload.role !== "admin") {
             alert("Admin credentials required.");
             if (window.pbClearToken) window.pbClearToken();
             return;
           }
-          if (window.pbSetToken) window.pbSetToken(data.token);
+          if (window.pbSetToken) window.pbSetToken(payload.token);
           const base = window.pbGetBaseUrl ? window.pbGetBaseUrl() : "";
           const next = "admin.html" + (base ? "?base=" + encodeURIComponent(base) : "");
           window.location.href = next;
@@ -187,9 +193,13 @@
 
       async function populateDeviceInfo() {
         try {
-          const res = await fetch("/device_info", { cache: "no-store" });
+          const res = await fetch("/device_info", {
+            cache: "no-store",
+            headers: window.pbCborHeaders ? window.pbCborHeaders() : undefined,
+          });
           if (!res.ok) return;
-          const data = await res.json();
+          const data = window.pbReadCbor ? await window.pbReadCbor(res) : null;
+          if (!data) return;
           const idEl = document.getElementById("infoDeviceId");
           const swEl = document.getElementById("infoSwVer");
           const hwEl = document.getElementById("infoHwVer");

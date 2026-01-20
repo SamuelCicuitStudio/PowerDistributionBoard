@@ -1,0 +1,344 @@
+              <section class="device-col device-col--right">
+                <h3 class="ds-col-heading ds-col-heading--nichrome">
+                  <svg
+                    class="ds-col-icon"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path
+                      d="M12 2c0 4-2 6-2 8a3 3 0 0 0 6 0c0-2-2-4-2-8"
+                    ></path>
+                    <path
+                      d="M8.5 14.5C7.3 15.7 7 17 7 18a5 5 0 0 0 10 0c0-1-.3-2.3-1.5-3.5"
+                    ></path>
+                  </svg>
+                  <span>Nichrome Calibration</span>
+                </h3>
+
+                <div
+                  class="device-subtabs"
+                  role="tablist"
+                  aria-label="Nichrome settings tabs"
+                >
+                  <button
+                    type="button"
+                    class="device-subtab-btn is-active"
+                    data-device-subtab="nichrome"
+                    role="tab"
+                    aria-selected="true"
+                  >
+                    <svg
+                      class="device-subtab-icon"
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <rect x="3" y="3" width="7" height="7"></rect>
+                      <rect x="14" y="3" width="7" height="7"></rect>
+                      <rect x="3" y="14" width="7" height="7"></rect>
+                      <rect x="14" y="14" width="7" height="7"></rect>
+                    </svg>
+                    <span>Nichrome</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="device-subtab-btn"
+                    data-device-subtab="energy"
+                    role="tab"
+                    aria-selected="false"
+                  >
+                    <svg
+                      class="device-subtab-icon"
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <polyline
+                        points="22 12 18 12 15 21 9 3 6 12 2 12"
+                      ></polyline>
+                    </svg>
+                    <span>Energy Control</span>
+                  </button>
+                </div>
+
+                <div class="device-subtab-panels">
+                  <div
+                    class="device-subtab-panel is-active"
+                    data-device-subtab-panel="nichrome"
+                    role="tabpanel"
+                  >
+                    <div class="ds-group-title ds-floor">
+                      <svg
+                        class="ds-group-icon"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <line x1="4" y1="6" x2="20" y2="6"></line>
+                        <circle cx="9" cy="6" r="2"></circle>
+                        <line x1="4" y1="12" x2="20" y2="12"></line>
+                        <circle cx="15" cy="12" r="2"></circle>
+                        <line x1="4" y1="18" x2="20" y2="18"></line>
+                        <circle cx="11" cy="18" r="2"></circle>
+                      </svg>
+                      <span>Floor Settings</span>
+                    </div>
+                    <div class="nichrome-meta">
+                      <div class="ds-field">
+                        <label for="floorThicknessMm"
+                          >Floor Thickness (20-50 mm)</label
+                        >
+                        <div class="input-with-unit">
+                          <input
+                            type="number"
+                            id="floorThicknessMm"
+                            step="0.1"
+                            min="20"
+                            max="50"
+                          />
+                          <span class="unit-label">mm</span>
+                        </div>
+                      </div>
+                      <div class="ds-field">
+                        <label for="nichromeFinalTempC"
+                          >Nichrome Final Temp</label
+                        >
+                        <div class="input-with-unit">
+                          <input
+                            type="number"
+                            id="nichromeFinalTempC"
+                            step="0.1"
+                          />
+                          <span class="unit-label">C</span>
+                        </div>
+                      </div>
+                      <div class="ds-field">
+                        <label for="ntcGateIndex">NTC Linked Channel</label>
+                        <div class="input-with-unit">
+                          <input
+                            type="number"
+                            id="ntcGateIndex"
+                            min="1"
+                            max="10"
+                            step="1"
+                          />
+                          <span class="unit-label">CH</span>
+                        </div>
+                      </div>
+                      <div class="ds-field">
+                        <label for="floorMaterial">Floor Material</label>
+                        <select id="floorMaterial">
+                          <option value="wood">Wood</option>
+                          <option value="epoxy">Epoxy</option>
+                          <option value="concrete">Concrete</option>
+                          <option value="slate">Slate</option>
+                          <option value="marble">Marble</option>
+                          <option value="granite">Granite</option>
+                        </select>
+                      </div>
+                      <div class="ds-field">
+                        <label for="floorMaxC">Max Floor Temp (<= 35 C)</label>
+                        <div class="input-with-unit">
+                          <input
+                            type="number"
+                            id="floorMaxC"
+                            step="0.1"
+                            max="35"
+                          />
+                          <span class="unit-label">C</span>
+                        </div>
+                      </div>
+                      <div class="ds-field">
+                        <label for="floorSwitchMarginC"
+                          >Floor Switch Margin</label
+                        >
+                        <div class="input-with-unit">
+                          <input
+                            type="number"
+                            id="floorSwitchMarginC"
+                            step="0.1"
+                          />
+                          <span class="unit-label">C</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="ds-group-title ds-nichrome">
+                      <svg
+                        class="ds-group-icon"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <rect x="3" y="3" width="7" height="7"></rect>
+                        <rect x="14" y="3" width="7" height="7"></rect>
+                        <rect x="3" y="14" width="7" height="7"></rect>
+                        <rect x="14" y="14" width="7" height="7"></rect>
+                      </svg>
+                      <span>Nichrome Calibration</span>
+                    </div>
+                    <div class="nichrome-grid">
+                      <!-- New: global Ω/m -->
+                      <div class="field">
+                        <label for="wireOhmPerM">Wire Resistivity (Ω/m)</label>
+                        <input
+                          id="wireOhmPerM"
+                          type="number"
+                          step="0.01"
+                          inputmode="decimal"
+                        />
+                      </div>
+                      <!-- R01..R10 -->
+                      <div class="field">
+                        <label for="r01ohm">R01 (Ω)</label>
+                        <input
+                          id="r01ohm"
+                          type="number"
+                          step="0.1"
+                          inputmode="decimal"
+                        />
+                      </div>
+                      <div class="field">
+                        <label for="r02ohm">R02 (Ω)</label>
+                        <input
+                          id="r02ohm"
+                          type="number"
+                          step="0.1"
+                          inputmode="decimal"
+                        />
+                      </div>
+                      <div class="field">
+                        <label for="r03ohm">R03 (Ω)</label>
+                        <input
+                          id="r03ohm"
+                          type="number"
+                          step="0.1"
+                          inputmode="decimal"
+                        />
+                      </div>
+                      <div class="field">
+                        <label for="r04ohm">R04 (Ω)</label>
+                        <input
+                          id="r04ohm"
+                          type="number"
+                          step="0.1"
+                          inputmode="decimal"
+                        />
+                      </div>
+                      <div class="field">
+                        <label for="r05ohm">R05 (Ω)</label>
+                        <input
+                          id="r05ohm"
+                          type="number"
+                          step="0.1"
+                          inputmode="decimal"
+                        />
+                      </div>
+                      <div class="field">
+                        <label for="r06ohm">R06 (Ω)</label>
+                        <input
+                          id="r06ohm"
+                          type="number"
+                          step="0.1"
+                          inputmode="decimal"
+                        />
+                      </div>
+                      <div class="field">
+                        <label for="r07ohm">R07 (Ω)</label>
+                        <input
+                          id="r07ohm"
+                          type="number"
+                          step="0.1"
+                          inputmode="decimal"
+                        />
+                      </div>
+                      <div class="field">
+                        <label for="r08ohm">R08 (Ω)</label>
+                        <input
+                          id="r08ohm"
+                          type="number"
+                          step="0.1"
+                          inputmode="decimal"
+                        />
+                      </div>
+                      <div class="field">
+                        <label for="r09ohm">R09 (Ω)</label>
+                        <input
+                          id="r09ohm"
+                          type="number"
+                          step="0.1"
+                          inputmode="decimal"
+                        />
+                      </div>
+                      <div class="field">
+                        <label for="r10ohm">R10 (Ω)</label>
+                        <input
+                          id="r10ohm"
+                          type="number"
+                          step="0.1"
+                          inputmode="decimal"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div
+                    class="device-subtab-panel"
+                    data-device-subtab-panel="energy"
+                    role="tabpanel"
+                    hidden
+                  >
+                    <div class="energy-control-grid" id="energyControlGrid">
+                      <div class="ds-group-title ds-loop-timing">
+                        <svg
+                          class="ds-group-icon"
+                          viewBox="0 0 24 24"
+                          aria-hidden="true"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        >
+                          <polyline
+                            points="22 12 18 12 15 21 9 3 6 12 2 12"
+                          ></polyline>
+                        </svg>
+                        <span>Energy Control</span>
+                      </div>
+
+                      <div class="ds-field">
+                        <label for="wireGauge">Wire Gauge (AWG)</label>
+                        <input
+                          id="wireGauge"
+                          type="number"
+                          step="1"
+                          min="1"
+                          max="40"
+                          inputmode="numeric"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </section>

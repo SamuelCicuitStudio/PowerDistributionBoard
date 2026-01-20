@@ -46,6 +46,7 @@ public:
 
     // Calibration / configuration
     void setBeta(float beta, bool persist = true);
+    void setT0C(float t0C, bool persist = true);
     void setR0(float r0Ohm, bool persist = true);
     void setFixedRes(float rFixedOhm, bool persist = true);
     void setSampleCount(uint8_t samples, bool persist = true);
@@ -56,6 +57,7 @@ public:
     bool calibrateAtTempC(float refTempC);
 
     float getBeta() const;
+    float getT0C() const;
     float getR0() const;
     float getFixedRes() const;
     Model getModel() const;

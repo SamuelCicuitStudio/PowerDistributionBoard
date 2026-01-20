@@ -35,6 +35,12 @@ public:
     CLIENT_CONNECTED, CLIENT_DISCONNECTED
   };
 
+  enum class AlertLevel : uint8_t {
+    NONE = 0,
+    WARNING,
+    CRITICAL
+  };
+
   // Singleton access.
   // NOTE: BUZZER_PIN (from Config.h) is the authority for pin if defined.
   //       Init() now RESPECTS stored mute state and does NOT overwrite it.
@@ -68,6 +74,9 @@ public:
 
   void enqueue(Mode m);  // drops immediately if muted
 
+  void setAlert(AlertLevel level);
+  void clearAlert() { setAlert(AlertLevel::NONE); }
+
 private:
   Buzzer() = default;
   Buzzer(const Buzzer&) = delete;
@@ -78,6 +87,7 @@ private:
 
   void playMode(Mode m);
   void playTone(int freqHz, int durationMs);
+  void playAlert(AlertLevel level);
   inline void idleOff() {
     if (_pin < 0) return;
     digitalWrite(_pin, HIGH);
@@ -99,6 +109,11 @@ private:
   TaskHandle_t      _task  = nullptr;
   QueueHandle_t     _queue = nullptr;
   SemaphoreHandle_t _mtx   = nullptr;
+
+  // Alert latch
+  AlertLevel _alertLevel = AlertLevel::NONE;
+  uint32_t   _alertRepeatMs = 0;
+  uint32_t   _alertNextMs = 0;
 };
 
 // Convenience macro

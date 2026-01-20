@@ -1,0 +1,446 @@
+      <!-- Admin Settings Tab -->
+      <div class="content" id="adminSettingsTab">
+        <div class="content-header">
+          <h2></h2>
+        </div>
+
+        <div class="admin-settings-layout">
+          <section
+            class="user-modal-content zoom-box settings-card setup-wizard-card"
+          >
+            <div class="settings-card-header">
+              <div class="settings-card-title">
+                <svg
+                  class="settings-card-icon"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <circle cx="12" cy="12" r="9"></circle>
+                  <path d="M8 12l2.5 2.5 5-5"></path>
+                </svg>
+                <span>Setup Wizard</span>
+              </div>
+              <div class="settings-card-subtitle">
+                Track required configuration and calibration before RUN.
+              </div>
+            </div>
+
+            <div class="setup-wizard-body">
+              <div class="setup-wizard-status">
+                <div id="setupDonePill" class="setup-pill">Setup: --</div>
+                <div id="setupConfigPill" class="setup-pill">Config: --</div>
+                <div id="setupCalibPill" class="setup-pill">
+                  Calibration: --
+                </div>
+                <div id="setupRunPill" class="setup-pill">Run: --</div>
+              </div>
+
+              <div class="setup-progress-grid">
+                <div class="settings-field">
+                  <label for="setupStageInput">Stage</label>
+                  <input type="number" id="setupStageInput" min="0" step="1" />
+                </div>
+                <div class="settings-field">
+                  <label for="setupSubstageInput">Substage</label>
+                  <input
+                    type="number"
+                    id="setupSubstageInput"
+                    min="0"
+                    step="1"
+                  />
+                </div>
+                <div class="settings-field">
+                  <label for="setupWireIndexInput">Wire index</label>
+                  <input
+                    type="number"
+                    id="setupWireIndexInput"
+                    min="0"
+                    max="10"
+                    step="1"
+                  />
+                </div>
+              </div>
+
+              <div class="setup-progress-actions">
+                <button
+                  type="button"
+                  id="setupUpdateBtn"
+                  class="settings-btn settings-btn-primary"
+                >
+                  Update Stage
+                </button>
+                <button type="button" id="setupDoneBtn" class="settings-btn">
+                  Mark Setup Done
+                </button>
+                <button
+                  type="button"
+                  id="setupClearDoneBtn"
+                  class="settings-btn"
+                >
+                  Clear Setup Done
+                </button>
+                <button type="button" id="setupRefreshBtn" class="settings-btn">
+                  Refresh
+                </button>
+              </div>
+
+              <div class="setup-missing-grid">
+                <div class="setup-missing-block">
+                  <div class="setup-list-title">Missing config</div>
+                  <ul id="setupMissingConfigList" class="setup-list"></ul>
+                </div>
+                <div class="setup-missing-block">
+                  <div class="setup-list-title">Missing calibration</div>
+                  <ul id="setupMissingCalibList" class="setup-list"></ul>
+                </div>
+              </div>
+
+              <div class="setup-status-grid">
+                <div class="setup-status-card">
+                  <div class="setup-status-label">Floor</div>
+                  <div id="setupFloorStatus" class="setup-status-value">--</div>
+                </div>
+                <div class="setup-status-card">
+                  <div class="setup-status-label">Presence</div>
+                  <div id="setupPresenceStatus" class="setup-status-value">
+                    --
+                  </div>
+                </div>
+                <div class="setup-status-card">
+                  <div class="setup-status-label">Cap bank</div>
+                  <div id="setupCapStatus" class="setup-status-value">--</div>
+                </div>
+              </div>
+
+              <div class="setup-wire-grid" id="setupWireGrid"></div>
+
+              <div class="setup-reset-row">
+                <label class="setup-reset-option">
+                  <input type="checkbox" id="setupResetClearModels" />
+                  Clear models
+                </label>
+                <label class="setup-reset-option">
+                  <input type="checkbox" id="setupResetClearWire" />
+                  Clear wire params
+                </label>
+                <label class="setup-reset-option">
+                  <input type="checkbox" id="setupResetClearFloor" />
+                  Clear floor params
+                </label>
+                <button
+                  type="button"
+                  id="setupResetBtn"
+                  class="settings-btn settings-btn-danger"
+                >
+                  Reset Setup
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <section
+            class="user-modal-content zoom-box settings-card admin-credentials-card"
+          >
+            <div class="settings-card-header">
+              <div class="settings-card-title">
+                <svg
+                  class="settings-card-icon"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M12 2l7 4v6c0 5-3 9-7 10-4-1-7-5-7-10V6l7-4z"></path>
+                </svg>
+                <span>Admin Credentials</span>
+              </div>
+              <div class="settings-card-subtitle">
+                Current password is required to apply changes.
+              </div>
+            </div>
+
+            <div class="settings-form">
+              <div class="settings-field">
+                <label for="adminCurrentPassword">Current password</label>
+                <input
+                  type="password"
+                  id="adminCurrentPassword"
+                  autocomplete="current-password"
+                  placeholder="Current password"
+                />
+              </div>
+
+              <div class="settings-field">
+                <label for="adminUsername">New admin username</label>
+                <input
+                  type="text"
+                  id="adminUsername"
+                  autocomplete="username"
+                  placeholder="New admin username"
+                />
+                <div class="settings-field-hint">
+                  Leave blank to keep current.
+                </div>
+              </div>
+
+              <div class="settings-field">
+                <label for="adminPassword">New admin password</label>
+                <input
+                  type="password"
+                  id="adminPassword"
+                  autocomplete="new-password"
+                  placeholder="New admin password"
+                />
+                <div class="settings-field-hint">
+                  Leave blank to keep current.
+                </div>
+              </div>
+            </div>
+
+            <div class="settings-actions">
+              <button
+                type="button"
+                class="settings-btn settings-btn-primary"
+                onclick="saveAdminSettings('admin')"
+              >
+                <svg
+                  class="settings-btn-icon"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M20 6L9 17l-5-5"></path>
+                </svg>
+                Save
+              </button>
+              <button
+                type="button"
+                class="settings-btn"
+                onclick="resetAdminSettings('admin')"
+              >
+                <svg
+                  class="settings-btn-icon"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M3 12a9 9 0 1 0 3-6.7"></path>
+                  <polyline points="3 3 3 9 9 9"></polyline>
+                </svg>
+                Reset
+              </button>
+            </div>
+          </section>
+
+          <section
+            class="user-modal-content zoom-box settings-card wifi-station-card"
+          >
+            <div class="settings-card-header">
+              <div class="settings-card-title">
+                <svg
+                  class="settings-card-icon"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M5 12.55a11 11 0 0 1 14.08 0"></path>
+                  <path d="M8.5 15.5a6 6 0 0 1 7 0"></path>
+                  <path d="M12 20h.01"></path>
+                </svg>
+                <span>Wi-Fi Station</span>
+              </div>
+              <div class="settings-card-subtitle">
+                Network the device should join (SSID + password).
+              </div>
+            </div>
+
+            <div class="settings-form">
+              <div class="settings-field">
+                <label for="wifiSSID">Wi-Fi SSID</label>
+                <input
+                  type="text"
+                  id="wifiSSID"
+                  autocomplete="off"
+                  placeholder="Wi-Fi SSID"
+                />
+                <div class="settings-field-hint">
+                  Leave blank to keep current.
+                </div>
+              </div>
+
+              <div class="settings-field">
+                <label for="wifiPassword">Wi-Fi password</label>
+                <input
+                  type="password"
+                  id="wifiPassword"
+                  autocomplete="new-password"
+                  placeholder="Wi-Fi password"
+                />
+                <div class="settings-field-hint">
+                  Leave blank to keep current.
+                </div>
+              </div>
+            </div>
+
+            <div class="settings-actions">
+              <button
+                type="button"
+                class="settings-btn settings-btn-primary"
+                onclick="saveAdminSettings('wifi')"
+              >
+                <svg
+                  class="settings-btn-icon"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M20 6L9 17l-5-5"></path>
+                </svg>
+                Save
+              </button>
+              <button
+                type="button"
+                class="settings-btn"
+                onclick="resetAdminSettings('wifi')"
+              >
+                <svg
+                  class="settings-btn-icon"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M3 12a9 9 0 1 0 3-6.7"></path>
+                  <polyline points="3 3 3 9 9 9"></polyline>
+                </svg>
+                Reset
+              </button>
+            </div>
+          </section>
+
+          <section
+            class="user-modal-content zoom-box settings-card wifi-ap-card"
+          >
+            <div class="settings-card-header">
+              <div class="settings-card-title">
+                <svg
+                  class="settings-card-icon"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M2 12.5a13 13 0 0 1 20 0"></path>
+                  <path d="M6.5 16.5a7 7 0 0 1 11 0"></path>
+                  <path d="M12 21h.01"></path>
+                </svg>
+                <span>Wi-Fi Access Point</span>
+              </div>
+              <div class="settings-card-subtitle">
+                Hotspot name and password (AP mode).
+              </div>
+            </div>
+
+            <div class="settings-form">
+              <div class="settings-field">
+                <label for="apSSID">AP SSID</label>
+                <input
+                  type="text"
+                  id="apSSID"
+                  autocomplete="off"
+                  placeholder="AP SSID"
+                />
+                <div class="settings-field-hint">
+                  Leave blank to keep current.
+                </div>
+              </div>
+
+              <div class="settings-field">
+                <label for="apPassword">AP password</label>
+                <input
+                  type="password"
+                  id="apPassword"
+                  autocomplete="new-password"
+                  placeholder="AP password"
+                />
+                <div class="settings-field-hint">
+                  Leave blank to keep current.
+                </div>
+              </div>
+            </div>
+
+            <div class="settings-actions">
+              <button
+                type="button"
+                class="settings-btn settings-btn-primary"
+                onclick="saveApSettings()"
+              >
+                <svg
+                  class="settings-btn-icon"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M20 6L9 17l-5-5"></path>
+                </svg>
+                Save
+              </button>
+              <button
+                type="button"
+                class="settings-btn"
+                onclick="resetApSettings()"
+              >
+                <svg
+                  class="settings-btn-icon"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M3 12a9 9 0 1 0 3-6.7"></path>
+                  <polyline points="3 3 3 9 9 9"></polyline>
+                </svg>
+                Reset
+              </button>
+            </div>
+          </section>
+        </div>
+      </div>
+

@@ -154,6 +154,7 @@ bool Device::startWireTargetTest(float targetC, uint8_t wireIndex) {
         wireTargetStatus.targetC = targetC;
         wireTargetStatus.ntcTempC = NAN;
         wireTargetStatus.activeTempC = NAN;
+        wireTargetStatus.dutyFrac = 1.0f;
         wireTargetStatus.activeWire = idx;
         wireTargetStatus.packetMs = 0;
         wireTargetStatus.frameMs = 0;
@@ -204,6 +205,7 @@ bool Device::startWireTargetTest(float targetC, uint8_t wireIndex) {
                 {
                     self->wireTargetStatus.active = false;
                     self->wireTargetStatus.purpose = EnergyRunPurpose::None;
+                    self->wireTargetStatus.dutyFrac = 1.0f;
                     self->wireTargetStatus.activeWire = 0;
                     self->wireTargetStatus.packetMs = 0;
                     self->wireTargetStatus.frameMs = 0;
@@ -229,6 +231,7 @@ bool Device::startWireTargetTest(float targetC, uint8_t wireIndex) {
             {
                 wireTargetStatus.active = false;
                 wireTargetStatus.purpose = EnergyRunPurpose::None;
+                wireTargetStatus.dutyFrac = 1.0f;
                 wireTargetStatus.activeWire = 0;
                 wireTargetStatus.packetMs = 0;
                 wireTargetStatus.frameMs = 0;
@@ -245,9 +248,13 @@ bool Device::startWireTargetTest(float targetC, uint8_t wireIndex) {
 }
 
 
-bool Device::startEnergyCalibration(float targetC, uint8_t wireIndex, EnergyRunPurpose purpose) {
+bool Device::startEnergyCalibration(float targetC,
+                                    uint8_t wireIndex,
+                                    EnergyRunPurpose purpose,
+                                    float dutyFrac) {
     if (purpose != EnergyRunPurpose::ModelCal &&
-        purpose != EnergyRunPurpose::NtcCal) {
+        purpose != EnergyRunPurpose::NtcCal &&
+        purpose != EnergyRunPurpose::FloorCal) {
         return false;
     }
     if (!isfinite(targetC) || targetC <= 0.0f) return false;
@@ -259,9 +266,10 @@ bool Device::startEnergyCalibration(float targetC, uint8_t wireIndex, EnergyRunP
     }
 
     uint8_t idx = resolveWireIndex(wireIndex);
-    if (purpose == EnergyRunPurpose::ModelCal ||
-        purpose == EnergyRunPurpose::NtcCal) {
+    if (purpose == EnergyRunPurpose::NtcCal) {
         idx = resolveNtcGateIndex();
+    } else if (purpose == EnergyRunPurpose::ModelCal && WIRE) {
+        WIRE->setWirePresence(idx, true);
     }
     if (idx < 1 || idx > HeaterManager::kWireCount) {
         return false;
@@ -287,6 +295,10 @@ bool Device::startEnergyCalibration(float targetC, uint8_t wireIndex, EnergyRunP
         return false;
     }
 
+    float duty = dutyFrac;
+    if (!isfinite(duty) || duty <= 0.0f) duty = 1.0f;
+    if (duty > 1.0f) duty = 1.0f;
+
     if (controlMtx && xSemaphoreTake(controlMtx, pdMS_TO_TICKS(50)) == pdTRUE) {
         if (wireTargetStatus.active) {
             xSemaphoreGive(controlMtx);
@@ -298,6 +310,7 @@ bool Device::startEnergyCalibration(float targetC, uint8_t wireIndex, EnergyRunP
         wireTargetStatus.targetC = targetC;
         wireTargetStatus.ntcTempC = NAN;
         wireTargetStatus.activeTempC = NAN;
+        wireTargetStatus.dutyFrac = duty;
         wireTargetStatus.activeWire = idx;
         wireTargetStatus.packetMs = 0;
         wireTargetStatus.frameMs = 0;
@@ -348,6 +361,7 @@ bool Device::startEnergyCalibration(float targetC, uint8_t wireIndex, EnergyRunP
                 {
                     self->wireTargetStatus.active = false;
                     self->wireTargetStatus.purpose = EnergyRunPurpose::None;
+                    self->wireTargetStatus.dutyFrac = 1.0f;
                     self->wireTargetStatus.activeWire = 0;
                     self->wireTargetStatus.packetMs = 0;
                     self->wireTargetStatus.frameMs = 0;
@@ -373,6 +387,7 @@ bool Device::startEnergyCalibration(float targetC, uint8_t wireIndex, EnergyRunP
             {
                 wireTargetStatus.active = false;
                 wireTargetStatus.purpose = EnergyRunPurpose::None;
+                wireTargetStatus.dutyFrac = 1.0f;
                 wireTargetStatus.activeWire = 0;
                 wireTargetStatus.packetMs = 0;
                 wireTargetStatus.frameMs = 0;
@@ -400,6 +415,7 @@ void Device::stopWireTargetTest() {
         wireTargetStatus.targetC = NAN;
         wireTargetStatus.ntcTempC = NAN;
         wireTargetStatus.activeTempC = NAN;
+        wireTargetStatus.dutyFrac = 1.0f;
         wireTargetStatus.activeWire = 0;
         wireTargetStatus.packetMs = 0;
         wireTargetStatus.frameMs = 0;
@@ -419,7 +435,8 @@ void Device::stopWireTargetTest() {
     if (wasActive &&
         (purpose == EnergyRunPurpose::WireTest ||
          purpose == EnergyRunPurpose::ModelCal ||
-         purpose == EnergyRunPurpose::NtcCal)) {
+         purpose == EnergyRunPurpose::NtcCal ||
+         purpose == EnergyRunPurpose::FloorCal)) {
         if (getState() == DeviceState::Running) {
             setLastStopReason("Targeted run stopped");
             if (indicator) indicator->clearAll();
@@ -469,6 +486,55 @@ Device::AmbientWaitStatus Device::getAmbientWaitStatus() const {
         out = ambientWaitStatus;
     }
     return out;
+}
+
+bool Device::confirmWiresCool() {
+    if (getState() == DeviceState::Running) {
+        return false;
+    }
+
+    if (controlMtx == nullptr) {
+        controlMtx = xSemaphoreCreateMutex();
+    }
+
+    const uint32_t nowMs = millis();
+    if (controlMtx && xSemaphoreTake(controlMtx, pdMS_TO_TICKS(25)) == pdTRUE) {
+        wiresCoolConfirmed = true;
+        wiresCoolConfirmMs = nowMs;
+        xSemaphoreGive(controlMtx);
+    } else {
+        wiresCoolConfirmed = true;
+        wiresCoolConfirmMs = nowMs;
+    }
+    return true;
+}
+
+bool Device::consumeWiresCoolConfirmation() {
+    bool confirmed = false;
+    if (controlMtx && xSemaphoreTake(controlMtx, pdMS_TO_TICKS(25)) == pdTRUE) {
+        confirmed = wiresCoolConfirmed;
+        wiresCoolConfirmed = false;
+        wiresCoolConfirmMs = 0;
+        xSemaphoreGive(controlMtx);
+    } else {
+        confirmed = wiresCoolConfirmed;
+        wiresCoolConfirmed = false;
+        wiresCoolConfirmMs = 0;
+    }
+    return confirmed;
+}
+
+bool Device::isWiresCoolConfirmed() const {
+    bool confirmed = false;
+    if (const_cast<Device*>(this)->controlMtx &&
+        xSemaphoreTake(const_cast<Device*>(this)->controlMtx, pdMS_TO_TICKS(25)) == pdTRUE)
+    {
+        confirmed = wiresCoolConfirmed;
+        xSemaphoreGive(const_cast<Device*>(this)->controlMtx);
+    } else {
+        confirmed = wiresCoolConfirmed;
+    }
+    return confirmed;
 }
 
 void Device::setAmbientWaitStatus(bool active, float tolC, const char* reason) {
@@ -546,8 +612,8 @@ void Device::controlTask() {
         float floorTempC = NAN;
         float floorWireTargetC = NAN;
 
-        if (floorActive && tempSensor) {
-            floorTempC = tempSensor->getHeatsinkTemp();
+        if (floorActive && NTC) {
+            floorTempC = NTC->getLastTempC();
         }
 
         if (floorActive) {

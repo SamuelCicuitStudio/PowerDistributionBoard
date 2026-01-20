@@ -1,7 +1,7 @@
-ESP32Async/ESPAsyncWebServer
-arduino-libraries/NTPClient@^3.2.1
 paulstoffregen/Time@^1.6.1
-ESP32Async/AsyncTCP
-paulstoffregen/OneWire@^2.3.8
 milesburton/DallasTemperature@^4.0.4
-bblanchon/ArduinoJson@^7.2.0
+arduino-libraries/NTPClient@^3.2.1
+soburi/TinyCBOR@^0.5.3-arduino2
+https://github.com/philbowles/ESPAsyncWebServer.git
+paulstoffregen/OneWire@^2.3.8
+https://github.com/philbowles/AsyncTCP.git
