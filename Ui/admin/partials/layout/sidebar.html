@@ -1,0 +1,178 @@
+<button class="tab is-active" type="button" data-tab="dashboard">
+  <svg
+    class="tab-icon"
+    viewBox="0 0 24 24"
+    aria-hidden="true"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
+    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+    <line x1="3" y1="9" x2="21" y2="9"></line>
+    <line x1="9" y1="21" x2="9" y2="9"></line>
+  </svg>
+  <span class="tab-label">Dashboard</span>
+</button>
+
+<button class="tab" type="button" data-tab="user">
+  <svg
+    class="tab-icon"
+    viewBox="0 0 24 24"
+    aria-hidden="true"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
+    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+    <circle cx="12" cy="7" r="4"></circle>
+  </svg>
+  <span class="tab-label">User</span>
+</button>
+
+<button class="tab" type="button" data-tab="control">
+  <svg
+    class="tab-icon"
+    viewBox="0 0 24 24"
+    aria-hidden="true"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
+    <line x1="4" y1="21" x2="4" y2="14"></line>
+    <line x1="4" y1="10" x2="4" y2="3"></line>
+    <line x1="12" y1="21" x2="12" y2="12"></line>
+    <line x1="12" y1="8" x2="12" y2="3"></line>
+    <line x1="20" y1="21" x2="20" y2="16"></line>
+    <line x1="20" y1="12" x2="20" y2="3"></line>
+    <line x1="1" y1="14" x2="7" y2="14"></line>
+    <line x1="9" y1="8" x2="15" y2="8"></line>
+    <line x1="17" y1="16" x2="23" y2="16"></line>
+  </svg>
+  <span class="tab-label">Control</span>
+</button>
+
+<button class="tab" type="button" data-tab="admin">
+  <svg
+    class="tab-icon"
+    viewBox="0 0 24 24"
+    aria-hidden="true"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
+    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+  </svg>
+  <span class="tab-label">Admin</span>
+</button>
+
+<button class="tab" type="button" data-tab="device">
+  <svg
+    class="tab-icon"
+    viewBox="0 0 24 24"
+    aria-hidden="true"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
+    <rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect>
+    <rect x="9" y="9" width="6" height="6"></rect>
+    <line x1="9" y1="1" x2="9" y2="4"></line>
+    <line x1="15" y1="1" x2="15" y2="4"></line>
+    <line x1="9" y1="20" x2="9" y2="23"></line>
+    <line x1="15" y1="20" x2="15" y2="23"></line>
+    <line x1="20" y1="9" x2="23" y2="9"></line>
+    <line x1="20" y1="14" x2="23" y2="14"></line>
+    <line x1="1" y1="9" x2="4" y2="9"></line>
+    <line x1="1" y1="14" x2="4" y2="14"></line>
+  </svg>
+  <span class="tab-label">Device</span>
+</button>
+
+<button class="tab" type="button" data-tab="live">
+  <svg
+    class="tab-icon"
+    viewBox="0 0 24 24"
+    aria-hidden="true"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
+    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+  </svg>
+  <span class="tab-label">Live</span>
+</button>
+
+<div class="sidebar-controls-vertical" aria-label="Quick actions">
+  <button class="round-button mute" type="button" aria-pressed="false">
+    <svg
+      class="round-icon"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    >
+      <path d="M11 5L6 9H2v6h4l5 4V5z"></path>
+      <line x1="23" y1="9" x2="17" y2="15"></line>
+      <line x1="17" y1="9" x2="23" y2="15"></line>
+    </svg>
+  </button>
+
+  <button class="power-button state-off" type="button">
+    <span class="ring" aria-hidden="true"></span>
+    <span class="label">OFF</span>
+  </button>
+
+  <button
+    class="round-button reset"
+    type="button"
+    aria-label="Reset"
+    data-sidebar-action="reset"
+  >
+    <svg
+      class="round-icon"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2.2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    >
+      <path d="M21 12a9 9 0 1 1-3-6.7"></path>
+      <path d="M21 3v6h-6"></path>
+    </svg>
+  </button>
+
+  <button class="round-button restart" type="button" aria-label="Restart">
+    <svg
+      class="round-icon"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2.2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    >
+      <polyline points="23 4 23 10 17 10"></polyline>
+      <polyline points="1 20 1 14 7 14"></polyline>
+      <path d="M3.5 9a9 9 0 0 1 14.1-3.4L23 10"></path>
+      <path d="M20.5 15a9 9 0 0 1-14.1 3.4L1 14"></path>
+    </svg>
+  </button>
+</div>

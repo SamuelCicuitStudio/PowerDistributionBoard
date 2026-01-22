@@ -1,0 +1,106 @@
+<section class="user-tab" aria-label="User settings">
+  <div class="user-card" aria-label="Account settings">
+    <div class="user-card-inner">
+      <div class="user-header">
+        <div class="user-header-icon" aria-hidden="true">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M20 21a8 8 0 0 0-16 0"></path>
+            <circle cx="12" cy="8" r="4"></circle>
+          </svg>
+        </div>
+        <div>
+          <h2>Account</h2>
+          <p>Update your password and device label.</p>
+        </div>
+      </div>
+
+      <form class="user-form" data-user-form autocomplete="off">
+        <div class="user-field">
+          <label for="user-cur-pw">Current password</label>
+          <input
+            class="user-input"
+            id="user-cur-pw"
+            type="password"
+            placeholder="Current password"
+          />
+        </div>
+
+        <div class="user-field">
+          <label for="user-new-pw">New password</label>
+          <input
+            class="user-input"
+            id="user-new-pw"
+            type="password"
+            placeholder="New password"
+          />
+        </div>
+
+        <div class="user-field">
+          <label for="user-device-id">Device ID</label>
+          <input
+            class="user-input"
+            id="user-device-id"
+            type="text"
+            value="PDB-T37H6-911N0"
+            readonly
+            aria-readonly="true"
+            data-user-device-id
+          />
+          <div class="user-hint">
+            Used as the device name/label (may require reconnect).
+          </div>
+        </div>
+
+        <div class="user-actions">
+          <div data-include="admin/partials/components/btn-save.html"></div>
+          <div data-include="admin/partials/components/btn-reset.html"></div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="user-card" aria-label="Output access">
+    <div class="user-card-inner">
+      <div class="user-header">
+        <div class="user-header-icon" aria-hidden="true">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M12 2v2"></path>
+            <path d="M12 20v2"></path>
+            <path d="M4.93 4.93l1.41 1.41"></path>
+            <path d="M17.66 17.66l1.41 1.41"></path>
+            <path d="M2 12h2"></path>
+            <path d="M20 12h2"></path>
+            <path d="M4.93 19.07l1.41-1.41"></path>
+            <path d="M17.66 6.34l1.41-1.41"></path>
+            <circle cx="12" cy="12" r="3.2"></circle>
+          </svg>
+        </div>
+        <div>
+          <h2>Output Access</h2>
+          <p>Select which outputs the loop/calibration is allowed to use.</p>
+        </div>
+      </div>
+
+      <div
+        class="user-access-list"
+        data-output-list
+        role="list"
+        aria-label="Output allow list"
+      ></div>
+    </div>
+  </div>
+</section>

@@ -1,0 +1,291 @@
+<div class="live-chart">
+  <div class="live-chart-meta">
+    <span class="chart-pill setpoint">
+      Setpoint
+      <span class="chart-temp" data-live-setpoint>--&deg;C</span>
+    </span>
+    <div class="chart-wire-list" data-live-wire-list>
+      <span class="chart-pill wire" data-wire="1" data-live-wire="1">
+        Wire 1
+        <span class="chart-temp" data-live-wire-temp="1">--&deg;C</span>
+      </span>
+      <span class="chart-pill wire" data-wire="2" data-live-wire="2">
+        Wire 2
+        <span class="chart-temp" data-live-wire-temp="2">--&deg;C</span>
+      </span>
+      <span class="chart-pill wire" data-wire="3" data-live-wire="3">
+        Wire 3
+        <span class="chart-temp" data-live-wire-temp="3">--&deg;C</span>
+      </span>
+      <span class="chart-pill wire" data-wire="4" data-live-wire="4">
+        Wire 4
+        <span class="chart-temp" data-live-wire-temp="4">--&deg;C</span>
+      </span>
+      <span class="chart-pill wire" data-wire="5" data-live-wire="5">
+        Wire 5
+        <span class="chart-temp" data-live-wire-temp="5">--&deg;C</span>
+      </span>
+      <span class="chart-pill wire" data-wire="6" data-live-wire="6">
+        Wire 6
+        <span class="chart-temp" data-live-wire-temp="6">--&deg;C</span>
+      </span>
+      <span class="chart-pill wire" data-wire="7" data-live-wire="7">
+        Wire 7
+        <span class="chart-temp" data-live-wire-temp="7">--&deg;C</span>
+      </span>
+      <span class="chart-pill wire" data-wire="8" data-live-wire="8">
+        Wire 8
+        <span class="chart-temp" data-live-wire-temp="8">--&deg;C</span>
+      </span>
+      <span class="chart-pill wire" data-wire="9" data-live-wire="9">
+        Wire 9
+        <span class="chart-temp" data-live-wire-temp="9">--&deg;C</span>
+      </span>
+      <span class="chart-pill wire" data-wire="10" data-live-wire="10">
+        Wire 10
+        <span class="chart-temp" data-live-wire-temp="10">--&deg;C</span>
+      </span>
+    </div>
+    <button class="chart-pill chart-action" type="button" data-live-center>
+      Center
+    </button>
+  </div>
+
+  <div class="live-chart-shell">
+    <div class="live-chart-axis">
+      <svg
+        class="live-chart-axis-svg"
+        viewBox="0 0 60 300"
+        preserveAspectRatio="none"
+        aria-hidden="true"
+      >
+        <line class="axis-line" x1="48" y1="10" x2="48" y2="265"></line>
+        <line class="axis-tick" x1="42" y1="10" x2="48" y2="10"></line>
+        <line class="axis-tick" x1="42" y1="27" x2="48" y2="27"></line>
+        <line class="axis-tick" x1="42" y1="44" x2="48" y2="44"></line>
+        <line class="axis-tick" x1="42" y1="61" x2="48" y2="61"></line>
+        <line class="axis-tick" x1="42" y1="78" x2="48" y2="78"></line>
+        <line class="axis-tick" x1="42" y1="95" x2="48" y2="95"></line>
+        <line class="axis-tick" x1="42" y1="112" x2="48" y2="112"></line>
+        <line class="axis-tick" x1="42" y1="129" x2="48" y2="129"></line>
+        <line class="axis-tick" x1="42" y1="146" x2="48" y2="146"></line>
+        <line class="axis-tick" x1="42" y1="163" x2="48" y2="163"></line>
+        <line class="axis-tick" x1="42" y1="180" x2="48" y2="180"></line>
+        <line class="axis-tick" x1="42" y1="197" x2="48" y2="197"></line>
+        <line class="axis-tick" x1="42" y1="214" x2="48" y2="214"></line>
+        <line class="axis-tick" x1="42" y1="231" x2="48" y2="231"></line>
+        <line class="axis-tick" x1="42" y1="248" x2="48" y2="248"></line>
+        <line class="axis-tick" x1="42" y1="265" x2="48" y2="265"></line>
+        <text class="axis-label" x="36" y="10">150</text>
+        <text class="axis-label" x="36" y="27">140</text>
+        <text class="axis-label" x="36" y="44">130</text>
+        <text class="axis-label" x="36" y="61">120</text>
+        <text class="axis-label" x="36" y="78">110</text>
+        <text class="axis-label" x="36" y="95">100</text>
+        <text class="axis-label" x="36" y="112">90</text>
+        <text class="axis-label" x="36" y="129">80</text>
+        <text class="axis-label" x="36" y="146">70</text>
+        <text class="axis-label" x="36" y="163">60</text>
+        <text class="axis-label" x="36" y="180">50</text>
+        <text class="axis-label" x="36" y="197">40</text>
+        <text class="axis-label" x="36" y="214">30</text>
+        <text class="axis-label" x="36" y="231">20</text>
+        <text class="axis-label" x="36" y="248">10</text>
+        <text class="axis-label" x="36" y="265">0</text>
+      </svg>
+    </div>
+
+    <div class="live-chart-scroll" data-live-scroll>
+      <svg
+        class="live-chart-svg"
+        viewBox="0 0 1200 300"
+        aria-hidden="true"
+        preserveAspectRatio="none"
+      >
+        <g class="chart-grid">
+          <line x1="0" y1="10" x2="1200" y2="10"></line>
+          <line x1="0" y1="27" x2="1200" y2="27"></line>
+          <line x1="0" y1="44" x2="1200" y2="44"></line>
+          <line x1="0" y1="61" x2="1200" y2="61"></line>
+          <line x1="0" y1="78" x2="1200" y2="78"></line>
+          <line x1="0" y1="95" x2="1200" y2="95"></line>
+          <line x1="0" y1="112" x2="1200" y2="112"></line>
+          <line x1="0" y1="129" x2="1200" y2="129"></line>
+          <line x1="0" y1="146" x2="1200" y2="146"></line>
+          <line x1="0" y1="163" x2="1200" y2="163"></line>
+          <line x1="0" y1="180" x2="1200" y2="180"></line>
+          <line x1="0" y1="197" x2="1200" y2="197"></line>
+          <line x1="0" y1="214" x2="1200" y2="214"></line>
+          <line x1="0" y1="231" x2="1200" y2="231"></line>
+          <line x1="0" y1="248" x2="1200" y2="248"></line>
+          <line x1="0" y1="265" x2="1200" y2="265"></line>
+          <line x1="0" y1="0" x2="0" y2="270"></line>
+          <line x1="80" y1="0" x2="80" y2="270"></line>
+          <line x1="160" y1="0" x2="160" y2="270"></line>
+          <line x1="240" y1="0" x2="240" y2="270"></line>
+          <line x1="320" y1="0" x2="320" y2="270"></line>
+          <line x1="400" y1="0" x2="400" y2="270"></line>
+          <line x1="480" y1="0" x2="480" y2="270"></line>
+          <line x1="560" y1="0" x2="560" y2="270"></line>
+          <line x1="640" y1="0" x2="640" y2="270"></line>
+          <line x1="720" y1="0" x2="720" y2="270"></line>
+          <line x1="800" y1="0" x2="800" y2="270"></line>
+          <line x1="880" y1="0" x2="880" y2="270"></line>
+          <line x1="960" y1="0" x2="960" y2="270"></line>
+          <line x1="1040" y1="0" x2="1040" y2="270"></line>
+          <line x1="1120" y1="0" x2="1120" y2="270"></line>
+          <line x1="1200" y1="0" x2="1200" y2="270"></line>
+        </g>
+
+        <line class="x-axis-line" x1="0" y1="265" x2="1200" y2="265"></line>
+        <g class="x-axis">
+          <line class="x-tick" x1="0" y1="265" x2="0" y2="275"></line>
+          <line class="x-tick" x1="120" y1="265" x2="120" y2="275"></line>
+          <line class="x-tick" x1="240" y1="265" x2="240" y2="275"></line>
+          <line class="x-tick" x1="360" y1="265" x2="360" y2="275"></line>
+          <line class="x-tick" x1="480" y1="265" x2="480" y2="275"></line>
+          <line class="x-tick" x1="600" y1="265" x2="600" y2="275"></line>
+          <line class="x-tick" x1="720" y1="265" x2="720" y2="275"></line>
+          <line class="x-tick" x1="840" y1="265" x2="840" y2="275"></line>
+          <line class="x-tick" x1="960" y1="265" x2="960" y2="275"></line>
+          <line class="x-tick" x1="1080" y1="265" x2="1080" y2="275"></line>
+          <text class="x-label" x="0" y="286">06:56:54</text>
+          <text class="x-label" x="120" y="286">06:57:00</text>
+          <text class="x-label" x="240" y="286">06:57:06</text>
+          <text class="x-label" x="360" y="286">06:57:12</text>
+          <text class="x-label" x="480" y="286">06:57:18</text>
+          <text class="x-label" x="600" y="286">06:57:24</text>
+          <text class="x-label" x="720" y="286">06:57:30</text>
+          <text class="x-label" x="840" y="286">06:57:36</text>
+          <text class="x-label" x="960" y="286">06:57:42</text>
+          <text class="x-label" x="1080" y="286">06:57:48</text>
+        </g>
+
+        <polyline
+          class="chart-line setpoint"
+          points="0,27 120,27 240,27 360,27 480,27 600,27 720,27 840,27 960,27 1080,27 1200,27"
+        ></polyline>
+        <polyline
+          class="chart-line wire-line wire-01"
+          data-wire="1"
+          points="0,214 120,213 240,212 360,210 480,208 600,206 720,204 840,202 960,200 1080,198 1200,196"
+        ></polyline>
+        <circle
+          class="chart-dot wire-dot wire-01"
+          data-wire="1"
+          cx="1200"
+          cy="196"
+          r="4"
+        ></circle>
+        <polyline
+          class="chart-line wire-line wire-02"
+          data-wire="2"
+          points="0,231 120,229 240,227 360,224 480,222 600,220 720,218 840,216 960,214 1080,212 1200,210"
+        ></polyline>
+        <circle
+          class="chart-dot wire-dot wire-02"
+          data-wire="2"
+          cx="1200"
+          cy="210"
+          r="4"
+        ></circle>
+        <polyline
+          class="chart-line wire-line wire-03"
+          data-wire="3"
+          points="0,204 120,203 240,202 360,200 480,198 600,196 720,194 840,192 960,190 1080,188 1200,186"
+        ></polyline>
+        <circle
+          class="chart-dot wire-dot wire-03"
+          data-wire="3"
+          cx="1200"
+          cy="186"
+          r="4"
+        ></circle>
+        <polyline
+          class="chart-line wire-line wire-04"
+          data-wire="4"
+          points="0,196 120,195 240,194 360,192 480,190 600,188 720,186 840,184 960,182 1080,180 1200,178"
+        ></polyline>
+        <circle
+          class="chart-dot wire-dot wire-04"
+          data-wire="4"
+          cx="1200"
+          cy="178"
+          r="4"
+        ></circle>
+        <polyline
+          class="chart-line wire-line wire-05"
+          data-wire="5"
+          points="0,188 120,187 240,186 360,184 480,182 600,180 720,178 840,176 960,174 1080,172 1200,170"
+        ></polyline>
+        <circle
+          class="chart-dot wire-dot wire-05"
+          data-wire="5"
+          cx="1200"
+          cy="170"
+          r="4"
+        ></circle>
+        <polyline
+          class="chart-line wire-line wire-06"
+          data-wire="6"
+          points="0,180 120,179 240,178 360,176 480,174 600,172 720,170 840,168 960,166 1080,164 1200,162"
+        ></polyline>
+        <circle
+          class="chart-dot wire-dot wire-06"
+          data-wire="6"
+          cx="1200"
+          cy="162"
+          r="4"
+        ></circle>
+        <polyline
+          class="chart-line wire-line wire-07"
+          data-wire="7"
+          points="0,172 120,171 240,170 360,168 480,166 600,164 720,162 840,160 960,158 1080,156 1200,154"
+        ></polyline>
+        <circle
+          class="chart-dot wire-dot wire-07"
+          data-wire="7"
+          cx="1200"
+          cy="154"
+          r="4"
+        ></circle>
+        <polyline
+          class="chart-line wire-line wire-08"
+          data-wire="8"
+          points="0,164 120,163 240,162 360,160 480,158 600,156 720,154 840,152 960,150 1080,148 1200,146"
+        ></polyline>
+        <circle
+          class="chart-dot wire-dot wire-08"
+          data-wire="8"
+          cx="1200"
+          cy="146"
+          r="4"
+        ></circle>
+        <polyline
+          class="chart-line wire-line wire-09"
+          data-wire="9"
+          points="0,156 120,155 240,154 360,152 480,150 600,148 720,146 840,144 960,142 1080,140 1200,138"
+        ></polyline>
+        <circle
+          class="chart-dot wire-dot wire-09"
+          data-wire="9"
+          cx="1200"
+          cy="138"
+          r="4"
+        ></circle>
+        <polyline
+          class="chart-line wire-line wire-10"
+          data-wire="10"
+          points="0,148 120,147 240,146 360,144 480,142 600,140 720,138 840,136 960,134 1080,132 1200,130"
+        ></polyline>
+        <circle
+          class="chart-dot wire-dot wire-10"
+          data-wire="10"
+          cx="1200"
+          cy="130"
+          r="4"
+        ></circle>
+      </svg>
+    </div>
+  </div>
+</div>

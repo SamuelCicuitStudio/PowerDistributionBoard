@@ -1,0 +1,223 @@
+.sidebar {
+  width: var(--sidebar-w);
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  background: radial-gradient(circle at top, rgba(0, 255, 174, 0.06), transparent),
+    var(--panel2);
+  box-shadow: inset -1px 0 0 rgba(0, 255, 174, 0.12);
+  overflow: auto;
+  padding-bottom: 22px;
+}
+
+.tab {
+  appearance: none;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-left: none;
+  background: radial-gradient(
+      circle at left top,
+      rgba(0, 255, 174, 0.06),
+      transparent
+    ),
+    rgba(255, 255, 255, 0.01);
+  color: rgba(233, 254, 247, 0.95);
+  border-radius: 12px;
+  padding: 12px 16px;
+  margin: 6px 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+  font-size: 15px;
+  cursor: pointer;
+  transition: transform 0.08s ease, background 0.2s ease, border-color 0.2s ease,
+    box-shadow 0.2s ease, color 0.2s ease;
+  position: relative;
+}
+
+.tab:hover {
+  background: radial-gradient(
+      circle at left top,
+      rgba(0, 255, 174, 0.12),
+      transparent
+    ),
+    rgba(10, 16, 18, 0.98);
+  box-shadow: 0 0 14px rgba(0, 255, 180, 0.18) inset;
+  transform: translateY(-1px);
+}
+
+.tab:active {
+  transform: translateY(0);
+}
+
+.tab:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(0, 255, 174, 0.22),
+    0 0 10px rgba(0, 255, 174, 0.25) inset;
+}
+
+.tab.is-active {
+  color: var(--accent);
+  border-color: rgba(0, 255, 174, 0.42);
+  background: radial-gradient(circle at top, rgba(0, 255, 174, 0.16), transparent),
+    radial-gradient(circle at bottom, rgba(0, 119, 255, 0.08), transparent),
+    rgba(4, 6, 8, 0.98);
+  box-shadow: 0 0 20px rgba(0, 255, 174, 0.35),
+    0 0 12px rgba(0, 255, 174, 0.2) inset;
+}
+
+.tab.is-active::after {
+  content: "";
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 6px;
+  height: 2px;
+  border-radius: 2px;
+  background: radial-gradient(
+    80% 120% at 50% 50%,
+    rgba(0, 255, 174, 0.9),
+    rgba(0, 255, 174, 0.16)
+  );
+  pointer-events: none;
+}
+
+.tab-icon {
+  width: 16px;
+  height: 16px;
+  opacity: 0.9;
+  flex: 0 0 auto;
+  filter: drop-shadow(0 0 3px rgba(0, 255, 174, 0.25));
+}
+
+.tab-label {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.sidebar-controls-vertical {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+}
+
+.round-button {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: radial-gradient(circle at top, rgba(0, 255, 174, 0.08), transparent),
+    rgba(5, 7, 9, 0.98);
+  border: 2px solid rgba(0, 255, 174, 0.16);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  box-shadow: 0 0 12px rgba(0, 255, 180, 0.25);
+  transition: box-shadow 0.35s ease, transform 0.2s ease,
+    border-color 0.3s ease, background 0.3s ease;
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.round-icon {
+  width: 22px;
+  height: 22px;
+  filter: drop-shadow(0 0 3px rgba(0, 0, 0, 0.35))
+    drop-shadow(0 0 6px currentColor);
+  opacity: 0.92;
+}
+
+.round-button:hover {
+  box-shadow: 0 0 20px rgba(0, 255, 180, 0.5),
+    0 0 10px rgba(0, 255, 180, 0.22) inset;
+  transform: scale(1.05);
+  border-color: rgba(0, 255, 174, 0.4);
+}
+
+.round-button:active {
+  transform: scale(1.01);
+}
+
+.round-button.is-pulse {
+  transform: scale(1.03);
+  box-shadow: 0 0 22px rgba(0, 255, 180, 0.4),
+    0 0 10px rgba(0, 255, 180, 0.18) inset;
+}
+
+.round-button.mute.is-muted {
+  border-color: rgba(255, 80, 80, 0.35);
+  box-shadow: 0 0 12px rgba(255, 80, 80, 0.22);
+  color: rgba(255, 180, 180, 0.9);
+}
+
+.round-button.mute:not(.is-muted) line {
+  opacity: 0;
+}
+
+.round-button.reset {
+  color: rgba(0, 119, 255, 0.92);
+  box-shadow: 0 0 12px rgba(0, 255, 180, 0.25), 0 0 12px rgba(0, 119, 255, 0.12);
+}
+
+.round-button.reset:hover {
+  box-shadow: 0 0 20px rgba(0, 255, 180, 0.5),
+    0 0 10px rgba(0, 255, 180, 0.22) inset, 0 0 18px rgba(0, 119, 255, 0.18);
+}
+
+.round-button.restart {
+  color: rgba(255, 179, 71, 0.95);
+  box-shadow: 0 0 12px rgba(0, 255, 180, 0.25), 0 0 12px rgba(255, 179, 71, 0.12);
+}
+
+.round-button.restart:hover {
+  box-shadow: 0 0 20px rgba(0, 255, 180, 0.5),
+    0 0 10px rgba(0, 255, 180, 0.22) inset, 0 0 18px rgba(255, 179, 71, 0.18);
+}
+
+.power-button {
+  position: relative;
+  width: 70px;
+  height: 70px;
+  border: 0;
+  outline: 0;
+  border-radius: 999px;
+  background: radial-gradient(circle at center, rgba(0, 255, 174, 0.18), transparent),
+    rgba(5, 7, 9, 0.98);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.75), 0 0 16px rgba(0, 255, 174, 0.32);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: transform 0.12s ease, box-shadow 0.2s ease;
+  color: var(--err);
+}
+
+.power-button:active {
+  transform: scale(0.98);
+}
+
+.power-button .ring {
+  position: absolute;
+  inset: 6px;
+  border-radius: 999px;
+  border: 3px solid currentColor;
+  filter: drop-shadow(0 0 5px currentColor);
+}
+
+.power-button .label {
+  font-size: 10px;
+  letter-spacing: 0.6px;
+  opacity: 0.85;
+}
+
+.power-button.state-off {
+  color: var(--err);
+}
+
+.power-button.state-idle {
+  color: var(--warn);
+}
+
+.power-button.state-ready {
+  color: var(--accent);
+}

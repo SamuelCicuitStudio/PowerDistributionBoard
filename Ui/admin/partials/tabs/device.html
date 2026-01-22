@@ -1,0 +1,487 @@
+<section class="device-tab" aria-label="Device settings">
+  <div class="device-card">
+    <div class="device-card-inner">
+      <div class="device-header">
+        <div class="device-header-icon" aria-hidden="true">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M12 1v2"></path>
+            <path d="M12 21v2"></path>
+            <path d="M4.22 4.22l1.42 1.42"></path>
+            <path d="M18.36 18.36l1.42 1.42"></path>
+            <path d="M1 12h2"></path>
+            <path d="M21 12h2"></path>
+            <path d="M4.22 19.78l1.42-1.42"></path>
+            <path d="M18.36 5.64l1.42-1.42"></path>
+            <circle cx="12" cy="12" r="4"></circle>
+          </svg>
+        </div>
+        <div>
+          <h2>Device Settings</h2>
+          <p>Sampling, safety, floor, and nichrome parameters.</p>
+        </div>
+      </div>
+
+      <div class="device-grid">
+        <section class="device-col device-col--left" aria-label="Device settings left">
+          <div class="device-group device-group--power">
+            <h3 class="device-group-title">
+              <span class="device-group-icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z"></path>
+                </svg>
+              </span>
+              <span>Sampling &amp; Power</span>
+            </h3>
+            <div class="device-fields">
+              <div class="device-field">
+                <label for="acFrequency">Sampling Rate</label>
+                <div class="input-with-unit">
+                  <input
+                    class="device-input"
+                    id="acFrequency"
+                    type="number"
+                    min="50"
+                    max="500"
+                  />
+                  <span class="device-unit">Hz</span>
+                </div>
+              </div>
+
+              <div class="device-field">
+                <label for="chargeResistor">Charge Resistor</label>
+                <div class="input-with-unit">
+                  <input class="device-input" id="chargeResistor" type="number" />
+                  <span class="device-unit">Ohm</span>
+                </div>
+              </div>
+
+              <div class="device-field">
+                <label for="currLimit">Current Trip Limit</label>
+                <div class="input-with-unit">
+                  <input
+                    class="device-input"
+                    id="currLimit"
+                    type="number"
+                    step="0.1"
+                  />
+                  <span class="device-unit">A</span>
+                </div>
+              </div>
+
+              <div class="device-field device-field--full">
+                <label for="currentSource">Current Source</label>
+                <select class="device-select" id="currentSource">
+                  <option value="1">ACS Sensor</option>
+                  <option value="0">CSP Discharge Estimate</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div class="device-group device-group--safety">
+            <h3 class="device-group-title">
+              <span class="device-group-icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                  <path d="M12 8v5"></path>
+                  <path d="M12 16h.01"></path>
+                </svg>
+              </span>
+              <span>Thermal Safety</span>
+            </h3>
+            <div class="device-fields">
+              <div class="device-field">
+                <label for="tempWarnC">Temp Warning</label>
+                <div class="input-with-unit">
+                  <input
+                    class="device-input"
+                    id="tempWarnC"
+                    type="number"
+                    step="0.1"
+                  />
+                  <span class="device-unit">C</span>
+                </div>
+              </div>
+
+              <div class="device-field">
+                <label for="tempTripC">Temp Trip (Shutdown)</label>
+                <div class="input-with-unit">
+                  <input
+                    class="device-input"
+                    id="tempTripC"
+                    type="number"
+                    step="0.1"
+                  />
+                  <span class="device-unit">C</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="device-group device-group--model">
+            <h3 class="device-group-title">
+              <span class="device-group-icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <rect x="4" y="4" width="16" height="16" rx="2"></rect>
+                  <path d="M4 10h16"></path>
+                  <path d="M10 4v16"></path>
+                </svg>
+              </span>
+              <span>Thermal Model</span>
+            </h3>
+            <div class="device-fields">
+              <div class="device-field device-field--full">
+                <label for="modelParamTarget">Model Target</label>
+                <select class="device-select" id="modelParamTarget">
+                  <option value="wire1">Wire 1</option>
+                  <option value="wire2">Wire 2</option>
+                  <option value="wire3">Wire 3</option>
+                  <option value="wire4">Wire 4</option>
+                  <option value="wire5">Wire 5</option>
+                  <option value="wire6">Wire 6</option>
+                  <option value="wire7">Wire 7</option>
+                  <option value="wire8">Wire 8</option>
+                  <option value="wire9">Wire 9</option>
+                  <option value="wire10">Wire 10</option>
+                  <option value="floor">Floor</option>
+                </select>
+              </div>
+
+              <div class="device-field">
+                <label for="modelTau">Tau</label>
+                <div class="input-with-unit">
+                  <input class="device-input" id="modelTau" type="number" step="0.01" />
+                  <span class="device-unit">s</span>
+                </div>
+              </div>
+
+              <div class="device-field">
+                <label for="modelK">K Loss</label>
+                <div class="input-with-unit">
+                  <input class="device-input" id="modelK" type="number" step="0.001" />
+                  <span class="device-unit">W/K</span>
+                </div>
+              </div>
+
+              <div class="device-field">
+                <label for="modelC">Thermal C</label>
+                <div class="input-with-unit">
+                  <input class="device-input" id="modelC" type="number" step="0.01" />
+                  <span class="device-unit">J/K</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="device-group device-group--ntc">
+            <h3 class="device-group-title">
+              <span class="device-group-icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M14 14.76V3.5a2 2 0 0 0-4 0v11.26"></path>
+                  <circle cx="12" cy="17" r="4"></circle>
+                </svg>
+              </span>
+              <span>NTC Parameters</span>
+            </h3>
+            <div class="device-fields">
+              <div class="device-field">
+                <label for="ntcBeta">Beta</label>
+                <input class="device-input" id="ntcBeta" type="number" min="1" step="1" />
+              </div>
+              <div class="device-field">
+                <label for="ntcT0C">T0</label>
+                <input class="device-input" id="ntcT0C" type="number" step="0.1" />
+              </div>
+              <div class="device-field">
+                <label for="ntcR0">R0 / R25</label>
+                <input class="device-input" id="ntcR0" type="number" step="1" />
+              </div>
+              <div class="device-field">
+                <label for="ntcFixedRes">Fixed Pull-up Resistor</label>
+                <input class="device-input" id="ntcFixedRes" type="number" step="1" />
+              </div>
+            </div>
+          </div>
+
+          <div class="device-group device-group--presence">
+            <h3 class="device-group-title">
+              <span class="device-group-icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <circle cx="12" cy="12" r="9"></circle>
+                  <path d="M12 7v5"></path>
+                  <path d="M12 16h.01"></path>
+                </svg>
+              </span>
+              <span>Presence</span>
+            </h3>
+            <div class="device-fields">
+              <div class="device-field device-field--full">
+                <label for="presenceMinDropV">Presence Min Voltage Drop</label>
+                <div class="input-with-unit">
+                  <input
+                    class="device-input"
+                    id="presenceMinDropV"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                  />
+                  <span class="device-unit">V</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="device-col device-col--right" aria-label="Device settings right">
+          <div class="device-group device-group--floor">
+            <h3 class="device-group-title">
+              <span class="device-group-icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <rect x="3" y="3" width="18" height="6" rx="2"></rect>
+                  <rect x="3" y="10" width="18" height="6" rx="2"></rect>
+                  <rect x="3" y="17" width="18" height="4" rx="2"></rect>
+                </svg>
+              </span>
+              <span>Floor Settings</span>
+            </h3>
+            <div class="device-fields">
+              <div class="device-field">
+                <label for="floorThicknessMm">Floor Thickness (20-50 mm)</label>
+                <div class="input-with-unit">
+                  <input
+                    class="device-input"
+                    id="floorThicknessMm"
+                    type="number"
+                    min="20"
+                    max="50"
+                    step="0.1"
+                  />
+                  <span class="device-unit">mm</span>
+                </div>
+              </div>
+
+              <div class="device-field">
+                <label for="nichromeFinalTempC">Nichrome Final Temp</label>
+                <div class="input-with-unit">
+                  <input
+                    class="device-input"
+                    id="nichromeFinalTempC"
+                    type="number"
+                    step="0.1"
+                  />
+                  <span class="device-unit">C</span>
+                </div>
+              </div>
+
+              <div class="device-field">
+                <label for="ntcGateIndex">NTC Linked Channel</label>
+                <input
+                  class="device-input"
+                  id="ntcGateIndex"
+                  type="number"
+                  min="1"
+                  max="10"
+                  step="1"
+                />
+              </div>
+
+              <div class="device-field device-field--full">
+                <label for="floorMaterial">Floor Material</label>
+                <select class="device-select" id="floorMaterial">
+                  <option value="wood">Wood</option>
+                  <option value="epoxy">Epoxy</option>
+                  <option value="concrete">Concrete</option>
+                  <option value="slate">Slate</option>
+                  <option value="marble">Marble</option>
+                  <option value="granite">Granite</option>
+                </select>
+              </div>
+
+              <div class="device-field">
+                <label for="floorMaxC">Max Floor Temp (<= 35 C)</label>
+                <div class="input-with-unit">
+                  <input
+                    class="device-input"
+                    id="floorMaxC"
+                    type="number"
+                    max="35"
+                    step="0.1"
+                  />
+                  <span class="device-unit">C</span>
+                </div>
+              </div>
+
+              <div class="device-field">
+                <label for="floorSwitchMarginC">Floor Switch Margin</label>
+                <div class="input-with-unit">
+                  <input
+                    class="device-input"
+                    id="floorSwitchMarginC"
+                    type="number"
+                    step="0.1"
+                  />
+                  <span class="device-unit">C</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="device-group device-group--nichrome">
+            <h3 class="device-group-title">
+              <span class="device-group-icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M12 2c0 4-2 6-2 8a3 3 0 0 0 6 0c0-2-2-4-2-8"></path>
+                  <path d="M8.5 14.5C7.3 15.7 7 17 7 18a5 5 0 0 0 10 0c0-1-.3-2.3-1.5-3.5"></path>
+                </svg>
+              </span>
+              <span>Nichrome Calibration</span>
+            </h3>
+            <div class="nichrome-grid">
+              <div class="device-field device-field--full">
+                <label for="wireOhmPerM">Wire Resistivity (Ohm/m)</label>
+                <input
+                  class="device-input"
+                  id="wireOhmPerM"
+                  type="number"
+                  step="0.01"
+                />
+              </div>
+              <div class="device-field">
+                <label for="r01ohm">R01 (Ohm)</label>
+                <input class="device-input" id="r01ohm" type="number" step="0.1" />
+              </div>
+              <div class="device-field">
+                <label for="r02ohm">R02 (Ohm)</label>
+                <input class="device-input" id="r02ohm" type="number" step="0.1" />
+              </div>
+              <div class="device-field">
+                <label for="r03ohm">R03 (Ohm)</label>
+                <input class="device-input" id="r03ohm" type="number" step="0.1" />
+              </div>
+              <div class="device-field">
+                <label for="r04ohm">R04 (Ohm)</label>
+                <input class="device-input" id="r04ohm" type="number" step="0.1" />
+              </div>
+              <div class="device-field">
+                <label for="r05ohm">R05 (Ohm)</label>
+                <input class="device-input" id="r05ohm" type="number" step="0.1" />
+              </div>
+              <div class="device-field">
+                <label for="r06ohm">R06 (Ohm)</label>
+                <input class="device-input" id="r06ohm" type="number" step="0.1" />
+              </div>
+              <div class="device-field">
+                <label for="r07ohm">R07 (Ohm)</label>
+                <input class="device-input" id="r07ohm" type="number" step="0.1" />
+              </div>
+              <div class="device-field">
+                <label for="r08ohm">R08 (Ohm)</label>
+                <input class="device-input" id="r08ohm" type="number" step="0.1" />
+              </div>
+              <div class="device-field">
+                <label for="r09ohm">R09 (Ohm)</label>
+                <input class="device-input" id="r09ohm" type="number" step="0.1" />
+              </div>
+              <div class="device-field">
+                <label for="r10ohm">R10 (Ohm)</label>
+                <input class="device-input" id="r10ohm" type="number" step="0.1" />
+              </div>
+            </div>
+          </div>
+
+          <div class="device-group device-group--energy">
+            <h3 class="device-group-title">
+              <span class="device-group-icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                </svg>
+              </span>
+              <span>Energy Control</span>
+            </h3>
+            <div class="device-fields">
+              <div class="device-field device-field--full">
+                <label for="wireGauge">Wire Gauge (AWG)</label>
+                <input
+                  class="device-input"
+                  id="wireGauge"
+                  type="number"
+                  min="1"
+                  max="40"
+                  step="1"
+                />
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <div class="device-actions">
+        <div data-include="admin/partials/components/btn-save.html"></div>
+        <div data-include="admin/partials/components/btn-reset.html"></div>
+      </div>
+    </div>
+  </div>
+</section>

@@ -1,0 +1,44 @@
+.status-toast {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--statusbar-h, 48px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 16px;
+  text-align: center;
+  font-size: 12px;
+  letter-spacing: 0.2px;
+  opacity: 0;
+  transform: translateY(-110%);
+  transition:
+    opacity 0.25s ease,
+    transform 0.25s ease;
+  pointer-events: none;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.status-toast.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.status-toast[data-state="success"] {
+  color: var(--accent);
+  background: rgba(0, 255, 174, 0.18);
+}
+
+.status-toast[data-state="error"] {
+  color: var(--err);
+  background: rgba(255, 80, 80, 0.2);
+}
+
+.status-toast-text {
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.35);
+}

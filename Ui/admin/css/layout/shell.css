@@ -1,0 +1,36 @@
+.app-stage {
+  --app-scale: min(
+    1,
+    calc((100vw - 48px) / var(--APP_W)),
+    calc((100vh - 48px) / var(--APP_H))
+  );
+  width: 100vw;
+  height: 100vh;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  padding: 24px;
+}
+
+.ui-container {
+  width: calc(var(--APP_W) * var(--app-scale));
+  height: calc(var(--APP_H) * var(--app-scale));
+  position: relative;
+  display: block;
+  overflow: hidden;
+  border-radius: var(--r-lg);
+  background: var(--panel);
+  border: 1px solid rgba(0, 255, 174, 0.08);
+  box-shadow:
+    var(--shadow-lg),
+    0 0 18px rgba(0, 255, 174, 0.04);
+  backdrop-filter: blur(14px);
+}
+
+.ui-inner {
+  width: var(--APP_W);
+  height: var(--APP_H);
+  display: flex;
+  transform: scale(var(--app-scale));
+  transform-origin: top left;
+}

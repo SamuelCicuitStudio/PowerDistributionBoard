@@ -1,0 +1,227 @@
+<div class="statusbar-left">
+  <div
+    class="status-pill status-indicator"
+    data-state="ok"
+    data-sb="indicator"
+    aria-label="Device status"
+  >
+    <span class="status-dot" aria-hidden="true"></span>
+  </div>
+
+  <div
+    class="status-pill"
+    data-state="ok"
+    data-sb="link-pill"
+    data-link="station"
+    aria-label="Connection mode"
+  >
+    <svg
+      class="status-link-icon status-link-icon--station"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    >
+      <rect x="4.5" y="15.5" width="15" height="5" rx="2"></rect>
+      <path d="M7.5 14V9.5"></path>
+      <path d="M16.5 14V9.5"></path>
+      <path d="M8.8 10.3a5.2 5.2 0 0 1 6.4 0"></path>
+      <path d="M10.6 12.1a2.6 2.6 0 0 1 2.8 0"></path>
+      <circle cx="9" cy="18" r="0.8" fill="currentColor" stroke="none"></circle>
+      <circle cx="12" cy="18" r="0.8" fill="currentColor" stroke="none"></circle>
+      <circle cx="15" cy="18" r="0.8" fill="currentColor" stroke="none"></circle>
+    </svg>
+
+    <svg
+      class="status-link-icon status-link-icon--ap"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    >
+      <circle cx="12" cy="8.5" r="1.4" fill="currentColor" stroke="none"></circle>
+      <path d="M6.5 12.2a7 7 0 0 1 11 0"></path>
+      <path d="M9 12.2a4 4 0 0 1 6 0"></path>
+      <path d="M12 10.2v9.2"></path>
+      <path d="M10 19.4h4"></path>
+    </svg>
+  </div>
+
+  <button
+    class="status-pill status-alert-btn"
+    type="button"
+    data-state="ok"
+    data-sb="warn-pill"
+    aria-label="Warnings"
+  >
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    >
+      <path
+        d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
+      ></path>
+      <line x1="12" y1="9" x2="12" y2="13"></line>
+      <line x1="12" y1="17" x2="12.01" y2="17"></line>
+    </svg>
+    <span class="status-value" data-sb="warn-count">0</span>
+  </button>
+
+  <button
+    class="status-pill status-alert-btn"
+    type="button"
+    data-state="ok"
+    data-sb="err-pill"
+    aria-label="Errors"
+  >
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    >
+      <polygon
+        points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"
+      ></polygon>
+      <line x1="12" y1="8" x2="12" y2="12"></line>
+      <line x1="12" y1="16" x2="12.01" y2="16"></line>
+    </svg>
+    <span class="status-value" data-sb="err-count">0</span>
+  </button>
+
+  <div class="status-pill status-temp" data-temp="board">
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    >
+      <path d="M14 14.76V5a2 2 0 0 0-4 0v9.76a3 3 0 1 0 4 0z"></path>
+    </svg>
+    <span class="status-label">Board</span>
+    <span class="status-value" data-sb="board-temp">--</span>
+    <span class="status-unit">&deg;C</span>
+  </div>
+
+  <div class="status-pill status-temp" data-temp="sink">
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    >
+      <path d="M14 14.76V5a2 2 0 0 0-4 0v9.76a3 3 0 1 0 4 0z"></path>
+    </svg>
+    <span class="status-label">Sink</span>
+    <span class="status-value" data-sb="sink-temp">--</span>
+    <span class="status-unit">&deg;C</span>
+  </div>
+
+  <div class="status-pill">
+    <span class="status-label">DC</span>
+    <span class="status-value" data-sb="dc-voltage">--</span>
+    <span class="status-unit">V</span>
+  </div>
+
+  <div class="status-pill">
+    <span class="status-label">I</span>
+    <span class="status-value" data-sb="dc-current">--</span>
+    <span class="status-unit">A</span>
+  </div>
+
+  <div
+    class="status-pill status-mode is-hidden"
+    data-mode="running"
+    data-sb="mode-pill"
+  >
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    >
+      <polygon
+        points="8 5 19 12 8 19 8 5"
+        fill="currentColor"
+        stroke="none"
+      ></polygon>
+    </svg>
+    <span class="status-label">Mode</span>
+    <span class="status-text" data-sb="mode-label">Running</span>
+  </div>
+
+  <button class="status-pill status-action is-hidden" type="button" data-sb="live-btn">
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    >
+      <polyline points="3 17 9 11 13 15 21 7"></polyline>
+      <polyline points="21 7 21 13 15 13"></polyline>
+    </svg>
+    <span class="status-text">Live</span>
+  </button>
+</div>
+
+<div class="statusbar-right">
+  <button
+    class="status-pill status-session-toggle"
+    type="button"
+    data-sb="session-toggle"
+    aria-expanded="false"
+    aria-haspopup="true"
+  >
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    >
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+      <circle cx="12" cy="7" r="4"></circle>
+    </svg>
+    <span class="status-text" data-sb="user-role">Admin</span>
+    <svg
+      class="status-caret"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    >
+      <polyline points="6 9 12 15 18 9"></polyline>
+    </svg>
+  </button>
+</div>

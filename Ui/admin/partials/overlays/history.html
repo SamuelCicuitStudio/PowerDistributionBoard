@@ -1,0 +1,42 @@
+<div class="history-shell" role="dialog" aria-label="Session history">
+  <header class="history-header">
+    <div>
+      <p class="history-eyebrow">History</p>
+      <h3 class="history-title">Run Sessions</h3>
+    </div>
+    <button
+      class="history-close"
+      type="button"
+      data-history-close
+      aria-label="Close history"
+    >
+      <svg
+        viewBox="0 0 24 24"
+        aria-hidden="true"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <line x1="18" y1="6" x2="6" y2="18"></line>
+        <line x1="6" y1="6" x2="18" y2="18"></line>
+      </svg>
+    </button>
+  </header>
+
+  <div class="history-table-wrap">
+    <table class="history-table">
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Duration</th>
+          <th>Energy (Wh)</th>
+          <th>Peak P (W)</th>
+          <th>Peak I (A)</th>
+        </tr>
+      </thead>
+      <tbody data-history-body></tbody>
+    </table>
+  </div>
+</div>

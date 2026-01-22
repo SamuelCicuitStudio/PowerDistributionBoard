@@ -1,0 +1,61 @@
+.content {
+  flex: 1;
+  height: 100%;
+  padding: 2px 20px 30px;
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tab-panel {
+  display: none;
+  height: 100%;
+  overflow: hidden;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.tab-panel.is-active {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow: hidden;
+}
+
+.content-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 28px;
+}
+
+.content-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.scroll-area {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 8px;
+}
+
+.scroll-area::-webkit-scrollbar {
+  width: 10px;
+}
+
+.scroll-area::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.7);
+  border-radius: 10px;
+}
+
+.scroll-area::-webkit-scrollbar-thumb {
+  background: rgba(0, 255, 180, 0.24);
+  border-radius: 10px;
+}

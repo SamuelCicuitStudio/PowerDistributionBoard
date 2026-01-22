@@ -1,0 +1,326 @@
+<section class="live-tab" aria-label="Live outputs">
+  <div class="live-legend-wrap">
+    <div class="live-legend" role="group" aria-label="Output state legend">
+      <div class="live-legend-pill" data-kind="on">
+        <span class="live-legend-led" aria-hidden="true"></span>
+        ON (energized)
+      </div>
+      <div class="live-legend-pill" data-kind="off">
+        <span class="live-legend-led" aria-hidden="true"></span>
+        OFF (connected)
+      </div>
+      <div class="live-legend-pill" data-kind="nw">
+        <span class="live-legend-led" aria-hidden="true"></span>
+        No wire / Not connected
+      </div>
+    </div>
+    <span class="live-unit-note">Temperatures in &deg;C</span>
+  </div>
+
+  <div class="live-stage" aria-label="Output layout">
+    <svg class="live-wiring" viewBox="0 0 980 560" aria-hidden="true">
+      <g
+        fill="none"
+        stroke="rgba(0,255,174,.22)"
+        stroke-width="3"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M70 117 C270 117 320 117 380 117" />
+        <path d="M70 184 C270 184 320 184 380 184" />
+        <path d="M70 251 C270 251 320 251 380 251" />
+        <path d="M70 320 C270 320 320 320 380 320" />
+        <path d="M70 385 C270 385 320 385 380 385" />
+
+        <path d="M910 117 C710 117 660 117 600 117" />
+        <path d="M910 184 C710 184 660 184 600 184" />
+        <path d="M910 251 C710 251 660 251 600 251" />
+        <path d="M910 320 C710 320 660 320 600 320" />
+        <path d="M910 385 C710 385 660 385 600 385" />
+
+        <path d="M380 250 C420 250 450 250 490 250" />
+        <path d="M600 250 C560 250 530 250 490 250" />
+        <path d="M380 330 C420 330 450 330 490 330" />
+        <path d="M600 330 C560 330 530 330 490 330" />
+
+        <path d="M85 520 H380 V420 H600" />
+        <path d="M895 520 H600 V420 H400" />
+      </g>
+    </svg>
+
+    <div class="live-port-row left" style="--y: 84px">
+      <span class="live-state-dot" data-state="off"></span>
+      <div class="live-port" data-port="L1">--</div>
+    </div>
+    <div class="live-port-row left" style="--y: 149px">
+      <span class="live-state-dot" data-state="off"></span>
+      <div class="live-port" data-port="L2">--</div>
+    </div>
+    <div class="live-port-row left" style="--y: 214px">
+      <span class="live-state-dot" data-state="off"></span>
+      <div class="live-port" data-port="L3">--</div>
+    </div>
+    <div class="live-port-row left" style="--y: 279px">
+      <span class="live-state-dot" data-state="off"></span>
+      <div class="live-port" data-port="L4">--</div>
+    </div>
+    <div class="live-port-row left" style="--y: 344px">
+      <span class="live-state-dot" data-state="off"></span>
+      <div class="live-port" data-port="L5">--</div>
+    </div>
+
+    <div class="live-port-row right" style="--y: 84px">
+      <span class="live-state-dot" data-state="off"></span>
+      <div class="live-port" data-port="R1">--</div>
+    </div>
+    <div class="live-port-row right" style="--y: 149px">
+      <span class="live-state-dot" data-state="off"></span>
+      <div class="live-port" data-port="R2">--</div>
+    </div>
+    <div class="live-port-row right" style="--y: 214px">
+      <span class="live-state-dot" data-state="off"></span>
+      <div class="live-port" data-port="R3">--</div>
+    </div>
+    <div class="live-port-row right" style="--y: 279px">
+      <span class="live-state-dot" data-state="off"></span>
+      <div class="live-port" data-port="R4">--</div>
+    </div>
+    <div class="live-port-row right" style="--y: 344px">
+      <span class="live-state-dot" data-state="off"></span>
+      <div class="live-port live-temp" data-port="R5">23</div>
+    </div>
+
+    <div class="live-bottom-dot live-ac" aria-label="AC input connected"></div>
+    <div
+      class="live-bottom-dot live-relay"
+      aria-label="Input relay state"
+    ></div>
+
+    <section class="live-card" aria-label="Current session live panel">
+      <svg class="live-card-watermark" viewBox="0 0 240 240" aria-hidden="true">
+        <circle
+          cx="120"
+          cy="120"
+          r="92"
+          fill="none"
+          stroke="rgba(0,255,174,.55)"
+          stroke-width="3"
+        />
+        <circle
+          cx="120"
+          cy="120"
+          r="62"
+          fill="none"
+          stroke="rgba(0,255,174,.35)"
+          stroke-width="3"
+        />
+        <path
+          d="M42 120h28 l10-14 10 28 10-28 10 28 10-28 10 28 10-28 10 28 10-14 h28"
+          fill="none"
+          stroke="rgba(0,255,174,.55)"
+          stroke-width="3"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+        <circle cx="42" cy="120" r="4" fill="rgba(0,255,174,.55)" />
+        <circle cx="198" cy="120" r="4" fill="rgba(0,255,174,.55)" />
+      </svg>
+      <div class="live-card-inner">
+        <div class="live-card-header">
+          <div class="live-card-title">
+            <span class="live-card-icon" aria-hidden="true"></span>
+            CURRENT SESSION
+          </div>
+          <div class="live-pill">
+            <span class="live-pill-dot"></span>
+            LIVE
+          </div>
+        </div>
+        <div class="live-card-sub">No active session</div>
+
+        <div class="live-metrics">
+          <div class="live-metric">
+            <div class="live-metric-top">
+              <span class="live-metric-icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z"></path>
+                </svg>
+              </span>
+              Energy
+            </div>
+            <div class="live-metric-val">-- <small>Wh</small></div>
+          </div>
+          <div class="live-metric">
+            <div class="live-metric-top">
+              <span class="live-metric-icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <circle cx="12" cy="12" r="9"></circle>
+                  <path d="M12 7v6l4 2"></path>
+                </svg>
+              </span>
+              Duration
+            </div>
+            <div class="live-metric-val">-- <small>s</small></div>
+          </div>
+          <div class="live-metric">
+            <div class="live-metric-top">
+              <span class="live-metric-icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M4 19V5"></path>
+                  <path d="M8 19V9"></path>
+                  <path d="M12 19V12"></path>
+                  <path d="M16 19V7"></path>
+                  <path d="M20 19V10"></path>
+                </svg>
+              </span>
+              Peak Power
+            </div>
+            <div class="live-metric-val">-- <small>W</small></div>
+          </div>
+          <div class="live-metric">
+            <div class="live-metric-top">
+              <span class="live-metric-icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M3 12h6l3-8 4 16 3-8h5"></path>
+                </svg>
+              </span>
+              Peak Current
+            </div>
+            <div class="live-metric-val">-- <small>A</small></div>
+          </div>
+        </div>
+
+        <div class="live-actions">
+          <button class="live-btn" type="button" data-live-history>
+            <span class="live-btn-icon" aria-hidden="true">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M4 6h16"></path>
+                <path d="M4 12h16"></path>
+                <path d="M4 18h12"></path>
+              </svg>
+            </span>
+            History
+          </button>
+          <button class="live-btn" type="button" data-kind="cal">
+            <span class="live-btn-icon" aria-hidden="true">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M4 12h16"></path>
+                <path d="M6 8h12"></path>
+                <path d="M8 16h8"></path>
+              </svg>
+            </span>
+            Calibration
+          </button>
+          <button
+            class="live-btn"
+            type="button"
+            data-kind="live"
+            data-live-control
+          >
+            <span class="live-btn-icon" aria-hidden="true">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M4 12a8 8 0 0 1 16 0"></path>
+                <path d="M7 12a5 5 0 0 1 10 0"></path>
+                <circle cx="12" cy="12" r="1.2" fill="currentColor"></circle>
+              </svg>
+            </span>
+            Live Control
+          </button>
+          <button
+            class="live-btn"
+            type="button"
+            data-kind="err"
+            data-live-error
+          >
+            <span class="live-btn-icon" aria-hidden="true">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M12 9v4"></path>
+                <path d="M12 17h.01"></path>
+                <path
+                  d="M10.3 4.3h3.4l7 12.2a2 2 0 0 1-1.7 3H5a2 2 0 0 1-1.7-3l7-12.2z"
+                ></path>
+              </svg>
+            </span>
+            Error
+          </button>
+          <button class="live-btn" type="button" data-kind="log" data-live-log>
+            <span class="live-btn-icon" aria-hidden="true">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path
+                  d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
+                ></path>
+                <path d="M14 2v6h6"></path>
+                <path d="M8 13h8"></path>
+                <path d="M8 17h6"></path>
+              </svg>
+            </span>
+            Log
+          </button>
+        </div>
+      </div>
+    </section>
+  </div>
+</section>

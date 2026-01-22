@@ -1,0 +1,247 @@
+.live-graph {
+  flex: 1 1 auto;
+  min-height: 320px;
+}
+
+.live-chart {
+  --chart-h: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.live-chart-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 4px;
+  flex-wrap: wrap;
+}
+
+.chart-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 12px;
+  background: rgba(255, 255, 255, 0.02);
+  color: rgba(233, 254, 247, 0.9);
+}
+
+.chart-temp {
+  font-weight: 600;
+  color: rgba(233, 254, 247, 0.9);
+}
+
+.chart-pill.setpoint {
+  color: #ff4d7d;
+  border-color: rgba(255, 77, 125, 0.4);
+}
+
+.chart-pill.wire {
+  display: none;
+  color: var(--wire-color, #ffb347);
+  border-color: color-mix(in srgb, var(--wire-color, #ffb347) 45%, transparent);
+}
+
+.chart-pill.wire.is-selected {
+  display: inline-flex;
+}
+
+.chart-wire-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.chart-pill.setpoint .chart-temp {
+  color: #ff4d7d;
+}
+
+.chart-action {
+  margin-left: auto;
+  cursor: pointer;
+  border-color: rgba(0, 255, 174, 0.4);
+  color: var(--accent);
+}
+
+.chart-action:hover {
+  box-shadow: 0 0 10px rgba(0, 255, 174, 0.2);
+}
+
+.live-chart-shell {
+  flex: 1;
+  display: flex;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.4), transparent);
+  overflow: hidden;
+}
+
+.live-chart-axis {
+  flex: 0 0 60px;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(2, 6, 8, 0.4);
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+}
+
+.live-chart-axis-svg {
+  width: 60px;
+  height: 100%;
+}
+
+.axis-line {
+  stroke: rgba(233, 254, 247, 0.7);
+  stroke-width: 1.6;
+  vector-effect: non-scaling-stroke;
+}
+
+.axis-tick {
+  stroke: rgba(233, 254, 247, 0.6);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.axis-label {
+  fill: rgba(233, 254, 247, 0.85);
+  font-size: 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  text-anchor: end;
+  dominant-baseline: middle;
+}
+
+.live-chart-scroll {
+  flex: 1 1 auto;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0 12px;
+  padding-right: 50%;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: pan-x;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.live-chart-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.live-chart-scroll.is-dragging {
+  cursor: grabbing;
+}
+
+.live-chart-svg {
+  height: 100%;
+  display: block;
+}
+
+.chart-grid line {
+  stroke: rgba(255, 255, 255, 0.12);
+  stroke-dasharray: 3 6;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.x-axis-line {
+  stroke: rgba(233, 254, 247, 0.7);
+  stroke-width: 1.6;
+  vector-effect: non-scaling-stroke;
+}
+
+.x-tick {
+  stroke: rgba(233, 254, 247, 0.5);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.x-label {
+  fill: rgba(233, 254, 247, 0.65);
+  font-size: 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  text-anchor: middle;
+  dominant-baseline: hanging;
+}
+
+.chart-line {
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.85;
+  vector-effect: non-scaling-stroke;
+}
+
+.chart-line.setpoint {
+  stroke: #ff4d7d;
+  stroke-dasharray: 2 6;
+  stroke-linecap: round;
+}
+
+.chart-line.wire-line {
+  stroke: var(--wire-color, #ffb347);
+  opacity: 0;
+}
+
+.chart-line.wire-line.is-selected {
+  opacity: 0.85;
+}
+
+.chart-dot {
+  fill: var(--wire-color, #ffb347);
+  stroke: rgba(0, 0, 0, 0.35);
+  stroke-width: 1;
+  opacity: 0;
+}
+
+.chart-dot.is-selected {
+  opacity: 1;
+}
+
+[data-wire="1"] {
+  --wire-color: #ffb347;
+}
+
+[data-wire="2"] {
+  --wire-color: #53c1ff;
+}
+
+[data-wire="3"] {
+  --wire-color: #7dff6a;
+}
+
+[data-wire="4"] {
+  --wire-color: #ff7bd6;
+}
+
+[data-wire="5"] {
+  --wire-color: #ffd166;
+}
+
+[data-wire="6"] {
+  --wire-color: #6effc8;
+}
+
+[data-wire="7"] {
+  --wire-color: #ff9f43;
+}
+
+[data-wire="8"] {
+  --wire-color: #5ce0ff;
+}
+
+[data-wire="9"] {
+  --wire-color: #c3ff5a;
+}
+
+[data-wire="10"] {
+  --wire-color: #ff6b6b;
+}

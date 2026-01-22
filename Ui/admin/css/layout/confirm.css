@@ -1,0 +1,73 @@
+.status-confirm {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  min-height: var(--statusbar-h, 48px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 6px 16px;
+  text-align: center;
+  font-size: 12px;
+  letter-spacing: 0.2px;
+  opacity: 0;
+  transform: translateY(-110%);
+  transition:
+    opacity 0.25s ease,
+    transform 0.25s ease;
+  pointer-events: none;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  background: rgba(6, 9, 12, 0.9);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.status-confirm.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.status-confirm-text {
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.35);
+  color: rgba(233, 254, 247, 0.9);
+}
+
+.status-confirm-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.status-confirm-btn {
+  height: 28px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.02);
+  color: rgba(233, 254, 247, 0.85);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.16s ease,
+    border-color 0.16s ease;
+}
+
+.status-confirm-btn:hover {
+  transform: translateY(-1px);
+  border-color: rgba(0, 255, 174, 0.35);
+  box-shadow: 0 0 12px rgba(0, 255, 174, 0.15);
+}
+
+.status-confirm-btn.is-yes {
+  border-color: rgba(0, 255, 174, 0.32);
+  background: rgba(0, 255, 174, 0.12);
+  color: rgba(233, 254, 247, 0.95);
+}

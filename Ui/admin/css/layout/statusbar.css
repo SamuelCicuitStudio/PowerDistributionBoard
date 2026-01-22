@@ -1,0 +1,277 @@
+.statusbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 8px 4px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: #22db8232;
+  overflow: visible;
+  position: relative;
+}
+
+.statusbar-left,
+.statusbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.statusbar-left {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  white-space: nowrap;
+  padding-bottom: 2px;
+}
+
+.statusbar-right {
+  flex-direction: column;
+  align-items: flex-end;
+  flex: 0 0 auto;
+  margin-left: auto;
+  position: relative;
+}
+
+.statusbar-left::-webkit-scrollbar {
+  height: 6px;
+}
+
+.statusbar-left::-webkit-scrollbar-thumb {
+  background: rgba(0, 255, 180, 0.2);
+  border-radius: 999px;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    radial-gradient(circle at top, rgba(0, 255, 174, 0.06), transparent),
+    rgba(6, 10, 14, 0.92);
+  color: rgba(233, 254, 247, 0.92);
+  font-size: 12px;
+  letter-spacing: 0.2px;
+}
+
+.status-pill svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  opacity: 0.9;
+}
+
+.status-pill[data-sb="link-pill"] svg {
+  width: 16px;
+  height: 16px;
+}
+
+.status-indicator {
+  padding: 0;
+  width: 26px;
+  justify-content: center;
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--accent);
+  box-shadow: 0 0 8px rgba(0, 255, 174, 0.6);
+}
+
+.status-label {
+  font-size: 11px;
+  opacity: 0.65;
+}
+
+.status-value {
+  font-weight: 600;
+}
+
+.status-text {
+  font-weight: 600;
+}
+
+.status-unit {
+  font-size: 11px;
+  opacity: 0.65;
+}
+
+.status-pill[data-state="ok"] {
+  color: var(--accent);
+  border-color: rgba(0, 255, 174, 0.32);
+}
+
+.status-pill[data-state="warn"] {
+  color: var(--warn);
+  border-color: rgba(247, 209, 74, 0.35);
+}
+
+.status-pill[data-state="err"] {
+  color: var(--err);
+  border-color: rgba(255, 80, 80, 0.4);
+}
+
+.status-indicator[data-state="warn"] .status-dot {
+  background: var(--warn);
+  box-shadow: 0 0 8px rgba(247, 209, 74, 0.6);
+}
+
+.status-indicator[data-state="err"] .status-dot {
+  background: var(--err);
+  box-shadow: 0 0 8px rgba(255, 80, 80, 0.6);
+}
+
+.status-mode[data-mode="running"] {
+  color: var(--accent);
+  border-color: rgba(0, 255, 174, 0.32);
+}
+
+.status-mode[data-mode="wire-calibration"] {
+  color: var(--warn);
+  border-color: rgba(247, 209, 74, 0.35);
+}
+
+.status-mode[data-mode="floor-calibration"] {
+  color: var(--accent2);
+  border-color: rgba(0, 119, 255, 0.35);
+}
+
+.status-action {
+  cursor: pointer;
+  color: var(--accent);
+  border-color: rgba(0, 255, 174, 0.35);
+  background:
+    radial-gradient(circle at top, rgba(0, 255, 174, 0.12), transparent),
+    rgba(5, 7, 9, 0.95);
+  transition:
+    box-shadow 0.2s ease,
+    transform 0.12s ease,
+    border-color 0.2s ease,
+    background 0.2s ease;
+}
+
+.status-action:hover {
+  border-color: rgba(0, 255, 174, 0.55);
+  box-shadow: 0 0 12px rgba(0, 255, 174, 0.35);
+  transform: translateY(-1px);
+}
+
+.status-action:active {
+  transform: translateY(0);
+}
+
+.status-alert-btn {
+  cursor: pointer;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.12s ease;
+}
+
+.status-alert-btn:hover {
+  border-color: color-mix(in srgb, currentColor 55%, transparent);
+  box-shadow: 0 0 10px color-mix(in srgb, currentColor 35%, transparent);
+  transform: translateY(-1px);
+}
+
+.status-alert-btn:active {
+  transform: translateY(0);
+}
+
+.status-session-toggle {
+  cursor: pointer;
+}
+
+.status-session-toggle .status-caret {
+  width: 12px;
+  height: 12px;
+  opacity: 0.65;
+  transition: transform 0.2s ease;
+}
+
+.status-session-toggle[aria-expanded="true"] .status-caret {
+  transform: rotate(180deg);
+}
+
+.status-session-action {
+  height: 24px;
+  padding: 4px 10px;
+  font-size: 11px;
+}
+
+.status-session-action svg {
+  width: 12px;
+  height: 12px;
+}
+
+.status-pill.is-hidden {
+  display: none;
+}
+
+.status-temp[data-temp="board"] svg {
+  color: var(--accent);
+  stroke: var(--accent);
+}
+
+.status-temp[data-temp="sink"] svg {
+  color: var(--accent2);
+  stroke: var(--accent2);
+}
+
+.status-link-icon {
+  display: none;
+}
+
+.status-pill[data-sb="link-pill"][data-link="station"]
+  .status-link-icon--station {
+  display: inline-block;
+}
+
+.status-pill[data-sb="link-pill"][data-link="ap"] .status-link-icon--ap {
+  display: inline-block;
+}
+
+.status-pill[data-sb="err-pill"] svg {
+  color: var(--err);
+  stroke: var(--err);
+}
+
+.status-mode {
+  position: relative;
+}
+
+.status-mode.is-active::before {
+  content: "";
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  top: 2px;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, currentColor, transparent);
+  opacity: 0.75;
+  box-shadow: 0 0 6px currentColor;
+  animation: status-mode-pulse 1.6s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes status-mode-pulse {
+  0% {
+    opacity: 0.25;
+    transform: scaleX(0.6);
+  }
+  50% {
+    opacity: 0.95;
+    transform: scaleX(1);
+  }
+  100% {
+    opacity: 0.3;
+    transform: scaleX(0.6);
+  }
+}

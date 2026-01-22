@@ -1,0 +1,115 @@
+<section class="control-tab" aria-label="Manual controls">
+  <div class="control-card" aria-label="Manual controls">
+    <div class="control-card-inner">
+      <div class="control-header">
+        <div class="control-h-icon" aria-hidden="true">
+          <svg
+            viewBox="0 0 24 24"
+            width="22"
+            height="22"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M4 21v-7"></path>
+            <path d="M4 10V3"></path>
+            <path d="M12 21v-9"></path>
+            <path d="M12 8V3"></path>
+            <path d="M20 21v-5"></path>
+            <path d="M20 12V3"></path>
+            <path d="M2 14h4"></path>
+            <path d="M10 8h4"></path>
+            <path d="M18 16h4"></path>
+          </svg>
+        </div>
+        <div>
+          <h2>Manual Controls</h2>
+          <p>
+            Adjusting these will switch to manual mode (and abort auto loop if
+            running).
+          </p>
+        </div>
+      </div>
+
+      <div class="control-section">
+        <div class="control-row">
+          <div class="control-label">Fan speed</div>
+          <div class="control-pill" data-control-fan-value>0%</div>
+        </div>
+
+        <div class="control-slider-wrap">
+          <input
+            type="range"
+            min="0"
+            max="100"
+            value="0"
+            data-control-fan
+            aria-label="Fan speed"
+          />
+        </div>
+
+        <div class="control-divider"></div>
+
+        <div class="control-row">
+          <div class="control-label">Relay</div>
+          <label class="control-switch" aria-label="Relay toggle">
+            <input type="checkbox" data-control-relay />
+            <span class="control-slider"></span>
+          </label>
+        </div>
+
+        <div class="control-divider"></div>
+
+        <div class="control-info">
+          <div class="control-k">Device Name/ID</div>
+          <div class="control-v">PDB-T37H6-911N0</div>
+        </div>
+        <div class="control-info">
+          <div class="control-k">HW Version</div>
+          <div class="control-v">2.2.5</div>
+        </div>
+        <div class="control-info">
+          <div class="control-k">SW Version</div>
+          <div class="control-v">1.7.0</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="control-card" aria-label="Manual outputs">
+    <div class="control-card-inner">
+      <div class="control-header">
+        <div class="control-h-icon" aria-hidden="true">
+          <svg
+            viewBox="0 0 24 24"
+            width="22"
+            height="22"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <rect x="4" y="4" width="7" height="7" rx="2"></rect>
+            <rect x="13" y="4" width="7" height="7" rx="2"></rect>
+            <rect x="4" y="13" width="7" height="7" rx="2"></rect>
+            <rect x="13" y="13" width="7" height="7" rx="2"></rect>
+          </svg>
+        </div>
+        <div>
+          <h2>Manual Outputs</h2>
+          <p>Toggle outputs directly (manual mode).</p>
+        </div>
+      </div>
+
+      <div
+        class="control-output-list"
+        data-control-output-list
+        role="list"
+        aria-label="Outputs"
+      ></div>
+    </div>
+  </div>
+</section>
