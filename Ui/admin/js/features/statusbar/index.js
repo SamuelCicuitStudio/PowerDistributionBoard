@@ -75,6 +75,21 @@ export function initStatusbar() {
     }, 2200);
   };
 
+  const normalizeAlertState = (state) => {
+    const key = String(state || "").trim().toLowerCase();
+    if (!key) return "ok";
+    if (key === "warning") return "warn";
+    if (key === "error") return "err";
+    if (key === "success") return "ok";
+    if (key === "info") return "ok";
+    if (key === "ok" || key === "warn" || key === "err") return key;
+    return "ok";
+  };
+
+  const notify = (message, state = "ok") => {
+    showAlert(String(message || ""), normalizeAlertState(state));
+  };
+
   updateStatusbarHeightVar();
   window.addEventListener("resize", updateStatusbarHeightVar);
 
@@ -215,5 +230,6 @@ export function initStatusbar() {
     setErrors,
     setUserRole,
     setMode,
+    notify,
   };
 }

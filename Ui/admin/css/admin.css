@@ -12,6 +12,7 @@
 @import "./layout/alert-overlays.css";
 @import "./layout/history-overlay.css";
 @import "./layout/log-overlay.css";
+@import "./layout/calibration-overlay.css";
 @import "./layout/live-overlay.css";
 @import "./layout/live-chart.css";
 @import "./layout/live-tab.css";

@@ -153,7 +153,7 @@ export function initDashboardTab() {
     showToast("Setup not implemented yet.", "error");
   });
   calBtn?.addEventListener("click", () => {
-    showToast("Calibration not implemented yet.", "error");
+    window.__calibration?.open?.();
   });
   logsBtn?.addEventListener("click", () => {
     window.__log?.open?.();

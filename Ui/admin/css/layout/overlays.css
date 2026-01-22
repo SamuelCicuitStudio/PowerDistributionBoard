@@ -42,6 +42,15 @@
   );
 }
 
+.status-alert-overlay[data-state="ok"] {
+  color: var(--accent);
+  background: linear-gradient(
+    180deg,
+    rgba(0, 255, 174, 0.22),
+    rgba(0, 0, 0, 0.12)
+  );
+}
+
 .status-alert-overlay[data-state="err"] {
   color: var(--err);
   background: linear-gradient(

@@ -4,6 +4,7 @@ import { initLiveOverlay } from "./features/live/index.js";
 import { initAlerts } from "./features/alerts/index.js";
 import { initHistoryOverlay } from "./features/history/index.js";
 import { initLogOverlay } from "./features/log/index.js";
+import { initCalibrationOverlay } from "./features/calibration/index.js";
 import { initToast } from "./features/toast/index.js";
 import { initUserTab } from "./features/user/index.js";
 import { initConfirm } from "./features/confirm/index.js";
@@ -66,6 +67,7 @@ document.addEventListener("DOMContentLoaded", () => {
     window.__alerts = initAlerts();
     window.__history = initHistoryOverlay();
     window.__log = initLogOverlay();
+    window.__calibration = initCalibrationOverlay();
     initLiveOverlay();
     initDashboardTab();
     initUserTab();
