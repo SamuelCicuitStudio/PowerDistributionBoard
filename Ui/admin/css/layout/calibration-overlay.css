@@ -2,17 +2,12 @@
   position: absolute;
   inset: 0;
   z-index: 86;
-  display: none;
   padding: 10px 12px 14px;
   background:
     radial-gradient(circle at top, rgba(0, 255, 174, 0.06), transparent),
     rgba(2, 4, 6, 0.82);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-}
-
-.calibration-overlay.is-open {
-  display: flex;
 }
 
 .calibration-shell {

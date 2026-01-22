@@ -13,6 +13,7 @@ import { initControlTab } from "./features/control/index.js";
 import { initAdminTab } from "./features/admin/index.js";
 import { initDashboardTab } from "./features/dashboard/index.js";
 import { initDeviceTab } from "./features/device/index.js";
+import { initSetupWizard } from "./features/setup/index.js";
 
 async function loadIncludes() {
   let includeNodes = qsa("[data-include]");
@@ -44,16 +45,52 @@ function initTabs() {
   const tabs = qsa(".tab");
   if (!tabs.length) return;
   const panels = qsa("[data-tab-panel]");
+  const panelByKey = new Map(
+    panels.map((panel) => [panel.dataset.tabPanel, panel]),
+  );
+  let activeIndex = tabs.findIndex((tab) =>
+    tab.classList.contains("is-active"),
+  );
+  if (activeIndex < 0) activeIndex = 0;
+  let isAnimating = false;
+  const ANIM_MS = 420;
 
   tabs.forEach((tab) =>
     tab.addEventListener("click", () => {
+      if (tab.classList.contains("is-active") || isAnimating) return;
+      const nextIndex = tabs.indexOf(tab);
+      const currentTab = tabs[activeIndex];
+      const currentPanel = panelByKey.get(currentTab?.dataset.tab || "");
+      const nextPanel = panelByKey.get(tab.dataset.tab || "");
+      if (!currentPanel || !nextPanel) return;
+
+      const dir = nextIndex > activeIndex ? "up" : "down";
+      isAnimating = true;
+
       tabs.forEach((t) => t.classList.remove("is-active"));
       tab.classList.add("is-active");
-      if (!panels.length) return;
-      const key = tab.dataset.tab;
-      panels.forEach((panel) => {
-        panel.classList.toggle("is-active", panel.dataset.tabPanel === key);
+
+      currentPanel.classList.add("is-leaving");
+      currentPanel.dataset.dir = dir;
+
+      nextPanel.classList.add("is-active", "is-entering");
+      nextPanel.dataset.dir = dir;
+
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          currentPanel.classList.add("is-animating");
+          nextPanel.classList.add("is-animating");
+        });
       });
+
+      window.setTimeout(() => {
+        currentPanel.classList.remove("is-active", "is-leaving", "is-animating");
+        currentPanel.removeAttribute("data-dir");
+        nextPanel.classList.remove("is-entering", "is-animating");
+        nextPanel.removeAttribute("data-dir");
+        activeIndex = nextIndex;
+        isAnimating = false;
+      }, ANIM_MS);
     }),
   );
 }
@@ -74,6 +111,7 @@ document.addEventListener("DOMContentLoaded", () => {
     initControlTab();
     initAdminTab();
     initDeviceTab();
+    window.__wizard = initSetupWizard();
     initSidebarActions();
     window.dispatchEvent(new Event("ui:ready"));
   });

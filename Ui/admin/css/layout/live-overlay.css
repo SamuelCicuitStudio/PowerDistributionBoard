@@ -2,16 +2,11 @@
   position: absolute;
   inset: 0;
   z-index: 80;
-  display: none;
   padding: 10px 12px 14px;
   background: radial-gradient(circle at top, rgba(0, 255, 174, 0.08), transparent),
     rgba(3, 6, 8, 0.92);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-}
-
-.live-overlay.is-open {
-  display: flex;
 }
 
 .live-shell {

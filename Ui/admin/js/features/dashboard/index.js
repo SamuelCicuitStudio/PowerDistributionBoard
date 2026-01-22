@@ -150,7 +150,7 @@ export function initDashboardTab() {
   const logsBtn = qs("[data-dashboard-logs]", root);
 
   setupBtn?.addEventListener("click", () => {
-    showToast("Setup not implemented yet.", "error");
+    window.__wizard?.open?.();
   });
   calBtn?.addEventListener("click", () => {
     window.__calibration?.open?.();

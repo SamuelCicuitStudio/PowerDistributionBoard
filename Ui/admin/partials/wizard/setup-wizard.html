@@ -1,0 +1,699 @@
+<div class="setup-shell" role="dialog" aria-label="Setup wizard">
+  <header class="setup-header">
+    <div class="setup-title-block">
+      <p class="setup-eyebrow">Setup wizard</p>
+      <h2 class="setup-title">System setup</h2>
+      <p class="setup-sub">
+        Complete the required steps to finish initial configuration.
+      </p>
+    </div>
+    <div class="setup-progress-block">
+      <div class="setup-step-label" data-setup-step-label>Step 1 of 10</div>
+      <div class="setup-step-title" data-setup-step-title>Welcome</div>
+      <div class="setup-progress-bar" aria-hidden="true">
+        <span data-setup-progress></span>
+      </div>
+    </div>
+    <button class="setup-close" type="button" data-setup-close aria-label="Close setup wizard">
+      <svg
+        viewBox="0 0 24 24"
+        aria-hidden="true"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <line x1="18" y1="6" x2="6" y2="18"></line>
+        <line x1="6" y1="6" x2="18" y2="18"></line>
+      </svg>
+    </button>
+  </header>
+
+  <div class="setup-body">
+    <nav class="setup-steps" aria-label="Setup steps">
+      <button class="setup-step-btn is-active" type="button" data-setup-stepper="1">
+        <span class="setup-step-index">1</span>
+        <span class="setup-step-text">
+          <strong>Welcome</strong>
+          <small>Intro</small>
+        </span>
+      </button>
+      <button class="setup-step-btn" type="button" data-setup-stepper="2">
+        <span class="setup-step-index">2</span>
+        <span class="setup-step-text">
+          <strong>Credentials</strong>
+          <small>Skippable</small>
+        </span>
+      </button>
+      <button class="setup-step-btn" type="button" data-setup-stepper="3">
+        <span class="setup-step-index">3</span>
+        <span class="setup-step-text">
+          <strong>Wi-Fi</strong>
+          <small>Skippable</small>
+        </span>
+      </button>
+      <button class="setup-step-btn" type="button" data-setup-stepper="4">
+        <span class="setup-step-index">4</span>
+        <span class="setup-step-text">
+          <strong>Allowed outputs</strong>
+          <small>Required</small>
+        </span>
+      </button>
+      <button class="setup-step-btn" type="button" data-setup-stepper="5">
+        <span class="setup-step-index">5</span>
+        <span class="setup-step-text">
+          <strong>Sensor zero</strong>
+          <small>Required</small>
+        </span>
+      </button>
+      <button class="setup-step-btn" type="button" data-setup-stepper="6">
+        <span class="setup-step-index">6</span>
+        <span class="setup-step-text">
+          <strong>NTC params</strong>
+          <small>Skippable</small>
+        </span>
+      </button>
+      <button class="setup-step-btn" type="button" data-setup-stepper="7">
+        <span class="setup-step-index">7</span>
+        <span class="setup-step-text">
+          <strong>Device settings</strong>
+          <small>Required</small>
+        </span>
+      </button>
+      <button class="setup-step-btn" type="button" data-setup-stepper="8">
+        <span class="setup-step-index">8</span>
+        <span class="setup-step-text">
+          <strong>Wire calibration</strong>
+          <small>Skippable</small>
+        </span>
+      </button>
+      <button class="setup-step-btn" type="button" data-setup-stepper="9">
+        <span class="setup-step-index">9</span>
+        <span class="setup-step-text">
+          <strong>Floor calibration</strong>
+          <small>Skippable</small>
+        </span>
+      </button>
+      <button class="setup-step-btn" type="button" data-setup-stepper="10">
+        <span class="setup-step-index">10</span>
+        <span class="setup-step-text">
+          <strong>Finish</strong>
+          <small>Complete</small>
+        </span>
+      </button>
+    </nav>
+
+    <div class="setup-content" role="region" aria-label="Setup step content">
+      <section
+        class="setup-step-panel is-active"
+        data-setup-step="1"
+        data-step-title="Welcome"
+      >
+        <div class="setup-card">
+          <h3>Welcome</h3>
+          <p>
+            This wizard guides you through the initial configuration of the
+            system. Required steps must be completed before finish.
+          </p>
+          <div class="setup-instructions">
+            <strong>Before you start</strong>
+            <ul>
+              <li>Have your Wi-Fi credentials ready (if you plan to connect).</li>
+              <li>Make sure the device is powered and connected.</li>
+              <li>You can skip optional steps and finish them later.</li>
+            </ul>
+          </div>
+          <ul class="setup-list">
+            <li>10 steps total with progress indicator.</li>
+            <li>Some steps can be skipped and completed later.</li>
+            <li>Canceling will keep setup incomplete.</li>
+          </ul>
+        </div>
+      </section>
+
+      <section
+        class="setup-step-panel"
+        data-setup-step="2"
+        data-step-title="Credentials"
+        data-step-skippable="true"
+      >
+        <div class="setup-card-grid">
+          <div class="setup-card">
+            <h3>User credentials</h3>
+            <p class="setup-note">
+              Set a new user password if you want the system to be protected.
+            </p>
+            <div class="setup-fields">
+              <label class="setup-field">
+                <span>Current password</span>
+                <input class="setup-input" type="password" placeholder="Current password" />
+              </label>
+              <label class="setup-field">
+                <span>New password</span>
+                <input class="setup-input" type="password" placeholder="New password" />
+              </label>
+            </div>
+          </div>
+          <div class="setup-card">
+            <h3>Admin credentials</h3>
+            <p class="setup-note">
+              Admin changes require the current admin password to save.
+            </p>
+            <div class="setup-fields">
+              <label class="setup-field">
+                <span>Current admin password</span>
+                <input class="setup-input" type="password" placeholder="Current admin password" />
+              </label>
+              <label class="setup-field">
+                <span>New admin username</span>
+                <input class="setup-input" type="text" placeholder="New admin username" />
+              </label>
+              <label class="setup-field">
+                <span>New admin password</span>
+                <input class="setup-input" type="password" placeholder="New admin password" />
+              </label>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section
+        class="setup-step-panel"
+        data-setup-step="3"
+        data-step-title="Wi-Fi setup"
+        data-step-skippable="true"
+      >
+        <div class="setup-card-grid">
+          <div class="setup-card">
+            <h3>Wi-Fi Station</h3>
+            <p class="setup-note">
+              Station connects the board to your local router (recommended).
+            </p>
+            <div class="setup-fields">
+              <label class="setup-field">
+                <span>SSID</span>
+                <input class="setup-input" type="text" placeholder="Wi-Fi SSID" />
+              </label>
+              <label class="setup-field">
+                <span>Password</span>
+                <input class="setup-input" type="password" placeholder="Wi-Fi password" />
+              </label>
+            </div>
+          </div>
+          <div class="setup-card">
+            <h3>Wi-Fi Access Point</h3>
+            <p class="setup-note">
+              AP mode creates a local hotspot for direct connection.
+            </p>
+            <div class="setup-fields">
+              <label class="setup-field">
+                <span>AP SSID</span>
+                <input class="setup-input" type="text" placeholder="AP SSID" />
+              </label>
+              <label class="setup-field">
+                <span>AP password</span>
+                <input class="setup-input" type="password" placeholder="AP password" />
+              </label>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section
+        class="setup-step-panel"
+        data-setup-step="4"
+        data-step-title="Allowed outputs"
+      >
+        <div class="setup-card">
+          <h3>Allowed outputs</h3>
+          <p>Select which outputs are available for the user.</p>
+          <div class="setup-instructions">
+            <strong>Tip</strong>
+            <ul>
+              <li>Disable outputs that should never be used by operators.</li>
+              <li>You can change this later in Device settings.</li>
+            </ul>
+          </div>
+          <div class="setup-output-grid" role="list">
+            <label class="setup-output">
+              <input type="checkbox" checked />
+              <span>Output 01</span>
+            </label>
+            <label class="setup-output">
+              <input type="checkbox" checked />
+              <span>Output 02</span>
+            </label>
+            <label class="setup-output">
+              <input type="checkbox" checked />
+              <span>Output 03</span>
+            </label>
+            <label class="setup-output">
+              <input type="checkbox" checked />
+              <span>Output 04</span>
+            </label>
+            <label class="setup-output">
+              <input type="checkbox" checked />
+              <span>Output 05</span>
+            </label>
+            <label class="setup-output">
+              <input type="checkbox" checked />
+              <span>Output 06</span>
+            </label>
+            <label class="setup-output">
+              <input type="checkbox" checked />
+              <span>Output 07</span>
+            </label>
+            <label class="setup-output">
+              <input type="checkbox" checked />
+              <span>Output 08</span>
+            </label>
+            <label class="setup-output">
+              <input type="checkbox" checked />
+              <span>Output 09</span>
+            </label>
+            <label class="setup-output">
+              <input type="checkbox" checked />
+              <span>Output 10</span>
+            </label>
+          </div>
+        </div>
+      </section>
+
+      <section
+        class="setup-step-panel"
+        data-setup-step="5"
+        data-step-title="Sensor zero and presence"
+      >
+        <div class="setup-card-grid">
+          <div class="setup-card">
+            <h3>Sensor zero</h3>
+            <p>Run these actions in order before presence check.</p>
+            <div class="setup-instructions">
+              <strong>Required sequence</strong>
+              <ul>
+                <li>Run capacitance measurement first.</li>
+                <li>Then run ACS zero calibration.</li>
+              </ul>
+            </div>
+            <div class="setup-actions">
+              <button class="btn btn-primary" type="button">Run capacitance measurement</button>
+              <button class="btn" type="button">Run ACS zero</button>
+            </div>
+          </div>
+          <div class="setup-card">
+            <h3>Presence check</h3>
+            <p>Confirm which outputs are connected.</p>
+            <div class="setup-instructions">
+              <strong>What to look for</strong>
+              <ul>
+                <li>Each wire should show Connected if present.</li>
+                <li>Any missing wire will show Not connected.</li>
+              </ul>
+            </div>
+            <button class="btn btn-primary" type="button">Run presence probe</button>
+            <div class="setup-presence-grid">
+              <div class="setup-presence-item">Wire 01<span>--</span></div>
+              <div class="setup-presence-item">Wire 02<span>--</span></div>
+              <div class="setup-presence-item">Wire 03<span>--</span></div>
+              <div class="setup-presence-item">Wire 04<span>--</span></div>
+              <div class="setup-presence-item">Wire 05<span>--</span></div>
+              <div class="setup-presence-item">Wire 06<span>--</span></div>
+              <div class="setup-presence-item">Wire 07<span>--</span></div>
+              <div class="setup-presence-item">Wire 08<span>--</span></div>
+              <div class="setup-presence-item">Wire 09<span>--</span></div>
+              <div class="setup-presence-item">Wire 10<span>--</span></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section
+        class="setup-step-panel"
+        data-setup-step="6"
+        data-step-title="NTC parameters"
+        data-step-skippable="true"
+      >
+        <div class="setup-card">
+          <h3>NTC parameters</h3>
+          <p class="setup-note">
+            Use the values from your NTC sensor datasheet.
+          </p>
+          <div class="setup-fields setup-fields-2">
+            <label class="setup-field">
+              <span>Beta</span>
+              <input class="setup-input" type="number" min="1" step="1" />
+            </label>
+            <label class="setup-field">
+              <span>T0 (&deg;C)</span>
+              <input class="setup-input" type="number" step="0.1" />
+            </label>
+            <label class="setup-field">
+              <span>R0 / R25</span>
+              <input class="setup-input" type="number" step="1" />
+            </label>
+            <label class="setup-field">
+              <span>Fixed pull-up resistor</span>
+              <input class="setup-input" type="number" step="1" />
+            </label>
+          </div>
+        </div>
+      </section>
+
+      <section
+        class="setup-step-panel"
+        data-setup-step="7"
+        data-step-title="Device settings"
+      >
+        <div class="setup-card-grid">
+          <div class="setup-card">
+            <h3>Sampling and power</h3>
+            <p class="setup-note">
+              Defines sampling speed and current protection limits.
+            </p>
+            <div class="setup-fields">
+              <label class="setup-field">
+                <span>Sampling rate (Hz)</span>
+                <input class="setup-input" type="number" min="50" max="500" />
+              </label>
+              <label class="setup-field">
+                <span>Charge resistor (Ohm)</span>
+                <input class="setup-input" type="number" />
+              </label>
+              <label class="setup-field">
+                <span>Current trip limit (A)</span>
+                <input class="setup-input" type="number" step="0.1" />
+              </label>
+              <label class="setup-field">
+                <span>Current source</span>
+                <select class="setup-select">
+                  <option>ACS Sensor</option>
+                  <option>CSP Discharge Estimate</option>
+                </select>
+              </label>
+            </div>
+          </div>
+
+          <div class="setup-card">
+            <h3>Thermal safety</h3>
+            <p class="setup-note">
+              Warning and trip levels protect the system from overheating.
+            </p>
+            <div class="setup-fields">
+              <label class="setup-field">
+                <span>Temp warning (&deg;C)</span>
+                <input class="setup-input" type="number" step="0.1" />
+              </label>
+              <label class="setup-field">
+                <span>Temp trip shutdown (&deg;C)</span>
+                <input class="setup-input" type="number" step="0.1" />
+              </label>
+            </div>
+          </div>
+
+          <div class="setup-card">
+            <h3>Thermal model</h3>
+            <p class="setup-note">
+              Thermal model parameters are used for control calculations.
+            </p>
+            <div class="setup-fields">
+              <label class="setup-field">
+                <span>Model target</span>
+                <select class="setup-select">
+                  <option>Wire 1</option>
+                  <option>Wire 2</option>
+                  <option>Wire 3</option>
+                  <option>Wire 4</option>
+                  <option>Wire 5</option>
+                  <option>Wire 6</option>
+                  <option>Wire 7</option>
+                  <option>Wire 8</option>
+                  <option>Wire 9</option>
+                  <option>Wire 10</option>
+                  <option>Floor</option>
+                </select>
+              </label>
+              <label class="setup-field">
+                <span>Tau (s)</span>
+                <input class="setup-input" type="number" step="0.01" />
+              </label>
+              <label class="setup-field">
+                <span>K Loss (W/K)</span>
+                <input class="setup-input" type="number" step="0.001" />
+              </label>
+              <label class="setup-field">
+                <span>Thermal C (J/K)</span>
+                <input class="setup-input" type="number" step="0.01" />
+              </label>
+            </div>
+          </div>
+
+          <div class="setup-card">
+            <h3>Presence</h3>
+            <p class="setup-note">
+              Minimum voltage drop for wire presence detection.
+            </p>
+            <div class="setup-fields">
+              <label class="setup-field">
+                <span>Presence min voltage drop (V)</span>
+                <input class="setup-input" type="number" step="0.01" />
+              </label>
+            </div>
+          </div>
+
+          <div class="setup-card">
+            <h3>Floor settings</h3>
+            <p class="setup-note">
+              Floor limits depend on material and local code requirements.
+            </p>
+            <div class="setup-fields">
+              <label class="setup-field">
+                <span>Floor thickness (20-50 mm)</span>
+                <input class="setup-input" type="number" min="20" max="50" step="0.1" />
+              </label>
+              <label class="setup-field">
+                <span>Nichrome final temp (&deg;C)</span>
+                <input class="setup-input" type="number" step="0.1" />
+              </label>
+              <label class="setup-field">
+                <span>NTC linked channel (1-10)</span>
+                <input class="setup-input" type="number" min="1" max="10" step="1" />
+              </label>
+              <label class="setup-field">
+                <span>Floor material</span>
+                <select class="setup-select">
+                  <option>Wood</option>
+                  <option>Epoxy</option>
+                  <option>Concrete</option>
+                  <option>Slate</option>
+                  <option>Marble</option>
+                  <option>Granite</option>
+                </select>
+              </label>
+              <label class="setup-field">
+                <span>Max floor temp (<= 35 &deg;C)</span>
+                <input class="setup-input" type="number" max="35" step="0.1" />
+              </label>
+              <label class="setup-field">
+                <span>Floor switch margin (&deg;C)</span>
+                <input class="setup-input" type="number" step="0.1" />
+              </label>
+            </div>
+          </div>
+
+          <div class="setup-card">
+            <h3>Nichrome calibration</h3>
+            <p class="setup-note">
+              Enter measured resistances for each output wire.
+            </p>
+            <div class="setup-fields setup-fields-2">
+              <label class="setup-field">
+                <span>Wire resistivity (Ohm/m)</span>
+                <input class="setup-input" type="number" step="0.01" />
+              </label>
+              <label class="setup-field">
+                <span>R01 (Ohm)</span>
+                <input class="setup-input" type="number" step="0.1" />
+              </label>
+              <label class="setup-field">
+                <span>R02 (Ohm)</span>
+                <input class="setup-input" type="number" step="0.1" />
+              </label>
+              <label class="setup-field">
+                <span>R03 (Ohm)</span>
+                <input class="setup-input" type="number" step="0.1" />
+              </label>
+              <label class="setup-field">
+                <span>R04 (Ohm)</span>
+                <input class="setup-input" type="number" step="0.1" />
+              </label>
+              <label class="setup-field">
+                <span>R05 (Ohm)</span>
+                <input class="setup-input" type="number" step="0.1" />
+              </label>
+              <label class="setup-field">
+                <span>R06 (Ohm)</span>
+                <input class="setup-input" type="number" step="0.1" />
+              </label>
+              <label class="setup-field">
+                <span>R07 (Ohm)</span>
+                <input class="setup-input" type="number" step="0.1" />
+              </label>
+              <label class="setup-field">
+                <span>R08 (Ohm)</span>
+                <input class="setup-input" type="number" step="0.1" />
+              </label>
+              <label class="setup-field">
+                <span>R09 (Ohm)</span>
+                <input class="setup-input" type="number" step="0.1" />
+              </label>
+              <label class="setup-field">
+                <span>R10 (Ohm)</span>
+                <input class="setup-input" type="number" step="0.1" />
+              </label>
+            </div>
+          </div>
+
+          <div class="setup-card">
+            <h3>Energy control</h3>
+            <p class="setup-note">
+              Wire gauge controls power calculations and safety limits.
+            </p>
+            <div class="setup-fields">
+              <label class="setup-field">
+                <span>Wire gauge (AWG 1-40)</span>
+                <input class="setup-input" type="number" min="1" max="40" step="1" />
+              </label>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section
+        class="setup-step-panel"
+        data-setup-step="8"
+        data-step-title="Wire calibration"
+        data-step-skippable="true"
+      >
+        <div class="setup-card">
+          <h3>Wire calibration</h3>
+          <p class="setup-note">
+            Use this if you want to calibrate a single wire now.
+          </p>
+          <div class="setup-fields setup-fields-2">
+            <label class="setup-field">
+              <span>Target temp (&deg;C)</span>
+              <input class="setup-input" type="number" step="0.1" />
+            </label>
+          </div>
+          <div class="setup-actions">
+            <button class="btn btn-primary" type="button">Start wire test</button>
+            <button class="btn" type="button">Stop wire test</button>
+          </div>
+          <div class="setup-status-grid">
+            <div class="setup-status-item"><span>State</span><strong>Idle</strong></div>
+            <div class="setup-status-item"><span>Mode</span><strong>--</strong></div>
+            <div class="setup-status-item"><span>Purpose</span><strong>--</strong></div>
+            <div class="setup-status-item"><span>Active wire</span><strong>--</strong></div>
+            <div class="setup-status-item"><span>NTC temp</span><strong>--</strong></div>
+            <div class="setup-status-item"><span>Model temp</span><strong>--</strong></div>
+            <div class="setup-status-item"><span>Packet</span><strong>--</strong></div>
+            <div class="setup-status-item"><span>Frame</span><strong>--</strong></div>
+          </div>
+        </div>
+      </section>
+
+      <section
+        class="setup-step-panel"
+        data-setup-step="9"
+        data-step-title="Floor calibration"
+        data-step-skippable="true"
+      >
+        <div class="setup-card">
+          <h3>Floor calibration</h3>
+          <p class="setup-note">
+            Run a full floor calibration if your installation requires it.
+          </p>
+          <div class="setup-fields setup-fields-3">
+            <label class="setup-field">
+              <span>Target temp (&deg;C)</span>
+              <input class="setup-input" type="number" step="0.1" />
+            </label>
+            <label class="setup-field">
+              <span>Duty (%)</span>
+              <input class="setup-input" type="number" min="5" max="100" step="1" />
+            </label>
+            <label class="setup-field">
+              <span>Ambient (min)</span>
+              <input class="setup-input" type="number" min="1" step="1" />
+            </label>
+            <label class="setup-field">
+              <span>Heat (min)</span>
+              <input class="setup-input" type="number" min="1" step="1" />
+            </label>
+            <label class="setup-field">
+              <span>Cool (min)</span>
+              <input class="setup-input" type="number" min="0" step="1" />
+            </label>
+            <label class="setup-field">
+              <span>Interval (ms)</span>
+              <input class="setup-input" type="number" min="50" max="5000" step="50" />
+            </label>
+            <label class="setup-field">
+              <span>Wire index</span>
+              <input class="setup-input" type="number" min="1" max="10" step="1" />
+            </label>
+          </div>
+          <div class="setup-actions">
+            <button class="btn btn-primary" type="button">Start floor cal</button>
+          </div>
+          <div class="setup-status-grid">
+            <div class="setup-status-item"><span>Stage</span><strong>--</strong></div>
+            <div class="setup-status-item"><span>Running</span><strong>--</strong></div>
+            <div class="setup-status-item"><span>Done</span><strong>--</strong></div>
+            <div class="setup-status-item"><span>Tau</span><strong>--</strong></div>
+            <div class="setup-status-item"><span>K</span><strong>--</strong></div>
+            <div class="setup-status-item"><span>C</span><strong>--</strong></div>
+          </div>
+        </div>
+      </section>
+
+      <section
+        class="setup-step-panel"
+        data-setup-step="10"
+        data-step-title="Finish"
+      >
+        <div class="setup-card">
+          <h3>Finish setup</h3>
+          <p>Review the completed steps and finalize setup.</p>
+          <div class="setup-instructions">
+            <strong>After finishing</strong>
+            <ul>
+              <li>You can update any settings later from the tabs.</li>
+              <li>Required steps must be completed before running the system.</li>
+            </ul>
+          </div>
+          <div class="setup-summary" data-setup-summary>
+            <div class="setup-summary-item">
+              <span>Required steps complete</span>
+              <strong>Pending</strong>
+            </div>
+            <div class="setup-summary-item">
+              <span>Skipped steps</span>
+              <strong>None</strong>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <footer class="setup-footer">
+    <button class="btn" type="button" data-setup-cancel>Cancel</button>
+    <div class="setup-footer-actions">
+      <button class="btn" type="button" data-setup-back>Back</button>
+      <button class="btn" type="button" data-setup-skip>Skip</button>
+      <button class="btn btn-primary" type="button" data-setup-next>Next</button>
+    </div>
+  </footer>
+</div>

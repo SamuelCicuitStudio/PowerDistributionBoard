@@ -2,16 +2,11 @@
   position: absolute;
   inset: 0;
   z-index: 90;
-  display: none;
   padding: 10px 12px 14px;
   background: radial-gradient(circle at top, rgba(0, 255, 174, 0.05), transparent),
     rgba(2, 4, 6, 0.75);
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
-}
-
-.alert-overlay.is-open {
-  display: flex;
 }
 
 .alert-overlay--warn {

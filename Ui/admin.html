@@ -30,37 +30,37 @@
             data-include="admin/partials/layout/overlays.html"
           ></div>
           <div
-            class="live-overlay"
+            class="live-overlay overlay-panel"
             data-live-overlay
             data-include="admin/partials/overlays/live.html"
             aria-hidden="true"
           ></div>
           <div
-            class="alert-overlay alert-overlay--warn"
+            class="alert-overlay alert-overlay--warn overlay-panel"
             data-alert-overlay="warn"
             aria-hidden="true"
             data-include="admin/partials/overlays/warnings.html"
           ></div>
           <div
-            class="alert-overlay alert-overlay--err"
+            class="alert-overlay alert-overlay--err overlay-panel"
             data-alert-overlay="err"
             aria-hidden="true"
             data-include="admin/partials/overlays/errors.html"
           ></div>
           <div
-            class="history-overlay"
+            class="history-overlay overlay-panel"
             data-history-overlay
             aria-hidden="true"
             data-include="admin/partials/overlays/history.html"
           ></div>
           <div
-            class="log-overlay"
+            class="log-overlay overlay-panel"
             data-log-overlay
             aria-hidden="true"
             data-include="admin/partials/overlays/log.html"
           ></div>
           <div
-            class="calibration-overlay"
+            class="calibration-overlay overlay-panel"
             data-calibration-overlay
             aria-hidden="true"
             data-include="admin/partials/overlays/calibration.html"
@@ -71,37 +71,45 @@
             aria-hidden="true"
             data-include="admin/partials/layout/session-menu.html"
             ></div>
-            <div
-              class="tab-panel is-active"
-              data-tab-panel="dashboard"
-              data-include="admin/partials/tabs/dashboard.html"
-            ></div>
-            <div
-              class="tab-panel"
-              data-tab-panel="user"
-              data-include="admin/partials/tabs/user.html"
-            ></div>
-            <div
-              class="tab-panel"
-              data-tab-panel="control"
-              data-include="admin/partials/tabs/control.html"
-            ></div>
-            <div
-              class="tab-panel"
-              data-tab-panel="admin"
-              data-include="admin/partials/tabs/admin.html"
-            ></div>
-            <div
-              class="tab-panel"
-              data-tab-panel="device"
-              data-include="admin/partials/tabs/device.html"
-            ></div>
-            <div
-              class="tab-panel"
-              data-tab-panel="live"
-              data-include="admin/partials/tabs/live.html"
-            ></div>
+            <div class="tab-stage">
+              <div
+                class="tab-panel is-active"
+                data-tab-panel="dashboard"
+                data-include="admin/partials/tabs/dashboard.html"
+              ></div>
+              <div
+                class="tab-panel"
+                data-tab-panel="user"
+                data-include="admin/partials/tabs/user.html"
+              ></div>
+              <div
+                class="tab-panel"
+                data-tab-panel="control"
+                data-include="admin/partials/tabs/control.html"
+              ></div>
+              <div
+                class="tab-panel"
+                data-tab-panel="admin"
+                data-include="admin/partials/tabs/admin.html"
+              ></div>
+              <div
+                class="tab-panel"
+                data-tab-panel="device"
+                data-include="admin/partials/tabs/device.html"
+              ></div>
+              <div
+                class="tab-panel"
+                data-tab-panel="live"
+                data-include="admin/partials/tabs/live.html"
+              ></div>
+            </div>
           </main>
+          <div
+            class="setup-wizard"
+            data-setup-wizard
+            aria-hidden="true"
+            data-include="admin/partials/wizard/setup-wizard.html"
+          ></div>
         </div>
       </div>
     </div>

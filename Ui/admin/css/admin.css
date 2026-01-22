@@ -16,6 +16,7 @@
 @import "./layout/live-overlay.css";
 @import "./layout/live-chart.css";
 @import "./layout/live-tab.css";
+@import "./layout/setup-wizard.css";
 @import "./layout/dashboard-tab.css";
 @import "./layout/device-tab.css";
 @import "./layout/user-tab.css";
