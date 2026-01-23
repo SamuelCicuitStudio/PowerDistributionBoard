@@ -4,6 +4,7 @@
     data-state="ok"
     data-sb="indicator"
     aria-label="Device status"
+    data-i18n-aria="statusbar.deviceStatus"
   >
     <span class="status-dot" aria-hidden="true"></span>
   </div>
@@ -14,6 +15,7 @@
     data-sb="link-pill"
     data-link="station"
     aria-label="Connection mode"
+    data-i18n-aria="statusbar.connectionMode"
   >
     <svg
       class="status-link-icon status-link-icon--station"
@@ -59,6 +61,7 @@
     data-state="ok"
     data-sb="warn-pill"
     aria-label="Warnings"
+    data-i18n-aria="statusbar.warnings"
   >
     <svg
       viewBox="0 0 24 24"
@@ -84,6 +87,7 @@
     data-state="ok"
     data-sb="err-pill"
     aria-label="Errors"
+    data-i18n-aria="statusbar.errors"
   >
     <svg
       viewBox="0 0 24 24"
@@ -115,7 +119,7 @@
     >
       <path d="M14 14.76V5a2 2 0 0 0-4 0v9.76a3 3 0 1 0 4 0z"></path>
     </svg>
-    <span class="status-label">Board</span>
+    <span class="status-label" data-i18n="statusbar.board">Board</span>
     <span class="status-value" data-sb="board-temp">--</span>
     <span class="status-unit">&deg;C</span>
   </div>
@@ -132,19 +136,19 @@
     >
       <path d="M14 14.76V5a2 2 0 0 0-4 0v9.76a3 3 0 1 0 4 0z"></path>
     </svg>
-    <span class="status-label">Sink</span>
+    <span class="status-label" data-i18n="statusbar.sink">Sink</span>
     <span class="status-value" data-sb="sink-temp">--</span>
     <span class="status-unit">&deg;C</span>
   </div>
 
   <div class="status-pill">
-    <span class="status-label">DC</span>
+    <span class="status-label" data-i18n="statusbar.dc">DC</span>
     <span class="status-value" data-sb="dc-voltage">--</span>
     <span class="status-unit">V</span>
   </div>
 
   <div class="status-pill">
-    <span class="status-label">I</span>
+    <span class="status-label" data-i18n="statusbar.current">I</span>
     <span class="status-value" data-sb="dc-current">--</span>
     <span class="status-unit">A</span>
   </div>
@@ -169,8 +173,10 @@
         stroke="none"
       ></polygon>
     </svg>
-    <span class="status-label">Mode</span>
-    <span class="status-text" data-sb="mode-label">Running</span>
+    <span class="status-label" data-i18n="statusbar.mode">Mode</span>
+    <span class="status-text" data-sb="mode-label" data-i18n="statusbar.mode.running"
+      >Running</span
+    >
   </div>
 
   <button class="status-pill status-action is-hidden" type="button" data-sb="live-btn">
@@ -186,7 +192,7 @@
       <polyline points="3 17 9 11 13 15 21 7"></polyline>
       <polyline points="21 7 21 13 15 13"></polyline>
     </svg>
-    <span class="status-text">Live</span>
+    <span class="status-text" data-i18n="statusbar.live">Live</span>
   </button>
 </div>
 

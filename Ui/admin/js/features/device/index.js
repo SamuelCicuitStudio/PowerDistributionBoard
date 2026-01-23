@@ -62,15 +62,28 @@ export function initDeviceTab() {
   const showToast = (message, state = "success") => {
     window.__toast?.show?.(message, state);
   };
+  const t = (key, vars, fallback) => {
+    if (window.__i18n?.t) {
+      const value = window.__i18n.t(key, vars);
+      if (value && value !== key) return value;
+    }
+    return fallback ?? key;
+  };
 
   applyDefaults(root);
-  showToast("Device connected (mock). Values loaded.");
+  showToast(
+    t(
+      "device.toast.connected",
+      null,
+      "Device connected (mock). Values loaded.",
+    ),
+  );
 
   const fields = qsa("input, select, textarea", root).filter((el) => el.id);
   fields.forEach((field) => {
     field.addEventListener("change", () => {
       const label = labelFor(root, field.id);
-      showToast(`${label} updated.`);
+      showToast(t("device.toast.updated", { label }, `${label} updated.`));
     });
   });
 
@@ -78,14 +91,13 @@ export function initDeviceTab() {
   const resetBtn = qs('[data-action="reset"]', root);
 
   saveBtn?.addEventListener("click", () => {
-    showToast("Device settings saved (mock).");
+    showToast(t("device.toast.saved", null, "Device settings saved (mock)."));
   });
 
   resetBtn?.addEventListener("click", () => {
     applyDefaults(root);
-    showToast("Device settings reset (mock).");
+    showToast(t("device.toast.reset", null, "Device settings reset (mock)."));
   });
 
   return { applyDefaults };
 }
-

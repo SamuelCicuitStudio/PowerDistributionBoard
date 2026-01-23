@@ -1,19 +1,58 @@
 import { qs, qsa } from "../../core/dom.js";
 
 const ACTION_MESSAGES = {
-  startModelCalibBtn: "Temp model calibration queued",
-  stopCalibBtn: "Calibration stop requested",
-  calibHistoryBtn: "Loading calibration history",
-  calibClearBtn: "Calibration data cleared",
-  calibHistoryLoadBtn: "Saved history loaded",
-  calibHistoryRefreshBtn: "History list refreshed",
-  wireTestStartBtn: "Wire test started",
-  wireTestStopBtn: "Wire test stopped",
-  startFloorCalibBtn: "Floor calibration started",
-  presenceProbeBtn: "Presence probe started",
-  logRefreshBtn: "Calibration log refreshed",
-  logClearBtn: "Calibration log cleared",
-  capCurrentCalBtn: "Capacitance + current sensor zero queued",
+  startModelCalibBtn: {
+    key: "calibration.toast.modelQueued",
+    fallback: "Temp model calibration queued",
+  },
+  stopCalibBtn: {
+    key: "calibration.toast.stopRequested",
+    fallback: "Calibration stop requested",
+  },
+  calibHistoryBtn: {
+    key: "calibration.toast.historyLoading",
+    fallback: "Loading calibration history",
+  },
+  calibClearBtn: {
+    key: "calibration.toast.historyCleared",
+    fallback: "Calibration data cleared",
+  },
+  calibHistoryLoadBtn: {
+    key: "calibration.toast.historyLoaded",
+    fallback: "Saved history loaded",
+  },
+  calibHistoryRefreshBtn: {
+    key: "calibration.toast.historyRefreshed",
+    fallback: "History list refreshed",
+  },
+  wireTestStartBtn: {
+    key: "calibration.toast.wireStart",
+    fallback: "Wire test started",
+  },
+  wireTestStopBtn: {
+    key: "calibration.toast.wireStop",
+    fallback: "Wire test stopped",
+  },
+  startFloorCalibBtn: {
+    key: "calibration.toast.floorStart",
+    fallback: "Floor calibration started",
+  },
+  presenceProbeBtn: {
+    key: "calibration.toast.presenceStart",
+    fallback: "Presence probe started",
+  },
+  logRefreshBtn: {
+    key: "calibration.toast.logRefreshed",
+    fallback: "Calibration log refreshed",
+  },
+  logClearBtn: {
+    key: "calibration.toast.logCleared",
+    fallback: "Calibration log cleared",
+  },
+  capCurrentCalBtn: {
+    key: "calibration.toast.capZeroQueued",
+    fallback: "Capacitance + current sensor zero queued",
+  },
 };
 
 const ACTION_STATES = {
@@ -33,9 +72,22 @@ export function initCalibrationOverlay() {
   const infoPanel = qs("[data-cal-info]", overlay);
   const infoOpen = qs("[data-cal-info-open]", overlay);
   const infoClose = qs("[data-cal-info-close]", overlay);
-  const actionButtons = qsa("[data-cal-action]", overlay);
-  const fieldNodes = qsa("[data-cal-field]", overlay);
-  const inputNodes = qsa("[data-cal-input]", overlay);
+  const wizardRoot = qs("[data-setup-wizard]");
+  const wizardScoped = wizardRoot
+    ? qsa("[data-cal-scope='wizard']", wizardRoot)
+    : [];
+  const actionButtons = [
+    ...qsa("[data-cal-action]", overlay),
+    ...wizardScoped.filter((node) => node.hasAttribute("data-cal-action")),
+  ];
+  const fieldNodes = [
+    ...qsa("[data-cal-field]", overlay),
+    ...wizardScoped.filter((node) => node.hasAttribute("data-cal-field")),
+  ];
+  const inputNodes = [
+    ...qsa("[data-cal-input]", overlay),
+    ...wizardScoped.filter((node) => node.hasAttribute("data-cal-input")),
+  ];
   const historySelect = qs("[data-cal-input='calibHistorySelect']", overlay);
   const presenceGrid = qs("[data-cal-grid='presenceProbeGrid']", overlay);
   const logBody = qs("[data-cal-log]", overlay);
@@ -52,6 +104,13 @@ export function initCalibrationOverlay() {
   });
 
   let calAlertTimer = null;
+  const t = (key, vars, fallback) => {
+    if (window.__i18n?.t) {
+      const value = window.__i18n.t(key, vars);
+      if (value && value !== key) return value;
+    }
+    return fallback ?? key;
+  };
 
   const setOpen = (open) => {
     overlay.classList.toggle("is-open", open);
@@ -179,7 +238,11 @@ export function initCalibrationOverlay() {
     if (!lines.length) {
       const empty = document.createElement("div");
       empty.className = "calibration-log-entry";
-      empty.textContent = "[--:--:--] No log data";
+      empty.textContent = t(
+        "calibration.log.empty",
+        null,
+        "[--:--:--] No log data",
+      );
       logBody.appendChild(empty);
       return;
     }
@@ -232,7 +295,10 @@ export function initCalibrationOverlay() {
   actionButtons.forEach((btn) => {
     btn.addEventListener("click", () => {
       const key = btn.getAttribute("data-cal-action");
-      const message = ACTION_MESSAGES[key] || "Calibration action queued";
+      const info = ACTION_MESSAGES[key];
+      const message = info
+        ? t(info.key, null, info.fallback)
+        : t("calibration.toast.actionQueued", null, "Calibration action queued");
       notify(message, ACTION_STATES[key] || "ok");
       window.dispatchEvent(
         new CustomEvent("calibration:action", {

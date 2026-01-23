@@ -1,4 +1,8 @@
-<section class="device-tab" aria-label="Device settings">
+<section
+  class="device-tab"
+  aria-label="Device settings"
+  data-i18n-aria="device.aria.root"
+>
   <div class="device-card">
     <div class="device-card-inner">
       <div class="device-header">
@@ -23,13 +27,19 @@
           </svg>
         </div>
         <div>
-          <h2>Device Settings</h2>
-          <p>Sampling, safety, floor, and nichrome parameters.</p>
+          <h2 data-i18n="device.header.title">Device Settings</h2>
+          <p data-i18n="device.header.subtitle">
+            Sampling, safety, floor, and nichrome parameters.
+          </p>
         </div>
       </div>
 
       <div class="device-grid">
-        <section class="device-col device-col--left" aria-label="Device settings left">
+        <section
+          class="device-col device-col--left"
+          aria-label="Device settings left"
+          data-i18n-aria="device.aria.left"
+        >
           <div class="device-group device-group--power">
             <h3 class="device-group-title">
               <span class="device-group-icon" aria-hidden="true">
@@ -44,11 +54,13 @@
                   <path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z"></path>
                 </svg>
               </span>
-              <span>Sampling &amp; Power</span>
+              <span data-i18n="device.group.power">Sampling &amp; Power</span>
             </h3>
             <div class="device-fields">
               <div class="device-field">
-                <label for="acFrequency">Sampling Rate</label>
+                <label for="acFrequency" data-i18n="device.field.samplingRate">
+                  Sampling Rate
+                </label>
                 <div class="input-with-unit">
                   <input
                     class="device-input"
@@ -62,7 +74,9 @@
               </div>
 
               <div class="device-field">
-                <label for="chargeResistor">Charge Resistor</label>
+                <label for="chargeResistor" data-i18n="device.field.chargeResistor">
+                  Charge Resistor
+                </label>
                 <div class="input-with-unit">
                   <input class="device-input" id="chargeResistor" type="number" />
                   <span class="device-unit">Ohm</span>
@@ -70,7 +84,9 @@
               </div>
 
               <div class="device-field">
-                <label for="currLimit">Current Trip Limit</label>
+                <label for="currLimit" data-i18n="device.field.currentTripLimit">
+                  Current Trip Limit
+                </label>
                 <div class="input-with-unit">
                   <input
                     class="device-input"
@@ -83,10 +99,16 @@
               </div>
 
               <div class="device-field device-field--full">
-                <label for="currentSource">Current Source</label>
+                <label for="currentSource" data-i18n="device.field.currentSource">
+                  Current Source
+                </label>
                 <select class="device-select" id="currentSource">
-                  <option value="1">ACS Sensor</option>
-                  <option value="0">CSP Discharge Estimate</option>
+                  <option value="1" data-i18n="device.field.currentSource.acs">
+                    ACS Sensor
+                  </option>
+                  <option value="0" data-i18n="device.field.currentSource.csp">
+                    CSP Discharge Estimate
+                  </option>
                 </select>
               </div>
             </div>
@@ -108,11 +130,13 @@
                   <path d="M12 16h.01"></path>
                 </svg>
               </span>
-              <span>Thermal Safety</span>
+              <span data-i18n="device.group.safety">Thermal Safety</span>
             </h3>
             <div class="device-fields">
               <div class="device-field">
-                <label for="tempWarnC">Temp Warning</label>
+                <label for="tempWarnC" data-i18n="device.field.tempWarn">
+                  Temp Warning
+                </label>
                 <div class="input-with-unit">
                   <input
                     class="device-input"
@@ -125,7 +149,9 @@
               </div>
 
               <div class="device-field">
-                <label for="tempTripC">Temp Trip (Shutdown)</label>
+                <label for="tempTripC" data-i18n="device.field.tempTrip">
+                  Temp Trip (Shutdown)
+                </label>
                 <div class="input-with-unit">
                   <input
                     class="device-input"
@@ -155,28 +181,52 @@
                   <path d="M10 4v16"></path>
                 </svg>
               </span>
-              <span>Thermal Model</span>
+              <span data-i18n="device.group.model">Thermal Model</span>
             </h3>
             <div class="device-fields">
               <div class="device-field device-field--full">
-                <label for="modelParamTarget">Model Target</label>
+                <label for="modelParamTarget" data-i18n="device.field.modelTarget">
+                  Model Target
+                </label>
                 <select class="device-select" id="modelParamTarget">
-                  <option value="wire1">Wire 1</option>
-                  <option value="wire2">Wire 2</option>
-                  <option value="wire3">Wire 3</option>
-                  <option value="wire4">Wire 4</option>
-                  <option value="wire5">Wire 5</option>
-                  <option value="wire6">Wire 6</option>
-                  <option value="wire7">Wire 7</option>
-                  <option value="wire8">Wire 8</option>
-                  <option value="wire9">Wire 9</option>
-                  <option value="wire10">Wire 10</option>
-                  <option value="floor">Floor</option>
+                  <option value="wire1" data-i18n="device.field.modelTarget.wire1">
+                    Wire 1
+                  </option>
+                  <option value="wire2" data-i18n="device.field.modelTarget.wire2">
+                    Wire 2
+                  </option>
+                  <option value="wire3" data-i18n="device.field.modelTarget.wire3">
+                    Wire 3
+                  </option>
+                  <option value="wire4" data-i18n="device.field.modelTarget.wire4">
+                    Wire 4
+                  </option>
+                  <option value="wire5" data-i18n="device.field.modelTarget.wire5">
+                    Wire 5
+                  </option>
+                  <option value="wire6" data-i18n="device.field.modelTarget.wire6">
+                    Wire 6
+                  </option>
+                  <option value="wire7" data-i18n="device.field.modelTarget.wire7">
+                    Wire 7
+                  </option>
+                  <option value="wire8" data-i18n="device.field.modelTarget.wire8">
+                    Wire 8
+                  </option>
+                  <option value="wire9" data-i18n="device.field.modelTarget.wire9">
+                    Wire 9
+                  </option>
+                  <option value="wire10" data-i18n="device.field.modelTarget.wire10">
+                    Wire 10
+                  </option>
+                  <option value="floor" data-i18n="device.field.modelTarget.floor">
+                    Floor
+                  </option>
                 </select>
               </div>
 
               <div class="device-field">
-                <label for="modelTau">Tau</label>
+                <label for="modelTau" data-i18n="device.field.modelTau">Tau</label>
                 <div class="input-with-unit">
                   <input class="device-input" id="modelTau" type="number" step="0.01" />
                   <span class="device-unit">s</span>
@@ -184,7 +234,7 @@
               </div>
 
               <div class="device-field">
-                <label for="modelK">K Loss</label>
+                <label for="modelK" data-i18n="device.field.modelKloss">K Loss</label>
                 <div class="input-with-unit">
                   <input class="device-input" id="modelK" type="number" step="0.001" />
                   <span class="device-unit">W/K</span>
@@ -192,7 +242,7 @@
               </div>
 
               <div class="device-field">
-                <label for="modelC">Thermal C</label>
+                <label for="modelC" data-i18n="device.field.modelC">Thermal C</label>
                 <div class="input-with-unit">
                   <input class="device-input" id="modelC" type="number" step="0.01" />
                   <span class="device-unit">J/K</span>
@@ -216,23 +266,25 @@
                   <circle cx="12" cy="17" r="4"></circle>
                 </svg>
               </span>
-              <span>NTC Parameters</span>
+              <span data-i18n="device.group.ntc">NTC Parameters</span>
             </h3>
             <div class="device-fields">
               <div class="device-field">
-                <label for="ntcBeta">Beta</label>
+                <label for="ntcBeta" data-i18n="device.field.ntcBeta">Beta</label>
                 <input class="device-input" id="ntcBeta" type="number" min="1" step="1" />
               </div>
               <div class="device-field">
-                <label for="ntcT0C">T0</label>
+                <label for="ntcT0C" data-i18n="device.field.ntcT0">T0</label>
                 <input class="device-input" id="ntcT0C" type="number" step="0.1" />
               </div>
               <div class="device-field">
-                <label for="ntcR0">R0 / R25</label>
+                <label for="ntcR0" data-i18n="device.field.ntcR0">R0 / R25</label>
                 <input class="device-input" id="ntcR0" type="number" step="1" />
               </div>
               <div class="device-field">
-                <label for="ntcFixedRes">Fixed Pull-up Resistor</label>
+                <label for="ntcFixedRes" data-i18n="device.field.ntcFixedRes">
+                  Fixed Pull-up Resistor
+                </label>
                 <input class="device-input" id="ntcFixedRes" type="number" step="1" />
               </div>
             </div>
@@ -254,11 +306,16 @@
                   <path d="M12 16h.01"></path>
                 </svg>
               </span>
-              <span>Presence</span>
+              <span data-i18n="device.group.presence">Presence</span>
             </h3>
             <div class="device-fields">
               <div class="device-field device-field--full">
-                <label for="presenceMinDropV">Presence Min Voltage Drop</label>
+                <label
+                  for="presenceMinDropV"
+                  data-i18n="device.field.presenceMinDrop"
+                >
+                  Presence Min Voltage Drop
+                </label>
                 <div class="input-with-unit">
                   <input
                     class="device-input"
@@ -274,7 +331,11 @@
           </div>
         </section>
 
-        <section class="device-col device-col--right" aria-label="Device settings right">
+        <section
+          class="device-col device-col--right"
+          aria-label="Device settings right"
+          data-i18n-aria="device.aria.right"
+        >
           <div class="device-group device-group--floor">
             <h3 class="device-group-title">
               <span class="device-group-icon" aria-hidden="true">
@@ -291,11 +352,16 @@
                   <rect x="3" y="17" width="18" height="4" rx="2"></rect>
                 </svg>
               </span>
-              <span>Floor Settings</span>
+              <span data-i18n="device.group.floor">Floor Settings</span>
             </h3>
             <div class="device-fields">
               <div class="device-field">
-                <label for="floorThicknessMm">Floor Thickness (20-50 mm)</label>
+                <label
+                  for="floorThicknessMm"
+                  data-i18n="device.field.floorThickness"
+                >
+                  Floor Thickness (20-50 mm)
+                </label>
                 <div class="input-with-unit">
                   <input
                     class="device-input"
@@ -310,7 +376,12 @@
               </div>
 
               <div class="device-field">
-                <label for="nichromeFinalTempC">Nichrome Final Temp</label>
+                <label
+                  for="nichromeFinalTempC"
+                  data-i18n="device.field.nichromeFinalTemp"
+                >
+                  Nichrome Final Temp
+                </label>
                 <div class="input-with-unit">
                   <input
                     class="device-input"
@@ -323,7 +394,9 @@
               </div>
 
               <div class="device-field">
-                <label for="ntcGateIndex">NTC Linked Channel</label>
+                <label for="ntcGateIndex" data-i18n="device.field.ntcLinkedChannel">
+                  NTC Linked Channel
+                </label>
                 <input
                   class="device-input"
                   id="ntcGateIndex"
@@ -335,19 +408,41 @@
               </div>
 
               <div class="device-field device-field--full">
-                <label for="floorMaterial">Floor Material</label>
+                <label for="floorMaterial" data-i18n="device.field.floorMaterial">
+                  Floor Material
+                </label>
                 <select class="device-select" id="floorMaterial">
-                  <option value="wood">Wood</option>
-                  <option value="epoxy">Epoxy</option>
-                  <option value="concrete">Concrete</option>
-                  <option value="slate">Slate</option>
-                  <option value="marble">Marble</option>
-                  <option value="granite">Granite</option>
+                  <option value="wood" data-i18n="device.field.floorMaterial.wood">
+                    Wood
+                  </option>
+                  <option value="epoxy" data-i18n="device.field.floorMaterial.epoxy">
+                    Epoxy
+                  </option>
+                  <option
+                    value="concrete"
+                    data-i18n="device.field.floorMaterial.concrete"
+                  >
+                    Concrete
+                  </option>
+                  <option value="slate" data-i18n="device.field.floorMaterial.slate">
+                    Slate
+                  </option>
+                  <option value="marble" data-i18n="device.field.floorMaterial.marble">
+                    Marble
+                  </option>
+                  <option
+                    value="granite"
+                    data-i18n="device.field.floorMaterial.granite"
+                  >
+                    Granite
+                  </option>
                 </select>
               </div>
 
               <div class="device-field">
-                <label for="floorMaxC">Max Floor Temp (<= 35 C)</label>
+                <label for="floorMaxC" data-i18n="device.field.floorMax">
+                  Max Floor Temp (<= 35 C)
+                </label>
                 <div class="input-with-unit">
                   <input
                     class="device-input"
@@ -361,7 +456,9 @@
               </div>
 
               <div class="device-field">
-                <label for="floorSwitchMarginC">Floor Switch Margin</label>
+                <label for="floorSwitchMarginC" data-i18n="device.field.floorSwitchMargin">
+                  Floor Switch Margin
+                </label>
                 <div class="input-with-unit">
                   <input
                     class="device-input"
@@ -390,11 +487,13 @@
                   <path d="M8.5 14.5C7.3 15.7 7 17 7 18a5 5 0 0 0 10 0c0-1-.3-2.3-1.5-3.5"></path>
                 </svg>
               </span>
-              <span>Nichrome Calibration</span>
+              <span data-i18n="device.group.nichrome">Nichrome Calibration</span>
             </h3>
             <div class="nichrome-grid">
               <div class="device-field device-field--full">
-                <label for="wireOhmPerM">Wire Resistivity (Ohm/m)</label>
+                <label for="wireOhmPerM" data-i18n="device.field.wireResistivity">
+                  Wire Resistivity (Ohm/m)
+                </label>
                 <input
                   class="device-input"
                   id="wireOhmPerM"
@@ -403,43 +502,63 @@
                 />
               </div>
               <div class="device-field">
-                <label for="r01ohm">R01 (Ohm)</label>
+                <label for="r01ohm" data-i18n="device.field.wireOhm.r01">
+                  R01 (Ohm)
+                </label>
                 <input class="device-input" id="r01ohm" type="number" step="0.1" />
               </div>
               <div class="device-field">
-                <label for="r02ohm">R02 (Ohm)</label>
+                <label for="r02ohm" data-i18n="device.field.wireOhm.r02">
+                  R02 (Ohm)
+                </label>
                 <input class="device-input" id="r02ohm" type="number" step="0.1" />
               </div>
               <div class="device-field">
-                <label for="r03ohm">R03 (Ohm)</label>
+                <label for="r03ohm" data-i18n="device.field.wireOhm.r03">
+                  R03 (Ohm)
+                </label>
                 <input class="device-input" id="r03ohm" type="number" step="0.1" />
               </div>
               <div class="device-field">
-                <label for="r04ohm">R04 (Ohm)</label>
+                <label for="r04ohm" data-i18n="device.field.wireOhm.r04">
+                  R04 (Ohm)
+                </label>
                 <input class="device-input" id="r04ohm" type="number" step="0.1" />
               </div>
               <div class="device-field">
-                <label for="r05ohm">R05 (Ohm)</label>
+                <label for="r05ohm" data-i18n="device.field.wireOhm.r05">
+                  R05 (Ohm)
+                </label>
                 <input class="device-input" id="r05ohm" type="number" step="0.1" />
               </div>
               <div class="device-field">
-                <label for="r06ohm">R06 (Ohm)</label>
+                <label for="r06ohm" data-i18n="device.field.wireOhm.r06">
+                  R06 (Ohm)
+                </label>
                 <input class="device-input" id="r06ohm" type="number" step="0.1" />
               </div>
               <div class="device-field">
-                <label for="r07ohm">R07 (Ohm)</label>
+                <label for="r07ohm" data-i18n="device.field.wireOhm.r07">
+                  R07 (Ohm)
+                </label>
                 <input class="device-input" id="r07ohm" type="number" step="0.1" />
               </div>
               <div class="device-field">
-                <label for="r08ohm">R08 (Ohm)</label>
+                <label for="r08ohm" data-i18n="device.field.wireOhm.r08">
+                  R08 (Ohm)
+                </label>
                 <input class="device-input" id="r08ohm" type="number" step="0.1" />
               </div>
               <div class="device-field">
-                <label for="r09ohm">R09 (Ohm)</label>
+                <label for="r09ohm" data-i18n="device.field.wireOhm.r09">
+                  R09 (Ohm)
+                </label>
                 <input class="device-input" id="r09ohm" type="number" step="0.1" />
               </div>
               <div class="device-field">
-                <label for="r10ohm">R10 (Ohm)</label>
+                <label for="r10ohm" data-i18n="device.field.wireOhm.r10">
+                  R10 (Ohm)
+                </label>
                 <input class="device-input" id="r10ohm" type="number" step="0.1" />
               </div>
             </div>
@@ -459,11 +578,13 @@
                   <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
                 </svg>
               </span>
-              <span>Energy Control</span>
+              <span data-i18n="device.group.energy">Energy Control</span>
             </h3>
             <div class="device-fields">
               <div class="device-field device-field--full">
-                <label for="wireGauge">Wire Gauge (AWG)</label>
+                <label for="wireGauge" data-i18n="device.field.wireGauge">
+                  Wire Gauge (AWG)
+                </label>
                 <input
                   class="device-input"
                   id="wireGauge"

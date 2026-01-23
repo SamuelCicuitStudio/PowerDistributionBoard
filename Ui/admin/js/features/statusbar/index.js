@@ -90,6 +90,14 @@ export function initStatusbar() {
     showAlert(String(message || ""), normalizeAlertState(state));
   };
 
+  const t = (key, vars, fallback) => {
+    if (window.__i18n?.t) {
+      const value = window.__i18n.t(key, vars);
+      if (value && value !== key) return value;
+    }
+    return fallback ?? key;
+  };
+
   updateStatusbarHeightVar();
   window.addEventListener("resize", updateStatusbarHeightVar);
 
@@ -155,8 +163,8 @@ export function initStatusbar() {
       nodes.linkPill.setAttribute(
         "aria-label",
         nodes.linkPill.dataset.link === "ap"
-          ? "Connected (AP Hotspot)"
-          : "Connected (Station)",
+          ? t("statusbar.connection.ap", null, "Connected (AP Hotspot)")
+          : t("statusbar.connection.station", null, "Connected (Station)"),
       );
     }
   }
@@ -182,7 +190,7 @@ export function initStatusbar() {
     setText(nodes.warnCount, String(value));
     setState(nodes.warnPill, value > 0 ? "warn" : "ok");
     if (value > lastWarn) {
-      showAlert("New warning", "warn");
+      showAlert(t("statusbar.alert.warn", null, "New warning"), "warn");
     }
     lastWarn = value;
   }
@@ -192,13 +200,19 @@ export function initStatusbar() {
     setText(nodes.errCount, String(value));
     setState(nodes.errPill, value > 0 ? "err" : "ok");
     if (value > lastErr) {
-      showAlert("New error", "err");
+      showAlert(t("statusbar.alert.error", null, "New error"), "err");
     }
     lastErr = value;
   }
 
   function setUserRole(value) {
-    setText(nodes.userRole, value);
+    const raw = String(value || "").trim();
+    const lower = raw.toLowerCase();
+    if (lower === "admin" || lower === "user") {
+      setText(nodes.userRole, t(`statusbar.role.${lower}`, null, raw));
+      return;
+    }
+    setText(nodes.userRole, raw);
   }
 
   function setMode(value) {
@@ -209,7 +223,19 @@ export function initStatusbar() {
       !lower.includes("idle") &&
       !lower.includes("stopped") &&
       !lower.includes("off");
-    setText(nodes.modeLabel, modeValue);
+    let label = modeValue;
+    if (lower === "running") {
+      label = t("statusbar.mode.running", null, "Running");
+    } else if (lower === "wire calibration") {
+      label = t("statusbar.mode.wireCalibration", null, "Wire calibration");
+    } else if (lower === "floor calibration") {
+      label = t("statusbar.mode.floorCalibration", null, "Floor calibration");
+    } else if (lower === "idle") {
+      label = t("statusbar.mode.idle", null, "Idle");
+    } else if (lower === "off") {
+      label = t("statusbar.mode.off", null, "Off");
+    }
+    setText(nodes.modeLabel, label);
     if (nodes.modePill) {
       nodes.modePill.dataset.mode = normalizeMode(modeValue);
       nodes.modePill.classList.toggle("is-active", isActive);

@@ -14,6 +14,7 @@ import { initAdminTab } from "./features/admin/index.js";
 import { initDashboardTab } from "./features/dashboard/index.js";
 import { initDeviceTab } from "./features/device/index.js";
 import { initSetupWizard } from "./features/setup/index.js";
+import { initLanguage } from "./services/language.js";
 
 async function loadIncludes() {
   let includeNodes = qsa("[data-include]");
@@ -98,6 +99,9 @@ function initTabs() {
 document.addEventListener("DOMContentLoaded", () => {
   window.__uiReady = loadIncludes().then(() => {
     initTabs();
+    const language = initLanguage();
+    window.__i18n = language;
+    window.__language = language;
     window.__toast = initToast();
     window.__confirm = initConfirm();
     window.__statusbar = initStatusbar();

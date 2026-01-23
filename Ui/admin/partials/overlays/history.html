@@ -1,14 +1,20 @@
-<div class="history-shell" role="dialog" aria-label="Session history">
+<div
+  class="history-shell"
+  role="dialog"
+  aria-label="Session history"
+  data-i18n-aria="history.aria.root"
+>
   <header class="history-header">
     <div>
-      <p class="history-eyebrow">History</p>
-      <h3 class="history-title">Run Sessions</h3>
+      <p class="history-eyebrow" data-i18n="history.eyebrow">History</p>
+      <h3 class="history-title" data-i18n="history.title">Run Sessions</h3>
     </div>
     <button
       class="history-close"
       type="button"
       data-history-close
       aria-label="Close history"
+      data-i18n-aria="history.close"
     >
       <svg
         viewBox="0 0 24 24"
@@ -29,11 +35,11 @@
     <table class="history-table">
       <thead>
         <tr>
-          <th>Time</th>
-          <th>Duration</th>
-          <th>Energy (Wh)</th>
-          <th>Peak P (W)</th>
-          <th>Peak I (A)</th>
+          <th data-i18n="history.table.time">Time</th>
+          <th data-i18n="history.table.duration">Duration</th>
+          <th data-i18n="history.table.energy">Energy (Wh)</th>
+          <th data-i18n="history.table.peakP">Peak P (W)</th>
+          <th data-i18n="history.table.peakI">Peak I (A)</th>
         </tr>
       </thead>
       <tbody data-history-body></tbody>

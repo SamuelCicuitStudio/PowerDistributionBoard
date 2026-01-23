@@ -6,6 +6,14 @@ export function initUserTab() {
   const panel = qs('[data-tab-panel="user"]');
   if (!panel) return null;
 
+  const t = (key, vars, fallback) => {
+    if (window.__i18n?.t) {
+      const value = window.__i18n.t(key, vars);
+      if (value && value !== key) return value;
+    }
+    return fallback ?? key;
+  };
+
   const outputList = qs("[data-output-list]", panel);
   const deviceId = qs("[data-user-device-id]", panel);
   const saveBtn = qs('[data-action="save"]', panel);
@@ -25,9 +33,19 @@ export function initUserTab() {
       const row = document.createElement("div");
       row.className = "user-access-item";
       row.setAttribute("role", "listitem");
+      const labelText = t(
+        "user.outputs.allow",
+        { index: output.id },
+        `Allow Output ${output.id}`,
+      );
+      const ariaText = t(
+        "user.outputs.allowAria",
+        { index: output.id },
+        `Allow Output ${output.id}`,
+      );
       row.innerHTML = `
-        <span>Allow Output ${output.id}</span>
-        <label class="user-switch" aria-label="Allow Output ${output.id}">
+        <span>${labelText}</span>
+        <label class="user-switch" aria-label="${ariaText}">
           <input type="checkbox" ${
             output.allowed ? "checked" : ""
           } data-id="${output.id}">
@@ -42,8 +60,15 @@ export function initUserTab() {
         const id = Number(event.target.dataset.id);
         const item = outputs.find((entry) => entry.id === id);
         if (item) item.allowed = event.target.checked;
+        const stateLabel = event.target.checked
+          ? t("user.outputs.state.enabled", null, "enabled")
+          : t("user.outputs.state.disabled", null, "disabled");
         showToast(
-          `Output ${id} ${event.target.checked ? "enabled" : "disabled"}`,
+          t(
+            "user.outputs.toast",
+            { index: id, state: stateLabel },
+            `Output ${id} ${stateLabel}`,
+          ),
           "success",
         );
       });
@@ -64,12 +89,20 @@ export function initUserTab() {
       const allowed = outputs.filter((o) => o.allowed).map((o) => o.id);
       const ok = Math.random() > 0.2;
       if (ok) {
+        const list = allowed.length ? allowed.join(", ") : t("user.outputs.none", null, "none");
         showToast(
-          `Saved. Outputs allowed: ${allowed.length ? allowed.join(", ") : "none"}`,
+          t(
+            "user.save.success",
+            { list },
+            `Saved. Outputs allowed: ${list}`,
+          ),
           "success",
         );
       } else {
-        showToast("Failed to save settings", "error");
+        showToast(
+          t("user.save.fail", null, "Failed to save settings"),
+          "error",
+        );
       }
       if (curPw) curPw.value = "";
       if (newPw) newPw.value = "";
@@ -82,7 +115,7 @@ export function initUserTab() {
       if (!confirm) {
         return;
       }
-      confirm("Reset this form?", () => {
+      confirm(t("user.reset.confirm", null, "Reset this form?"), () => {
         if (curPw) curPw.value = "";
         if (newPw) newPw.value = "";
         if (deviceId) deviceId.value = DEFAULT_DEVICE_ID;
@@ -90,12 +123,16 @@ export function initUserTab() {
           o.allowed = index === 0;
         });
         renderOutputs();
-        showToast("Form reset", "success");
+        showToast(t("user.reset.done", null, "Form reset"), "success");
       });
     });
   }
 
   renderOutputs();
+
+  document.addEventListener("language:change", () => {
+    renderOutputs();
+  });
 
   return { renderOutputs };
 }

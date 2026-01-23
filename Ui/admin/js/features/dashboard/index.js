@@ -1,4 +1,4 @@
-import { qs } from "../../core/dom.js";
+﻿import { qs } from "../../core/dom.js";
 import { renderNotifications } from "../notifications/index.js";
 
 const MAX_VOLT = 325;
@@ -36,6 +36,14 @@ export function initDashboardTab() {
   const root = qs(".dashboard-tab", panel);
   if (!root) return null;
 
+  const t = (key, vars, fallback) => {
+    if (window.__i18n?.t) {
+      const value = window.__i18n.t(key, vars);
+      if (value && value !== key) return value;
+    }
+    return fallback ?? key;
+  };
+
   const showToast = (message, state = "success") => {
     window.__toast?.show?.(message, state);
   };
@@ -49,14 +57,21 @@ export function initDashboardTab() {
   const hHand = qs('[data-dashboard-hand="h"]', root);
   const mHand = qs('[data-dashboard-hand="m"]', root);
   const sHand = qs('[data-dashboard-hand="s"]', root);
+  const localeMap = { en: "en-US", it: "it-IT", fr: "fr-FR" };
+
+  const getClockLocale = () => {
+    const lang = window.__i18n?.getLang?.() || "en";
+    return localeMap[lang] || "en-US";
+  };
 
   function tickClock() {
     const d = new Date();
+    const locale = getClockLocale();
     if (dowEl) {
-      dowEl.textContent = d.toLocaleDateString(undefined, { weekday: "long" });
+      dowEl.textContent = d.toLocaleDateString(locale, { weekday: "long" });
     }
     if (dateEl) {
-      dateEl.textContent = d.toLocaleDateString(undefined, {
+      dateEl.textContent = d.toLocaleDateString(locale, {
         year: "numeric",
         month: "short",
         day: "2-digit",
@@ -98,9 +113,27 @@ export function initDashboardTab() {
   const ledFeedback = qs("[data-dashboard-led-feedback]", root);
 
   function renderSystem() {
-    if (readyTxt) readyTxt.textContent = systemState.ready ? "Ready" : "Not Ready";
-    if (modeTxt) modeTxt.textContent = systemState.mode;
-    if (calTxt) calTxt.textContent = systemState.calibrationPending ? "Cal Pending" : "Cal OK";
+    if (readyTxt) {
+      readyTxt.textContent = systemState.ready
+        ? t("dashboard.system.ready", null, "Ready")
+        : t("dashboard.system.notReady", null, "Not Ready");
+    }
+    if (modeTxt) {
+      const modeValue = String(systemState.mode || "");
+      const lower = modeValue.toLowerCase();
+      if (lower === "running") {
+        modeTxt.textContent = t("statusbar.mode.running", null, "Running");
+      } else if (lower === "off") {
+        modeTxt.textContent = t("dashboard.system.off", null, "Off");
+      } else {
+        modeTxt.textContent = modeValue;
+      }
+    }
+    if (calTxt) {
+      calTxt.textContent = systemState.calibrationPending
+        ? t("dashboard.system.calPending", null, "Cal Pending")
+        : t("dashboard.system.calOk", null, "Cal OK");
+    }
 
     if (ledReady) ledReady.className = `led ${systemState.ready ? "ok" : "err"}`;
     if (ledMode) {
@@ -116,7 +149,11 @@ export function initDashboardTab() {
 
   ledFeedback?.addEventListener("change", (e) => {
     systemState.ledFeedback = e.target.checked;
-    showToast(`LED feedback ${systemState.ledFeedback ? "enabled" : "disabled"}.`);
+    showToast(
+      systemState.ledFeedback
+        ? t("dashboard.toast.ledOn", null, "LED feedback enabled.")
+        : t("dashboard.toast.ledOff", null, "LED feedback disabled."),
+    );
     renderSystem();
   });
 
@@ -126,21 +163,41 @@ export function initDashboardTab() {
   const noticeList = qs("[data-dashboard-notice-list]", root);
   const templateEl = qs("[data-notification-item-template]", root);
 
-  const notices = [
+  const buildNotices = () => [
     {
       level: "warn",
-      title: "Calibration pending",
-      message: "Device needs calibration before running the loop.",
+      title: t("dashboard.notice.calPending.title", null, "Calibration pending"),
+      message: t(
+        "dashboard.notice.calPending.message",
+        null,
+        "Device needs calibration before running the loop.",
+      ),
     },
-    { level: "ok", title: "Wi‑Fi connected", message: "Station mode active. Signal stable." },
+    {
+      level: "ok",
+      title: t("dashboard.notice.wifi.title", null, "Wi-Fi connected"),
+      message: t(
+        "dashboard.notice.wifi.message",
+        null,
+        "Station mode active. Signal stable.",
+      ),
+    },
     {
       level: "err",
-      title: "Output 4 not detected",
-      message: "No wire / open circuit detected on output 4.",
+      title: t("dashboard.notice.output.title", null, "Output 4 not detected"),
+      message: t(
+        "dashboard.notice.output.message",
+        null,
+        "No wire / open circuit detected on output 4.",
+      ),
     },
   ];
 
-  renderNotifications(noticeList, notices, templateEl);
+  const renderNoticeList = () => {
+    renderNotifications(noticeList, buildNotices(), templateEl);
+  };
+
+  renderNoticeList();
 
   // -----------------------------
   // Quick actions
@@ -191,21 +248,39 @@ export function initDashboardTab() {
   // -----------------------------
   const thermGrid = qs("[data-dashboard-therm-grid]", root);
   const therms = [
-    { name: "Board 01", value: 21.69 },
-    { name: "Board 02", value: 21.0 },
-    { name: "Heatsink", value: 20.94 },
-    { name: "Temp 4", value: null },
+    { type: "board", index: "01", value: 21.69 },
+    { type: "board", index: "02", value: 21.0 },
+    { type: "heatsink", value: 20.94 },
+    { type: "temp", index: "4", value: null },
   ];
 
   function renderThermals() {
     if (!thermGrid) return;
     thermGrid.innerHTML = "";
-    therms.forEach((t) => {
-      const off = t.value === null;
-      const valTxt = off ? "Off" : `${t.value.toFixed(2)}\u00b0C`;
+    therms.forEach((item) => {
+      const off = item.value === null;
+      const valTxt = off
+        ? t("dashboard.therm.off", null, "Off")
+        : `${item.value.toFixed(2)}\u00b0C`;
       const arc = off
         ? { circ: 2 * Math.PI * 30, dashoffset: 2 * Math.PI * 30 }
-        : smallArcDash(t.value, 0, 150);
+        : smallArcDash(item.value, 0, 150);
+      let label = "";
+      if (item.type === "board") {
+        label = t(
+          "dashboard.therm.board",
+          { index: item.index },
+          `Board ${item.index}`,
+        );
+      } else if (item.type === "heatsink") {
+        label = t("dashboard.therm.heatsink", null, "Heatsink");
+      } else if (item.type === "temp") {
+        label = t(
+          "dashboard.therm.temp",
+          { index: item.index },
+          `Temp ${item.index}`,
+        );
+      }
 
       const box = document.createElement("div");
       box.className = "therm";
@@ -223,7 +298,7 @@ export function initDashboardTab() {
           <span class="tDot" style="opacity:${off ? 0.35 : 0.9}"></span>
         </div>
         <div class="tval">${valTxt}</div>
-        <div class="label">${t.name}</div>
+        <div class="label">${label}</div>
       `;
       thermGrid.appendChild(box);
     });
@@ -231,12 +306,19 @@ export function initDashboardTab() {
 
   renderThermals();
   setInterval(() => {
-    therms.forEach((t) => {
-      if (t.value === null) return;
-      t.value = clamp(t.value + (Math.random() * 1.2 - 0.5), 0, 150);
+    therms.forEach((item) => {
+      if (item.value === null) return;
+      item.value = clamp(item.value + (Math.random() * 1.2 - 0.5), 0, 150);
     });
     renderThermals();
   }, 1400);
 
+  document.addEventListener("language:change", () => {
+    renderSystem();
+    renderNoticeList();
+    renderThermals();
+  });
+
   return { renderSystem };
 }
+

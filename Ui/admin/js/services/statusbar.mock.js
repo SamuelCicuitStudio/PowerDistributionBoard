@@ -27,21 +27,21 @@ function startMock() {
     },
   ];
   const modes = liveContexts.map((context) => context.mode);
-  const roles = ["Admin", "User"];
+  const roles = ["admin", "user"];
   const linkModes = ["Station", "AP Hotspot"];
   const warningMessages = [
-    "Board temperature high",
-    "Heatsink temperature high",
-    "Voltage drift detected",
-    "Calibration recommended",
-    "Sensor noise detected",
+    { key: "status.warning.boardTemp", fallback: "Board temperature high" },
+    { key: "status.warning.sinkTemp", fallback: "Heatsink temperature high" },
+    { key: "status.warning.voltageDrift", fallback: "Voltage drift detected" },
+    { key: "status.warning.calibration", fallback: "Calibration recommended" },
+    { key: "status.warning.sensorNoise", fallback: "Sensor noise detected" },
   ];
   const errorMessages = [
-    "Overcurrent detected",
-    "Wire open circuit",
-    "Control fault",
-    "EEPROM write failed",
-    "Power stage fault",
+    { key: "status.error.overcurrent", fallback: "Overcurrent detected" },
+    { key: "status.error.wireOpen", fallback: "Wire open circuit" },
+    { key: "status.error.controlFault", fallback: "Control fault" },
+    { key: "status.error.eepromWrite", fallback: "EEPROM write failed" },
+    { key: "status.error.powerStage", fallback: "Power stage fault" },
   ];
   const warningLog = [];
   const errorLog = [];
@@ -128,9 +128,9 @@ function startMock() {
   }
 
   function seedLogs() {
-    pushLog(warningLog, "Sensor noise detected");
-    pushLog(warningLog, "Heatsink temperature high");
-    pushLog(errorLog, "Control fault");
+    pushLog(warningLog, t("status.warning.sensorNoise", null, "Sensor noise detected"));
+    pushLog(warningLog, t("status.warning.sinkTemp", null, "Heatsink temperature high"));
+    pushLog(errorLog, t("status.error.controlFault", null, "Control fault"));
   }
 
   function buildHistoryRows() {
@@ -172,6 +172,14 @@ function startMock() {
     window.__toast?.show?.(message, state);
   }
 
+  function t(key, vars, fallback) {
+    if (window.__i18n?.t) {
+      const value = window.__i18n.t(key, vars);
+      if (value && value !== key) return value;
+    }
+    return fallback ?? key;
+  }
+
   function setOverlay(open) {
     const overlay = document.querySelector("[data-live-overlay]");
     if (!overlay) return;
@@ -204,11 +212,13 @@ function startMock() {
     const warnHit = Math.random() > 0.7;
     const errHit = Math.random() > 0.9;
     if (warnHit) {
-      const msg = warningMessages[tick % warningMessages.length];
+      const item = warningMessages[tick % warningMessages.length];
+      const msg = t(item.key, null, item.fallback);
       pushLog(warningLog, msg);
     }
     if (errHit) {
-      const msg = errorMessages[tick % errorMessages.length];
+      const item = errorMessages[tick % errorMessages.length];
+      const msg = t(item.key, null, item.fallback);
       pushLog(errorLog, msg);
     }
     statusbar.setWarnings(warningLog.length);
@@ -218,7 +228,14 @@ function startMock() {
       alerts.setErrors(errorLog);
     }
 
-    statusbar.setUserRole(roles[tick % roles.length]);
+    const roleKey = roles[tick % roles.length];
+    statusbar.setUserRole(
+      t(
+        `statusbar.role.${roleKey}`,
+        null,
+        roleKey === "admin" ? "Admin" : "User",
+      ),
+    );
     statusbar.setMode(modes[tick % modes.length]);
     if (liveShell) {
       liveShell.dataset.liveWires = context.wires;
@@ -233,14 +250,35 @@ function startMock() {
         target.classList.toggle("is-selected", selected.includes(id));
       });
     }
+    const modeKey = String(context.mode || "").trim().toLowerCase();
+    let modeLabel = context.mode;
+    if (modeKey === "running") {
+      modeLabel = t("statusbar.mode.running", null, "Running");
+    } else if (modeKey === "wire calibration") {
+      modeLabel = t("statusbar.mode.wireCalibration", null, "Wire calibration");
+    } else if (modeKey === "floor calibration") {
+      modeLabel = t("statusbar.mode.floorCalibration", null, "Floor calibration");
+    }
     if (liveMode) {
-      liveMode.textContent = `Mode: ${context.mode}`;
+      liveMode.textContent = t(
+        "live.overlay.mode",
+        { mode: modeLabel },
+        `Mode: ${modeLabel}`,
+      );
     }
     if (liveTarget) {
-      liveTarget.textContent = `Target: ${context.target}`;
+      liveTarget.textContent = t(
+        "live.overlay.target",
+        { target: context.target },
+        `Target: ${context.target}`,
+      );
     }
     if (liveSetpoint) {
-      liveSetpoint.textContent = `Setpoint: ${context.setpoint}\u00b0C`;
+      liveSetpoint.textContent = t(
+        "live.overlay.setpoint",
+        { value: `${context.setpoint}\u00b0C` },
+        `Setpoint: ${context.setpoint}\u00b0C`,
+      );
     }
     if (liveSetpointValue) {
       liveSetpointValue.textContent = `${context.setpoint}\u00b0C`;
@@ -321,34 +359,88 @@ function startMock() {
     logOverlay.refresh = () => logOverlay.setLogs(buildLogLines());
   }
 
+  document.addEventListener("language:change", () => {
+    warningLog.length = 0;
+    errorLog.length = 0;
+    seedLogs();
+    statusbar.setWarnings(warningLog.length);
+    statusbar.setErrors(errorLog.length);
+    if (alerts) {
+      alerts.setWarnings(warningLog);
+      alerts.setErrors(errorLog);
+    }
+  });
+
+  const states = ["off", "idle", "ready"];
+  const getPowerLabels = () => ({
+    off: t("sidebar.power.off", null, "OFF"),
+    idle: t("sidebar.power.idle", null, "IDLE"),
+    ready: t("sidebar.power.run", null, "RUN"),
+  });
+
+  let powerIndex = states.findIndex((state) =>
+    powerBtn?.classList.contains(`state-${state}`),
+  );
+  if (powerIndex < 0) powerIndex = 0;
+  let powerLabels = getPowerLabels();
+
+  const updateMuteLabel = () => {
+    if (!muteBtn) return;
+    const isMuted = muteBtn.classList.contains("is-muted");
+    muteBtn.setAttribute(
+      "aria-label",
+      isMuted
+        ? t("sidebar.unmute", null, "Unmute")
+        : t("sidebar.mute", null, "Mute"),
+    );
+  };
+
+  const updatePowerLabel = () => {
+    if (!powerLabel) return;
+    powerLabel.textContent = powerLabels[states[powerIndex]];
+  };
+
   if (muteBtn) {
+    updateMuteLabel();
     muteBtn.addEventListener("click", () => {
       const isMuted = muteBtn.classList.toggle("is-muted");
       muteBtn.setAttribute("aria-pressed", String(isMuted));
-      muteBtn.setAttribute("aria-label", isMuted ? "Unmute" : "Mute");
-      showToast(isMuted ? "Muted" : "Unmuted");
+      updateMuteLabel();
+      showToast(
+        isMuted
+          ? t("sidebar.toast.muted", null, "Muted")
+          : t("sidebar.toast.unmuted", null, "Unmuted"),
+      );
     });
   }
 
   if (powerBtn) {
-    const states = ["off", "idle", "ready"];
-    const labels = { off: "OFF", idle: "IDLE", ready: "RUN" };
-    let index = states.findIndex((state) =>
-      powerBtn.classList.contains(`state-${state}`),
-    );
-    if (index < 0) index = 0;
+    updatePowerLabel();
     powerBtn.addEventListener("click", () => {
       powerBtn.classList.remove(
-        `state-${states[index]}`,
-        `state-${states[(index + 1) % states.length]}`,
-        `state-${states[(index + 2) % states.length]}`,
+        `state-${states[powerIndex]}`,
+        `state-${states[(powerIndex + 1) % states.length]}`,
+        `state-${states[(powerIndex + 2) % states.length]}`,
       );
-      index = (index + 1) % states.length;
-      powerBtn.classList.add(`state-${states[index]}`);
-      if (powerLabel) powerLabel.textContent = labels[states[index]];
-      showToast(`Power ${labels[states[index]]}`);
+      powerIndex = (powerIndex + 1) % states.length;
+      powerBtn.classList.add(`state-${states[powerIndex]}`);
+      powerLabels = getPowerLabels();
+      updatePowerLabel();
+      showToast(
+        t(
+          "sidebar.toast.power",
+          { state: powerLabels[states[powerIndex]] },
+          `Power ${powerLabels[states[powerIndex]]}`,
+        ),
+      );
     });
   }
+
+  document.addEventListener("language:change", () => {
+    powerLabels = getPowerLabels();
+    updateMuteLabel();
+    updatePowerLabel();
+  });
 
   update();
   setInterval(update, 4000);

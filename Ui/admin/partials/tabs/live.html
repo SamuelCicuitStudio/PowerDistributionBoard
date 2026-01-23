@@ -1,23 +1,34 @@
-<section class="live-tab" aria-label="Live outputs">
+<section
+  class="live-tab"
+  aria-label="Live outputs"
+  data-i18n-aria="live.aria.root"
+>
   <div class="live-legend-wrap">
-    <div class="live-legend" role="group" aria-label="Output state legend">
+    <div
+      class="live-legend"
+      role="group"
+      aria-label="Output state legend"
+      data-i18n-aria="live.aria.legend"
+    >
       <div class="live-legend-pill" data-kind="on">
         <span class="live-legend-led" aria-hidden="true"></span>
-        ON (energized)
+        <span data-i18n="live.legend.on">ON (energized)</span>
       </div>
       <div class="live-legend-pill" data-kind="off">
         <span class="live-legend-led" aria-hidden="true"></span>
-        OFF (connected)
+        <span data-i18n="live.legend.off">OFF (connected)</span>
       </div>
       <div class="live-legend-pill" data-kind="nw">
         <span class="live-legend-led" aria-hidden="true"></span>
-        No wire / Not connected
+        <span data-i18n="live.legend.nowire">No wire / Not connected</span>
       </div>
     </div>
-    <span class="live-unit-note">Temperatures in &deg;C</span>
+    <span class="live-unit-note" data-i18n="live.unitNote">
+      Temperatures in &deg;C
+    </span>
   </div>
 
-  <div class="live-stage" aria-label="Output layout">
+  <div class="live-stage" aria-label="Output layout" data-i18n-aria="live.aria.layout">
     <svg class="live-wiring" viewBox="0 0 980 560" aria-hidden="true">
       <g
         fill="none"
@@ -90,13 +101,22 @@
       <div class="live-port live-temp" data-port="R5">23</div>
     </div>
 
-    <div class="live-bottom-dot live-ac" aria-label="AC input connected"></div>
+    <div
+      class="live-bottom-dot live-ac"
+      aria-label="AC input connected"
+      data-i18n-aria="live.aria.acInput"
+    ></div>
     <div
       class="live-bottom-dot live-relay"
       aria-label="Input relay state"
+      data-i18n-aria="live.aria.relay"
     ></div>
 
-    <section class="live-card" aria-label="Current session live panel">
+    <section
+      class="live-card"
+      aria-label="Current session live panel"
+      data-i18n-aria="live.aria.session"
+    >
       <svg class="live-card-watermark" viewBox="0 0 240 240" aria-hidden="true">
         <circle
           cx="120"
@@ -129,14 +149,16 @@
         <div class="live-card-header">
           <div class="live-card-title">
             <span class="live-card-icon" aria-hidden="true"></span>
-            CURRENT SESSION
+            <span data-i18n="live.card.title">CURRENT SESSION</span>
           </div>
           <div class="live-pill">
             <span class="live-pill-dot"></span>
-            LIVE
+            <span data-i18n="live.card.live">LIVE</span>
           </div>
         </div>
-        <div class="live-card-sub">No active session</div>
+        <div class="live-card-sub" data-i18n="live.card.subtitle">
+          No active session
+        </div>
 
         <div class="live-metrics">
           <div class="live-metric">
@@ -153,7 +175,7 @@
                   <path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z"></path>
                 </svg>
               </span>
-              Energy
+              <span data-i18n="live.metric.energy">Energy</span>
             </div>
             <div class="live-metric-val">-- <small>Wh</small></div>
           </div>
@@ -172,7 +194,7 @@
                   <path d="M12 7v6l4 2"></path>
                 </svg>
               </span>
-              Duration
+              <span data-i18n="live.metric.duration">Duration</span>
             </div>
             <div class="live-metric-val">-- <small>s</small></div>
           </div>
@@ -194,7 +216,7 @@
                   <path d="M20 19V10"></path>
                 </svg>
               </span>
-              Peak Power
+              <span data-i18n="live.metric.peakPower">Peak Power</span>
             </div>
             <div class="live-metric-val">-- <small>W</small></div>
           </div>
@@ -212,7 +234,7 @@
                   <path d="M3 12h6l3-8 4 16 3-8h5"></path>
                 </svg>
               </span>
-              Peak Current
+              <span data-i18n="live.metric.peakCurrent">Peak Current</span>
             </div>
             <div class="live-metric-val">-- <small>A</small></div>
           </div>
@@ -234,7 +256,7 @@
                 <path d="M4 18h12"></path>
               </svg>
             </span>
-            History
+            <span data-i18n="live.actions.history">History</span>
           </button>
           <button
             class="live-btn"
@@ -256,7 +278,7 @@
                 <path d="M8 16h8"></path>
               </svg>
             </span>
-            Calibration
+            <span data-i18n="live.actions.calibration">Calibration</span>
           </button>
           <button
             class="live-btn"
@@ -278,7 +300,7 @@
                 <circle cx="12" cy="12" r="1.2" fill="currentColor"></circle>
               </svg>
             </span>
-            Live Control
+            <span data-i18n="live.actions.control">Live Control</span>
           </button>
           <button
             class="live-btn"
@@ -302,7 +324,7 @@
                 ></path>
               </svg>
             </span>
-            Error
+            <span data-i18n="live.actions.error">Error</span>
           </button>
           <button class="live-btn" type="button" data-kind="log" data-live-log>
             <span class="live-btn-icon" aria-hidden="true">
@@ -322,7 +344,7 @@
                 <path d="M8 17h6"></path>
               </svg>
             </span>
-            Log
+            <span data-i18n="live.actions.log">Log</span>
           </button>
         </div>
       </div>

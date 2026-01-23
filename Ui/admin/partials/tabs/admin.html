@@ -1,6 +1,10 @@
-<section class="admin-tab" aria-label="Admin settings">
+<section class="admin-tab" aria-label="Admin settings" data-i18n-aria="admin.aria.root">
   <div class="admin-settings-grid">
-    <section class="admin-settings-card" aria-label="Admin Credentials">
+    <section
+      class="admin-settings-card"
+      aria-label="Admin Credentials"
+      data-i18n-aria="admin.aria.credentials"
+    >
       <div class="admin-settings-inner">
         <div class="admin-settings-header">
           <div class="admin-settings-icon" aria-hidden="true">
@@ -18,42 +22,57 @@
             </svg>
           </div>
           <div>
-            <h2>Admin Credentials</h2>
-            <p>Current password is required to apply changes.</p>
+            <h2 data-i18n="admin.credentials.title">Admin Credentials</h2>
+            <p data-i18n="admin.credentials.subtitle">
+              Current password is required to apply changes.
+            </p>
           </div>
         </div>
 
         <form class="admin-settings-form" data-admin-form="credentials">
           <div class="admin-settings-field">
-            <label for="admin-cur-pw">Current password</label>
+            <label for="admin-cur-pw" data-i18n="admin.credentials.currentPassword">
+              Current password
+            </label>
             <input
               class="admin-settings-input"
               id="admin-cur-pw"
               type="password"
               placeholder="Current password"
+              data-i18n-placeholder="admin.placeholders.currentPassword"
             />
           </div>
 
           <div class="admin-settings-field">
-            <label for="admin-user">New admin username</label>
+            <label for="admin-user" data-i18n="admin.credentials.username">
+              New admin username
+            </label>
             <input
               class="admin-settings-input"
               id="admin-user"
               type="text"
               placeholder="New admin username"
+              data-i18n-placeholder="admin.placeholders.username"
             />
-            <div class="admin-settings-hint">Leave blank to keep current.</div>
+            <div class="admin-settings-hint" data-i18n="admin.hint.keepCurrent">
+              Leave blank to keep current.
+            </div>
           </div>
 
           <div class="admin-settings-field">
-            <label for="admin-new-pw">New admin password</label>
+            <label for="admin-new-pw" data-i18n="admin.credentials.newPassword">
+              New admin password
+            </label>
             <input
               class="admin-settings-input"
               id="admin-new-pw"
               type="password"
               placeholder="New admin password"
+              data-i18n-placeholder="admin.placeholders.newPassword"
             />
-            <div class="admin-settings-hint">Leave blank to keep current.</div>
+            <div class="admin-settings-hint" data-i18n="admin.hint.keepCurrent">
+              Leave blank to keep current.
+            </div>
           </div>
 
           <div class="admin-settings-actions">
@@ -63,7 +82,11 @@
       </div>
     </section>
 
-    <section class="admin-settings-card" aria-label="Wi-Fi Station">
+    <section
+      class="admin-settings-card"
+      aria-label="Wi-Fi Station"
+      data-i18n-aria="admin.aria.station"
+    >
       <div class="admin-settings-inner">
         <div class="admin-settings-header">
           <div class="admin-settings-icon" aria-hidden="true">
@@ -90,32 +113,44 @@
             </svg>
           </div>
           <div>
-            <h2>Wi-Fi Station</h2>
-            <p>Network the device should join (SSID + password).</p>
+            <h2 data-i18n="admin.station.title">Wi-Fi Station</h2>
+            <p data-i18n="admin.station.subtitle">
+              Network the device should join (SSID + password).
+            </p>
           </div>
         </div>
 
         <form class="admin-settings-form" data-admin-form="station">
           <div class="admin-settings-field">
-            <label for="admin-sta-ssid">Wi-Fi SSID</label>
+            <label for="admin-sta-ssid" data-i18n="admin.station.ssid">
+              Wi-Fi SSID
+            </label>
             <input
               class="admin-settings-input"
               id="admin-sta-ssid"
               type="text"
               placeholder="Wi-Fi SSID"
+              data-i18n-placeholder="admin.placeholders.wifiSsid"
             />
-            <div class="admin-settings-hint">Leave blank to keep current.</div>
+            <div class="admin-settings-hint" data-i18n="admin.hint.keepCurrent">
+              Leave blank to keep current.
+            </div>
           </div>
 
           <div class="admin-settings-field">
-            <label for="admin-sta-pw">Wi-Fi password</label>
+            <label for="admin-sta-pw" data-i18n="admin.station.password">
+              Wi-Fi password
+            </label>
             <input
               class="admin-settings-input"
               id="admin-sta-pw"
               type="password"
               placeholder="Wi-Fi password"
+              data-i18n-placeholder="admin.placeholders.wifiPassword"
             />
-            <div class="admin-settings-hint">Leave blank to keep current.</div>
+            <div class="admin-settings-hint" data-i18n="admin.hint.keepCurrent">
+              Leave blank to keep current.
+            </div>
           </div>
 
           <div class="admin-settings-actions">
@@ -125,7 +160,11 @@
       </div>
     </section>
 
-    <section class="admin-settings-card" aria-label="Wi-Fi Access Point">
+    <section
+      class="admin-settings-card"
+      aria-label="Wi-Fi Access Point"
+      data-i18n-aria="admin.aria.ap"
+    >
       <div class="admin-settings-inner">
         <div class="admin-settings-header">
           <div class="admin-settings-icon" aria-hidden="true">
@@ -153,32 +192,38 @@
             </svg>
           </div>
           <div>
-            <h2>Wi-Fi Access Point</h2>
-            <p>Hotspot name and password (AP mode).</p>
+            <h2 data-i18n="admin.ap.title">Wi-Fi Access Point</h2>
+            <p data-i18n="admin.ap.subtitle">Hotspot name and password (AP mode).</p>
           </div>
         </div>
 
         <form class="admin-settings-form" data-admin-form="ap">
           <div class="admin-settings-field">
-            <label for="admin-ap-ssid">AP SSID</label>
+            <label for="admin-ap-ssid" data-i18n="admin.ap.ssid">AP SSID</label>
             <input
               class="admin-settings-input"
               id="admin-ap-ssid"
               type="text"
               placeholder="AP SSID"
+              data-i18n-placeholder="admin.placeholders.apSsid"
             />
-            <div class="admin-settings-hint">Leave blank to keep current.</div>
+            <div class="admin-settings-hint" data-i18n="admin.hint.keepCurrent">
+              Leave blank to keep current.
+            </div>
           </div>
 
           <div class="admin-settings-field">
-            <label for="admin-ap-pw">AP password</label>
+            <label for="admin-ap-pw" data-i18n="admin.ap.password">AP password</label>
             <input
               class="admin-settings-input"
               id="admin-ap-pw"
               type="password"
               placeholder="AP password"
+              data-i18n-placeholder="admin.placeholders.apPassword"
             />
-            <div class="admin-settings-hint">Leave blank to keep current.</div>
+            <div class="admin-settings-hint" data-i18n="admin.hint.keepCurrent">
+              Leave blank to keep current.
+            </div>
           </div>
 
           <div class="admin-settings-actions">

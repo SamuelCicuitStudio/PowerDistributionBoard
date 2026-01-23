@@ -26,14 +26,28 @@ export function initSetupWizard() {
     root.setAttribute("aria-hidden", String(!open));
   };
 
+  const t = (key, vars, fallback) => {
+    if (window.__i18n?.t) {
+      const value = window.__i18n.t(key, vars);
+      if (value && value !== key) return value;
+    }
+    return fallback ?? key;
+  };
+
   const updateControls = () => {
     if (!steps.length) return;
     const step = steps[activeIndex];
-    const title = step?.dataset.stepTitle || `Step ${activeIndex + 1}`;
+    const titleKey = step?.dataset.stepTitleKey;
+    const fallbackTitle = step?.dataset.stepTitle || `Step ${activeIndex + 1}`;
+    const title = titleKey ? t(titleKey, null, fallbackTitle) : fallbackTitle;
     const skippable = step?.dataset.stepSkippable === "true";
 
     if (stepLabel) {
-      stepLabel.textContent = `Step ${activeIndex + 1} of ${steps.length}`;
+      stepLabel.textContent = t(
+        "wizard.header.stepLabel",
+        { current: activeIndex + 1, total: steps.length },
+        `Step ${activeIndex + 1} of ${steps.length}`,
+      );
     }
     if (stepTitle) {
       stepTitle.textContent = title;
@@ -49,7 +63,10 @@ export function initSetupWizard() {
       skipBtn.style.display = skippable ? "inline-flex" : "none";
     }
     if (nextBtn) {
-      nextBtn.textContent = activeIndex === steps.length - 1 ? "Finish" : "Next";
+      nextBtn.textContent =
+        activeIndex === steps.length - 1
+          ? t("wizard.nav.finish", null, "Finish")
+          : t("wizard.nav.next", null, "Next");
     }
   };
 
@@ -95,6 +112,11 @@ export function initSetupWizard() {
   document.addEventListener("keydown", (event) => {
     if (!root.classList.contains("is-open")) return;
     if (event.key === "Escape") close();
+  });
+
+  document.addEventListener("language:change", () => {
+    if (!root.classList.contains("is-open")) return;
+    updateControls();
   });
 
   updateControls();

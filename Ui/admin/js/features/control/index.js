@@ -4,6 +4,14 @@ export function initControlTab() {
   const panel = qs('[data-tab-panel="control"]');
   if (!panel) return null;
 
+  const t = (key, vars, fallback) => {
+    if (window.__i18n?.t) {
+      const value = window.__i18n.t(key, vars);
+      if (value && value !== key) return value;
+    }
+    return fallback ?? key;
+  };
+
   const outputList = qs("[data-control-output-list]", panel);
   const fanSlider = qs("[data-control-fan]", panel);
   const fanValue = qs("[data-control-fan-value]", panel);
@@ -25,10 +33,20 @@ export function initControlTab() {
       const row = document.createElement("div");
       row.className = "control-out-item";
       row.setAttribute("role", "listitem");
+      const labelText = t(
+        "control.outputs.output",
+        { index: output.id },
+        `Output ${output.id}`,
+      );
+      const toggleText = t(
+        "control.outputs.toggle",
+        { index: output.id },
+        `Toggle Output ${output.id}`,
+      );
       row.innerHTML = `
-        <b>Output ${output.id}</b>
+        <b>${labelText}</b>
         <div class="control-out-right">
-          <label class="control-switch" aria-label="Toggle Output ${output.id}">
+          <label class="control-switch" aria-label="${toggleText}">
             <input type="checkbox" ${
               output.on ? "checked" : ""
             } data-id="${output.id}">
@@ -51,7 +69,16 @@ export function initControlTab() {
           ".control-dot",
         );
         if (dot) dot.classList.toggle("is-on", event.target.checked);
-        showToast(`Output ${id} ${event.target.checked ? "ON" : "OFF"}`);
+        const stateLabel = event.target.checked
+          ? t("control.state.on", null, "ON")
+          : t("control.state.off", null, "OFF");
+        showToast(
+          t(
+            "control.toast.output",
+            { index: id, state: stateLabel },
+            `Output ${id} ${stateLabel}`,
+          ),
+        );
       });
     });
   };
@@ -62,18 +89,37 @@ export function initControlTab() {
     };
     fanSlider.addEventListener("input", sync);
     fanSlider.addEventListener("change", () => {
-      showToast(`Fan speed set to ${fanSlider.value}%`);
+      showToast(
+        t(
+          "control.toast.fan",
+          { value: fanSlider.value },
+          `Fan speed set to ${fanSlider.value}%`,
+        ),
+      );
     });
     sync();
   }
 
   if (relayToggle) {
     relayToggle.addEventListener("change", () => {
-      showToast(`Relay ${relayToggle.checked ? "ON" : "OFF"}`);
+      const stateLabel = relayToggle.checked
+        ? t("control.state.on", null, "ON")
+        : t("control.state.off", null, "OFF");
+      showToast(
+        t(
+          "control.toast.relay",
+          { state: stateLabel },
+          `Relay ${stateLabel}`,
+        ),
+      );
     });
   }
 
   renderOutputs();
+
+  document.addEventListener("language:change", () => {
+    renderOutputs();
+  });
 
   return { renderOutputs };
 }

@@ -230,6 +230,17 @@
   color: rgba(233, 254, 247, 0.78);
 }
 
+.setup-language {
+  margin: 10px 0 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.setup-language .setup-field {
+  max-width: 220px;
+}
+
 .setup-instructions strong {
   display: block;
   margin-bottom: 6px;

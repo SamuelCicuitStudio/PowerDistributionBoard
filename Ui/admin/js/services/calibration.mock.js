@@ -60,7 +60,7 @@ function startMock() {
       calibStatusText: "Idle",
       calibModeText: "--",
       calibCountText: "--",
-      calibIntervalText: "--",
+        calibIntervalText: "1s",
       calibTempText: "--",
       calibWireText: "--",
       calibTargetText: "--",
@@ -82,7 +82,7 @@ function startMock() {
       presenceProbeStatusText: "Idle",
     });
 
-    setPresenceAll((label) => ({ label, value: "--", state: "off" }));
+      setPresenceAll((label) => ({ label, value: "...", state: "off" }));
   };
 
   const setScenario = (scenario, inputs = {}) => {
@@ -105,7 +105,7 @@ function startMock() {
         calibStatusText: "Running",
         calibModeText: "Sensor zero",
         calibCountText: "1",
-        calibIntervalText: "—",
+        calibIntervalText: "1s",
         calibTempText: "--",
         calibWireText: "--",
         calibTargetText: "--",
@@ -147,7 +147,7 @@ function startMock() {
       cal.setFields({
         calibStatusText: "Running",
         calibModeText: "Model calibration",
-        calibIntervalText: "500 ms",
+        calibIntervalText: "1s",
         calibCountText: "0",
         calibTempText: formatTemp(rand(20, 35, 1)),
         calibElapsedText: "0s",
@@ -175,7 +175,7 @@ function startMock() {
       cal.setFields({
         calibStatusText: "Running",
         calibModeText: "Wire test",
-        calibIntervalText: "250 ms",
+        calibIntervalText: "1s",
         calibCountText: "0",
         calibWireText: `Wire ${String(state.activeWire).padStart(2, "0")}`,
         calibTargetText: formatTemp(target),
@@ -274,7 +274,7 @@ function startMock() {
     if (scenario === "presence") {
       cal.setField("presenceProbeStatusText", "Scanning...");
       pushLog("Presence probe started");
-      setPresenceAll((label) => ({ label, value: "…", state: "off" }));
+      setPresenceAll((label) => ({ label, value: "...", state: "off" }));
       setTimeout(() => {
         setPresenceAll((label, wire) => {
           const r = wire % 3;

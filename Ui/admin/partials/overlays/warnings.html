@@ -1,14 +1,17 @@
 <div class="alert-shell" data-alert-shell>
   <header class="alert-header">
     <div>
-      <p class="alert-eyebrow">Warnings</p>
-      <h3 class="alert-title">System Warnings</h3>
+      <p class="alert-eyebrow" data-i18n="alerts.warnings.eyebrow">Warnings</p>
+      <h3 class="alert-title" data-i18n="alerts.warnings.title">
+        System Warnings
+      </h3>
     </div>
     <button
       class="alert-close"
       type="button"
       data-alert-close
       aria-label="Close warnings"
+      data-i18n-aria="alerts.warnings.close"
     >
       <svg
         viewBox="0 0 24 24"
@@ -26,7 +29,7 @@
   </header>
 
   <section class="alert-current">
-    <span class="alert-label">Current</span>
+    <span class="alert-label" data-i18n="alerts.current">Current</span>
     <div class="alert-card alert-card--current">
       <span class="alert-message" data-alert-current>--</span>
       <span class="alert-meta" data-alert-current-meta>--</span>
@@ -34,7 +37,7 @@
   </section>
 
   <section class="alert-history">
-    <span class="alert-label">Last 10</span>
+    <span class="alert-label" data-i18n="alerts.lastTen">Last 10</span>
     <div class="alert-list" data-alert-list></div>
   </section>
 </div>

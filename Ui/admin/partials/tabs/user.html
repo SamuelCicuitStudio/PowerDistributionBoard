@@ -1,5 +1,5 @@
-<section class="user-tab" aria-label="User settings">
-  <div class="user-card" aria-label="Account settings">
+<section class="user-tab" aria-label="User settings" data-i18n-aria="user.aria.root">
+  <div class="user-card" aria-label="Account settings" data-i18n-aria="user.aria.account">
     <div class="user-card-inner">
       <div class="user-header">
         <div class="user-header-icon" aria-hidden="true">
@@ -16,34 +16,44 @@
           </svg>
         </div>
         <div>
-          <h2>Account</h2>
-          <p>Update your password and device label.</p>
+          <h2 data-i18n="user.account.title">Account</h2>
+          <p data-i18n="user.account.subtitle">
+            Update your password and device label.
+          </p>
         </div>
       </div>
 
       <form class="user-form" data-user-form autocomplete="off">
         <div class="user-field">
-          <label for="user-cur-pw">Current password</label>
+          <label for="user-cur-pw" data-i18n="user.fields.currentPassword">
+            Current password
+          </label>
           <input
             class="user-input"
             id="user-cur-pw"
             type="password"
             placeholder="Current password"
+            data-i18n-placeholder="user.placeholders.currentPassword"
           />
         </div>
 
         <div class="user-field">
-          <label for="user-new-pw">New password</label>
+          <label for="user-new-pw" data-i18n="user.fields.newPassword">
+            New password
+          </label>
           <input
             class="user-input"
             id="user-new-pw"
             type="password"
             placeholder="New password"
+            data-i18n-placeholder="user.placeholders.newPassword"
           />
         </div>
 
         <div class="user-field">
-          <label for="user-device-id">Device ID</label>
+          <label for="user-device-id" data-i18n="user.fields.deviceId">
+            Device ID
+          </label>
           <input
             class="user-input"
             id="user-device-id"
@@ -54,7 +64,9 @@
             data-user-device-id
           />
           <div class="user-hint">
-            Used as the device name/label (may require reconnect).
+            <span data-i18n="user.deviceHint">
+              Used as the device name/label (may require reconnect).
+            </span>
           </div>
         </div>
 
@@ -66,7 +78,7 @@
     </div>
   </div>
 
-  <div class="user-card" aria-label="Output access">
+  <div class="user-card" aria-label="Output access" data-i18n-aria="user.aria.outputs">
     <div class="user-card-inner">
       <div class="user-header">
         <div class="user-header-icon" aria-hidden="true">
@@ -90,8 +102,10 @@
           </svg>
         </div>
         <div>
-          <h2>Output Access</h2>
-          <p>Select which outputs the loop/calibration is allowed to use.</p>
+          <h2 data-i18n="user.outputs.title">Output Access</h2>
+          <p data-i18n="user.outputs.subtitle">
+            Select which outputs the loop/calibration is allowed to use.
+          </p>
         </div>
       </div>
 
@@ -100,6 +114,7 @@
         data-output-list
         role="list"
         aria-label="Output allow list"
+        data-i18n-aria="user.outputs.list"
       ></div>
     </div>
   </div>

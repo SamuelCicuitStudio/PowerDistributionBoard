@@ -1,5 +1,5 @@
-<section class="control-tab" aria-label="Manual controls">
-  <div class="control-card" aria-label="Manual controls">
+<section class="control-tab" aria-label="Manual controls" data-i18n-aria="control.aria.root">
+  <div class="control-card" aria-label="Manual controls" data-i18n-aria="control.aria.manual">
     <div class="control-card-inner">
       <div class="control-header">
         <div class="control-h-icon" aria-hidden="true">
@@ -25,8 +25,8 @@
           </svg>
         </div>
         <div>
-          <h2>Manual Controls</h2>
-          <p>
+          <h2 data-i18n="control.title">Manual Controls</h2>
+          <p data-i18n="control.subtitle">
             Adjusting these will switch to manual mode (and abort auto loop if
             running).
           </p>
@@ -35,7 +35,7 @@
 
       <div class="control-section">
         <div class="control-row">
-          <div class="control-label">Fan speed</div>
+          <div class="control-label" data-i18n="control.fan.label">Fan speed</div>
           <div class="control-pill" data-control-fan-value>0%</div>
         </div>
 
@@ -47,14 +47,19 @@
             value="0"
             data-control-fan
             aria-label="Fan speed"
+            data-i18n-aria="control.fan.aria"
           />
         </div>
 
         <div class="control-divider"></div>
 
         <div class="control-row">
-          <div class="control-label">Relay</div>
-          <label class="control-switch" aria-label="Relay toggle">
+          <div class="control-label" data-i18n="control.relay.label">Relay</div>
+          <label
+            class="control-switch"
+            aria-label="Relay toggle"
+            data-i18n-aria="control.relay.aria"
+          >
             <input type="checkbox" data-control-relay />
             <span class="control-slider"></span>
           </label>
@@ -63,22 +68,22 @@
         <div class="control-divider"></div>
 
         <div class="control-info">
-          <div class="control-k">Device Name/ID</div>
+          <div class="control-k" data-i18n="control.deviceId">Device Name/ID</div>
           <div class="control-v">PDB-T37H6-911N0</div>
         </div>
         <div class="control-info">
-          <div class="control-k">HW Version</div>
+          <div class="control-k" data-i18n="control.hwVersion">HW Version</div>
           <div class="control-v">2.2.5</div>
         </div>
         <div class="control-info">
-          <div class="control-k">SW Version</div>
+          <div class="control-k" data-i18n="control.swVersion">SW Version</div>
           <div class="control-v">1.7.0</div>
         </div>
       </div>
     </div>
   </div>
 
-  <div class="control-card" aria-label="Manual outputs">
+  <div class="control-card" aria-label="Manual outputs" data-i18n-aria="control.aria.outputs">
     <div class="control-card-inner">
       <div class="control-header">
         <div class="control-h-icon" aria-hidden="true">
@@ -99,8 +104,8 @@
           </svg>
         </div>
         <div>
-          <h2>Manual Outputs</h2>
-          <p>Toggle outputs directly (manual mode).</p>
+          <h2 data-i18n="control.outputs.title">Manual Outputs</h2>
+          <p data-i18n="control.outputs.subtitle">Toggle outputs directly (manual mode).</p>
         </div>
       </div>
 
@@ -109,6 +114,7 @@
         data-control-output-list
         role="list"
         aria-label="Outputs"
+        data-i18n-aria="control.outputs.list"
       ></div>
     </div>
   </div>
