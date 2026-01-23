@@ -33,6 +33,34 @@ const ACTION_MESSAGES = {
     key: "calibration.toast.wireStop",
     fallback: "Wire test stopped",
   },
+  wizardWireLinkBtn: {
+    key: "calibration.toast.wizardLink",
+    fallback: "NTC linked to wire gate",
+  },
+  wizardWireStartBtn: {
+    key: "calibration.toast.wizardStart",
+    fallback: "Wire calibration started",
+  },
+  wizardWireStopBtn: {
+    key: "calibration.toast.wizardStop",
+    fallback: "Wire calibration stopped",
+  },
+  wizardWireSaveBtn: {
+    key: "calibration.toast.wizardSave",
+    fallback: "Wire calibration saved",
+  },
+  wizardWireDiscardBtn: {
+    key: "calibration.toast.wizardDiscard",
+    fallback: "Wire calibration discarded",
+  },
+  wizardWireTestStartBtn: {
+    key: "calibration.toast.wizardTestStart",
+    fallback: "Wire test started",
+  },
+  wizardWireTestStopBtn: {
+    key: "calibration.toast.wizardTestStop",
+    fallback: "Wire test stopped",
+  },
   startFloorCalibBtn: {
     key: "calibration.toast.floorStart",
     fallback: "Floor calibration started",

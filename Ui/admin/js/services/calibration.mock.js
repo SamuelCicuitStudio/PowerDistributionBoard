@@ -23,6 +23,62 @@ function formatTemp(value) {
   return `${value.toFixed(1)}\u00b0C`;
 }
 
+function formatGateLabel(gate) {
+  return `Gate ${gate}`;
+}
+
+function formatWireLabel(gate) {
+  return `Wire ${String(gate).padStart(2, "0")}`;
+}
+
+function parseGate(value, fallback = 1) {
+  const gate = Number.parseInt(value, 10);
+  if (!Number.isFinite(gate)) return fallback;
+  return clamp(gate, 1, 10);
+}
+
+function parseTarget(value, fallback) {
+  const target = Number.parseFloat(value);
+  return Number.isFinite(target) ? target : fallback;
+}
+
+const X_POINTS = [0, 120, 240, 360, 480, 600, 720, 840, 960, 1080, 1200];
+const CHART_TOP = 10;
+const CHART_BOTTOM = 265;
+const CHART_HEIGHT = CHART_BOTTOM - CHART_TOP;
+
+function yForTemp(temp) {
+  const safeTemp = clamp(temp, 0, 150);
+  return CHART_TOP + (150 - safeTemp) * (CHART_HEIGHT / 150);
+}
+
+function buildLinePoints(endTemp) {
+  const startTemp = clamp(endTemp - rand(3, 8, 1), 0, 150);
+  return X_POINTS.map((x, index) => {
+    const t = index / (X_POINTS.length - 1);
+    const drift = Math.sin(index * 0.7) * 0.6;
+    const temp = startTemp + (endTemp - startTemp) * t + drift;
+    return `${x},${yForTemp(temp)}`;
+  }).join(" ");
+}
+
+function getChartNodes(root) {
+  if (!root) return null;
+  return {
+    root,
+    setpointValue: root.querySelector("[data-live-setpoint]"),
+    setpointLine: root.querySelector(".chart-line.setpoint"),
+    wireTemps: Array.from(root.querySelectorAll("[data-live-wire-temp]")),
+    wireLines: Array.from(root.querySelectorAll(".wire-line[data-wire]")),
+    wireDots: Array.from(root.querySelectorAll(".wire-dot[data-wire]")),
+    wireTargets: Array.from(
+      root.querySelectorAll(
+        ".wire-line[data-wire], .wire-dot[data-wire], .chart-pill.wire[data-wire]",
+      ),
+    ),
+  };
+}
+
 function startMock() {
   const cal = window.__calibration || initCalibrationOverlay();
   if (!cal) return;
@@ -36,14 +92,115 @@ function startMock() {
     activeWire: 3,
   };
 
+  const chartRoots = {
+    wire: document.querySelector('[data-setup-chart="wire"]'),
+    floor: document.querySelector('[data-setup-chart="floor"]'),
+  };
+  const chartNodes = {
+    wire: getChartNodes(chartRoots.wire),
+    floor: getChartNodes(chartRoots.floor),
+  };
+  const wizardRoot = document.querySelector("[data-setup-wizard]");
+  const wizardFieldNodes = wizardRoot
+    ? Array.from(wizardRoot.querySelectorAll("[data-cal-field]"))
+    : [];
+  const wizardFields = new Map();
+
+  wizardFieldNodes.forEach((node) => {
+    const key = node.getAttribute("data-cal-field");
+    if (!key) return;
+    const list = wizardFields.get(key) || [];
+    list.push(node);
+    wizardFields.set(key, list);
+  });
+
   const pushLog = (message) => {
     state.log.unshift(`[${nowLabel()}] ${message}`);
     if (state.log.length > 80) state.log.length = 80;
     cal.setLogLines(state.log);
   };
 
+  const updateChart = (nodes, context) => {
+  if (!nodes || !context) return;
+  const root = nodes.root;
+  if (!root) return;
+  const wiresValue = context.wires || "";
+  root.dataset.liveWires = wiresValue;
+  const selected = wiresValue
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const setpoint = Number.isFinite(context.setpoint) ? context.setpoint : null;
+  const baseSetpoint = Number.isFinite(setpoint) ? setpoint : 0;
+
+  if (nodes.wireTargets.length) {
+    nodes.wireTargets.forEach((target) => {
+      const id = target.dataset.wire;
+      target.classList.toggle("is-selected", selected.includes(id));
+      });
+    }
+
+  if (nodes.setpointValue) {
+    nodes.setpointValue.textContent = Number.isFinite(setpoint)
+      ? `${setpoint.toFixed(1)}\u00b0C`
+      : "--\u00b0C";
+  }
+  if (nodes.setpointLine) {
+    const setpointY = yForTemp(baseSetpoint);
+    nodes.setpointLine.setAttribute(
+      "points",
+      X_POINTS.map((x) => `${x},${setpointY}`).join(" "),
+    );
+  }
+
+    const tempsByWire = {};
+    selected.forEach((id, index) => {
+      const spread = (index - (selected.length - 1) / 2) * 1.6;
+      const base = baseSetpoint + spread;
+      const temp = clamp(base + rand(-3, 3, 1), 0, 150);
+      tempsByWire[id] = temp;
+    });
+
+    nodes.wireTemps.forEach((node) => {
+      const id = node.dataset.liveWireTemp;
+      if (!id || !selected.includes(id)) {
+        node.textContent = "--\u00b0C";
+        return;
+      }
+      node.textContent = `${tempsByWire[id].toFixed(1)}\u00b0C`;
+    });
+
+    nodes.wireLines.forEach((line) => {
+      const id = line.dataset.wire;
+      const temp = tempsByWire[id];
+      if (!Number.isFinite(temp)) return;
+      line.setAttribute("points", buildLinePoints(temp));
+    });
+
+    nodes.wireDots.forEach((dot) => {
+      const id = dot.dataset.wire;
+      const temp = tempsByWire[id];
+      if (!Number.isFinite(temp)) return;
+      dot.setAttribute("cx", X_POINTS[X_POINTS.length - 1]);
+      dot.setAttribute("cy", yForTemp(temp));
+    });
+  };
+
   const notify = (message, kind = "ok") => {
     cal.notify?.(message, kind);
+  };
+
+  const setWizardFields = (values = {}) => {
+    if (!wizardFields.size) return;
+    Object.entries(values).forEach(([key, value]) => {
+      const nodes = wizardFields.get(key);
+      if (!nodes?.length) return;
+      const text =
+        value === null || value === undefined || value === "" ? "--" : String(value);
+      nodes.forEach((node) => {
+        node.textContent = text;
+      });
+    });
   };
 
   const setPresenceAll = (builder) => {
@@ -55,12 +212,27 @@ function startMock() {
     cal.setPresence(items);
   };
 
+  const resetWizardFields = () => {
+    cal.setFields({
+      wizardWireStatus: "Idle",
+      wizardWireState: "Idle",
+      wizardWireGateActive: "--",
+      wizardWireLinked: "--",
+      wizardWireProgress: "0%",
+      wizardWireR0: "--",
+      wizardWireTau: "--",
+      wizardWireK: "--",
+      wizardWireC: "--",
+    });
+    updateChart(chartNodes.wire, { wires: "", setpoint: null });
+  };
+
   const resetFields = () => {
     cal.setFields({
       calibStatusText: "Idle",
       calibModeText: "--",
       calibCountText: "--",
-        calibIntervalText: "1s",
+      calibIntervalText: "1s",
       calibTempText: "--",
       calibWireText: "--",
       calibTargetText: "--",
@@ -82,7 +254,54 @@ function startMock() {
       presenceProbeStatusText: "Idle",
     });
 
-      setPresenceAll((label) => ({ label, value: "...", state: "off" }));
+    resetWizardFields();
+    setPresenceAll((label) => ({ label, value: "...", state: "off" }));
+    updateChart(chartNodes.floor, { wires: "", setpoint: null });
+  };
+
+  const seedWizardPreview = () => {
+    if (!wizardRoot) return;
+    const previewGate = 4;
+    const previewTarget = 38.5;
+    setWizardFields({
+      wizardWireStatus: "Running",
+      wizardWireState: "Heating",
+      wizardWireGateActive: formatGateLabel(previewGate),
+      wizardWireLinked: formatGateLabel(previewGate),
+      wizardWireProgress: "52%",
+      wizardWireR0: "12.40",
+      wizardWireTau: "96.0",
+      wizardWireK: "0.78",
+      wizardWireC: "1.86",
+      floorCalStageText: "Heat",
+      floorCalRunningText: "Yes",
+      floorCalDoneText: "45%",
+      floorCalTauText: "88.4",
+      floorCalKText: "0.69",
+      floorCalCText: "1.92",
+    });
+    updateChart(chartNodes.wire, {
+      wires: String(previewGate),
+      setpoint: previewTarget,
+    });
+    updateChart(chartNodes.floor, {
+      wires: "1,2,3,4,5,6,7,8,9,10",
+      setpoint: 42.0,
+    });
+  };
+
+  const stopTimer = () => {
+    if (state.timer) {
+      clearInterval(state.timer);
+      state.timer = null;
+    }
+  };
+
+  const setWizardStatus = (status, stateLabel) => {
+    cal.setFields({
+      wizardWireStatus: status,
+      wizardWireState: stateLabel ?? status,
+    });
   };
 
   const setScenario = (scenario, inputs = {}) => {
@@ -167,17 +386,90 @@ function startMock() {
       return;
     }
 
+    if (scenario === "wizard-wire-cal") {
+      const gate = parseGate(inputs.wizardWireGate, state.activeWire || 1);
+      const target = parseTarget(inputs.wizardWireTargetC, 38.5);
+      state.activeWire = gate;
+
+      cal.setFields({
+        wizardWireStatus: "Running",
+        wizardWireState: "Heating",
+        wizardWireGateActive: formatGateLabel(gate),
+        wizardWireLinked: formatGateLabel(gate),
+        wizardWireProgress: "0%",
+        wizardWireR0: "--",
+        wizardWireTau: "--",
+        wizardWireK: "--",
+        wizardWireC: "--",
+      });
+      updateChart(chartNodes.wire, { wires: String(gate), setpoint: target });
+      pushLog(
+        `Wire calibration started (gate ${gate}, target ${target.toFixed(1)}C)`,
+      );
+
+      state.timer = setInterval(() => {
+        state.tick += 1;
+        const pct = clamp(Math.round((state.tick / 18) * 100), 0, 100);
+        const phase = pct < 65 ? "Heating" : pct < 90 ? "Cooling" : "Settling";
+        cal.setFields({
+          wizardWireProgress: `${pct}%`,
+          wizardWireState: pct >= 100 ? "Complete" : phase,
+          wizardWireStatus: pct >= 100 ? "Done" : "Running",
+        });
+        updateChart(chartNodes.wire, { wires: String(gate), setpoint: target });
+        if (pct >= 100) {
+          const r0 = rand(8, 22, 2);
+          const tau = rand(80, 140, 1);
+          const k = rand(0.6, 1.4, 2);
+          const c = rand(1.2, 2.4, 2);
+          cal.setFields({
+            wizardWireR0: r0.toFixed(2),
+            wizardWireTau: tau.toFixed(1),
+            wizardWireK: k.toFixed(2),
+            wizardWireC: c.toFixed(2),
+          });
+          clearInterval(state.timer);
+          state.timer = null;
+        }
+      }, 1000);
+      return;
+    }
+
+    if (scenario === "wizard-wire-test") {
+      const gate = parseGate(inputs.wizardWireGate, state.activeWire || 1);
+      const target = parseTarget(inputs.wizardWireTestTargetC, 45);
+      state.activeWire = gate;
+
+      cal.setFields({
+        wizardWireStatus: "Wire test",
+        wizardWireState: "Holding",
+        wizardWireGateActive: formatGateLabel(gate),
+        wizardWireLinked: formatGateLabel(gate),
+        wizardWireProgress: "Hold",
+      });
+      updateChart(chartNodes.wire, { wires: String(gate), setpoint: target });
+      pushLog(`Wire test started (gate ${gate}, target ${target.toFixed(1)}C)`);
+
+      state.timer = setInterval(() => {
+        state.tick += 1;
+        updateChart(chartNodes.wire, { wires: String(gate), setpoint: target });
+        if (state.tick % 6 === 0) {
+          pushLog(`Wire test stable at ${target.toFixed(1)}C`);
+        }
+      }, 1000);
+      return;
+    }
+
     if (scenario === "wire") {
-      const targetC = Number.parseFloat(inputs.wireTestTargetC);
-      const target = Number.isFinite(targetC) ? targetC : 38.5;
-      state.activeWire = clamp(Number(inputs.floorCalWireIndex) || 3, 1, 10);
+      const target = parseTarget(inputs.wireTestTargetC, 38.5);
+      state.activeWire = parseGate(inputs.wireTestWireIndex, state.activeWire || 3);
 
       cal.setFields({
         calibStatusText: "Running",
         calibModeText: "Wire test",
         calibIntervalText: "1s",
         calibCountText: "0",
-        calibWireText: `Wire ${String(state.activeWire).padStart(2, "0")}`,
+        calibWireText: formatWireLabel(state.activeWire),
         calibTargetText: formatTemp(target),
         calibElapsedText: "0s",
       });
@@ -185,7 +477,7 @@ function startMock() {
         wireTestState: "Running",
         wireTestMode: "Manual",
         wireTestPurpose: "Calibration",
-        wireTestActiveWire: `Wire ${String(state.activeWire).padStart(2, "0")}`,
+        wireTestActiveWire: formatWireLabel(state.activeWire),
         wireTestPacket: "0",
         wireTestFrame: "0",
       });
@@ -230,6 +522,10 @@ function startMock() {
         floorCalCText: "--",
       });
       pushLog(`Floor calibration started (target ${target.toFixed(1)}C, duty ${dutyPct}%)`);
+      updateChart(chartNodes.floor, {
+        wires: "1,2,3,4,5,6,7,8,9,10",
+        setpoint: target,
+      });
 
       state.timer = setInterval(() => {
         state.tick += 1;
@@ -245,6 +541,10 @@ function startMock() {
           floorCalTauText: `${tau.toFixed(1)}`,
           floorCalKText: `${k.toFixed(2)}`,
           floorCalCText: `${c.toFixed(2)}`,
+        });
+        updateChart(chartNodes.floor, {
+          wires: "1,2,3,4,5,6,7,8,9,10",
+          setpoint: target,
         });
         if (pct > 35 && pct < 60 && state.tick % 7 === 0 && Math.random() > 0.9) {
           cal.setFields({
@@ -297,6 +597,47 @@ function startMock() {
     if (action === "stopCalibBtn") return setScenario("idle", inputs);
     if (action === "wireTestStartBtn") return setScenario("wire", inputs);
     if (action === "wireTestStopBtn") return setScenario("idle", inputs);
+    if (action === "wizardWireLinkBtn") {
+      const gate = parseGate(inputs.wizardWireGate, state.activeWire || 1);
+      state.activeWire = gate;
+      cal.setFields({
+        wizardWireGateActive: formatGateLabel(gate),
+        wizardWireLinked: formatGateLabel(gate),
+      });
+      setWizardStatus("Linked", "Idle");
+      updateChart(chartNodes.wire, {
+        wires: String(gate),
+        setpoint: parseTarget(inputs.wizardWireTargetC, 38.5),
+      });
+      pushLog(`NTC linked to gate ${gate}`);
+      return;
+    }
+    if (action === "wizardWireStartBtn") return setScenario("wizard-wire-cal", inputs);
+    if (action === "wizardWireStopBtn") {
+      stopTimer();
+      setWizardStatus("Stopped");
+      pushLog("Wire calibration stopped");
+      return;
+    }
+    if (action === "wizardWireSaveBtn") {
+      stopTimer();
+      setWizardStatus("Saved");
+      pushLog("Wire calibration saved");
+      return;
+    }
+    if (action === "wizardWireDiscardBtn") {
+      stopTimer();
+      resetWizardFields();
+      pushLog("Wire calibration discarded");
+      return;
+    }
+    if (action === "wizardWireTestStartBtn") return setScenario("wizard-wire-test", inputs);
+    if (action === "wizardWireTestStopBtn") {
+      stopTimer();
+      setWizardStatus("Stopped");
+      pushLog("Wire test stopped");
+      return;
+    }
     if (action === "startFloorCalibBtn") return setScenario("floor", inputs);
     if (action === "presenceProbeBtn") return setScenario("presence", inputs);
     if (action === "capCurrentCalBtn") return setScenario("sensors", inputs);
@@ -350,6 +691,7 @@ function startMock() {
     "Session 2026-01-19",
   ]);
   resetFields();
+  seedWizardPreview();
   pushLog("Calibration overlay mock ready");
   notify("Calibration mock ready", "ok");
 

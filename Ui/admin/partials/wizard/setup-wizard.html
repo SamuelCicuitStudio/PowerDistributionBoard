@@ -705,90 +705,223 @@
         data-step-title-key="wizard.step8.title"
       >
         <div class="setup-card setup-wire-cal">
-          <h3 data-i18n="wizard.step8.title">Wire calibration</h3>
-          <p class="setup-note" data-i18n="wizard.step8.note">
-            Use this if you want to calibrate a single wire now.
-          </p>
-          <div class="setup-fields setup-fields-2">
-            <label class="setup-field">
-              <span data-i18n="wizard.step8.target">Target temp (&deg;C)</span>
-              <input
-                class="setup-input"
-                type="number"
-                step="0.1"
-                data-cal-input="wireTestTargetC"
-                data-cal-scope="wizard"
-              />
-            </label>
+          <div class="setup-wire-header">
+            <div>
+              <h3 data-i18n="wizard.step8.title">Wire calibration</h3>
+              <p class="setup-note" data-i18n="wizard.step8.note">
+                Attach the single NTC to the selected wire gate. Run calibration
+                to capture heat-up/cool-down and extract tau, k, C.
+              </p>
+            </div>
+            <div class="setup-wire-status">
+              <span data-i18n="wizard.step8.status">Status</span>
+              <strong data-cal-field="wizardWireStatus" data-cal-scope="wizard">
+                Idle
+              </strong>
+            </div>
           </div>
-          <div class="setup-actions">
-            <button
-              class="btn btn-primary"
-              type="button"
-              data-cal-action="wireTestStartBtn"
-              data-cal-scope="wizard"
-              data-i18n="wizard.step8.start"
-            >
-              Start wire test
-            </button>
-            <button
-              class="btn"
-              type="button"
-              data-cal-action="wireTestStopBtn"
-              data-cal-scope="wizard"
-              data-i18n="wizard.step8.stop"
-            >
-              Stop wire test
-            </button>
-          </div>
-          <div class="setup-status-grid setup-status-grid--wide">
-            <div class="setup-status-item">
-              <span data-i18n="wizard.wire.state">State</span>
-              <strong data-cal-field="wireTestState" data-cal-scope="wizard"
-                >Idle</strong
-              >
+
+          <div class="setup-wire-layout">
+            <div class="setup-wire-left">
+              <div class="setup-fields setup-fields-2">
+                <label class="setup-field">
+                  <span data-i18n="wizard.step8.wireGate">Wire gate</span>
+                  <select
+                    class="setup-select"
+                    data-cal-input="wizardWireGate"
+                    data-cal-scope="wizard"
+                  >
+                    <option value="1">Gate 1</option>
+                    <option value="2">Gate 2</option>
+                    <option value="3">Gate 3</option>
+                    <option value="4">Gate 4</option>
+                    <option value="5">Gate 5</option>
+                    <option value="6">Gate 6</option>
+                    <option value="7">Gate 7</option>
+                    <option value="8">Gate 8</option>
+                    <option value="9">Gate 9</option>
+                    <option value="10">Gate 10</option>
+                  </select>
+                </label>
+                <label class="setup-field">
+                  <span data-i18n="wizard.step8.target">Calibration target (&deg;C)</span>
+                  <input
+                    class="setup-input"
+                    type="number"
+                    step="0.1"
+                    value="38.5"
+                    data-cal-input="wizardWireTargetC"
+                    data-cal-scope="wizard"
+                  />
+                </label>
+              </div>
+
+              <div class="setup-instructions">
+                <strong data-i18n="wizard.step8.instructions.title">How it works</strong>
+                <ul>
+                  <li data-i18n="wizard.step8.instructions.li1">
+                    Keep the wire OFF until ambient is stable.
+                  </li>
+                  <li data-i18n="wizard.step8.instructions.li2">
+                    Start calibration to log the temperature curve.
+                  </li>
+                  <li data-i18n="wizard.step8.instructions.li3">
+                    Save parameters if the curve looks good.
+                  </li>
+                </ul>
+              </div>
+
+              <div class="setup-actions">
+                <button
+                  class="btn"
+                  type="button"
+                  data-cal-action="wizardWireLinkBtn"
+                  data-cal-scope="wizard"
+                  data-i18n="wizard.step8.link"
+                >
+                  Link NTC
+                </button>
+                <button
+                  class="btn btn-primary"
+                  type="button"
+                  data-cal-action="wizardWireStartBtn"
+                  data-cal-scope="wizard"
+                  data-i18n="wizard.step8.start"
+                >
+                  Start calibration
+                </button>
+                <button
+                  class="btn"
+                  type="button"
+                  data-cal-action="wizardWireStopBtn"
+                  data-cal-scope="wizard"
+                  data-i18n="wizard.step8.stop"
+                >
+                  Stop calibration
+                </button>
+              </div>
+
+              <div class="setup-status-grid setup-status-grid--wide">
+                <div class="setup-status-item">
+                  <span data-i18n="wizard.step8.status.state">State</span>
+                  <strong data-cal-field="wizardWireState" data-cal-scope="wizard">
+                    Idle
+                  </strong>
+                </div>
+                <div class="setup-status-item">
+                  <span data-i18n="wizard.step8.status.activeGate">Active gate</span>
+                  <strong data-cal-field="wizardWireGateActive" data-cal-scope="wizard"
+                    >--</strong
+                  >
+                </div>
+                <div class="setup-status-item">
+                  <span data-i18n="wizard.step8.status.linked">NTC attached</span>
+                  <strong data-cal-field="wizardWireLinked" data-cal-scope="wizard"
+                    >--</strong
+                  >
+                </div>
+                <div class="setup-status-item">
+                  <span data-i18n="wizard.step8.status.progress">Progress</span>
+                  <strong data-cal-field="wizardWireProgress" data-cal-scope="wizard"
+                    >0%</strong
+                  >
+                </div>
+              </div>
+
+              <div class="setup-results-grid">
+                <div class="setup-result">
+                  <span data-i18n="wizard.step8.result.r0">R0 (Ohm)</span>
+                  <strong data-cal-field="wizardWireR0" data-cal-scope="wizard"
+                    >--</strong
+                  >
+                </div>
+                <div class="setup-result">
+                  <span data-i18n="wizard.step8.result.tau">Tau</span>
+                  <strong data-cal-field="wizardWireTau" data-cal-scope="wizard"
+                    >--</strong
+                  >
+                </div>
+                <div class="setup-result">
+                  <span data-i18n="wizard.step8.result.k">K</span>
+                  <strong data-cal-field="wizardWireK" data-cal-scope="wizard"
+                    >--</strong
+                  >
+                </div>
+                <div class="setup-result">
+                  <span data-i18n="wizard.step8.result.c">C</span>
+                  <strong data-cal-field="wizardWireC" data-cal-scope="wizard"
+                    >--</strong
+                  >
+                </div>
+              </div>
+
+              <div class="setup-actions setup-actions--secondary">
+                <button
+                  class="btn btn-primary"
+                  type="button"
+                  data-cal-action="wizardWireSaveBtn"
+                  data-cal-scope="wizard"
+                  data-i18n="wizard.step8.save"
+                >
+                  Save parameters
+                </button>
+                <button
+                  class="btn"
+                  type="button"
+                  data-cal-action="wizardWireDiscardBtn"
+                  data-cal-scope="wizard"
+                  data-i18n="wizard.step8.discard"
+                >
+                  Discard
+                </button>
+              </div>
+
+              <div class="setup-wire-test">
+                <h4 data-i18n="wizard.step8.test.title">Wire test (optional)</h4>
+                <p class="setup-note" data-i18n="wizard.step8.test.note">
+                  Use the saved model to hold a target temperature.
+                </p>
+                <div class="setup-fields">
+                  <label class="setup-field">
+                    <span data-i18n="wizard.step8.test.target">Test target (&deg;C)</span>
+                    <input
+                      class="setup-input"
+                      type="number"
+                      step="0.1"
+                      value="45"
+                      data-cal-input="wizardWireTestTargetC"
+                      data-cal-scope="wizard"
+                    />
+                  </label>
+                </div>
+                <div class="setup-actions">
+                  <button
+                    class="btn btn-primary"
+                    type="button"
+                    data-cal-action="wizardWireTestStartBtn"
+                    data-cal-scope="wizard"
+                    data-i18n="wizard.step8.test.start"
+                  >
+                    Start wire test
+                  </button>
+                  <button
+                    class="btn"
+                    type="button"
+                    data-cal-action="wizardWireTestStopBtn"
+                    data-cal-scope="wizard"
+                    data-i18n="wizard.step8.test.stop"
+                  >
+                    Stop wire test
+                  </button>
+                </div>
+              </div>
             </div>
-            <div class="setup-status-item">
-              <span data-i18n="wizard.wire.mode">Mode</span>
-              <strong data-cal-field="wireTestMode" data-cal-scope="wizard"
-                >--</strong
-              >
-            </div>
-            <div class="setup-status-item">
-              <span data-i18n="wizard.wire.purpose">Purpose</span>
-              <strong data-cal-field="wireTestPurpose" data-cal-scope="wizard"
-                >--</strong
-              >
-            </div>
-            <div class="setup-status-item">
-              <span data-i18n="wizard.wire.active">Active wire</span>
-              <strong data-cal-field="wireTestActiveWire" data-cal-scope="wizard"
-                >--</strong
-              >
-            </div>
-            <div class="setup-status-item">
-              <span data-i18n="wizard.wire.ntc">NTC temp</span>
-              <strong data-cal-field="wireTestNtcTemp" data-cal-scope="wizard"
-                >--</strong
-              >
-            </div>
-            <div class="setup-status-item">
-              <span data-i18n="wizard.wire.model">Model temp</span>
-              <strong data-cal-field="wireTestModelTemp" data-cal-scope="wizard"
-                >--</strong
-              >
-            </div>
-            <div class="setup-status-item">
-              <span data-i18n="wizard.wire.packet">Packet</span>
-              <strong data-cal-field="wireTestPacket" data-cal-scope="wizard"
-                >--</strong
-              >
-            </div>
-            <div class="setup-status-item">
-              <span data-i18n="wizard.wire.frame">Frame</span>
-              <strong data-cal-field="wireTestFrame" data-cal-scope="wizard"
-                >--</strong
-              >
+
+            <div class="setup-wire-chart" data-setup-chart="wire" data-live-wires="1">
+              <div
+                class="live-graph"
+                data-include="admin/partials/components/live-chart.html"
+              ></div>
             </div>
           </div>
         </div>
@@ -804,69 +937,146 @@
         <div class="setup-card">
           <h3 data-i18n="wizard.step9.title">Floor calibration</h3>
           <p class="setup-note" data-i18n="wizard.step9.note">
-            Run a full floor calibration if your installation requires it.
+            NTC provides the floor temperature. Wire temperatures are estimated
+            by the model.
           </p>
           <div class="setup-fields setup-fields-3">
             <label class="setup-field">
               <span data-i18n="wizard.step9.target">Target temp (&deg;C)</span>
-              <input class="setup-input" type="number" step="0.1" />
+              <input
+                class="setup-input"
+                type="number"
+                step="0.1"
+                data-cal-input="floorCalTargetC"
+                data-cal-scope="wizard"
+              />
             </label>
             <label class="setup-field">
               <span data-i18n="wizard.step9.duty">Duty (%)</span>
-              <input class="setup-input" type="number" min="5" max="100" step="1" />
+              <input
+                class="setup-input"
+                type="number"
+                min="5"
+                max="100"
+                step="1"
+                data-cal-input="floorCalDutyPct"
+                data-cal-scope="wizard"
+              />
             </label>
             <label class="setup-field">
               <span data-i18n="wizard.step9.ambient">Ambient (min)</span>
-              <input class="setup-input" type="number" min="1" step="1" />
+              <input
+                class="setup-input"
+                type="number"
+                min="1"
+                step="1"
+                data-cal-input="floorCalAmbientMin"
+                data-cal-scope="wizard"
+              />
             </label>
             <label class="setup-field">
               <span data-i18n="wizard.step9.heat">Heat (min)</span>
-              <input class="setup-input" type="number" min="1" step="1" />
+              <input
+                class="setup-input"
+                type="number"
+                min="1"
+                step="1"
+                data-cal-input="floorCalHeatMin"
+                data-cal-scope="wizard"
+              />
             </label>
             <label class="setup-field">
               <span data-i18n="wizard.step9.cool">Cool (min)</span>
-              <input class="setup-input" type="number" min="0" step="1" />
+              <input
+                class="setup-input"
+                type="number"
+                min="0"
+                step="1"
+                data-cal-input="floorCalCoolMin"
+                data-cal-scope="wizard"
+              />
             </label>
             <label class="setup-field">
               <span data-i18n="wizard.step9.interval">Interval (ms)</span>
-              <input class="setup-input" type="number" min="50" max="5000" step="50" />
+              <input
+                class="setup-input"
+                type="number"
+                min="50"
+                max="5000"
+                step="50"
+                data-cal-input="floorCalIntervalMs"
+                data-cal-scope="wizard"
+              />
             </label>
             <label class="setup-field">
               <span data-i18n="wizard.step9.index">Wire index</span>
-              <input class="setup-input" type="number" min="1" max="10" step="1" />
+              <input
+                class="setup-input"
+                type="number"
+                min="1"
+                max="10"
+                step="1"
+                data-cal-input="floorCalWireIndex"
+                data-cal-scope="wizard"
+              />
             </label>
           </div>
           <div class="setup-actions">
-            <button class="btn btn-primary" type="button" data-i18n="wizard.step9.start">
+            <button
+              class="btn btn-primary"
+              type="button"
+              data-cal-action="startFloorCalibBtn"
+              data-cal-scope="wizard"
+              data-i18n="wizard.step9.start"
+            >
               Start floor cal
             </button>
           </div>
           <div class="setup-status-grid">
             <div class="setup-status-item">
               <span data-i18n="wizard.step9.stage">Stage</span>
-              <strong>--</strong>
+              <strong data-cal-field="floorCalStageText" data-cal-scope="wizard"
+                >--</strong
+              >
             </div>
             <div class="setup-status-item">
               <span data-i18n="wizard.step9.running">Running</span>
-              <strong>--</strong>
+              <strong data-cal-field="floorCalRunningText" data-cal-scope="wizard"
+                >--</strong
+              >
             </div>
             <div class="setup-status-item">
               <span data-i18n="wizard.step9.done">Done</span>
-              <strong>--</strong>
+              <strong data-cal-field="floorCalDoneText" data-cal-scope="wizard"
+                >--</strong
+              >
             </div>
             <div class="setup-status-item">
               <span data-i18n="wizard.step9.tau">Tau</span>
-              <strong>--</strong>
+              <strong data-cal-field="floorCalTauText" data-cal-scope="wizard"
+                >--</strong
+              >
             </div>
             <div class="setup-status-item">
               <span data-i18n="wizard.step9.k">K</span>
-              <strong>--</strong>
+              <strong data-cal-field="floorCalKText" data-cal-scope="wizard"
+                >--</strong
+              >
             </div>
             <div class="setup-status-item">
               <span data-i18n="wizard.step9.c">C</span>
-              <strong>--</strong>
+              <strong data-cal-field="floorCalCText" data-cal-scope="wizard"
+                >--</strong
+              >
             </div>
           </div>
+        </div>
+        <div class="setup-card setup-floor-chart" data-setup-chart="floor" data-live-wires="1,2,3,4,5,6,7,8,9,10">
+          <h3 data-i18n="wizard.step9.chart">Calibration chart</h3>
+          <div
+            class="live-graph"
+            data-include="admin/partials/components/live-chart.html"
+          ></div>
         </div>
       </section>
 
