@@ -1,0 +1,425 @@
+﻿<section class="dashboard-tab" aria-label="Dashboard" data-i18n-aria="dashboard.aria.root">
+  <div class="dash" aria-label="Dashboard cards" data-i18n-aria="dashboard.aria.cards">
+    <!-- TOP-LEFT: CLOCK + SYSTEM -->
+    <section class="card" aria-label="Clock and system" data-i18n-aria="dashboard.aria.clockSystem">
+      <div class="card-inner">
+        <div class="head">
+          <div class="title">
+            <svg
+              class="ico"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="12" r="9"></circle>
+              <path d="M12 7v6l4 2"></path>
+            </svg>
+            <div>
+              <h3 data-i18n="dashboard.overview.title">Overview</h3>
+              <div class="subtitle" data-i18n="dashboard.overview.subtitle">
+                Clock + system state
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="overview">
+          <!-- Clock -->
+          <div class="clockPanel">
+            <div class="dialWrap" aria-hidden="true">
+              <svg class="dial" viewBox="0 0 120 120">
+                <defs>
+                  <filter id="dbClockGlow" x="-30%" y="-30%" width="160%" height="160%">
+                    <feGaussianBlur stdDeviation="1.8" result="b"></feGaussianBlur>
+                    <feComponentTransfer in="b">
+                      <feFuncA type="linear" slope="0.35"></feFuncA>
+                    </feComponentTransfer>
+                    <feMerge>
+                      <feMergeNode />
+                      <feMergeNode in="SourceGraphic" />
+                    </feMerge>
+                  </filter>
+                </defs>
+
+                <g
+                  filter="url(#dbClockGlow)"
+                  fill="none"
+                  stroke="rgba(0,255,174,.55)"
+                  stroke-width="3"
+                  stroke-linecap="round"
+                >
+                  <circle cx="60" cy="60" r="42" opacity=".3"></circle>
+                  <path d="M60 18v10" />
+                  <path d="M60 92v10" />
+                  <path d="M18 60h10" />
+                  <path d="M92 60h10" />
+                  <path d="M30 30l7 7" opacity=".7" />
+                  <path d="M83 83l7 7" opacity=".7" />
+                  <path d="M90 30l-7 7" opacity=".7" />
+                  <path d="M37 83l-7 7" opacity=".7" />
+                </g>
+
+                <g stroke-linecap="round">
+                  <path
+                    data-dashboard-hand="h"
+                    d="M60 60 L43 52"
+                    stroke="rgba(233,254,247,.92)"
+                    stroke-width="4"
+                  />
+                  <path
+                    data-dashboard-hand="m"
+                    d="M60 60 L60 34"
+                    stroke="rgba(233,254,247,.92)"
+                    stroke-width="3"
+                  />
+                  <path
+                    data-dashboard-hand="s"
+                    d="M60 60 L78 70"
+                    stroke="rgba(247,209,74,.92)"
+                    stroke-width="2.2"
+                  />
+                  <circle cx="60" cy="60" r="3" fill="rgba(233,254,247,.92)" />
+                </g>
+              </svg>
+            </div>
+
+            <div class="clockText">
+              <div class="dow" data-dashboard-dow>Thursday</div>
+              <div class="date" data-dashboard-date>Jan 22, 2026</div>
+              <div class="time" data-dashboard-time>07:48:57</div>
+            </div>
+          </div>
+
+          <!-- System -->
+          <div class="systemPanel">
+            <div class="sysBox" aria-label="System status" data-i18n-aria="dashboard.aria.systemStatus">
+              <div class="sysTop">
+              <div class="sysK" data-i18n="dashboard.system.title">SYSTEM</div>
+                <svg
+                  class="sysWave"
+                  viewBox="0 0 64 24"
+                  width="64"
+                  height="24"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M2 12h12l6-8 8 16 8-12 6 4h14"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  ></path>
+                </svg>
+              </div>
+
+              <div class="pills">
+                <div class="pill">
+                  <span class="led ok" data-dashboard-led="ready"></span>
+                  <span data-dashboard-text="ready" data-i18n="dashboard.system.ready"
+                    >Ready</span
+                  >
+                </div>
+                <div class="pill">
+                  <span class="led err" data-dashboard-led="mode"></span>
+                  <span data-dashboard-text="mode" data-i18n="dashboard.system.off"
+                    >Off</span
+                  >
+                </div>
+                <div class="pill">
+                  <span class="led warn" data-dashboard-led="cal"></span>
+                  <span data-dashboard-text="cal" data-i18n="dashboard.system.calPending"
+                    >Cal Pending</span
+                  >
+                </div>
+              </div>
+
+              <div class="toggleRow">
+                <div class="sysK" data-i18n="dashboard.system.ledFeedback">
+                  LED FEEDBACK
+                </div>
+                <div class="toggleRight">
+                  <div class="tagMini">LT</div>
+                  <label
+                    class="switch"
+                    aria-label="LED feedback"
+                    data-i18n-aria="dashboard.system.ledFeedback"
+                  >
+                    <input data-dashboard-led-feedback type="checkbox" checked />
+                    <span class="slider"></span>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <div style="height: 0"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TOP-RIGHT: SYSTEM NOTIFICATIONS -->
+    <section
+      class="card"
+      aria-label="System notifications"
+      data-i18n-aria="dashboard.aria.notifications"
+    >
+      <div class="card-inner">
+        <div class="head">
+          <div class="title">
+            <svg
+              class="ico"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2z"></path>
+              <path d="M18 16v-5a6 6 0 1 0-12 0v5l-2 2h16l-2-2z"></path>
+            </svg>
+            <div>
+              <h3 data-i18n="dashboard.notifications.title">System</h3>
+              <div class="subtitle" data-i18n="dashboard.notifications.subtitle">
+                Notifications + quick actions
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div
+          class="noticeList"
+          data-dashboard-notice-list
+          aria-label="Notification list"
+          data-i18n-aria="dashboard.notifications.list"
+        ></div>
+
+        <div class="actionsRow">
+          <button class="btn btn-primary" type="button" data-dashboard-setup>
+            <span class="btn-icon" aria-hidden="true">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M12 20h9"></path>
+                <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"></path>
+              </svg>
+            </span>
+            <span data-i18n="dashboard.actions.setup">Setup</span>
+          </button>
+          <button
+            class="btn btn-warn"
+            type="button"
+            data-dashboard-calibrate
+            data-calibration-open
+          >
+            <span class="btn-icon" aria-hidden="true">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M12 2v6"></path>
+                <path d="M5 7h14"></path>
+                <path d="M6 20h12"></path>
+                <path d="M8 20a4 4 0 1 1 8 0"></path>
+              </svg>
+            </span>
+            <span data-i18n="dashboard.actions.calibrate">Calibrate</span>
+          </button>
+          <button class="btn" type="button" data-dashboard-logs>
+            <span class="btn-icon" aria-hidden="true">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M4 4h16v16H4z"></path>
+                <path d="M8 8h8"></path>
+                <path d="M8 12h8"></path>
+                <path d="M8 16h5"></path>
+              </svg>
+            </span>
+            <span data-i18n="dashboard.actions.logs">Logs</span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- BOTTOM-LEFT: ELECTRICAL -->
+    <section class="card" aria-label="Electrical" data-i18n-aria="dashboard.aria.electrical">
+      <div class="card-inner">
+        <div class="head">
+          <div class="title">
+            <svg
+              class="ico"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z"></path>
+            </svg>
+            <div>
+              <h3 data-i18n="dashboard.electrical.title">Electrical</h3>
+              <div class="subtitle" data-i18n="dashboard.electrical.subtitle">
+                Voltage, current, capacitance
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="gaugeRow">
+          <div class="gauge">
+            <div class="gTop">
+              <b data-i18n="dashboard.electrical.voltage">Voltage</b>
+              <span class="mini">0-325V</span>
+            </div>
+            <div class="ringWrap">
+              <svg class="ringSvg" viewBox="0 0 100 100" aria-hidden="true">
+                <circle class="base rot" cx="50" cy="50" r="38" stroke-width="8" fill="none"></circle>
+                <circle
+                  class="arc rot"
+                  data-dashboard-arc="v"
+                  cx="50"
+                  cy="50"
+                  r="38"
+                  stroke-width="8"
+                  fill="none"
+                  stroke-linecap="round"
+                  stroke-dasharray="239"
+                  stroke-dashoffset="239"
+                ></circle>
+              </svg>
+              <div class="gVal">
+                <div class="num" data-dashboard-val="v">0.0</div>
+                <div class="unit">V</div>
+              </div>
+            </div>
+            <div class="foot">
+              <span class="tinyDot"></span>
+              <span data-i18n="dashboard.electrical.live">Live</span>
+            </div>
+          </div>
+
+          <div class="gauge">
+            <div class="gTop">
+              <b data-i18n="dashboard.electrical.current">Current</b>
+              <span class="mini">0-50A</span>
+            </div>
+            <div class="ringWrap">
+              <svg class="ringSvg" viewBox="0 0 100 100" aria-hidden="true">
+                <circle class="base rot" cx="50" cy="50" r="38" stroke-width="8" fill="none"></circle>
+                <circle
+                  class="arc rot"
+                  data-dashboard-arc="i"
+                  cx="50"
+                  cy="50"
+                  r="38"
+                  stroke-width="8"
+                  fill="none"
+                  stroke-linecap="round"
+                  stroke-dasharray="239"
+                  stroke-dashoffset="239"
+                ></circle>
+              </svg>
+              <div class="gVal">
+                <div class="num" data-dashboard-val="i">0.00</div>
+                <div class="unit">A</div>
+              </div>
+            </div>
+            <div class="foot">
+              <span class="tinyDot"></span>
+              <span data-i18n="dashboard.electrical.live">Live</span>
+            </div>
+          </div>
+
+          <div class="gauge">
+            <div class="gTop">
+              <b data-i18n="dashboard.electrical.capacitance">Capacitance</b>
+              <span class="mini">0-20mF</span>
+            </div>
+            <div class="ringWrap">
+              <svg class="ringSvg" viewBox="0 0 100 100" aria-hidden="true">
+                <circle class="base rot" cx="50" cy="50" r="38" stroke-width="8" fill="none"></circle>
+                <circle
+                  class="arc rot"
+                  data-dashboard-arc="c"
+                  cx="50"
+                  cy="50"
+                  r="38"
+                  stroke-width="8"
+                  fill="none"
+                  stroke-linecap="round"
+                  stroke-dasharray="239"
+                  stroke-dashoffset="239"
+                ></circle>
+              </svg>
+              <div class="gVal">
+                <div class="num" data-dashboard-val="c">0.00</div>
+                <div class="unit">mF</div>
+              </div>
+            </div>
+            <div class="foot">
+              <span class="tinyDot"></span>
+              <span data-i18n="dashboard.electrical.live">Live</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- BOTTOM-RIGHT: THERMALS -->
+    <section class="card" aria-label="Thermals" data-i18n-aria="dashboard.aria.thermals">
+      <div class="card-inner">
+        <div class="head">
+          <div class="title">
+            <svg
+              class="ico"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M10 14.5V5a2 2 0 0 1 4 0v9.5a4 4 0 1 1-4 0z"></path>
+            </svg>
+            <div>
+              <h3 data-i18n="dashboard.thermals.title">Thermals</h3>
+              <div class="subtitle" data-i18n="dashboard.thermals.subtitle">
+                4 temperature channels
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="thermGrid" data-dashboard-therm-grid></div>
+      </div>
+    </section>
+  </div>
+
+  <div hidden data-include="admin/partials/components/notification_item.html"></div>
+</section>
+
+

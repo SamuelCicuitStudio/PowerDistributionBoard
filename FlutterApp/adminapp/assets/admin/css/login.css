@@ -1,167 +1,142 @@
-@font-face {
-  font-family: "Inter";
-  src: url("/fonts/Inter_18pt-Regular.ttf") format("truetype");
-  font-weight: 400;
-  font-style: normal;
-}
-@font-face {
-  font-family: "Inter";
-  src: url("/fonts/Inter_18pt-SemiBold.ttf") format("truetype");
-  font-weight: 600;
-  font-style: normal;
-}
-
-* {
-  box-sizing: border-box;
-}
+﻿@import "./base/reset.css";
+@import "./base/fonts.css";
+@import "./base/tokens.css";
+@import "./components/buttons.css";
 
 :root {
-  --bg-1: #050608;
-  --bg-2: #090b10;
-  --glass: rgba(255, 255, 255, 0.02);
-  --glass-2: rgba(0, 0, 0, 0.9);
-  --stroke: rgba(0, 255, 174, 0.14);
-  --stroke-2: rgba(0, 255, 174, 0.24);
-  --text: #ffffff;
-  --muted: rgba(255, 255, 255, 0.6);
-  --placeholder: rgba(255, 255, 255, 0.5);
-  --neon: #00ffae;
-  --neon-soft: rgba(0, 255, 174, 0.4);
-  --neon-inset: rgba(0, 255, 174, 0.22);
+  --login-card-w: 380px;
 }
 
-/* Help browsers pick dark UI defaults for controls/autofill popups */
-html,
-body,
-input,
-button {
-  color-scheme: dark;
+body.login-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background:
+    radial-gradient(circle at top, rgba(0, 255, 174, 0.08), transparent 55%),
+    radial-gradient(circle at bottom, rgba(0, 119, 255, 0.1), transparent 55%),
+    linear-gradient(to bottom right, var(--bg0), var(--bg1));
 }
 
-html,
-body {
-  height: 100%;
+.login-shell {
+  width: 100%;
+  display: grid;
+  place-items: center;
 }
 
-body {
-  margin: 0;
-  font-family: "Inter", sans-serif;
-  background: radial-gradient(
-      circle at top,
-      rgba(0, 255, 174, 0.06),
-      transparent
-    ),
-    radial-gradient(circle at bottom, rgba(0, 119, 255, 0.06), transparent),
-    linear-gradient(to bottom right, var(--bg-1), var(--bg-2));
-  color: var(--text);
+.login-card {
+  width: min(var(--login-card-w), 92vw);
+  background: var(--panel);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-md);
+  padding: 26px 26px 22px;
+  display: grid;
+  gap: 18px;
+  position: relative;
+}
+
+.login-brand {
   display: flex;
   align-items: center;
-  justify-content: center;
-  min-height: 100%;
+  gap: 14px;
 }
 
-.login-container {
-  background: radial-gradient(
-      circle at center,
-      rgba(0, 255, 174, 0.06),
-      transparent
-    ),
-    radial-gradient(circle at top, rgba(0, 119, 255, 0.08), transparent),
-    rgba(8, 8, 8, 0.98);
-  backdrop-filter: blur(14px);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 20px;
-  padding: 40px 30px;
-  width: 320px;
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.85);
-  text-align: center;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  animation: fadeIn 0.8s ease-out forwards;
-  opacity: 0;
-  transform: translateY(30px);
-  transition: box-shadow 0.4s ease-in-out, border-color 0.3s ease-in-out,
-    background 0.3s ease-in-out;
-}
-.login-container:hover {
-  box-shadow: 0 0 35px var(--neon-soft), 0 0 14px var(--neon-inset) inset,
-    0 26px 70px rgba(0, 0, 0, 0.95);
-  border-color: rgba(0, 255, 174, 0.22);
-}
-@keyframes fadeIn {
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.logo-circle {
-  width: 100px;
-  height: 100px;
-  background-color: rgba(0, 0, 0, 0.9);
-  border: 2px solid var(--stroke-2);
+.brand-icon {
+  width: 58px;
+  height: 58px;
   border-radius: 50%;
   display: grid;
   place-items: center;
-  margin-bottom: 30px;
-  box-shadow: 0 0 16px rgba(0, 255, 180, 0.32), 0 8px 20px rgba(0, 0, 0, 0.9);
-}
-.logo-circle img {
-  width: 60%;
-  height: 60%;
-  object-fit: contain;
-  filter: drop-shadow(0 0 6px rgba(0, 255, 180, 0.5));
+  background: var(--panel2);
+  border: 1px solid rgba(0, 255, 174, 0.25);
+  box-shadow: 0 0 12px rgba(0, 255, 174, 0.18);
+  color: var(--accent);
 }
 
-/* Input groups */
-.input-group {
-  width: 100%;
-  position: relative;
+.brand-icon svg {
+  width: 26px;
+  height: 26px;
+}
+
+.brand-title {
+  margin: 0;
+  font-size: 18px;
+}
+
+.brand-sub {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.login-form {
+  display: grid;
+  gap: 14px;
+}
+
+.login-field {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.login-label {
+  font-size: 12px;
+  color: rgba(233, 254, 247, 0.75);
+}
+
+.login-input {
   display: flex;
   align-items: center;
-  background-color: rgba(0, 0, 0, 0.9);
-  border-radius: 12px;
-  border: 1px solid var(--stroke);
-  margin-bottom: 20px;
+  gap: 8px;
+  border-radius: var(--r-md);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.7);
+  height: 46px;
   padding: 0 12px;
-  height: 48px;
-  transition: box-shadow 0.3s, border-color 0.3s, background 0.3s;
-}
-.input-group img {
-  width: 20px;
-  height: 20px;
-  margin-right: 10px;
-  filter: drop-shadow(0 0 4px rgba(0, 255, 174, 0.25));
-}
-.input-group input {
-  flex: 1;
-  background: transparent;
-  border: none;
-  color: var(--text);
-  font-size: 1em;
-  height: 100%;
-  caret-color: var(--neon);
-  padding-right: 46px; /* space for eye */
-}
-.input-group input::placeholder {
-  color: var(--placeholder);
-}
-.input-group input:focus {
-  outline: none;
-}
-.input-group:focus-within {
-  border-color: var(--neon);
-  box-shadow: 0 0 8px var(--neon), 0 0 10px rgba(0, 255, 174, 0.25) inset;
-  background: radial-gradient(
-      circle at left,
-      rgba(0, 255, 174, 0.12),
-      transparent
-    ),
-    rgba(0, 0, 0, 0.96);
+  position: relative;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
-/* Password eye */
+.login-input:focus-within {
+  border-color: rgba(0, 255, 174, 0.4);
+  box-shadow: 0 0 0 1px rgba(0, 255, 174, 0.2) inset;
+}
+
+.login-icon {
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(0, 255, 174, 0.8);
+}
+
+.login-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.login-input input {
+  flex: 1;
+  height: 100%;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 14px;
+  padding-right: 44px;
+}
+
+.login-input input::placeholder {
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.login-input input:focus {
+  outline: none;
+}
+
 .toggle-eye {
   position: absolute;
   right: 8px;
@@ -171,123 +146,123 @@ body {
   height: 34px;
   display: inline-grid;
   place-items: center;
-  appearance: none;
-  -webkit-appearance: none;
   border: 1px solid transparent;
   background: rgba(255, 255, 255, 0.02);
   border-radius: 10px;
-  cursor: pointer;
-  transition: border-color 0.2s, box-shadow 0.2s, background 0.2s,
-    transform 0.04s;
+  color: rgba(255, 255, 255, 0.75);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease,
+    transform 0.08s ease;
 }
+
 .toggle-eye:hover {
-  border-color: var(--neon);
-  box-shadow: inset 0 0 8px rgba(0, 255, 174, 0.2),
-    0 0 8px rgba(0, 255, 174, 0.3);
+  border-color: rgba(0, 255, 174, 0.35);
+  box-shadow: 0 0 8px rgba(0, 255, 174, 0.2);
 }
+
 .toggle-eye:active {
   transform: translateY(-50%) scale(0.96);
 }
+
 .toggle-eye svg {
-  fill: var(--text);
-  opacity: 0.9;
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
 }
+
 .toggle-eye .eye-open {
   display: block;
 }
+
 .toggle-eye .eye-closed {
   display: none;
 }
+
 .toggle-eye.is-showing {
-  background: rgba(0, 255, 174, 0.12);
-  border-color: var(--neon);
-  box-shadow: 0 0 10px rgba(0, 255, 174, 0.32),
-    inset 0 0 10px rgba(0, 255, 174, 0.16);
+  border-color: rgba(0, 255, 174, 0.6);
+  box-shadow: 0 0 10px rgba(0, 255, 174, 0.35);
+  color: var(--accent);
 }
+
 .toggle-eye.is-showing .eye-open {
   display: none;
 }
+
 .toggle-eye.is-showing .eye-closed {
   display: block;
 }
 
-/* Selection color */
-::selection {
-  background: rgba(0, 255, 174, 0.35);
-  color: #06110c;
+.login-actions {
+  display: flex;
 }
 
-/* Login button */
 .login-btn {
   width: 100%;
-  padding: 12px;
-  font-size: 1em;
-  background: var(--neon);
-  color: #000;
-  border: none;
-  border-radius: 12px;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
   justify-content: center;
-  gap: 10px;
-  cursor: pointer;
-  transition: background 0.3s, box-shadow 0.3s, transform 0.12s;
-  box-shadow: 0 0 14px rgba(0, 255, 174, 0.35);
-}
-.login-btn img {
-  width: 20px;
-  height: 20px;
-}
-.login-btn:hover {
-  background: #00e6a0;
-  box-shadow: 0 0 20px rgba(0, 255, 174, 0.6), 0 6px 18px rgba(0, 0, 0, 0.9);
-  transform: translateY(-1px);
 }
 
-/* Info button in corner */
-.info-btn {
+.login-status {
+  min-height: 18px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--err);
+}
+
+.login-status[data-state="ok"] {
+  color: var(--accent);
+}
+
+.login-info-btn {
   position: absolute;
-  top: 10px;
-  right: 10px;
+  top: 16px;
+  right: 16px;
   width: 26px;
   height: 26px;
   border-radius: 50%;
-  border: 1px solid var(--stroke);
-  background: rgba(0, 0, 0, 0.85);
-  color: var(--muted);
-  font-size: 14px;
-  cursor: pointer;
-  display: flex;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.7);
+  color: rgba(233, 254, 247, 0.7);
+  font-size: 13px;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0;
-}
-.info-btn:hover {
-  border-color: var(--neon);
-  color: var(--neon);
 }
 
-.device-info-panel {
+.login-info-btn:hover {
+  border-color: rgba(0, 255, 174, 0.35);
+  color: var(--accent);
+}
+
+.login-info-panel {
   position: absolute;
-  top: 42px;
-  right: 10px;
-  background: var(--glass-2);
-  border-radius: 10px;
-  padding: 8px 12px;
-  font-size: 0.78em;
-  text-align: left;
-  border: 1px solid var(--stroke);
-  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.9);
+  top: 52px;
+  right: 16px;
+  width: 200px;
+  border-radius: var(--r-md);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(3, 8, 10, 0.95);
+  padding: 10px 12px;
+  font-size: 12px;
+  color: rgba(233, 254, 247, 0.72);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.7);
+  display: none;
 }
 
-.footer {
-  margin-top: 20px;
-  font-size: 0.85em;
-  color: var(--muted);
+.login-info-panel.is-open {
+  display: block;
 }
 
-/* a11y helper */
+.login-info-panel h4 {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: rgba(0, 255, 174, 0.8);
+}
+
+.login-footer {
+  text-align: center;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.45);
+}
+
 .visually-hidden {
   position: absolute !important;
   width: 1px;
@@ -300,62 +275,13 @@ body {
   white-space: nowrap;
 }
 
-/* === Fixed Login Stage === */
-:root {
-  --LOGIN_W: 360px;
-  --LOGIN_H: 420px;
-}
-html,
-body {
-  min-width: calc(var(--LOGIN_W) + 40px);
-  min-height: calc(var(--LOGIN_H) + 40px);
-  overflow: auto; /* scroll when window smaller */
-}
-.login-container {
-  width: var(--LOGIN_W);
-  height: var(--LOGIN_H);
-  min-width: var(--LOGIN_W);
-  min-height: var(--LOGIN_H);
-  max-width: var(--LOGIN_W);
-  max-height: var(--LOGIN_H);
-  flex: none;
-  overflow: hidden;
-  position: relative; /* anchor info button/panel */
+@media (max-width: 520px) {
+  .login-card {
+    padding: 22px 20px 20px;
+  }
+
+  .login-info-panel {
+    width: 180px;
+  }
 }
 
-/* =========================
-   Autofill / Suggestions Fix
-   ========================= */
-
-/* Chrome/Edge/Safari (WebKit/Blink) */
-.input-group input:-webkit-autofill,
-.input-group input:-webkit-autofill:hover,
-.input-group input:-webkit-autofill:focus,
-.input-group input:-webkit-autofill:active {
-  -webkit-text-fill-color: var(--text) !important;
-  caret-color: var(--neon);
-  -webkit-box-shadow: 0 0 0px 1000px rgba(0, 0, 0, 0.9) inset !important;
-  box-shadow: 0 0 0px 1000px rgba(0, 0, 0, 0.9) inset !important;
-  transition: background-color 9999s ease-in-out 0s;
-}
-
-/* Ensure first line in autofilled text uses our font/size */
-.input-group input:-webkit-autofill::first-line {
-  font-family: "Inter", sans-serif;
-  font-size: 1em;
-  color: var(--text);
-}
-
-/* Firefox */
-.input-group input:-moz-autofill {
-  box-shadow: 0 0 0 1000px rgba(0, 0, 0, 0.9) inset !important;
-  -moz-text-fill-color: var(--text) !important;
-}
-
-/* When focused and autofilled, keep glow/border */
-.input-group:focus-within input:-webkit-autofill,
-.input-group:focus-within input:-moz-autofill {
-  -webkit-box-shadow: 0 0 0px 1000px rgba(0, 0, 0, 0.9) inset,
-    0 0 6px var(--neon) !important;
-  box-shadow: 0 0 0px 1000px rgba(0, 0, 0, 0.9) inset, 0 0 6px var(--neon) !important;
-}

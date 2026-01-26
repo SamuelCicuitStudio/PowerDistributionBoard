@@ -1,0 +1,37 @@
+﻿<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="Cache-Control" content="no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Login Failed</title>
+    <link rel="stylesheet" href="admin/css/login.css" />
+    <link rel="stylesheet" href="admin/css/login_failed.css" />
+  </head>
+  <body class="login-page">
+    <main class="login-shell">
+      <section class="login-card is-error" aria-label="Login failed">
+        <div class="login-fail-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="9"></circle>
+            <path d="M12 7v6"></path>
+            <path d="M12 17h.01"></path>
+          </svg>
+        </div>
+        <h1 class="login-fail-title">Login Failed</h1>
+        <p class="login-fail-message" data-login-fail-message>
+          Incorrect username or password. Please try again.
+        </p>
+        <div class="login-fail-actions">
+          <button class="btn btn-primary" type="button" data-login-back>
+            Back to Login
+          </button>
+        </div>
+      </section>
+    </main>
+
+    <script type="module" src="admin/js/login_failed.js"></script>
+  </body>
+</html>

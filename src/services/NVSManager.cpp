@@ -269,6 +269,7 @@ void NVS::initializeVariables() {
   PutString(ADMIN_PASS_KEY, DEFAULT_ADMIN_PASS);
   PutString(USER_ID_KEY, DEFAULT_USER_ID);
   PutString(USER_PASS_KEY, DEFAULT_USER_PASS);
+  PutString(UI_LANGUAGE_KEY, DEFAULT_UI_LANGUAGE);
 
   // Device identity & versions (persist once)
   // Deterministic, human-friendly ID derived from eFuse MAC
@@ -338,7 +339,6 @@ void NVS::initializeVariables() {
   PutBool(CALIB_CAP_DONE_KEY, DEFAULT_CALIB_CAP_DONE);
   PutBool(CALIB_NTC_DONE_KEY, DEFAULT_CALIB_NTC_DONE);
   PutBool(CALIB_PRESENCE_DONE_KEY, DEFAULT_CALIB_PRESENCE_DONE);
-  PutFloat(PRESENCE_MIN_DROP_V_KEY, DEFAULT_PRESENCE_MIN_DROP_V);
   PutFloat(PRESENCE_MIN_RATIO_KEY, DEFAULT_PRESENCE_MIN_RATIO);
   PutInt(PRESENCE_WINDOW_MS_KEY, DEFAULT_PRESENCE_WINDOW_MS);
   PutInt(PRESENCE_FAIL_COUNT_KEY, DEFAULT_PRESENCE_FAIL_COUNT);
@@ -437,6 +437,7 @@ void NVS::ensureMissingDefaults() {
   ensureString(ADMIN_PASS_KEY, DEFAULT_ADMIN_PASS);
   ensureString(USER_ID_KEY, DEFAULT_USER_ID);
   ensureString(USER_PASS_KEY, DEFAULT_USER_PASS);
+  ensureString(UI_LANGUAGE_KEY, DEFAULT_UI_LANGUAGE);
 
   ensureString(DEV_ID_KEY, devId.c_str());
   ensureString(DEV_SW_KEY, DEVICE_SW_VERSION);
@@ -499,7 +500,6 @@ void NVS::ensureMissingDefaults() {
   ensureBool(CALIB_CAP_DONE_KEY, DEFAULT_CALIB_CAP_DONE);
   ensureBool(CALIB_NTC_DONE_KEY, DEFAULT_CALIB_NTC_DONE);
   ensureBool(CALIB_PRESENCE_DONE_KEY, DEFAULT_CALIB_PRESENCE_DONE);
-  ensureFloat(PRESENCE_MIN_DROP_V_KEY, DEFAULT_PRESENCE_MIN_DROP_V);
   ensureFloat(PRESENCE_MIN_RATIO_KEY, DEFAULT_PRESENCE_MIN_RATIO);
   ensureInt(PRESENCE_WINDOW_MS_KEY, DEFAULT_PRESENCE_WINDOW_MS);
   ensureInt(PRESENCE_FAIL_COUNT_KEY, DEFAULT_PRESENCE_FAIL_COUNT);
@@ -551,6 +551,33 @@ void NVS::ensureMissingDefaults() {
   ensureString(TSB1ID_KEY, "");
   ensureString(TSHSID_KEY, "");
   ensureBool(TSMAP_KEY, false);
+
+  // Normalize language and setup fields in case legacy/invalid values exist.
+  {
+    String lang = preferences.getString(UI_LANGUAGE_KEY, DEFAULT_UI_LANGUAGE);
+    String norm = lang;
+    norm.trim();
+    norm.toLowerCase();
+    if (!(norm == "en" || norm == "fr" || norm == "it")) {
+      norm = DEFAULT_UI_LANGUAGE;
+    }
+    if (norm != lang) {
+      preferences.putString(UI_LANGUAGE_KEY, norm);
+    }
+
+    const int stage = preferences.getInt(SETUP_STAGE_KEY, DEFAULT_SETUP_STAGE);
+    if (stage < 0 || stage > 10) {
+      preferences.putInt(SETUP_STAGE_KEY, DEFAULT_SETUP_STAGE);
+    }
+    const int substage = preferences.getInt(SETUP_SUBSTAGE_KEY, DEFAULT_SETUP_SUBSTAGE);
+    if (substage < 0) {
+      preferences.putInt(SETUP_SUBSTAGE_KEY, DEFAULT_SETUP_SUBSTAGE);
+    }
+    const int wireIndex = preferences.getInt(SETUP_WIRE_INDEX_KEY, DEFAULT_SETUP_WIRE_INDEX);
+    if (wireIndex < 0 || wireIndex > 10) {
+      preferences.putInt(SETUP_WIRE_INDEX_KEY, DEFAULT_SETUP_WIRE_INDEX);
+    }
+  }
 
   unlock_();
 }

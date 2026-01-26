@@ -110,6 +110,7 @@ private:
 
     // Mutex guards: OneWire, addresses, caches, interval, sensorCount
     SemaphoreHandle_t _mutex = nullptr;
+    volatile bool _stopRequested = false;
     inline bool lock(TickType_t timeoutTicks = portMAX_DELAY) const {
         if (_mutex == nullptr) return true;
         return (xSemaphoreTake(_mutex, timeoutTicks) == pdTRUE);

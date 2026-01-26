@@ -1,5 +1,6 @@
 #include <WiFiManager.hpp>
 #include <WiFiCbor.hpp>
+#include <WiFiLocalization.hpp>
 #include <Utils.hpp>
 #include <DeviceTransport.hpp>
 #include <NtcSensor.hpp>
@@ -201,6 +202,7 @@ void WiFiManager::startEventStreamTask() {
         Device::EventEntry errEntries[1]{};
         const bool hasWarn = (DEVICE->getWarningHistory(warnEntries, 1) > 0);
         const bool hasErr = (DEVICE->getErrorHistory(errEntries, 1) > 0);
+        const WiFiLang::UiLanguage lang = WiFiLang::getCurrentLanguage();
 
         String payload;
         if (!buildCborBase64_(payload, 512, [&](CborEncoder* map) {
@@ -220,7 +222,9 @@ void WiFiManager::startEventStreamTask() {
                     if (cbor_encoder_create_map(map, &lastWarn, CborIndefiniteLength) != CborNoError) {
                         return false;
                     }
-                    if (!WiFiCbor::encodeKvText(&lastWarn, "reason", warnEntries[0].reason)) {
+                    const String warnReason =
+                        WiFiLang::translateReason(warnEntries[0].reason, lang);
+                    if (!WiFiCbor::encodeKvText(&lastWarn, "reason", warnReason)) {
                         return false;
                     }
                     if (warnEntries[0].ms) {
@@ -244,7 +248,9 @@ void WiFiManager::startEventStreamTask() {
                     if (cbor_encoder_create_map(map, &lastErr, CborIndefiniteLength) != CborNoError) {
                         return false;
                     }
-                    if (!WiFiCbor::encodeKvText(&lastErr, "reason", errEntries[0].reason)) {
+                    const String errReason =
+                        WiFiLang::translateReason(errEntries[0].reason, lang);
+                    if (!WiFiCbor::encodeKvText(&lastErr, "reason", errReason)) {
                         return false;
                     }
                     if (errEntries[0].ms) {
@@ -296,11 +302,13 @@ void WiFiManager::eventStreamTask(void* pv) {
         if (!DEVICE->waitForEventNotice(note, portMAX_DELAY)) continue;
 
         String payload;
+        const WiFiLang::UiLanguage lang = WiFiLang::getCurrentLanguage();
         const char* kind =
             (note.kind == Device::EventKind::Warning) ? "warning" : "error";
         if (!buildCborBase64_(payload, 256, [&](CborEncoder* map) {
                 if (!WiFiCbor::encodeKvText(map, "kind", kind)) return false;
-                if (!WiFiCbor::encodeKvText(map, "reason", note.reason)) return false;
+                const String reason = WiFiLang::translateReason(note.reason, lang);
+                if (!WiFiCbor::encodeKvText(map, "reason", reason)) return false;
                 if (note.ms) {
                     if (!WiFiCbor::encodeKvUInt(map, "ms", note.ms)) return false;
                 }
@@ -637,7 +645,9 @@ void WiFiManager::snapshotTask(void* param) {
                     cborOk = WiFiCbor::encodeKvFloat(&waitMap, "tol_c", wait.tolC);
                 }
                 if (cborOk && wait.reason[0]) {
-                    cborOk = WiFiCbor::encodeKvText(&waitMap, "reason", wait.reason);
+                    const WiFiLang::UiLanguage lang = WiFiLang::getCurrentLanguage();
+                    const String waitReason = WiFiLang::translateReason(wait.reason, lang);
+                    cborOk = WiFiCbor::encodeKvText(&waitMap, "reason", waitReason);
                 }
             }
             if (cborOk &&
@@ -760,8 +770,31 @@ bool WiFiManager::getMonitorCbor(std::vector<uint8_t>& out) {
 }
 
 void WiFiManager::pushLiveSample(const StatusSnapshot& s) {
-    // Live push disabled; snapshots are pulled by clients.
-    (void)s;
+    LiveSample sm{};
+    sm.seq = ++_liveSeqCtr;
+    sm.tsMs = s.updatedMs ? s.updatedMs : millis();
+    sm.capV = s.capVoltage;
+    sm.currentA = s.current;
+
+    uint16_t mask = 0;
+    for (uint8_t i = 0; i < HeaterManager::kWireCount; ++i) {
+        if (s.outputs[i]) {
+            mask |= static_cast<uint16_t>(1u << i);
+        }
+        const double t = s.wireTemps[i];
+        sm.wireTemps[i] = static_cast<int16_t>(
+            (isfinite(t) ? lround(t) : -127));
+    }
+    sm.outputsMask = mask;
+    sm.relay = s.relayOn;
+    sm.ac = s.acPresent;
+    sm.fanPct = FAN ? FAN->getSpeedPercent() : 0;
+
+    _liveBuf[_liveHead] = sm;
+    _liveHead = (_liveHead + 1) % kLiveBufSize;
+    if (_liveCount < kLiveBufSize) {
+        _liveCount++;
+    }
 }
 
 bool WiFiManager::buildLiveBatch(CborEncoder* items, uint32_t sinceSeq, uint32_t& seqStart, uint32_t& seqEnd) {

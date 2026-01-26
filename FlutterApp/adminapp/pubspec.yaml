@@ -2,7 +2,7 @@ name: adminapp
 description: "A new Flutter project."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
-publish_to: 'none' # Remove this line if you wish to publish to pub.dev
+publish_to: "none" # Remove this line if you wish to publish to pub.dev
 
 # The following defines the version and build number for your application.
 # A version number is three numbers separated by dots, like 1.2.43
@@ -30,8 +30,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  webview_windows:
-    path: third_party/webview_windows
+  flutter_inappwebview: ^6.0.0
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
@@ -54,21 +53,109 @@ dev_dependencies:
 
 # The following section is specific to Flutter packages.
 flutter:
-
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
 
   assets:
-    - assets/admin/admin.html
-    - assets/admin/login.html
-    - assets/admin/login_failed.html
-    - assets/admin/css/
-    - assets/admin/js/
-    - assets/admin/icons/
-    - assets/admin/fonts/
-    - assets/admin/partials/
+    - assets/admin.html
+    - assets/admin/css/admin.css
+    - assets/admin/css/base/fonts.css
+    - assets/admin/css/base/reset.css
+    - assets/admin/css/base/tokens.css
+    - assets/admin/css/components/buttons.css
+    - assets/admin/css/components/notification_item.css
+    - assets/admin/css/layout/admin_tab.css
+    - assets/admin/css/layout/alert_overlays.css
+    - assets/admin/css/layout/calibration_overlay.css
+    - assets/admin/css/layout/confirm.css
+    - assets/admin/css/layout/content.css
+    - assets/admin/css/layout/control_tab.css
+    - assets/admin/css/layout/dashboard_tab.css
+    - assets/admin/css/layout/device_tab.css
+    - assets/admin/css/layout/history_overlay.css
+    - assets/admin/css/layout/live_chart.css
+    - assets/admin/css/layout/live_overlay.css
+    - assets/admin/css/layout/live_tab.css
+    - assets/admin/css/layout/log_overlay.css
+    - assets/admin/css/layout/overlays.css
+    - assets/admin/css/layout/setup_wizard.css
+    - assets/admin/css/layout/shell.css
+    - assets/admin/css/layout/sidebar.css
+    - assets/admin/css/layout/statusbar.css
+    - assets/admin/css/layout/toast.css
+    - assets/admin/css/layout/user_tab.css
+    - assets/admin/css/login_failed.css
+    - assets/admin/css/login.css
+    - assets/admin/fonts/inter_18pt_regular.ttf
+    - assets/admin/fonts/inter_18pt_semibold.ttf
+    - assets/admin/js/app.js
+    - assets/admin/js/core/dom.js
+    - assets/admin/js/features/admin/index.js
+    - assets/admin/js/features/alerts/index.js
+    - assets/admin/js/features/calibration/index.js
+    - assets/admin/js/features/confirm/index.js
+    - assets/admin/js/features/control/index.js
+    - assets/admin/js/features/dashboard/index.js
+    - assets/admin/js/features/device/index.js
+    - assets/admin/js/features/history/index.js
+    - assets/admin/js/features/live/chart.js
+    - assets/admin/js/features/live/index.js
+    - assets/admin/js/features/log/index.js
+    - assets/admin/js/features/notifications/index.js
+    - assets/admin/js/features/setup/index.js
+    - assets/admin/js/features/sidebar/index.js
+    - assets/admin/js/features/statusbar/index.js
+    - assets/admin/js/features/toast/index.js
+    - assets/admin/js/features/user/index.js
+    - assets/admin/js/login_failed.js
+    - assets/admin/js/login.js
+    - assets/admin/js/services/alerts_linkage.js
+    - assets/admin/js/services/auth_session.js
+    - assets/admin/js/services/calibration_linkage.js
+    - assets/admin/js/services/cbor_client.js
+    - assets/admin/js/services/cbor.js
+    - assets/admin/js/services/controls_refresh.js
+    - assets/admin/js/services/edit_lock.js
+    - assets/admin/js/services/heartbeat.js
+    - assets/admin/js/services/i18n_en.js
+    - assets/admin/js/services/i18n_fr.js
+    - assets/admin/js/services/i18n_it.js
+    - assets/admin/js/services/i18n.js
+    - assets/admin/js/services/language.js
+    - assets/admin/js/services/linkage.js
+    - assets/admin/js/services/setup_linkage.js
+    - assets/admin/js/services/sidebar_linkage.js
+    - assets/admin/js/services/sse_client.js
+    - assets/admin/js/services/statusbar_linkage.js
+    - assets/admin/js/services/telemetry_cache.js
+    - assets/admin/js/services/transport.js
+    - assets/admin/partials/components/btn_reset.html
+    - assets/admin/partials/components/btn_save.html
+    - assets/admin/partials/components/live_chart.html
+    - assets/admin/partials/components/notification_item.html
+    - assets/admin/partials/layout/confirm.html
+    - assets/admin/partials/layout/overlays.html
+    - assets/admin/partials/layout/session_menu.html
+    - assets/admin/partials/layout/sidebar.html
+    - assets/admin/partials/layout/statusbar.html
+    - assets/admin/partials/layout/toast.html
+    - assets/admin/partials/overlays/calibration.html
+    - assets/admin/partials/overlays/errors.html
+    - assets/admin/partials/overlays/history.html
+    - assets/admin/partials/overlays/live.html
+    - assets/admin/partials/overlays/log.html
+    - assets/admin/partials/overlays/warnings.html
+    - assets/admin/partials/tabs/admin.html
+    - assets/admin/partials/tabs/control.html
+    - assets/admin/partials/tabs/dashboard.html
+    - assets/admin/partials/tabs/device.html
+    - assets/admin/partials/tabs/live.html
+    - assets/admin/partials/tabs/user.html
+    - assets/admin/partials/wizard/setup_wizard.html
+    - assets/login.html
+    - assets/login_failed.html
 
   # To add assets to your application, add an assets section, like this:
   # assets:
@@ -89,8 +176,8 @@ flutter:
   # fonts:
   #   - family: Schyler
   #     fonts:
-  #       - asset: fonts/Schyler-Regular.ttf
-  #       - asset: fonts/Schyler-Italic.ttf
+  #       - asset: fonts/schyler_regular.ttf
+  #       - asset: fonts/schyler_italic.ttf
   #         style: italic
   #   - family: Trajan Pro
   #     fonts:

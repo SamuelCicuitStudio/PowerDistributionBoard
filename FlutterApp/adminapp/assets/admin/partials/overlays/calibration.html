@@ -1,0 +1,725 @@
+<div
+  class="calibration-shell"
+  role="dialog"
+  aria-label="Calibration"
+  data-i18n-aria="calibration.aria.root"
+>
+  <header class="calibration-header">
+    <div>
+      <p class="calibration-eyebrow" data-i18n="calibration.header.eyebrow">
+        Calibration
+      </p>
+      <h3 class="calibration-title" data-i18n="calibration.header.title">
+        Device calibration
+      </h3>
+      <p class="calibration-sub" data-i18n="calibration.header.subtitle">
+        Model tuning, wire tests, floor calibration, and presence checks.
+      </p>
+    </div>
+    <div class="calibration-head-actions">
+      <button
+        class="calibration-info-btn"
+        type="button"
+        data-cal-info-open
+        aria-label="Open calibration help"
+        data-i18n-aria="calibration.header.helpOpen"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <circle cx="12" cy="12" r="9"></circle>
+          <path d="M12 16v-4"></path>
+          <path d="M12 8h.01"></path>
+        </svg>
+        <span data-i18n="calibration.header.help">Help</span>
+      </button>
+      <button
+        class="calibration-close"
+        type="button"
+        data-calibration-close
+        aria-label="Close calibration"
+        data-i18n-aria="calibration.header.close"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <div class="calibration-grid">
+    <section class="calibration-card calibration-card--control">
+      <div class="calibration-card-head">
+        <div class="calibration-card-title">
+          <span class="calibration-card-icon" aria-hidden="true">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M4 21v-7"></path>
+              <path d="M4 10V3"></path>
+              <path d="M12 21v-9"></path>
+              <path d="M12 8V3"></path>
+              <path d="M20 21v-5"></path>
+              <path d="M20 12V3"></path>
+              <path d="M2 14h4"></path>
+              <path d="M10 8h4"></path>
+              <path d="M18 16h4"></path>
+            </svg>
+          </span>
+          <h4 data-i18n="calibration.card.control.title">Calibration Control</h4>
+        </div>
+        <span class="calibration-tag" data-i18n="calibration.tag.modelSensors">
+          Model + sensors
+        </span>
+      </div>
+      <div class="calibration-actions">
+        <button
+          class="btn btn-primary"
+          type="button"
+          data-cal-action="startModelCalibBtn"
+        >
+          <span data-i18n="calibration.action.modelCal">Temp Model Calibration</span>
+        </button>
+        <button class="btn" type="button" data-cal-action="stopCalibBtn">
+          <span data-i18n="calibration.action.stopSave">Stop</span>
+        </button>
+      </div>
+      <div class="calibration-status-grid calibration-status-grid--compact">
+        <div class="calibration-stat">
+          <span class="calibration-stat-label" data-i18n="calibration.floor.tau">Tau</span>
+          <span class="calibration-stat-value" data-cal-field="modelCalTauText">--</span>
+        </div>
+        <div class="calibration-stat">
+          <span class="calibration-stat-label" data-i18n="calibration.floor.k">K</span>
+          <span class="calibration-stat-value" data-cal-field="modelCalKText">--</span>
+        </div>
+        <div class="calibration-stat">
+          <span class="calibration-stat-label" data-i18n="calibration.floor.c">C</span>
+          <span class="calibration-stat-value" data-cal-field="modelCalCText">--</span>
+        </div>
+      </div>
+      <div class="calibration-actions">
+        <button class="btn btn-primary" type="button" data-cal-action="modelCalSaveBtn">
+          <span data-i18n="buttons.save">Save</span>
+        </button>
+        <button class="btn" type="button" data-cal-action="modelCalDiscardBtn">
+          <span data-i18n="wizard.step8.discard">Discard</span>
+        </button>
+      </div>
+      <button class="btn" type="button" data-cal-action="capCurrentCalBtn">
+        <span data-i18n="calibration.action.capZero">
+          Capacitance + Current Sensor Zero
+        </span>
+      </button>
+    </section>
+
+    <section class="calibration-card calibration-card--status">
+      <div class="calibration-card-head">
+        <div class="calibration-card-title">
+          <span class="calibration-card-icon" aria-hidden="true">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M3 12h4l3-8 4 16 3-8h4"></path>
+            </svg>
+          </span>
+          <h4 data-i18n="calibration.card.status.title">Calibration Status</h4>
+        </div>
+        <span class="calibration-tag" data-cal-field="calibStatusText">
+          Idle
+        </span>
+      </div>
+      <div class="calibration-status-grid">
+        <div class="calibration-stat">
+          <span class="calibration-stat-label" data-i18n="calibration.status.mode">
+            Mode
+          </span>
+          <span class="calibration-stat-value" data-cal-field="calibModeText">
+            --
+          </span>
+        </div>
+        <div class="calibration-stat">
+          <span class="calibration-stat-label" data-i18n="calibration.status.count">
+            Count
+          </span>
+          <span class="calibration-stat-value" data-cal-field="calibCountText">
+            --
+          </span>
+        </div>
+        <div class="calibration-stat">
+          <span class="calibration-stat-label" data-i18n="calibration.status.interval">
+            Interval
+          </span>
+          <span class="calibration-stat-value" data-cal-field="calibIntervalText">
+            --
+          </span>
+        </div>
+        <div class="calibration-stat">
+          <span class="calibration-stat-label" data-i18n="calibration.status.temp">
+            Temp
+          </span>
+          <span class="calibration-stat-value" data-cal-field="calibTempText">
+            --
+          </span>
+        </div>
+        <div class="calibration-stat">
+          <span class="calibration-stat-label" data-i18n="calibration.status.wire">
+            Wire
+          </span>
+          <span class="calibration-stat-value" data-cal-field="calibWireText">
+            --
+          </span>
+        </div>
+        <div class="calibration-stat">
+          <span class="calibration-stat-label" data-i18n="calibration.status.target">
+            Target
+          </span>
+          <span class="calibration-stat-value" data-cal-field="calibTargetText">
+            --
+          </span>
+        </div>
+        <div class="calibration-stat">
+          <span class="calibration-stat-label" data-i18n="calibration.status.elapsed">
+            Elapsed
+          </span>
+          <span class="calibration-stat-value" data-cal-field="calibElapsedText">
+            --
+          </span>
+        </div>
+      </div>
+    </section>
+
+    <section class="calibration-card calibration-card--history">
+      <div class="calibration-card-head">
+        <div class="calibration-card-title">
+          <span class="calibration-card-icon" aria-hidden="true">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M3 12a9 9 0 1 0 3-6.7"></path>
+              <path d="M3 4v5h5"></path>
+              <path d="M12 7v5l3 2"></path>
+            </svg>
+          </span>
+          <h4 data-i18n="calibration.card.history.title">History &amp; Data</h4>
+        </div>
+        <span class="calibration-tag" data-i18n="calibration.tag.savedSessions">
+          Saved sessions
+        </span>
+      </div>
+      <label class="calibration-label" for="calibHistorySelect">
+        <span data-i18n="calibration.history.label">Saved history</span>
+      </label>
+      <div class="calibration-split">
+        <select
+          class="calibration-input calibration-select"
+          id="calibHistorySelect"
+          data-cal-input="calibHistorySelect"
+        >
+          <option>Session 2026-01-21</option>
+          <option>Session 2026-01-20</option>
+          <option>Session 2026-01-19</option>
+        </select>
+        <button class="btn" type="button" data-cal-action="calibHistoryLoadBtn">
+          <span data-i18n="calibration.history.loadSaved">Load Saved</span>
+        </button>
+      </div>
+      <div class="calibration-actions">
+        <button
+          class="btn"
+          type="button"
+          data-cal-action="calibHistoryRefreshBtn"
+        >
+          <span data-i18n="calibration.history.refresh">Refresh</span>
+        </button>
+        <button class="btn" type="button" data-cal-action="calibHistoryBtn">
+          <span data-i18n="calibration.history.loadHistory">Load History</span>
+        </button>
+        <button class="btn" type="button" data-cal-action="calibClearBtn">
+          <span data-i18n="calibration.history.clear">Clear Data</span>
+        </button>
+      </div>
+    </section>
+
+    <section class="calibration-card calibration-card--wire">
+      <div class="calibration-card-head">
+        <div class="calibration-card-title">
+          <span class="calibration-card-icon" aria-hidden="true">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M12 2v7"></path>
+              <path d="M12 15v7"></path>
+              <path d="M8 3h8"></path>
+              <path d="M7 14h10"></path>
+              <path d="M10 15a2 2 0 1 0 4 0"></path>
+            </svg>
+          </span>
+          <h4 data-i18n="calibration.card.wire.title">Wire Test</h4>
+        </div>
+        <span class="calibration-tag" data-i18n="calibration.tag.targetC">
+          Target in &deg;C
+        </span>
+      </div>
+      <div class="calibration-fields calibration-fields--single">
+        <label class="calibration-field">
+          <span data-i18n="calibration.wire.targetTemp">Target Temp</span>
+          <input
+            class="calibration-input"
+            type="number"
+            step="0.1"
+            value="38.5"
+            data-cal-input="wireTestTargetC"
+          />
+        </label>
+      </div>
+      <div class="calibration-actions">
+        <button
+          class="btn btn-primary"
+          type="button"
+          data-cal-action="wireTestStartBtn"
+        >
+          <span data-i18n="calibration.wire.start">Start Wire Test</span>
+        </button>
+        <button class="btn" type="button" data-cal-action="wireTestStopBtn">
+          <span data-i18n="calibration.wire.stop">Stop Wire Test</span>
+        </button>
+      </div>
+      <div class="calibration-status-grid calibration-status-grid--compact">
+        <div class="calibration-stat">
+          <span class="calibration-stat-label" data-i18n="calibration.wire.state">
+            State
+          </span>
+          <span class="calibration-stat-value" data-cal-field="wireTestState">
+            Idle
+          </span>
+        </div>
+        <div class="calibration-stat">
+          <span class="calibration-stat-label" data-i18n="calibration.wire.mode">
+            Mode
+          </span>
+          <span class="calibration-stat-value" data-cal-field="wireTestMode">
+            --
+          </span>
+        </div>
+        <div class="calibration-stat">
+          <span class="calibration-stat-label" data-i18n="calibration.wire.purpose">
+            Purpose
+          </span>
+          <span class="calibration-stat-value" data-cal-field="wireTestPurpose">
+            --
+          </span>
+        </div>
+        <div class="calibration-stat">
+          <span class="calibration-stat-label" data-i18n="calibration.wire.active">
+            Active Wire
+          </span>
+          <span class="calibration-stat-value" data-cal-field="wireTestActiveWire">
+            --
+          </span>
+        </div>
+        <div class="calibration-stat">
+          <span class="calibration-stat-label" data-i18n="calibration.wire.ntcTemp">
+            NTC Temp
+          </span>
+          <span class="calibration-stat-value" data-cal-field="wireTestNtcTemp">
+            --
+          </span>
+        </div>
+        <div class="calibration-stat">
+          <span class="calibration-stat-label" data-i18n="calibration.wire.modelTemp">
+            Model Temp
+          </span>
+          <span class="calibration-stat-value" data-cal-field="wireTestModelTemp">
+            --
+          </span>
+        </div>
+        <div class="calibration-stat">
+          <span class="calibration-stat-label" data-i18n="calibration.wire.packet">
+            Packet
+          </span>
+          <span class="calibration-stat-value" data-cal-field="wireTestPacket">
+            --
+          </span>
+        </div>
+        <div class="calibration-stat">
+          <span class="calibration-stat-label" data-i18n="calibration.wire.frame">
+            Frame
+          </span>
+          <span class="calibration-stat-value" data-cal-field="wireTestFrame">
+            --
+          </span>
+        </div>
+      </div>
+    </section>
+
+    <section class="calibration-card calibration-card--floor">
+      <div class="calibration-card-head">
+        <div class="calibration-card-title">
+          <span class="calibration-card-icon" aria-hidden="true">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M3 12h18"></path>
+              <path d="M3 6h18"></path>
+              <path d="M3 18h18"></path>
+              <path d="M7 6v12"></path>
+              <path d="M17 6v12"></path>
+            </svg>
+          </span>
+          <h4 data-i18n="calibration.card.floor.title">Floor Calibration</h4>
+        </div>
+        <span class="calibration-tag" data-i18n="calibration.tag.recipe">
+          Recipe settings
+        </span>
+      </div>
+      <div class="calibration-fields calibration-fields--dense">
+        <label class="calibration-field">
+          <span data-i18n="calibration.floor.targetTemp">Target Temp</span>
+          <input
+            class="calibration-input"
+            type="number"
+            step="0.1"
+            value="42.0"
+            data-cal-input="floorCalTargetC"
+          />
+        </label>
+        <label class="calibration-field">
+          <span data-i18n="calibration.floor.duty">Duty (%)</span>
+          <input
+            class="calibration-input"
+            type="number"
+            min="5"
+            max="100"
+            step="1"
+            value="50"
+            data-cal-input="floorCalDutyPct"
+          />
+        </label>
+        <label class="calibration-field">
+          <span data-i18n="calibration.floor.ambient">Ambient (min)</span>
+          <input
+            class="calibration-input"
+            type="number"
+            min="1"
+            step="1"
+            value="5"
+            data-cal-input="floorCalAmbientMin"
+          />
+        </label>
+        <label class="calibration-field">
+          <span data-i18n="calibration.floor.heat">Heat (min)</span>
+          <input
+            class="calibration-input"
+            type="number"
+            min="1"
+            step="1"
+            value="8"
+            data-cal-input="floorCalHeatMin"
+          />
+        </label>
+        <label class="calibration-field">
+          <span data-i18n="calibration.floor.cool">Cool (min)</span>
+          <input
+            class="calibration-input"
+            type="number"
+            min="0"
+            step="1"
+            value="4"
+            data-cal-input="floorCalCoolMin"
+          />
+        </label>
+        <label class="calibration-field">
+          <span data-i18n="calibration.floor.interval">Interval (ms)</span>
+          <input
+            class="calibration-input"
+            type="number"
+            min="50"
+            max="5000"
+            step="50"
+            value="500"
+            data-cal-input="floorCalIntervalMs"
+          />
+        </label>
+        <label class="calibration-field">
+          <span data-i18n="calibration.floor.wireIndex">Wire Index</span>
+          <input
+            class="calibration-input"
+            type="number"
+            min="1"
+            max="10"
+            step="1"
+            value="1"
+            data-cal-input="floorCalWireIndex"
+          />
+        </label>
+      </div>
+      <div class="calibration-actions">
+        <button
+          class="btn btn-primary"
+          type="button"
+          data-cal-action="startFloorCalibBtn"
+        >
+          <span data-i18n="calibration.floor.start">Start Floor Cal</span>
+        </button>
+      </div>
+      <div class="calibration-status-grid calibration-status-grid--compact">
+        <div class="calibration-stat">
+          <span class="calibration-stat-label" data-i18n="calibration.floor.stage">
+            Stage
+          </span>
+          <span class="calibration-stat-value" data-cal-field="floorCalStageText">
+            --
+          </span>
+        </div>
+        <div class="calibration-stat">
+          <span class="calibration-stat-label" data-i18n="calibration.floor.running">
+            Running
+          </span>
+          <span class="calibration-stat-value" data-cal-field="floorCalRunningText">
+            --
+          </span>
+        </div>
+        <div class="calibration-stat">
+          <span class="calibration-stat-label" data-i18n="calibration.floor.done">
+            Done
+          </span>
+          <span class="calibration-stat-value" data-cal-field="floorCalDoneText">
+            --
+          </span>
+        </div>
+        <div class="calibration-stat">
+          <span class="calibration-stat-label" data-i18n="calibration.floor.tau">
+            Tau
+          </span>
+          <span class="calibration-stat-value" data-cal-field="floorCalTauText">
+            --
+          </span>
+        </div>
+        <div class="calibration-stat">
+          <span class="calibration-stat-label" data-i18n="calibration.floor.k">
+            K
+          </span>
+          <span class="calibration-stat-value" data-cal-field="floorCalKText">
+            --
+          </span>
+        </div>
+        <div class="calibration-stat">
+          <span class="calibration-stat-label" data-i18n="calibration.floor.c">
+            C
+          </span>
+          <span class="calibration-stat-value" data-cal-field="floorCalCText">
+            --
+          </span>
+        </div>
+      </div>
+      <div class="calibration-actions">
+        <button class="btn btn-primary" type="button" data-cal-action="floorCalSaveBtn">
+          <span data-i18n="buttons.save">Save</span>
+        </button>
+        <button class="btn" type="button" data-cal-action="floorCalDiscardBtn">
+          <span data-i18n="wizard.step8.discard">Discard</span>
+        </button>
+      </div>
+    </section>
+
+    <section
+      class="calibration-card calibration-card--presence calibration-card--wide"
+    >
+      <div class="calibration-card-head">
+        <div class="calibration-card-title">
+          <span class="calibration-card-icon" aria-hidden="true">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <circle cx="12" cy="12" r="9"></circle>
+              <path d="M12 12l4-2"></path>
+              <path d="M12 12l-2 4"></path>
+              <circle cx="12" cy="12" r="1" fill="currentColor"></circle>
+            </svg>
+          </span>
+          <h4 data-i18n="calibration.card.presence.title">Presence Probe</h4>
+        </div>
+        <div class="calibration-actions calibration-actions--right">
+          <button
+            class="btn btn-primary"
+            type="button"
+            data-cal-action="presenceProbeBtn"
+          >
+            <span data-i18n="calibration.presence.run">Run Presence Probe</span>
+          </button>
+          <span class="calibration-inline-status" data-cal-field="presenceProbeStatusText">
+            Idle
+          </span>
+        </div>
+      </div>
+      <div class="presence-grid" data-cal-grid="presenceProbeGrid">
+        <div class="presence-item"><span>Wire 01</span><span>--</span></div>
+        <div class="presence-item"><span>Wire 02</span><span>--</span></div>
+        <div class="presence-item"><span>Wire 03</span><span>--</span></div>
+        <div class="presence-item"><span>Wire 04</span><span>--</span></div>
+        <div class="presence-item"><span>Wire 05</span><span>--</span></div>
+        <div class="presence-item"><span>Wire 06</span><span>--</span></div>
+        <div class="presence-item"><span>Wire 07</span><span>--</span></div>
+        <div class="presence-item"><span>Wire 08</span><span>--</span></div>
+        <div class="presence-item"><span>Wire 09</span><span>--</span></div>
+        <div class="presence-item"><span>Wire 10</span><span>--</span></div>
+      </div>
+    </section>
+
+    <section class="calibration-card calibration-card--log calibration-card--wide">
+      <div class="calibration-card-head">
+        <div class="calibration-card-title">
+          <span class="calibration-card-icon" aria-hidden="true">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path
+                d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
+              ></path>
+              <path d="M14 2v6h6"></path>
+              <path d="M8 13h8"></path>
+              <path d="M8 17h6"></path>
+            </svg>
+          </span>
+          <div>
+            <h4 data-i18n="calibration.card.log.title">Calibration Log</h4>
+            <p class="calibration-subtle" data-i18n="calibration.card.log.subtitle">
+              Device log entries for calibration.
+            </p>
+          </div>
+        </div>
+        <div class="calibration-actions">
+          <button class="btn" type="button" data-cal-action="logRefreshBtn">
+            <span data-i18n="calibration.log.refresh">Refresh</span>
+          </button>
+          <button class="btn" type="button" data-cal-action="logClearBtn">
+            <span data-i18n="calibration.log.clear">Clear</span>
+          </button>
+        </div>
+      </div>
+      <div class="calibration-log" data-cal-log>
+        <div class="calibration-log-entry">[12:00:01] Calibration idle</div>
+        <div class="calibration-log-entry">[12:00:20] Waiting for target temp</div>
+        <div class="calibration-log-entry">[12:01:10] Model samples captured</div>
+      </div>
+    </section>
+  </div>
+
+  <div
+    class="calibration-alert"
+    data-cal-alert
+    data-state="ok"
+    aria-hidden="true"
+  >
+    <span class="calibration-alert-text" data-cal-alert-text
+      >Calibration updated</span
+    >
+  </div>
+
+  <div class="calibration-info" data-cal-info aria-hidden="true">
+    <div
+      class="calibration-info-card"
+      role="dialog"
+      aria-label="Calibration help"
+      data-i18n-aria="calibration.help.aria"
+    >
+      <div class="calibration-info-header">
+        <div>
+          <p class="calibration-eyebrow" data-i18n="calibration.help.eyebrow">
+            Calibration help
+          </p>
+          <h4 class="calibration-info-title" data-i18n="calibration.help.title">
+            Steps and tools
+          </h4>
+        </div>
+        <button
+          class="calibration-close"
+          type="button"
+          data-cal-info-close
+          aria-label="Close calibration help"
+          data-i18n-aria="calibration.help.close"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <p class="calibration-info-text" data-i18n="calibration.help.text">
+        Use this panel to tune the temperature model, run wire tests, or
+        execute floor calibration. Presence probe checks which outputs are
+        connected, and the log shows recent calibration activity.
+      </p>
+      <ul class="calibration-info-list">
+        <li data-i18n="calibration.help.li1">
+          Temp Model Calibration collects data for the thermal model.
+        </li>
+        <li data-i18n="calibration.help.li2">
+          Capacitance + Current Sensor Zero runs a hardware zeroing cycle.
+        </li>
+        <li data-i18n="calibration.help.li3">
+          Floor calibration uses the recipe values to build floor curves.
+        </li>
+      </ul>
+    </div>
+  </div>
+</div>

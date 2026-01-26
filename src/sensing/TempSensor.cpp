@@ -98,7 +98,16 @@ void TempSensor::printAddress(uint8_t address[8]) {
 }
 
 void TempSensor::stopTemperatureTask() {
+    if (tempTaskHandle == nullptr) return;
+    _stopRequested = true;
+
+    const uint32_t start = millis();
+    while (tempTaskHandle != nullptr && (millis() - start) < 2000) {
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+
     if (tempTaskHandle != nullptr) {
+        DEBUG_PRINTLN("[TempSensor] TempUpdateTask stop timeout; forcing delete");
         vTaskDelete(tempTaskHandle);
         tempTaskHandle = nullptr;
     }
@@ -112,6 +121,7 @@ void TempSensor::startTemperatureTask(uint32_t intervalMs) {
         updateIntervalMs = intervalMs;
         unlock();
     }
+    _stopRequested = false;
 
     BaseType_t ok = xTaskCreate(
         TempSensor::temperatureTask,
@@ -203,8 +213,10 @@ void TempSensor::temperatureTask(void* param) {
     const TickType_t convertWaitTicks = pdMS_TO_TICKS(750); // 12-bit
 
     for (;;) {
+        if (self->_stopRequested) break;
         self->requestTemperatures();
         vTaskDelay(convertWaitTicks);
+        if (self->_stopRequested) break;
         self->updateAllTemperaturesBlocking();
 
         uint32_t intervalMs = TEMP_SENSOR_UPDATE_INTERVAL_MS;
@@ -217,6 +229,14 @@ void TempSensor::temperatureTask(void* param) {
         if (remainMs < 100) remainMs = 100;
         vTaskDelay(pdMS_TO_TICKS((uint32_t)remainMs));
     }
+
+    if (self->lock(pdMS_TO_TICKS(50))) {
+        self->tempTaskHandle = nullptr;
+        self->unlock();
+    } else {
+        self->tempTaskHandle = nullptr;
+    }
+    vTaskDelete(nullptr);
 }
 
 // ===================== ROM helpers & role mapping ===================

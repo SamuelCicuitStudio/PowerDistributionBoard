@@ -98,6 +98,7 @@ This file lists explicit work items split into frontend (web UI) and backend
 - Capacitance calibration:
   - Discharge capacitors through wires, then recharge.
   - Measure voltage via CSP discharge path and compute capacitance.
+  - Requires at least one connected wire to provide a discharge path.
 - Force calibration uses its own calibration routine (not the normal control
   loop) and runs:
   1. Capacitance calibration

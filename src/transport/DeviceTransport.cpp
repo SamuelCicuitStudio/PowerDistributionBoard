@@ -90,12 +90,6 @@ static bool setupConfigOk() {
     return false;
   }
 
-  const float minDropV =
-      CONF->GetFloat(PRESENCE_MIN_DROP_V_KEY, DEFAULT_PRESENCE_MIN_DROP_V);
-  if (!isfinite(minDropV) || minDropV <= 0.0f) {
-    return false;
-  }
-
   bool anyEnabled = false;
   for (uint8_t i = 0; i < HeaterManager::kWireCount; ++i) {
     const bool allowed = CONF->GetBool(kWireAccessKeys[i], false);

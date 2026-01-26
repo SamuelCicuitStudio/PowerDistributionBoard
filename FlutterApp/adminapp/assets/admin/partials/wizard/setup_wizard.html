@@ -1,0 +1,1132 @@
+<div class="setup-shell" role="dialog" aria-label="Setup wizard">
+  <header class="setup-header">
+    <div class="setup-title-block">
+      <p class="setup-eyebrow" data-i18n="wizard.header.eyebrow">Setup wizard</p>
+      <h2 class="setup-title" data-i18n="wizard.header.title">System setup</h2>
+      <p class="setup-sub" data-i18n="wizard.header.subtitle">
+        Complete the required steps to finish initial configuration.
+      </p>
+    </div>
+    <div class="setup-progress-block">
+      <div class="setup-step-label" data-setup-step-label>Step 1 of 10</div>
+      <div class="setup-step-title" data-setup-step-title>Welcome</div>
+      <div class="setup-progress-bar" aria-hidden="true">
+        <span data-setup-progress></span>
+      </div>
+    </div>
+    <button
+      class="setup-close"
+      type="button"
+      data-setup-close
+      aria-label="Close setup wizard"
+      data-i18n-aria="wizard.header.close"
+    >
+      <svg
+        viewBox="0 0 24 24"
+        aria-hidden="true"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <line x1="18" y1="6" x2="6" y2="18"></line>
+        <line x1="6" y1="6" x2="18" y2="18"></line>
+      </svg>
+    </button>
+  </header>
+
+  <div class="setup-body">
+    <nav class="setup-steps" aria-label="Setup steps">
+      <button class="setup-step-btn is-active" type="button" data-setup-stepper="1">
+        <span class="setup-step-index">1</span>
+        <span class="setup-step-text">
+          <strong data-i18n="wizard.steps.welcome.title">Welcome</strong>
+          <small data-i18n="wizard.steps.welcome.meta">Intro</small>
+        </span>
+      </button>
+      <button class="setup-step-btn" type="button" data-setup-stepper="2">
+        <span class="setup-step-index">2</span>
+        <span class="setup-step-text">
+          <strong data-i18n="wizard.steps.credentials.title">Credentials</strong>
+          <small data-i18n="wizard.steps.credentials.meta">Skippable</small>
+        </span>
+      </button>
+      <button class="setup-step-btn" type="button" data-setup-stepper="3">
+        <span class="setup-step-index">3</span>
+        <span class="setup-step-text">
+          <strong data-i18n="wizard.steps.wifi.title">Wi-Fi</strong>
+          <small data-i18n="wizard.steps.wifi.meta">Skippable</small>
+        </span>
+      </button>
+      <button class="setup-step-btn" type="button" data-setup-stepper="4">
+        <span class="setup-step-index">4</span>
+        <span class="setup-step-text">
+          <strong data-i18n="wizard.steps.outputs.title">Allowed outputs</strong>
+          <small data-i18n="wizard.steps.outputs.meta">Required</small>
+        </span>
+      </button>
+      <button class="setup-step-btn" type="button" data-setup-stepper="5">
+        <span class="setup-step-index">5</span>
+        <span class="setup-step-text">
+          <strong data-i18n="wizard.steps.device.title">Device settings</strong>
+          <small data-i18n="wizard.steps.device.meta">Required</small>
+        </span>
+      </button>
+      <button class="setup-step-btn" type="button" data-setup-stepper="6">
+        <span class="setup-step-index">6</span>
+        <span class="setup-step-text">
+          <strong data-i18n="wizard.steps.sensor.title">Sensor zero</strong>
+          <small data-i18n="wizard.steps.sensor.meta">Required</small>
+        </span>
+      </button>
+      <button class="setup-step-btn" type="button" data-setup-stepper="7">
+        <span class="setup-step-index">7</span>
+        <span class="setup-step-text">
+          <strong data-i18n="wizard.steps.ntc.title">NTC params</strong>
+          <small data-i18n="wizard.steps.ntc.meta">Skippable</small>
+        </span>
+      </button>
+      <button class="setup-step-btn" type="button" data-setup-stepper="8">
+        <span class="setup-step-index">8</span>
+        <span class="setup-step-text">
+          <strong data-i18n="wizard.steps.wire.title">Wire calibration</strong>
+          <small data-i18n="wizard.steps.wire.meta">Skippable</small>
+        </span>
+      </button>
+      <button class="setup-step-btn" type="button" data-setup-stepper="9">
+        <span class="setup-step-index">9</span>
+        <span class="setup-step-text">
+          <strong data-i18n="wizard.steps.floor.title">Floor calibration</strong>
+          <small data-i18n="wizard.steps.floor.meta">Skippable</small>
+        </span>
+      </button>
+      <button class="setup-step-btn" type="button" data-setup-stepper="10">
+        <span class="setup-step-index">10</span>
+        <span class="setup-step-text">
+          <strong data-i18n="wizard.steps.finish.title">Finish</strong>
+          <small data-i18n="wizard.steps.finish.meta">Complete</small>
+        </span>
+      </button>
+    </nav>
+
+    <div class="setup-content" role="region" aria-label="Setup step content">
+      <section
+        class="setup-step-panel is-active"
+        data-setup-step="1"
+        data-step-title="Welcome"
+        data-step-title-key="wizard.step1.title"
+      >
+        <div class="setup-card">
+          <h3 data-i18n="wizard.step1.title">Welcome</h3>
+          <p data-i18n="wizard.step1.body">
+            This wizard guides you through the initial configuration of the
+            system. Required steps must be completed before finish.
+          </p>
+          <div class="setup-language">
+            <label class="setup-field">
+              <span data-i18n="wizard.language.label">Language</span>
+              <select class="setup-select" data-language-select>
+                <option value="en" data-i18n="wizard.language.en">English</option>
+                <option value="fr" data-i18n="wizard.language.fr">French</option>
+                <option value="it" data-i18n="wizard.language.it">Italian</option>
+              </select>
+            </label>
+          </div>
+          <div class="setup-instructions">
+            <strong data-i18n="wizard.step1.before.title">Before you start</strong>
+            <ul>
+              <li data-i18n="wizard.step1.before.li1">
+                Have your Wi-Fi credentials ready (if you plan to connect).
+              </li>
+              <li data-i18n="wizard.step1.before.li2">
+                Make sure the device is powered and connected.
+              </li>
+              <li data-i18n="wizard.step1.before.li3">
+                You can skip optional steps and finish them later.
+              </li>
+            </ul>
+          </div>
+          <ul class="setup-list">
+            <li data-i18n="wizard.step1.list.li1">
+              10 steps total with progress indicator.
+            </li>
+            <li data-i18n="wizard.step1.list.li2">
+              Some steps can be skipped and completed later.
+            </li>
+            <li data-i18n="wizard.step1.list.li3">
+              Canceling will keep setup incomplete.
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <section
+        class="setup-step-panel"
+        data-setup-step="2"
+        data-step-title="Credentials"
+        data-step-skippable="true"
+        data-step-title-key="wizard.steps.credentials.title"
+      >
+        <div class="setup-card-grid">
+          <div class="setup-card">
+            <h3 data-i18n="wizard.step2.user.title">User credentials</h3>
+            <p class="setup-note" data-i18n="wizard.step2.user.note">
+              Set a new user password if you want the system to be protected.
+            </p>
+            <div class="setup-fields">
+              <label class="setup-field">
+                <span data-i18n="wizard.step2.user.current">Current password</span>
+                <input
+                  class="setup-input"
+                  type="password"
+                  placeholder="Current password"
+                  data-i18n-placeholder="wizard.step2.placeholder.current"
+                />
+              </label>
+              <label class="setup-field">
+                <span data-i18n="wizard.step2.user.new">New password</span>
+                <input
+                  class="setup-input"
+                  type="password"
+                  placeholder="New password"
+                  data-i18n-placeholder="wizard.step2.placeholder.new"
+                />
+              </label>
+            </div>
+          </div>
+          <div class="setup-card">
+            <h3 data-i18n="wizard.step2.admin.title">Admin credentials</h3>
+            <p class="setup-note" data-i18n="wizard.step2.admin.note">
+              Admin changes require the current admin password to save.
+            </p>
+            <div class="setup-fields">
+              <label class="setup-field">
+                <span data-i18n="wizard.step2.admin.current">Current admin password</span>
+                <input
+                  class="setup-input"
+                  type="password"
+                  placeholder="Current admin password"
+                  data-i18n-placeholder="wizard.step2.placeholder.adminCurrent"
+                />
+              </label>
+              <label class="setup-field">
+                <span data-i18n="wizard.step2.admin.username">New admin username</span>
+                <input
+                  class="setup-input"
+                  type="text"
+                  placeholder="New admin username"
+                  data-i18n-placeholder="wizard.step2.placeholder.adminUser"
+                />
+              </label>
+              <label class="setup-field">
+                <span data-i18n="wizard.step2.admin.new">New admin password</span>
+                <input
+                  class="setup-input"
+                  type="password"
+                  placeholder="New admin password"
+                  data-i18n-placeholder="wizard.step2.placeholder.adminPass"
+                />
+              </label>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section
+        class="setup-step-panel"
+        data-setup-step="3"
+        data-step-title="Wi-Fi setup"
+        data-step-skippable="true"
+        data-step-title-key="wizard.steps.wifi.title"
+      >
+        <div class="setup-card-grid">
+          <div class="setup-card">
+            <h3 data-i18n="wizard.step3.station.title">Wi-Fi Station</h3>
+            <p class="setup-note" data-i18n="wizard.step3.station.note">
+              Station connects the board to your local router (recommended).
+            </p>
+            <div class="setup-fields">
+              <label class="setup-field">
+                <span data-i18n="wizard.step3.station.ssid">SSID</span>
+                <input
+                  class="setup-input"
+                  type="text"
+                  placeholder="Wi-Fi SSID"
+                  data-i18n-placeholder="wizard.step3.placeholder.ssid"
+                />
+              </label>
+              <label class="setup-field">
+                <span data-i18n="wizard.step3.station.password">Password</span>
+                <input
+                  class="setup-input"
+                  type="password"
+                  placeholder="Wi-Fi password"
+                  data-i18n-placeholder="wizard.step3.placeholder.password"
+                />
+              </label>
+            </div>
+          </div>
+          <div class="setup-card">
+            <h3 data-i18n="wizard.step3.ap.title">Wi-Fi Access Point</h3>
+            <p class="setup-note" data-i18n="wizard.step3.ap.note">
+              AP mode creates a local hotspot for direct connection.
+            </p>
+            <div class="setup-fields">
+              <label class="setup-field">
+                <span data-i18n="wizard.step3.ap.ssid">AP SSID</span>
+                <input
+                  class="setup-input"
+                  type="text"
+                  placeholder="AP SSID"
+                  data-i18n-placeholder="wizard.step3.placeholder.apSsid"
+                />
+              </label>
+              <label class="setup-field">
+                <span data-i18n="wizard.step3.ap.password">AP password</span>
+                <input
+                  class="setup-input"
+                  type="password"
+                  placeholder="AP password"
+                  data-i18n-placeholder="wizard.step3.placeholder.apPass"
+                />
+              </label>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section
+        class="setup-step-panel"
+        data-setup-step="4"
+        data-step-title="Allowed outputs"
+        data-step-title-key="wizard.steps.outputs.title"
+      >
+        <div class="setup-card">
+          <h3 data-i18n="wizard.step4.title">Allowed outputs</h3>
+          <p data-i18n="wizard.step4.body">
+            Select which outputs are available for the user.
+          </p>
+          <div class="setup-instructions">
+            <strong data-i18n="wizard.step4.tip.title">Tip</strong>
+            <ul>
+              <li data-i18n="wizard.step4.tip.li1">
+                Disable outputs that should never be used by operators.
+              </li>
+              <li data-i18n="wizard.step4.tip.li2">
+                You can change this later in Device settings.
+              </li>
+            </ul>
+          </div>
+          <div class="setup-output-grid" role="list">
+            <label class="setup-output">
+              <input type="checkbox" checked />
+              <span data-output-label="01">Output 01</span>
+            </label>
+            <label class="setup-output">
+              <input type="checkbox" checked />
+              <span data-output-label="02">Output 02</span>
+            </label>
+            <label class="setup-output">
+              <input type="checkbox" checked />
+              <span data-output-label="03">Output 03</span>
+            </label>
+            <label class="setup-output">
+              <input type="checkbox" checked />
+              <span data-output-label="04">Output 04</span>
+            </label>
+            <label class="setup-output">
+              <input type="checkbox" checked />
+              <span data-output-label="05">Output 05</span>
+            </label>
+            <label class="setup-output">
+              <input type="checkbox" checked />
+              <span data-output-label="06">Output 06</span>
+            </label>
+            <label class="setup-output">
+              <input type="checkbox" checked />
+              <span data-output-label="07">Output 07</span>
+            </label>
+            <label class="setup-output">
+              <input type="checkbox" checked />
+              <span data-output-label="08">Output 08</span>
+            </label>
+            <label class="setup-output">
+              <input type="checkbox" checked />
+              <span data-output-label="09">Output 09</span>
+            </label>
+            <label class="setup-output">
+              <input type="checkbox" checked />
+              <span data-output-label="10">Output 10</span>
+            </label>
+          </div>
+        </div>
+      </section>
+
+      <section
+        class="setup-step-panel"
+        data-setup-step="5"
+        data-step-title="Device settings"
+        data-step-title-key="wizard.steps.device.title"
+      >
+        <div class="setup-card-grid">
+          <div class="setup-card">
+            <h3 data-i18n="wizard.step7.sample.title">Sampling and power</h3>
+            <p class="setup-note" data-i18n="wizard.step7.sample.note">
+              Defines sampling speed and current protection limits.
+            </p>
+            <div class="setup-fields">
+              <label class="setup-field">
+                <span data-i18n="wizard.step7.sample.rate">Sampling rate (Hz)</span>
+                <input class="setup-input" type="number" min="50" max="500" />
+              </label>
+              <label class="setup-field">
+                <span data-i18n="wizard.step7.sample.resistor">Charge resistor (Ohm)</span>
+                <input class="setup-input" type="number" />
+              </label>
+              <label class="setup-field">
+                <span data-i18n="wizard.step7.sample.limit">Current trip limit (A)</span>
+                <input class="setup-input" type="number" step="0.1" />
+              </label>
+              <label class="setup-field">
+                <span data-i18n="wizard.step7.sample.source">Current source</span>
+                <select class="setup-select">
+                  <option data-i18n="wizard.step7.sample.source1">ACS Sensor</option>
+                  <option data-i18n="wizard.step7.sample.source2">
+                    CSP Discharge Estimate
+                  </option>
+                </select>
+              </label>
+            </div>
+          </div>
+
+          <div class="setup-card">
+            <h3 data-i18n="wizard.step7.thermal.title">Thermal safety</h3>
+            <p class="setup-note" data-i18n="wizard.step7.thermal.note">
+              Warning and trip levels protect the system from overheating.
+            </p>
+            <div class="setup-fields">
+              <label class="setup-field">
+                <span data-i18n="wizard.step7.thermal.warn">Temp warning (&deg;C)</span>
+                <input class="setup-input" type="number" step="0.1" />
+              </label>
+              <label class="setup-field">
+                <span data-i18n="wizard.step7.thermal.trip">
+                  Temp trip shutdown (&deg;C)
+                </span>
+                <input class="setup-input" type="number" step="0.1" />
+              </label>
+            </div>
+          </div>
+
+          <div class="setup-card">
+            <h3 data-i18n="wizard.step7.model.title">Thermal model</h3>
+            <p class="setup-note" data-i18n="wizard.step7.model.note">
+              Thermal model parameters are used for control calculations.
+            </p>
+            <div class="setup-fields">
+              <label class="setup-field">
+                <span data-i18n="wizard.step7.model.target">Model target</span>
+                <select class="setup-select">
+                  <option>Wire 1</option>
+                  <option>Wire 2</option>
+                  <option>Wire 3</option>
+                  <option>Wire 4</option>
+                  <option>Wire 5</option>
+                  <option>Wire 6</option>
+                  <option>Wire 7</option>
+                  <option>Wire 8</option>
+                  <option>Wire 9</option>
+                  <option>Wire 10</option>
+                  <option>Floor</option>
+                </select>
+              </label>
+              <label class="setup-field">
+                <span data-i18n="wizard.step7.model.tau">Tau (s)</span>
+                <input class="setup-input" type="number" step="0.01" />
+              </label>
+              <label class="setup-field">
+                <span data-i18n="wizard.step7.model.kloss">K Loss (W/K)</span>
+                <input class="setup-input" type="number" step="0.001" />
+              </label>
+              <label class="setup-field">
+                <span data-i18n="wizard.step7.model.c">Thermal C (J/K)</span>
+                <input class="setup-input" type="number" step="0.01" />
+              </label>
+            </div>
+          </div>
+
+
+          <div class="setup-card">
+            <h3 data-i18n="wizard.step7.floor.title">Floor settings</h3>
+            <p class="setup-note" data-i18n="wizard.step7.floor.note">
+              Floor limits depend on material and local code requirements.
+            </p>
+            <div class="setup-fields">
+              <label class="setup-field">
+                <span data-i18n="wizard.step7.floor.thickness">
+                  Floor thickness (20-50 mm)
+                </span>
+                <input class="setup-input" type="number" min="20" max="50" step="0.1" />
+              </label>
+              <label class="setup-field">
+                <span data-i18n="wizard.step7.floor.final">
+                  Nichrome final temp (&deg;C)
+                </span>
+                <input class="setup-input" type="number" step="0.1" />
+              </label>
+              <label class="setup-field">
+                <span data-i18n="wizard.step7.floor.channel">
+                  NTC linked channel (1-10)
+                </span>
+                <input class="setup-input" type="number" min="1" max="10" step="1" />
+              </label>
+              <label class="setup-field">
+                <span data-i18n="wizard.step7.floor.material">Floor material</span>
+                <select class="setup-select">
+                  <option>Wood</option>
+                  <option>Epoxy</option>
+                  <option>Concrete</option>
+                  <option>Slate</option>
+                  <option>Marble</option>
+                  <option>Granite</option>
+                </select>
+              </label>
+              <label class="setup-field">
+                <span data-i18n="wizard.step7.floor.max">
+                  Max floor temp (<= 35 &deg;C)
+                </span>
+                <input class="setup-input" type="number" max="35" step="0.1" />
+              </label>
+              <label class="setup-field">
+                <span data-i18n="wizard.step7.floor.margin">
+                  Floor switch margin (&deg;C)
+                </span>
+                <input class="setup-input" type="number" step="0.1" />
+              </label>
+            </div>
+          </div>
+
+          <div class="setup-card">
+            <h3 data-i18n="wizard.step7.nichrome.title">Nichrome calibration</h3>
+            <p class="setup-note" data-i18n="wizard.step7.nichrome.note">
+              Enter measured resistances for each output wire.
+            </p>
+            <div class="setup-fields setup-fields-2">
+              <label class="setup-field">
+                <span data-i18n="wizard.step7.nichrome.resistivity">
+                  Wire resistivity (Ohm/m)
+                </span>
+                <input class="setup-input" type="number" step="0.01" />
+              </label>
+              <label class="setup-field">
+                <span>R01 (Ohm)</span>
+                <input class="setup-input" type="number" step="0.1" />
+              </label>
+              <label class="setup-field">
+                <span>R02 (Ohm)</span>
+                <input class="setup-input" type="number" step="0.1" />
+              </label>
+              <label class="setup-field">
+                <span>R03 (Ohm)</span>
+                <input class="setup-input" type="number" step="0.1" />
+              </label>
+              <label class="setup-field">
+                <span>R04 (Ohm)</span>
+                <input class="setup-input" type="number" step="0.1" />
+              </label>
+              <label class="setup-field">
+                <span>R05 (Ohm)</span>
+                <input class="setup-input" type="number" step="0.1" />
+              </label>
+              <label class="setup-field">
+                <span>R06 (Ohm)</span>
+                <input class="setup-input" type="number" step="0.1" />
+              </label>
+              <label class="setup-field">
+                <span>R07 (Ohm)</span>
+                <input class="setup-input" type="number" step="0.1" />
+              </label>
+              <label class="setup-field">
+                <span>R08 (Ohm)</span>
+                <input class="setup-input" type="number" step="0.1" />
+              </label>
+              <label class="setup-field">
+                <span>R09 (Ohm)</span>
+                <input class="setup-input" type="number" step="0.1" />
+              </label>
+              <label class="setup-field">
+                <span>R10 (Ohm)</span>
+                <input class="setup-input" type="number" step="0.1" />
+              </label>
+            </div>
+          </div>
+
+          <div class="setup-card">
+            <h3 data-i18n="wizard.step7.energy.title">Energy control</h3>
+            <p class="setup-note" data-i18n="wizard.step7.energy.note">
+              Wire gauge controls power calculations and safety limits.
+            </p>
+            <div class="setup-fields">
+              <label class="setup-field">
+                <span data-i18n="wizard.step7.energy.gauge">
+                  Wire gauge (AWG 1-40)
+                </span>
+                <input class="setup-input" type="number" min="1" max="40" step="1" />
+              </label>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section
+        class="setup-step-panel"
+        data-setup-step="6"
+        data-step-title="Sensor zero"
+        data-step-title-key="wizard.steps.sensor.title"
+      >
+        <div class="setup-card-grid">
+          <div class="setup-card">
+            <h3 data-i18n="wizard.step5.sensor.title">Sensor zero</h3>
+            <p data-i18n="wizard.step5.sensor.body">
+              Run these actions in order before wire calibration.
+            </p>
+            <div class="setup-instructions">
+              <strong data-i18n="wizard.step5.sensor.req.title">Required sequence</strong>
+              <ul>
+                <li data-i18n="wizard.step5.sensor.req.li1">
+                  Run capacitance measurement first.
+                </li>
+                <li data-i18n="wizard.step5.sensor.req.li2">
+                  Then run ACS zero calibration.
+                </li>
+              </ul>
+            </div>
+            <div class="setup-actions">
+              <button
+                class="btn btn-primary"
+                type="button"
+                data-i18n="wizard.step5.sensor.cap"
+              >
+                Run capacitance measurement
+              </button>
+              <button class="btn" type="button" data-i18n="wizard.step5.sensor.acs">
+                Run ACS zero
+              </button>
+            </div>
+            <div class="setup-status-grid">
+              <div class="setup-status-item">
+                <span data-i18n="wizard.step5.sensor.acs">Run ACS zero</span>
+                <strong data-cal-field="wizardAdcZeroText" data-cal-scope="wizard">--</strong>
+              </div>
+              <div class="setup-status-item">
+                <span data-i18n="dashboard.electrical.capacitance">Capacitance</span>
+                <strong data-cal-field="wizardCapacitanceText" data-cal-scope="wizard"
+                  >--</strong
+                >
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section
+        class="setup-step-panel"
+        data-setup-step="7"
+        data-step-title="NTC parameters"
+        data-step-skippable="true"
+        data-step-title-key="wizard.steps.ntc.title"
+      >
+        <div class="setup-card">
+          <h3 data-i18n="wizard.step6.title">NTC parameters</h3>
+          <p class="setup-note" data-i18n="wizard.step6.note">
+            Use the values from your NTC sensor datasheet.
+          </p>
+          <div class="setup-status-grid">
+            <div class="setup-status-item">
+              <span data-i18n="wizard.wire.ntc">NTC temp</span>
+              <strong data-cal-field="wizardNtcTempText" data-cal-scope="wizard">--</strong>
+            </div>
+          </div>
+          <div class="setup-fields setup-fields-2">
+            <label class="setup-field">
+              <span data-i18n="wizard.step6.beta">Beta</span>
+              <input class="setup-input" type="number" min="1" step="1" />
+            </label>
+            <label class="setup-field">
+              <span data-i18n="wizard.step6.t0">T0 (&deg;C)</span>
+              <input class="setup-input" type="number" step="0.1" />
+            </label>
+            <label class="setup-field">
+              <span data-i18n="wizard.step6.r0">R0 / R25</span>
+              <input class="setup-input" type="number" step="1" />
+            </label>
+            <label class="setup-field">
+              <span data-i18n="wizard.step6.pullup">Fixed pull-up resistor</span>
+              <input class="setup-input" type="number" step="1" />
+            </label>
+          </div>
+        </div>
+      </section>
+
+      <section
+        class="setup-step-panel"
+        data-setup-step="8"
+        data-step-title="Wire calibration"
+        data-step-skippable="true"
+        data-step-title-key="wizard.step8.title"
+      >
+        <div class="setup-card setup-wire-cal">
+          <div class="setup-wire-header">
+            <div>
+              <h3 data-i18n="wizard.step8.title">Wire calibration</h3>
+              <p class="setup-note" data-i18n="wizard.step8.note">
+                Attach the single NTC to the selected wire gate. Run calibration
+                to capture heat-up/cool-down and extract tau, k, C.
+              </p>
+            </div>
+            <div class="setup-wire-status">
+              <span data-i18n="wizard.step8.status">Status</span>
+              <strong data-cal-field="wizardWireStatus" data-cal-scope="wizard">
+                Idle
+              </strong>
+            </div>
+          </div>
+
+          <div class="setup-wire-layout">
+            <div class="setup-wire-left">
+              <div class="setup-wire-controls">
+                <div class="setup-fields setup-fields-2">
+                  <label class="setup-field">
+                    <span data-i18n="wizard.step8.wireGate">Wire gate</span>
+                    <select
+                      class="setup-select"
+                      data-cal-input="wizardWireGate"
+                      data-cal-scope="wizard"
+                    >
+                      <option value="1">Gate 1</option>
+                      <option value="2">Gate 2</option>
+                      <option value="3">Gate 3</option>
+                      <option value="4">Gate 4</option>
+                      <option value="5">Gate 5</option>
+                      <option value="6">Gate 6</option>
+                      <option value="7">Gate 7</option>
+                      <option value="8">Gate 8</option>
+                      <option value="9">Gate 9</option>
+                      <option value="10">Gate 10</option>
+                    </select>
+                  </label>
+                  <label class="setup-field">
+                    <span data-i18n="wizard.step8.target">Calibration target (&deg;C)</span>
+                    <input
+                      class="setup-input"
+                      type="number"
+                      step="0.1"
+                      value="38.5"
+                      data-cal-input="wizardWireTargetC"
+                      data-cal-scope="wizard"
+                    />
+                  </label>
+                </div>
+
+                <div class="setup-actions">
+                  <button
+                    class="btn"
+                    type="button"
+                    data-cal-action="wizardWireLinkBtn"
+                    data-cal-scope="wizard"
+                    data-i18n="wizard.step8.link"
+                  >
+                    Link NTC
+                  </button>
+                  <button
+                    class="btn btn-primary"
+                    type="button"
+                    data-cal-action="wizardWireStartBtn"
+                    data-cal-scope="wizard"
+                    data-i18n="wizard.step8.start"
+                  >
+                    Start calibration
+                  </button>
+                  <button
+                    class="btn"
+                    type="button"
+                    data-cal-action="wizardWireStopBtn"
+                    data-cal-scope="wizard"
+                    data-i18n="wizard.step8.stop"
+                  >
+                    Stop calibration
+                  </button>
+                </div>
+
+                <div class="setup-status-grid setup-status-grid--wide">
+                  <div class="setup-status-item">
+                    <span data-i18n="wizard.step8.status.state">State</span>
+                    <strong data-cal-field="wizardWireState" data-cal-scope="wizard">
+                      Idle
+                    </strong>
+                  </div>
+                  <div class="setup-status-item">
+                    <span data-i18n="wizard.step8.status.activeGate">Active gate</span>
+                    <strong
+                      data-cal-field="wizardWireGateActive"
+                      data-cal-scope="wizard"
+                      >--</strong
+                    >
+                  </div>
+                  <div class="setup-status-item">
+                    <span data-i18n="wizard.step8.status.linked">NTC attached</span>
+                    <strong data-cal-field="wizardWireLinked" data-cal-scope="wizard"
+                      >--</strong
+                    >
+                  </div>
+                  <div class="setup-status-item">
+                    <span data-i18n="wizard.step8.status.progress">Progress</span>
+                    <strong data-cal-field="wizardWireProgress" data-cal-scope="wizard"
+                      >0%</strong
+                    >
+                  </div>
+                </div>
+              </div>
+
+              <div class="setup-wire-results">
+                <div class="setup-results-grid">
+                  <div class="setup-result">
+                    <span data-i18n="wizard.step8.result.r0">R0 (Ohm)</span>
+                    <strong data-cal-field="wizardWireR0" data-cal-scope="wizard"
+                      >--</strong
+                    >
+                  </div>
+                  <div class="setup-result">
+                    <span data-i18n="wizard.step8.result.tau">Tau</span>
+                    <strong data-cal-field="wizardWireTau" data-cal-scope="wizard"
+                      >--</strong
+                    >
+                  </div>
+                  <div class="setup-result">
+                    <span data-i18n="wizard.step8.result.k">K</span>
+                    <strong data-cal-field="wizardWireK" data-cal-scope="wizard"
+                      >--</strong
+                    >
+                  </div>
+                  <div class="setup-result">
+                    <span data-i18n="wizard.step8.result.c">C</span>
+                    <strong data-cal-field="wizardWireC" data-cal-scope="wizard"
+                      >--</strong
+                    >
+                  </div>
+                </div>
+
+                <div class="setup-actions setup-actions--secondary">
+                  <button
+                    class="btn btn-primary"
+                    type="button"
+                    data-cal-action="wizardWireSaveBtn"
+                    data-cal-scope="wizard"
+                    data-i18n="wizard.step8.save"
+                  >
+                    Save parameters
+                  </button>
+                  <button
+                    class="btn"
+                    type="button"
+                    data-cal-action="wizardWireDiscardBtn"
+                    data-cal-scope="wizard"
+                    data-i18n="wizard.step8.discard"
+                  >
+                    Discard
+                  </button>
+                </div>
+              </div>
+
+              <div class="setup-instructions">
+                <strong data-i18n="wizard.step8.instructions.title">How it works</strong>
+                <ul>
+                  <li data-i18n="wizard.step8.instructions.li1">
+                    Keep the wire OFF until ambient is stable.
+                  </li>
+                  <li data-i18n="wizard.step8.instructions.li2">
+                    Start calibration to log the temperature curve.
+                  </li>
+                  <li data-i18n="wizard.step8.instructions.li3">
+                    Save parameters if the curve looks good.
+                  </li>
+                </ul>
+              </div>
+
+              <div class="setup-wire-secondary-grid">
+                <div class="setup-wire-panel setup-wire-presence">
+                  <h4 data-i18n="wizard.step7.presence.title">Presence</h4>
+                  <p class="setup-note" data-i18n="wizard.step7.presence.note">
+                    Presence is measured from the current ratio on the active wire; track
+                    the percentage below.
+                  </p>
+                  <div class="setup-instructions">
+                    <strong data-i18n="wizard.step5.presence.tip.title">What to look for</strong>
+                    <ul>
+                      <li data-i18n="wizard.step5.presence.tip.li1">
+                        Each wire should show Connected if present.
+                      </li>
+                      <li data-i18n="wizard.step5.presence.tip.li2">
+                        Any missing wire will show Not connected.
+                      </li>
+                    </ul>
+                  </div>
+                  <button class="btn btn-primary" type="button" data-i18n="wizard.step5.presence.run">
+                    Run presence probe
+                  </button>
+                  <div class="setup-presence-grid">
+                    <div class="setup-presence-item">Wire 01<span>--</span></div>
+                    <div class="setup-presence-item">Wire 02<span>--</span></div>
+                    <div class="setup-presence-item">Wire 03<span>--</span></div>
+                    <div class="setup-presence-item">Wire 04<span>--</span></div>
+                    <div class="setup-presence-item">Wire 05<span>--</span></div>
+                    <div class="setup-presence-item">Wire 06<span>--</span></div>
+                    <div class="setup-presence-item">Wire 07<span>--</span></div>
+                    <div class="setup-presence-item">Wire 08<span>--</span></div>
+                    <div class="setup-presence-item">Wire 09<span>--</span></div>
+                    <div class="setup-presence-item">Wire 10<span>--</span></div>
+                  </div>
+                  <div class="setup-fields">
+                    <label class="setup-field">
+                      <span data-i18n="wizard.step7.presence.vdrop">
+                        Presence current ratio (%)
+                      </span>
+                      <input class="setup-input" type="number" min="0" max="100" step="0.1" />
+                    </label>
+                  </div>
+                </div>
+
+                <div class="setup-wire-panel setup-wire-test">
+                  <h4 data-i18n="wizard.step8.test.title">Wire test (optional)</h4>
+                  <p class="setup-note" data-i18n="wizard.step8.test.note">
+                    Use the saved model to hold a target temperature.
+                  </p>
+                  <div class="setup-fields">
+                    <label class="setup-field">
+                      <span data-i18n="wizard.step8.test.target">Test target (&deg;C)</span>
+                      <input
+                        class="setup-input"
+                        type="number"
+                        step="0.1"
+                        value="45"
+                        data-cal-input="wizardWireTestTargetC"
+                        data-cal-scope="wizard"
+                      />
+                    </label>
+                  </div>
+                  <div class="setup-actions">
+                    <button
+                      class="btn btn-primary"
+                      type="button"
+                      data-cal-action="wizardWireTestStartBtn"
+                      data-cal-scope="wizard"
+                      data-i18n="wizard.step8.test.start"
+                    >
+                      Start wire test
+                    </button>
+                    <button
+                      class="btn"
+                      type="button"
+                      data-cal-action="wizardWireTestStopBtn"
+                      data-cal-scope="wizard"
+                      data-i18n="wizard.step8.test.stop"
+                    >
+                      Stop wire test
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="setup-wire-chart" data-setup-chart="wire" data-live-wires="1">
+              <div class="setup-wire-chart-meta">
+                <div class="setup-wire-chip">
+                  <span data-i18n="wizard.step8.status.activeGate">Active gate</span>
+                  <strong data-cal-field="wizardWireGateActive" data-cal-scope="wizard"
+                    >--</strong
+                  >
+                </div>
+                <div class="setup-wire-chip">
+                  <span data-i18n="wizard.wire.ntc">NTC temp</span>
+                  <strong data-cal-field="wizardNtcTempText" data-cal-scope="wizard"
+                    >--</strong
+                  >
+                </div>
+              </div>
+              <div
+                class="live-graph"
+                data-include="admin/partials/components/live_chart.html"
+              ></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section
+        class="setup-step-panel"
+        data-setup-step="9"
+        data-step-title="Floor calibration"
+        data-step-skippable="true"
+        data-step-title-key="wizard.step9.title"
+      >
+        <div class="setup-card">
+          <h3 data-i18n="wizard.step9.title">Floor calibration</h3>
+          <p class="setup-note" data-i18n="wizard.step9.note">
+            NTC provides the floor temperature. Wire temperatures are estimated
+            by the model.
+          </p>
+          <div class="setup-actions">
+            <button
+              class="btn btn-primary"
+              type="button"
+              data-cal-action="startFloorCalibBtn"
+              data-cal-scope="wizard"
+              data-i18n="wizard.step9.start"
+            >
+              Start floor cal
+            </button>
+            <button
+              class="btn"
+              type="button"
+              data-cal-action="floorCalSaveBtn"
+              data-cal-scope="wizard"
+              data-i18n="wizard.step8.save"
+            >
+              Save parameters
+            </button>
+          </div>
+          <div class="setup-status-grid">
+            <div class="setup-status-item">
+              <span data-i18n="wizard.step9.readout.floorTemp">Floor temp (NTC)</span>
+              <strong data-cal-field="floorCalFloorTempText" data-cal-scope="wizard"
+                >--</strong
+              >
+            </div>
+            <div class="setup-status-item">
+              <span data-i18n="wizard.step9.readout.roomTemp">Room temp (heatsink)</span>
+              <strong data-cal-field="floorCalRoomTempText" data-cal-scope="wizard"
+                >--</strong
+              >
+            </div>
+            <div class="setup-status-item">
+              <span data-i18n="wizard.step9.readout.busV">Bus voltage (V)</span>
+              <strong data-cal-field="floorCalBusVoltText" data-cal-scope="wizard"
+                >--</strong
+              >
+            </div>
+            <div class="setup-status-item">
+              <span data-i18n="wizard.step9.readout.floorAmb">Floor ambient (deg C)</span>
+              <strong data-cal-field="floorCalFloorAmbText" data-cal-scope="wizard"
+                >--</strong
+              >
+            </div>
+            <div class="setup-status-item">
+              <span data-i18n="wizard.step9.readout.roomAmb">Room ambient (deg C)</span>
+              <strong data-cal-field="floorCalRoomAmbText" data-cal-scope="wizard"
+                >--</strong
+              >
+            </div>
+          </div>
+          <div class="setup-floor-results">
+            <div class="setup-results-grid">
+              <div class="setup-result">
+                <span data-i18n="wizard.step9.result.power">Avg power (W)</span>
+                <strong data-cal-field="floorCalPowerText" data-cal-scope="wizard"
+                  >--</strong
+                >
+              </div>
+              <div class="setup-result">
+                <span data-i18n="wizard.step9.result.delta">Delta T_inf (deg C)</span>
+                <strong data-cal-field="floorCalDeltaTText" data-cal-scope="wizard"
+                  >--</strong
+                >
+              </div>
+              <div class="setup-result">
+                <span data-i18n="wizard.step9.tau">Tau</span>
+                <strong data-cal-field="floorCalTauText" data-cal-scope="wizard"
+                  >--</strong
+                >
+              </div>
+              <div class="setup-result">
+                <span data-i18n="wizard.step9.k">K</span>
+                <strong data-cal-field="floorCalKText" data-cal-scope="wizard"
+                  >--</strong
+                >
+              </div>
+              <div class="setup-result">
+                <span data-i18n="wizard.step9.c">C</span>
+                <strong data-cal-field="floorCalCText" data-cal-scope="wizard"
+                  >--</strong
+                >
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="setup-card setup-floor-chart" data-setup-chart="floor" data-live-wires="1,2,3,4,5,6,7,8,9,10">
+          <h3 data-i18n="wizard.step9.chart">Calibration chart</h3>
+          <div
+            class="live-graph"
+            data-include="admin/partials/components/live_chart.html"
+          ></div>
+        </div>
+      </section>
+
+      <section
+        class="setup-step-panel"
+        data-setup-step="10"
+        data-step-title="Finish"
+        data-step-title-key="wizard.step10.title"
+      >
+        <div class="setup-card">
+          <h3 data-i18n="wizard.step10.title">Finish setup</h3>
+          <p data-i18n="wizard.step10.body">
+            Review the completed steps and finalize setup.
+          </p>
+          <div class="setup-instructions">
+            <strong data-i18n="wizard.step10.after.title">After finishing</strong>
+            <ul>
+              <li data-i18n="wizard.step10.after.li1">
+                You can update any settings later from the tabs.
+              </li>
+              <li data-i18n="wizard.step10.after.li2">
+                Required steps must be completed before running the system.
+              </li>
+            </ul>
+          </div>
+          <div class="setup-summary" data-setup-summary>
+            <div class="setup-summary-item">
+              <span data-i18n="wizard.step10.summary.req">
+                Required steps complete
+              </span>
+              <strong data-i18n="wizard.step10.summary.pending">Pending</strong>
+            </div>
+            <div class="setup-summary-item">
+              <span data-i18n="wizard.step10.summary.skip">Skipped steps</span>
+              <strong data-i18n="wizard.step10.summary.none">None</strong>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <footer class="setup-footer">
+    <button class="btn" type="button" data-setup-cancel data-i18n="wizard.nav.cancel">
+      Cancel
+    </button>
+    <div class="setup-footer-actions">
+      <button class="btn" type="button" data-setup-back data-i18n="wizard.nav.back">
+        Back
+      </button>
+      <button class="btn" type="button" data-setup-skip data-i18n="wizard.nav.skip">
+        Skip
+      </button>
+      <button class="btn btn-primary" type="button" data-setup-next>Next</button>
+    </div>
+  </footer>
+
+  <div class="setup-toast" data-setup-toast aria-hidden="true">
+    <span class="setup-toast-text" data-setup-toast-text></span>
+  </div>
+</div>

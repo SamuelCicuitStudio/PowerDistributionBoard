@@ -5,6 +5,7 @@
 - **Temp Model Calibration**: heat the NTC-attached wire to a target, then log the heat-up and cool-down curve (saved to SPIFFS).
 - **Wire Test**: use the NTC-attached wire as feedback to hold a target temp (no logging).
 - **Floor Model Calibration**: estimate floor thermal parameters using NTC as floor temp and heatsink DS18B20 as room/ambient temp.
+- **Cap Bank Calibration**: estimates capacitor bank capacitance by timed discharge through heater outputs; requires at least one connected wire.
 - Tests/calibrations return to Shutdown (relay off) when stopped or finished.
 
 ## How sampling works
@@ -14,13 +15,18 @@
 - Model mode starts a fixed-duty calibration run so the curve captures heat-up/cool-down under a repeatable drive.
 - Data is paged via `/calib_data?offset=&count=` and summarized by `/calib_status`.
 
+## Cap bank calibration (discharge-based)
+- Uses heater outputs to discharge the capacitor bank briefly, then computes `CAP_BANK_CAP_F_KEY`.
+- **Requires at least one connected wire** (a real discharge path) or the calibration is skipped/failed.
+
 ## Per-wire thermal model calibration (Wire1..Wire10)
 - Each wire has its own thermal parameters (tau, k, C) stored in NVS after calibration.
 - Calibration is done per wire with the NTC attached to that wire (NTC temperature is the wire temperature).
 - The firmware supports 10 wires; calibrate only the outputs you have enabled.
 
 ### Procedure (per wire)
-1) Ambient: keep the wire OFF until stable, then set `T_amb` as the average of the last 30-60 s.
+1) Baseline: make sure the wire is cold, then record `T_amb` at start using the board + heatsink
+   temperatures (or the current NTC reading). No stabilization wait.
 2) Apply a constant power step: turn only that wire ON with fixed duty/ON time and log at 5-10 Hz:
    - time `t`, temperature `T(t)` from NTC, and voltage `V(t)` across the wire.
 3) Compute average ON power:
@@ -77,12 +83,9 @@ Step 0 - Preparation (2-3 min)
 - Choose a fixed cycle (e.g., 100 ms) and fixed duties `d_i`.
 - Start logging at 1-2 Hz: time, `T_floor`, `T_room`, `V`.
 
-Step 1 - Ambient stabilization (5-10 min)
+Step 1 - Ambient reference (no wait)
 - Heating OFF.
-- Wait until both temperatures are stable (floor change < 0.05 C/min).
-- Compute:
-  - `T_room,amb` = average room temp over last 2-3 min
-  - `T_floor,amb` = average floor temp over last 2-3 min
+- Capture `T_room,amb` and `T_floor,amb` from current readings (or a short moving average).
 
 Step 2 - Apply a constant power step (20-40 min)
 - At t = 0, turn heating ON with the fixed gate schedule.

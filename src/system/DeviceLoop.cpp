@@ -43,6 +43,7 @@ struct PulseStats {
     float    busVoltageStart = NAN;
     float    busVoltage = NAN;
     float    currentA   = NAN;
+    float    currentAcs = NAN;
     uint16_t appliedMask = 0;
 };
 
@@ -63,6 +64,7 @@ static bool _runMaskedPulse(Device* self,
         stats->busVoltageStart = NAN;
         stats->busVoltage = NAN;
         stats->currentA = NAN;
+        stats->currentAcs = NAN;
         stats->appliedMask = 0;
     }
 
@@ -219,9 +221,14 @@ static bool _runMaskedPulse(Device* self,
             V_bus = self->discharger->sampleVoltageNow();
         }
         const float Itot = (WIRE ? samplePulseCurrent(V_bus) : NAN);
+        float ItotAcs = NAN;
+        if (self->currentSensor) {
+            ItotAcs = self->currentSensor->readCurrent();
+        }
         if (stats) {
             stats->busVoltage = V_bus;
             stats->currentA = Itot;
+            stats->currentAcs = ItotAcs;
         }
         DEBUG_PRINTF("[Pulse] end: mask=0x%03X Vbus=%.2fV Iest=%.3fA\n",
                      (unsigned)appliedMask,
@@ -1100,13 +1107,15 @@ void Device::StartLoop() {
                 break;
             }
             if (pulseStats.appliedMask != 0) {
+                const float presenceCurrent =
+                    isfinite(pulseStats.currentAcs) ? pulseStats.currentAcs : NAN;
                 const bool changed =
                     wirePresenceManager.updatePresenceFromMask(
                         *WIRE,
                         wireStateModel,
                         pulseStats.appliedMask,
-                        pulseStats.busVoltageStart,
-                        pulseStats.busVoltage);
+                        pulseStats.busVoltage,
+                        presenceCurrent);
                 if (changed) {
                     checkAllowedOutputs();
                     if (!wirePresenceManager.hasAnyConnected(wireStateModel)) {

@@ -221,6 +221,19 @@ private:
     static void eventStreamTask(void* pv);
     // Routes registration shared by AP/STA
     void registerRoutes_();
+    void registerStateRoutes_();
+    void registerMonitorRoutes_();
+    void registerAuthRoutes_();
+    void registerDeviceInfoRoutes_();
+    void registerHistoryRoutes_();
+    void registerAdminRoutes_();
+    void registerCalibrationRoutes_();
+    void registerWireTestRoutes_();
+    void registerPresenceRoutes_();
+    void registerSetupRoutes_();
+    void registerNtcCalRoutes_();
+    void registerControlRoutes_();
+    void registerStaticRoutes_();
 };
 
 // Convenience macro (mirrors CONF)

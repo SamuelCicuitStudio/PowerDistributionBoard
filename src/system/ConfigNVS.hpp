@@ -31,6 +31,9 @@
 #define USER_ID_KEY                    "USRID"     // Single customer login username
 #define USER_PASS_KEY                  "USRPW"     // Single customer login password
 
+// ---------- UI / Language ----------
+#define UI_LANGUAGE_KEY                "UILANG"    // UI language code ("en", "fr", "it")
+
 // ---------- Preference Keys ----------
 #define INRUSH_DELAY_KEY               "INSHDY"    // Inrush delay duration key
 #define LED_FEEDBACK_KEY               "LEDFB"     // LED feedback toggle key
@@ -90,8 +93,7 @@
 #define CALIB_W10_DONE_KEY             "CALW10"  // bool: wire 10 calibration done
 #define CALIB_FLOOR_DONE_KEY           "CALFLR"  // bool: floor calibration done
 #define CALIB_PRESENCE_DONE_KEY        "CALPRS"  // bool: presence calibration done
-#define PRESENCE_MIN_DROP_V_KEY        "PMIND"   // float: min voltage drop [V]
-#define PRESENCE_MIN_RATIO_KEY         "PMINR"   // float: min ratio for presence checks
+#define PRESENCE_MIN_RATIO_KEY         "PMINR"   // float: min current ratio (Imeas/Iexp) for presence
 #define PRESENCE_WINDOW_MS_KEY         "PWIN"    // int: averaging window [ms]
 #define PRESENCE_FAIL_COUNT_KEY        "PFAIL"   // int: consecutive failures before missing
 #define CALIB_W1_STAGE_KEY             "W1STG"   // int: wire 1 calibration stage
@@ -178,6 +180,7 @@
 ASSERT_NVS_KEY_LEN(DEV_ID_KEY);
 ASSERT_NVS_KEY_LEN(DEV_SW_KEY);
 ASSERT_NVS_KEY_LEN(DEV_HW_KEY);
+ASSERT_NVS_KEY_LEN(UI_LANGUAGE_KEY);
 ASSERT_NVS_KEY_LEN(CURRENT_SOURCE_KEY);
 ASSERT_NVS_KEY_LEN(CURR_LIMIT_KEY);
 ASSERT_NVS_KEY_LEN(TEMP_WARN_KEY);
@@ -222,7 +225,6 @@ ASSERT_NVS_KEY_LEN(CALIB_W9_DONE_KEY);
 ASSERT_NVS_KEY_LEN(CALIB_W10_DONE_KEY);
 ASSERT_NVS_KEY_LEN(CALIB_FLOOR_DONE_KEY);
 ASSERT_NVS_KEY_LEN(CALIB_PRESENCE_DONE_KEY);
-ASSERT_NVS_KEY_LEN(PRESENCE_MIN_DROP_V_KEY);
 ASSERT_NVS_KEY_LEN(PRESENCE_MIN_RATIO_KEY);
 ASSERT_NVS_KEY_LEN(PRESENCE_WINDOW_MS_KEY);
 ASSERT_NVS_KEY_LEN(PRESENCE_FAIL_COUNT_KEY);
@@ -322,6 +324,9 @@ ASSERT_NVS_KEY_LEN(W10CAP_KEY);
 #define DEFAULT_ADMIN_PASS             "admin123"       // Default admin password
 #define DEFAULT_USER_ID                "user"           // Default customer username
 #define DEFAULT_USER_PASS              "user123"        // Default customer password
+
+// ---------- UI Defaults ----------
+#define DEFAULT_UI_LANGUAGE            "en"
 // Presence override (test aid): set to 1 to force all wires present
 #define FORCE_ALL_WIRES_PRESENT        1
 // ---------- Nichrome Wire Resistance (Ohms) ----------
@@ -435,8 +440,7 @@ ASSERT_NVS_KEY_LEN(W10CAP_KEY);
 #define DEFAULT_CALIB_W_DONE           false
 #define DEFAULT_CALIB_FLOOR_DONE       false
 #define DEFAULT_CALIB_PRESENCE_DONE    false
-#define DEFAULT_PRESENCE_MIN_RATIO     0.70f
-#define DEFAULT_PRESENCE_MIN_DROP_V    5.0f
+#define DEFAULT_PRESENCE_MIN_RATIO     0.50f           // 50% of expected current
 #define DEFAULT_PRESENCE_WINDOW_MS     200
 #define DEFAULT_PRESENCE_FAIL_COUNT    3
 #define DEFAULT_CALIB_W_STAGE          0

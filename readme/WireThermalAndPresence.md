@@ -17,7 +17,8 @@ This document defines the required behavior for wire thermal estimation and wire
 - `ratio`: `Imeas_wire / Iexp` used for presence checks.
 
 ## Current source policy
-Presence logic uses the selected current source:
+Presence logic is current-based only (no voltage-drop presence checks).
+It uses the selected current source:
 - `CURRENT_SOURCE_KEY = CURRENT_SRC_ACS`: use ACS current.
 - `CURRENT_SOURCE_KEY = CURRENT_SRC_ESTIMATE`: use `Vbus` + resistances.
 
@@ -31,9 +32,9 @@ When using estimate mode, include the charge/discharge resistor path in the tota
 3) Current source is selected (`CURRENT_SOURCE_KEY`).
 4) Device is in a safe idle state (relay on, outputs off).
 
-### NVS keys for presence calibration (to add)
+### NVS keys for presence calibration
 - `CALPRS` (bool): presence calibration done.
-- `PMINR` (float): minimum valid ratio for probe and runtime checks.
+- `PMINR` (float): minimum valid ratio for probe and runtime checks (default 0.50).
 - `PWIN`  (int): averaging window in ms for probe samples.
 - `PFAIL` (int): consecutive failures before marking missing.
 
@@ -48,11 +49,11 @@ When using estimate mode, include the charge/discharge resistor path in the tota
    - If below, mark wire missing.
 
 2) **Store thresholds**
-   - Recommended starting values:
-     - `PMINR = 0.70`
+   - Default values:
+     - `PMINR = 0.50`
      - `PWIN  = 200`
      - `PFAIL = 3`
-   - Tune per hardware if needed.
+   - `PMINR` may be tuned per hardware if needed.
 
 ### Notes
 - Do not auto-enable missing wires during RUN; require explicit probe or admin action.

@@ -8,6 +8,7 @@
 #include <vector>
 
 #include <WifiEnpoin.hpp>
+#include <WiFiLocalization.hpp>
 
 namespace WiFiCbor {
 
@@ -102,9 +103,11 @@ inline void sendError(AsyncWebServerRequest* request,
                       const char* detail = nullptr,
                       const char* state = nullptr,
                       const char* cacheControl = nullptr) {
+    const WiFiLang::UiLanguage lang = WiFiLang::getCurrentLanguage();
+    const char* localized = WiFiLang::translateErrorMessage(message, lang);
     std::vector<uint8_t> payload;
-    if (!buildErrorPayload(payload, 192, message, detail, state)) {
-        request->send(status, CT_TEXT_PLAIN, "error");
+    if (!buildErrorPayload(payload, 192, localized, detail, state)) {
+        request->send(status, CT_TEXT_PLAIN, WiFiLang::getPlainError());
         return;
     }
     sendPayload(request, status, payload, cacheControl);

@@ -7,14 +7,15 @@ class HeaterManager;
 class WireStateModel;
 class WireConfigStore;
 class CpDischg;
+class CurrentSensor;
 
 class WirePresenceManager {
 public:
   void resetFailures();
   bool probeAll(HeaterManager& heater, WireStateModel& state, const WireConfigStore& cfg,
-                CpDischg* discharger);
+                CpDischg* discharger, CurrentSensor* current);
   bool updatePresenceFromMask(HeaterManager& heater, WireStateModel& state,
-                              uint16_t mask, float busVoltageStart, float busVoltage);
+                              uint16_t mask, float busVoltage, float currentA);
   bool hasAnyConnected(const WireStateModel& state) const;
 
 private:
