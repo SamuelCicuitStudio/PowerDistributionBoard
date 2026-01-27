@@ -15,6 +15,12 @@ import { initDashboardTab } from "./features/dashboard/index.js";
 import { initDeviceTab } from "./features/device/index.js";
 import { initSetupWizard } from "./features/setup/index.js";
 import { initLanguage } from "./services/language.js";
+import { requireSession } from "./services/session.js";
+import { initSetupWizardLinkage } from "./services/setup_wizard_linkage.js";
+
+if (window.chrome?.webview) {
+  document.documentElement.classList.add("is-webview");
+}
 
 async function loadIncludes() {
   let includeNodes = qsa("[data-include]");
@@ -96,27 +102,35 @@ function initTabs() {
   );
 }
 
-document.addEventListener("DOMContentLoaded", () => {
-  window.__uiReady = loadIncludes().then(() => {
-    initTabs();
-    const language = initLanguage();
-    window.__i18n = language;
-    window.__language = language;
-    window.__toast = initToast();
-    window.__confirm = initConfirm();
-    window.__statusbar = initStatusbar();
-    window.__alerts = initAlerts();
-    window.__history = initHistoryOverlay();
-    window.__log = initLogOverlay();
-    window.__calibration = initCalibrationOverlay();
-    initLiveOverlay();
-    initDashboardTab();
-    initUserTab();
-    initControlTab();
-    initAdminTab();
-    initDeviceTab();
-    window.__wizard = initSetupWizard();
-    initSidebarActions();
-    window.dispatchEvent(new Event("ui:ready"));
+if (requireSession()) {
+  document.addEventListener("DOMContentLoaded", () => {
+    window.__uiReady = loadIncludes().then(() => {
+      initTabs();
+      const language = initLanguage();
+      window.__i18n = language;
+      window.__language = language;
+      const wizardLinkage = initSetupWizardLinkage();
+      window.__toast = initToast();
+      window.__confirm = initConfirm();
+      window.__statusbar = initStatusbar();
+      window.__alerts = initAlerts();
+      window.__history = initHistoryOverlay();
+      window.__log = initLogOverlay();
+      window.__calibration = initCalibrationOverlay();
+      initLiveOverlay();
+      initDashboardTab();
+      initUserTab();
+      initControlTab();
+      initAdminTab();
+      initDeviceTab();
+      window.__wizard = initSetupWizard({
+        onStepChange: wizardLinkage.onStepChange,
+        onOpen: wizardLinkage.onOpen,
+        onClose: wizardLinkage.onClose,
+      });
+      wizardLinkage.attach(window.__wizard);
+      initSidebarActions();
+      window.dispatchEvent(new Event("ui:ready"));
+    });
   });
-});
+}

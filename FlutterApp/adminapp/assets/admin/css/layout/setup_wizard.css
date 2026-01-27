@@ -91,6 +91,19 @@
   transition: width 0.3s ease;
 }
 
+.setup-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.setup-logout {
+  height: 36px;
+  padding: 0 14px;
+  font-size: 12px;
+  letter-spacing: 0.2px;
+}
+
 .setup-close {
   width: 36px;
   height: 36px;
@@ -305,6 +318,105 @@
   background: rgba(2, 5, 7, 0.75);
   color: rgba(233, 254, 247, 0.9);
   padding: 0 10px;
+}
+
+.setup-select-wrap {
+  position: relative;
+}
+
+.setup-select-btn {
+  width: 100%;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(2, 5, 7, 0.75);
+  color: rgba(233, 254, 247, 0.9);
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.setup-select-btn:focus-visible {
+  outline: none;
+  border-color: rgba(0, 255, 174, 0.3);
+  box-shadow: 0 0 0 3px rgba(0, 255, 174, 0.12);
+}
+
+.setup-select-caret {
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  opacity: 0.7;
+}
+
+.setup-select-caret svg {
+  width: 16px;
+  height: 16px;
+}
+
+.setup-select-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(3, 8, 10, 0.98);
+  padding: 6px;
+  display: none;
+  flex-direction: column;
+  gap: 4px;
+  z-index: 5;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
+  max-height: 200px;
+  overflow: auto;
+}
+
+.setup-select-menu.is-open {
+  display: flex;
+}
+
+.setup-select-menu button {
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  background: rgba(255, 255, 255, 0.02);
+  color: rgba(233, 254, 247, 0.82);
+  padding: 8px 10px;
+  font-size: 12px;
+  letter-spacing: 0.2px;
+  text-align: left;
+}
+
+.setup-select-menu button:hover,
+.setup-select-menu button:focus-visible {
+  border-color: rgba(0, 255, 174, 0.28);
+  box-shadow: 0 0 16px rgba(0, 255, 174, 0.08);
+  outline: none;
+}
+
+.setup-select-menu button.is-active {
+  border-color: rgba(0, 255, 174, 0.35);
+  color: rgba(0, 255, 174, 0.92);
+  background: rgba(0, 255, 174, 0.08);
+}
+
+.setup-select-menu button.is-disabled,
+.setup-select-menu button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.setup-select-native {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+  width: 1px;
+  height: 1px;
 }
 
 .setup-output-grid {

@@ -12,7 +12,7 @@
   </head>
   <body class="login-page">
     <main class="login-shell">
-      <section class="login-card is-error" aria-label="Login failed">
+      <section class="login-card is-error" aria-label="Login failed" data-i18n-aria="loginFailed.aria.card">
         <div class="login-fail-icon" aria-hidden="true">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="9"></circle>
@@ -20,12 +20,12 @@
             <path d="M12 17h.01"></path>
           </svg>
         </div>
-        <h1 class="login-fail-title">Login Failed</h1>
-        <p class="login-fail-message" data-login-fail-message>
+        <h1 class="login-fail-title" data-i18n="loginFailed.title">Login Failed</h1>
+        <p class="login-fail-message" data-login-fail-message data-i18n="loginFailed.message">
           Incorrect username or password. Please try again.
         </p>
         <div class="login-fail-actions">
-          <button class="btn btn-primary" type="button" data-login-back>
+          <button class="btn btn-primary" type="button" data-login-back data-i18n="loginFailed.back">
             Back to Login
           </button>
         </div>

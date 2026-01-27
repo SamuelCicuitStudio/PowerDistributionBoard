@@ -39,7 +39,7 @@ add_definitions(-DUNICODE -D_UNICODE)
 # of modifying this function.
 function(APPLY_STANDARD_SETTINGS TARGET)
   target_compile_features(${TARGET} PUBLIC cxx_std_17)
-  target_compile_options(${TARGET} PRIVATE /W4 /WX /wd"4100")
+  target_compile_options(${TARGET} PRIVATE /W4 /WX /wd"4100" /wd"4244" /wd"4458")
   target_compile_options(${TARGET} PRIVATE /EHsc)
   target_compile_definitions(${TARGET} PRIVATE "_HAS_EXCEPTIONS=0")
   target_compile_definitions(${TARGET} PRIVATE "$<$<CONFIG:Debug>:_DEBUG>")
@@ -56,6 +56,45 @@ add_subdirectory("runner")
 # Generated plugin build rules, which manage building the plugins and adding
 # them to the application.
 include(flutter/generated_plugins.cmake)
+
+# Silence known upstream warnings from flutter_inappwebview + WebView2 headers.
+if(TARGET flutter_inappwebview_windows_plugin)
+  target_compile_options(flutter_inappwebview_windows_plugin
+    PRIVATE /wd"4244" /wd"4458")
+endif()
+
+# Ensure C++/WinRT headers provide impl::wait_for for webview_windows when
+# older Windows SDKs are installed.
+if(TARGET webview_windows_plugin)
+  set(CPPWINRT_NUGET_URL "https://dist.nuget.org/win-x86-commandline/v5.10.0/nuget.exe")
+  set(CPPWINRT_NUGET_SHA256 "852b71cc8c8c2d40d09ea49d321ff56fd2397b9d6ea9f96e532530307bbbafd3")
+  find_program(NUGET nuget)
+  if(NOT NUGET)
+    set(NUGET "${CMAKE_BINARY_DIR}/nuget.exe")
+    if (NOT EXISTS ${NUGET})
+      file(DOWNLOAD ${CPPWINRT_NUGET_URL} ${NUGET})
+    endif()
+    file(SHA256 ${NUGET} NUGET_DL_HASH)
+    if (NOT NUGET_DL_HASH STREQUAL CPPWINRT_NUGET_SHA256)
+      message(FATAL_ERROR "Integrity check for ${NUGET} failed.")
+    endif()
+  endif()
+
+  add_custom_target(cppwinrt_download ALL)
+  add_custom_command(
+    TARGET cppwinrt_download PRE_BUILD
+    COMMAND ${NUGET} install Microsoft.Windows.CppWinRT -ExcludeVersion -OutputDirectory ${CMAKE_BINARY_DIR}/packages
+    DEPENDS ${NUGET}
+  )
+
+  add_dependencies(webview_windows_plugin cppwinrt_download)
+  target_include_directories(webview_windows_plugin BEFORE PRIVATE
+    "${CMAKE_BINARY_DIR}/packages/Microsoft.Windows.CppWinRT/include"
+  )
+  target_compile_options(webview_windows_plugin PRIVATE
+    "/FI${CMAKE_CURRENT_SOURCE_DIR}/winrt_wait_for_compat.h"
+  )
+endif()
 
 
 # === Installation ===

@@ -11,11 +11,12 @@
   </head>
   <body class="login-page">
     <main class="login-shell">
-      <section class="login-card" aria-label="Admin login">
+      <section class="login-card" aria-label="Admin login" data-i18n-aria="login.aria.card">
         <button
           class="login-info-btn"
           type="button"
           aria-label="Device information"
+          data-i18n-aria="login.info.button"
           data-login-info-btn
         >
           i
@@ -30,13 +31,13 @@
           </div>
           <div>
             <h1 class="brand-title">Powerboard</h1>
-            <p class="brand-sub">Admin access</p>
+            <p class="brand-sub" data-i18n="login.brand.sub">Admin access</p>
           </div>
         </div>
 
         <form class="login-form" id="loginForm" novalidate>
           <label class="login-field">
-            <span class="login-label">Username</span>
+            <span class="login-label" data-i18n="login.field.username">Username</span>
             <div class="login-input">
               <span class="login-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -48,6 +49,7 @@
                 id="username"
                 type="text"
                 placeholder="Username"
+                data-i18n-placeholder="login.placeholder.username"
                 autocomplete="username"
                 inputmode="text"
               />
@@ -55,7 +57,7 @@
           </label>
 
           <label class="login-field">
-            <span class="login-label">Password</span>
+            <span class="login-label" data-i18n="login.field.password">Password</span>
             <div class="login-input login-input--password">
               <span class="login-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -67,6 +69,7 @@
                 id="password"
                 type="password"
                 placeholder="Password"
+                data-i18n-placeholder="login.placeholder.password"
                 autocomplete="current-password"
                 aria-describedby="pwdHelp"
               />
@@ -75,7 +78,9 @@
                 class="toggle-eye"
                 type="button"
                 aria-label="Show password while pressed"
+                data-i18n-aria="login.password.show"
                 title="Press and hold to show password"
+                data-i18n-title="login.password.hold"
               >
                 <svg class="eye-open" viewBox="0 0 24 24" aria-hidden="true">
                   <path
@@ -89,7 +94,7 @@
                 </svg>
               </button>
             </div>
-            <small id="pwdHelp" class="visually-hidden">
+            <small id="pwdHelp" class="visually-hidden" data-i18n="login.password.help">
               Press and hold the eye to show the password.
             </small>
           </label>
@@ -102,7 +107,7 @@
                   <path d="M13 6l6 6-6 6"></path>
                 </svg>
               </span>
-              <span>Login</span>
+              <span data-i18n="login.action.submit">Login</span>
             </button>
           </div>
         </form>
@@ -110,10 +115,10 @@
         <div class="login-status" data-login-status aria-live="polite"></div>
 
         <div class="login-info-panel" data-login-info-panel aria-hidden="true">
-          <h4>Device Information</h4>
-          <p id="infoDeviceId">Device ID: ...</p>
-          <p id="infoSwVer">SW Version: ...</p>
-          <p id="infoHwVer">HW Version: ...</p>
+          <h4 data-i18n="login.info.title">Device Information</h4>
+          <p id="infoDeviceId" data-i18n="login.info.deviceId.placeholder">Device ID: ...</p>
+          <p id="infoSwVer" data-i18n="login.info.sw.placeholder">SW Version: ...</p>
+          <p id="infoHwVer" data-i18n="login.info.hw.placeholder">HW Version: ...</p>
         </div>
 
         <div class="login-footer">&copy; 2025 Power Distribution Interface</div>

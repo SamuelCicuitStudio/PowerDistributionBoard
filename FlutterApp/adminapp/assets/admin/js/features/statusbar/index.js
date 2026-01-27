@@ -155,7 +155,14 @@ export function initStatusbar() {
   }
 
   if (nodes.logoutBtn) {
-    nodes.logoutBtn.addEventListener("click", () => {
+    nodes.logoutBtn.addEventListener("click", async () => {
+      if (window.pbDisconnect) {
+        try {
+          await window.pbDisconnect();
+        } catch (error) {
+          console.warn("Disconnect failed:", error);
+        }
+      }
       if (window.pbClearToken) window.pbClearToken();
       const base = new URLSearchParams(window.location.search).get("base");
       const next = "login.html" + (base ? "?base=" + encodeURIComponent(base) : "");

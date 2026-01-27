@@ -1,10 +1,11 @@
 import 'dart:convert';
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:webview_windows/webview_windows.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -38,14 +39,52 @@ class WebviewHost extends StatefulWidget {
 }
 
 class _WebviewHostState extends State<WebviewHost> {
-  InAppWebViewController? _controller;
+  final WebviewController _controller = WebviewController();
+  StreamSubscription<LoadingState>? _loadingSub;
   bool _ready = false;
   String? _error;
-  bool _loadStarted = false;
 
   @override
   void initState() {
     super.initState();
+    _initWebview();
+  }
+
+  Future<void> _initWebview() async {
+    if (!Platform.isWindows) {
+      if (mounted) {
+        setState(() => _error = 'WebView is only supported on Windows.');
+      }
+      return;
+    }
+
+    final version = await WebviewController.getWebViewVersion();
+    if (version == null) {
+      if (mounted) {
+        setState(
+          () =>
+              _error =
+                  'WebView2 Runtime not installed. Install from '
+                  'https://go.microsoft.com/fwlink/p/?LinkId=2124703',
+        );
+      }
+      return;
+    }
+
+    try {
+      await _controller.initialize();
+      _loadingSub = _controller.loadingState.listen((state) {
+        if (!mounted) return;
+        setState(() => _ready = state != LoadingState.loading);
+      });
+      await _controller.setBackgroundColor(Colors.transparent);
+      await _controller.setPopupWindowPolicy(WebviewPopupWindowPolicy.deny);
+      await _controller.loadUrl(widget.assetHost.entryUrl);
+    } on PlatformException catch (e) {
+      if (mounted) {
+        setState(() => _error = e.message ?? e.code);
+      }
+    }
   }
 
   @override
@@ -56,48 +95,15 @@ class _WebviewHostState extends State<WebviewHost> {
       );
     }
 
+    final isInitialized = _controller.value.isInitialized;
+
     return Scaffold(
       body: Stack(
         children: [
           Positioned.fill(
-            child: InAppWebView(
-              initialUrlRequest: URLRequest(
-                url: WebUri(widget.assetHost.entryUrl),
-              ),
-              initialSettings: InAppWebViewSettings(
-                cacheEnabled: false,
-                transparentBackground: true,
-                supportZoom: false,
-              ),
-              onWebViewCreated: (controller) {
-                _controller = controller;
-              },
-              onLoadStart: (_, __) {
-                if (!_loadStarted) {
-                  _loadStarted = true;
-                  if (mounted) setState(() => _ready = false);
-                }
-              },
-              onLoadStop: (_, __) {
-                if (mounted) setState(() => _ready = true);
-              },
-              onReceivedError: (_, request, error) {
-                if (request.isForMainFrame == true) {
-                  if (mounted) setState(() => _error = error.description);
-                }
-              },
-              onReceivedHttpError: (_, request, response) {
-                if (request.isForMainFrame == true) {
-                  final code = response.statusCode;
-                  final reason = response.reasonPhrase ?? '';
-                  final message =
-                      reason.isEmpty ? 'HTTP $code' : 'HTTP $code $reason';
-                  if (mounted) setState(() => _error = message);
-                }
-              },
-            ),
+            child: isInitialized ? Webview(_controller) : const SizedBox.shrink(),
           ),
-          if (!_ready)
+          if (!isInitialized || !_ready)
             const Positioned.fill(
               child: ColoredBox(
                 color: Colors.black,
@@ -109,6 +115,13 @@ class _WebviewHostState extends State<WebviewHost> {
         ],
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _loadingSub?.cancel();
+    _controller.dispose();
+    super.dispose();
   }
 }
 

@@ -4,9 +4,11 @@ function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 
-export function initSetupWizard() {
+export function initSetupWizard(options = {}) {
   const root = qs("[data-setup-wizard]");
   if (!root) return null;
+
+  const { onStepChange, onOpen, onClose } = options;
 
   const steps = qsa("[data-setup-step]", root);
   const stepButtons = qsa("[data-setup-stepper]", root);
@@ -18,13 +20,17 @@ export function initSetupWizard() {
   const skipBtn = qs("[data-setup-skip]", root);
   const cancelBtn = qs("[data-setup-cancel]", root);
   const closeBtn = qs("[data-setup-close]", root);
+  const logoutBtn = qs("[data-setup-logout]", root);
   const toast = qs("[data-setup-toast]", root);
   const toastText = qs("[data-setup-toast-text]", root);
   const inputNodes = qsa("input, select, textarea", root);
+  const customSelects = [];
+  let customSelectsReady = false;
 
   let activeIndex = 0;
   let toastTimer = null;
   let demoShown = false;
+  let locked = false;
 
   const setOpen = (open) => {
     root.classList.toggle("is-open", open);
@@ -113,6 +119,9 @@ export function initSetupWizard() {
     });
     activeIndex = nextIndex;
     updateControls();
+    if (typeof onStepChange === "function") {
+      onStepChange(activeIndex, steps.length);
+    }
   };
 
   const open = (index = 0) => {
@@ -125,10 +134,200 @@ export function initSetupWizard() {
         "ok",
       );
     }
+    if (typeof onOpen === "function") onOpen();
   };
 
   const close = () => {
+    if (locked) return;
     setOpen(false);
+    if (typeof onClose === "function") onClose();
+  };
+
+  const setLocked = (value) => {
+    locked = Boolean(value);
+    root.dataset.locked = locked ? "true" : "false";
+    if (closeBtn) closeBtn.disabled = locked;
+    if (cancelBtn) cancelBtn.disabled = locked;
+  };
+
+  const handleLogout = async () => {
+    if (window.pbDisconnect) {
+      try {
+        await window.pbDisconnect();
+      } catch (error) {
+        console.warn("Disconnect failed:", error);
+      }
+    }
+    if (window.pbClearToken) window.pbClearToken();
+    const base = new URLSearchParams(window.location.search).get("base");
+    const next = "login.html" + (base ? "?base=" + encodeURIComponent(base) : "");
+    window.location.href = next;
+  };
+
+  const initCustomSelects = () => {
+    const selects = qsa("select", root).filter((node) =>
+      node.classList.contains("setup-select"),
+    );
+    selects.forEach((select) => {
+      if (select.dataset.customSelect === "true") return;
+
+      let wrap = select.closest(".setup-select-wrap");
+      if (!wrap) {
+        wrap = document.createElement("div");
+        wrap.className = "setup-select-wrap";
+        select.parentNode?.insertBefore(wrap, select);
+        wrap.appendChild(select);
+      }
+
+      let toggle = qs(".setup-select-btn", wrap);
+      let menu = qs(".setup-select-menu", wrap);
+      let current = qs("[data-setup-select-current]", wrap);
+
+      if (!toggle) {
+        toggle = document.createElement("button");
+        toggle.type = "button";
+        toggle.className = "setup-select-btn";
+        toggle.setAttribute("aria-haspopup", "listbox");
+        toggle.setAttribute("aria-expanded", "false");
+
+        current = document.createElement("span");
+        current.setAttribute("data-setup-select-current", "true");
+
+        const caret = document.createElement("span");
+        caret.className = "setup-select-caret";
+        caret.setAttribute("aria-hidden", "true");
+        caret.innerHTML = `
+          <svg
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <polyline points="6 9 12 15 18 9"></polyline>
+          </svg>
+        `;
+
+        toggle.append(current, caret);
+        wrap.insertBefore(toggle, select);
+      } else if (!current) {
+        current = document.createElement("span");
+        current.setAttribute("data-setup-select-current", "true");
+        toggle.prepend(current);
+      }
+
+      if (!menu) {
+        menu = document.createElement("div");
+        menu.className = "setup-select-menu";
+        menu.setAttribute("role", "listbox");
+        menu.setAttribute("aria-hidden", "true");
+        wrap.insertBefore(menu, select);
+      }
+
+      const setOpen = (open) => {
+        menu.classList.toggle("is-open", open);
+        menu.setAttribute("aria-hidden", String(!open));
+        toggle.setAttribute("aria-expanded", String(open));
+      };
+
+      const updateCurrent = () => {
+        const selectedIndex =
+          select.selectedIndex >= 0 ? select.selectedIndex : 0;
+        const selectedOption = select.options[selectedIndex];
+        if (current && selectedOption) {
+          current.textContent = selectedOption.textContent.trim();
+        }
+        const optionButtons = qsa("[data-setup-select-index]", menu);
+        optionButtons.forEach((btn) => {
+          const isActive = Number(btn.dataset.setupSelectIndex) === selectedIndex;
+          btn.classList.toggle("is-active", isActive);
+          btn.setAttribute("aria-selected", String(isActive));
+        });
+        if (toggle) {
+          toggle.disabled = select.disabled;
+          toggle.setAttribute(
+            "aria-disabled",
+            select.disabled ? "true" : "false",
+          );
+        }
+      };
+
+      const syncOptions = () => {
+        menu.innerHTML = "";
+        const options = Array.from(select.options);
+        options.forEach((option, index) => {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.dataset.setupSelectIndex = String(index);
+          btn.setAttribute("role", "option");
+          btn.textContent = option.textContent.trim();
+          if (option.disabled) {
+            btn.disabled = true;
+            btn.classList.add("is-disabled");
+          }
+          menu.appendChild(btn);
+        });
+        updateCurrent();
+      };
+
+      toggle.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const isOpen = menu.classList.contains("is-open");
+        customSelects.forEach((item) => {
+          if (item.menu !== menu) item.setOpen(false);
+        });
+        setOpen(!isOpen);
+      });
+
+      menu.addEventListener("click", (event) => {
+        const btn = event.target.closest("[data-setup-select-index]");
+        if (!btn || btn.disabled) return;
+        event.preventDefault();
+        const index = Number(btn.dataset.setupSelectIndex);
+        if (!Number.isNaN(index) && select.selectedIndex !== index) {
+          select.selectedIndex = index;
+          select.dispatchEvent(new Event("change", { bubbles: true }));
+        }
+        updateCurrent();
+        setOpen(false);
+      });
+
+      select.addEventListener("change", updateCurrent);
+
+      select.classList.add("setup-select-native");
+      select.dataset.customSelect = "true";
+
+      syncOptions();
+      customSelects.push({ wrap, menu, setOpen, syncOptions, updateCurrent });
+    });
+
+    if (customSelectsReady) return;
+    customSelectsReady = true;
+
+    document.addEventListener("click", (event) => {
+      customSelects.forEach((item) => {
+        if (!item.wrap.contains(event.target)) {
+          item.setOpen(false);
+        }
+      });
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        customSelects.forEach((item) => item.setOpen(false));
+      }
+    });
+
+    document.addEventListener("language:change", () => {
+      customSelects.forEach((item) => item.syncOptions());
+    });
+
+    document.addEventListener("setup:controls-loaded", () => {
+      customSelects.forEach((item) => item.updateCurrent());
+    });
   };
 
   backBtn?.addEventListener("click", () => setStep(activeIndex - 1));
@@ -142,6 +341,7 @@ export function initSetupWizard() {
   skipBtn?.addEventListener("click", () => setStep(activeIndex + 1));
   cancelBtn?.addEventListener("click", close);
   closeBtn?.addEventListener("click", close);
+  logoutBtn?.addEventListener("click", handleLogout);
 
   stepButtons.forEach((btn, i) => {
     btn.addEventListener("click", () => setStep(i));
@@ -167,6 +367,7 @@ export function initSetupWizard() {
     });
   });
 
+  initCustomSelects();
   updateControls();
 
   return {
@@ -175,5 +376,7 @@ export function initSetupWizard() {
     setStep,
     notify: showToast,
     isOpen: () => root.classList.contains("is-open"),
+    setLocked,
+    isLocked: () => locked,
   };
 }

@@ -14,26 +14,54 @@
         <span data-setup-progress></span>
       </div>
     </div>
-    <button
-      class="setup-close"
-      type="button"
-      data-setup-close
-      aria-label="Close setup wizard"
-      data-i18n-aria="wizard.header.close"
-    >
-      <svg
-        viewBox="0 0 24 24"
-        aria-hidden="true"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
+    <div class="setup-header-actions">
+      <button
+        class="btn setup-logout"
+        type="button"
+        data-setup-logout
+        aria-label="Logout"
+        data-i18n-aria="statusbar.session.logout"
       >
-        <line x1="18" y1="6" x2="6" y2="18"></line>
-        <line x1="6" y1="6" x2="18" y2="18"></line>
-      </svg>
-    </button>
+        <span class="btn-icon" aria-hidden="true">
+          <svg
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M9 21H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5"></path>
+            <polyline points="16 17 21 12 16 7"></polyline>
+            <line x1="21" y1="12" x2="9" y2="12"></line>
+          </svg>
+        </span>
+        <span class="setup-logout-text" data-i18n="statusbar.session.logout">
+          Logout
+        </span>
+      </button>
+      <button
+        class="setup-close"
+        type="button"
+        data-setup-close
+        aria-label="Close setup wizard"
+        data-i18n-aria="wizard.header.close"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+    </div>
   </header>
 
   <div class="setup-body">
@@ -182,6 +210,17 @@
                   type="password"
                   placeholder="Current password"
                   data-i18n-placeholder="wizard.step2.placeholder.current"
+                  data-setup-field="userCurrent"
+                />
+              </label>
+              <label class="setup-field">
+                <span data-i18n="wizard.step2.user.id">New user ID</span>
+                <input
+                  class="setup-input"
+                  type="text"
+                  placeholder="New user ID"
+                  data-i18n-placeholder="wizard.step2.placeholder.userId"
+                  data-setup-field="userNewId"
                 />
               </label>
               <label class="setup-field">
@@ -191,6 +230,7 @@
                   type="password"
                   placeholder="New password"
                   data-i18n-placeholder="wizard.step2.placeholder.new"
+                  data-setup-field="userNewPass"
                 />
               </label>
             </div>
@@ -208,6 +248,7 @@
                   type="password"
                   placeholder="Current admin password"
                   data-i18n-placeholder="wizard.step2.placeholder.adminCurrent"
+                  data-setup-field="adminCurrent"
                 />
               </label>
               <label class="setup-field">
@@ -217,6 +258,7 @@
                   type="text"
                   placeholder="New admin username"
                   data-i18n-placeholder="wizard.step2.placeholder.adminUser"
+                  data-setup-field="adminUsername"
                 />
               </label>
               <label class="setup-field">
@@ -226,6 +268,7 @@
                   type="password"
                   placeholder="New admin password"
                   data-i18n-placeholder="wizard.step2.placeholder.adminPass"
+                  data-setup-field="adminPassword"
                 />
               </label>
             </div>
@@ -254,6 +297,7 @@
                   type="text"
                   placeholder="Wi-Fi SSID"
                   data-i18n-placeholder="wizard.step3.placeholder.ssid"
+                  data-setup-field="wifiStationSsid"
                 />
               </label>
               <label class="setup-field">
@@ -263,6 +307,7 @@
                   type="password"
                   placeholder="Wi-Fi password"
                   data-i18n-placeholder="wizard.step3.placeholder.password"
+                  data-setup-field="wifiStationPass"
                 />
               </label>
             </div>
@@ -280,6 +325,7 @@
                   type="text"
                   placeholder="AP SSID"
                   data-i18n-placeholder="wizard.step3.placeholder.apSsid"
+                  data-setup-field="wifiApSsid"
                 />
               </label>
               <label class="setup-field">
@@ -289,6 +335,7 @@
                   type="password"
                   placeholder="AP password"
                   data-i18n-placeholder="wizard.step3.placeholder.apPass"
+                  data-setup-field="wifiApPass"
                 />
               </label>
             </div>
@@ -320,43 +367,43 @@
           </div>
           <div class="setup-output-grid" role="list">
             <label class="setup-output">
-              <input type="checkbox" checked />
+              <input type="checkbox" checked data-setup-access="1" />
               <span data-output-label="01">Output 01</span>
             </label>
             <label class="setup-output">
-              <input type="checkbox" checked />
+              <input type="checkbox" checked data-setup-access="2" />
               <span data-output-label="02">Output 02</span>
             </label>
             <label class="setup-output">
-              <input type="checkbox" checked />
+              <input type="checkbox" checked data-setup-access="3" />
               <span data-output-label="03">Output 03</span>
             </label>
             <label class="setup-output">
-              <input type="checkbox" checked />
+              <input type="checkbox" checked data-setup-access="4" />
               <span data-output-label="04">Output 04</span>
             </label>
             <label class="setup-output">
-              <input type="checkbox" checked />
+              <input type="checkbox" checked data-setup-access="5" />
               <span data-output-label="05">Output 05</span>
             </label>
             <label class="setup-output">
-              <input type="checkbox" checked />
+              <input type="checkbox" checked data-setup-access="6" />
               <span data-output-label="06">Output 06</span>
             </label>
             <label class="setup-output">
-              <input type="checkbox" checked />
+              <input type="checkbox" checked data-setup-access="7" />
               <span data-output-label="07">Output 07</span>
             </label>
             <label class="setup-output">
-              <input type="checkbox" checked />
+              <input type="checkbox" checked data-setup-access="8" />
               <span data-output-label="08">Output 08</span>
             </label>
             <label class="setup-output">
-              <input type="checkbox" checked />
+              <input type="checkbox" checked data-setup-access="9" />
               <span data-output-label="09">Output 09</span>
             </label>
             <label class="setup-output">
-              <input type="checkbox" checked />
+              <input type="checkbox" checked data-setup-access="10" />
               <span data-output-label="10">Output 10</span>
             </label>
           </div>
@@ -378,21 +425,35 @@
             <div class="setup-fields">
               <label class="setup-field">
                 <span data-i18n="wizard.step7.sample.rate">Sampling rate (Hz)</span>
-                <input class="setup-input" type="number" min="50" max="500" />
+                <input
+                  class="setup-input"
+                  type="number"
+                  min="50"
+                  max="500"
+                  step="1"
+                  data-setup-field="acFrequency"
+                />
               </label>
               <label class="setup-field">
                 <span data-i18n="wizard.step7.sample.resistor">Charge resistor (Ohm)</span>
-                <input class="setup-input" type="number" />
+                <input class="setup-input" type="number" data-setup-field="chargeResistor" />
               </label>
               <label class="setup-field">
                 <span data-i18n="wizard.step7.sample.limit">Current trip limit (A)</span>
-                <input class="setup-input" type="number" step="0.1" />
+                <input
+                  class="setup-input"
+                  type="number"
+                  step="0.1"
+                  data-setup-field="currLimit"
+                />
               </label>
               <label class="setup-field">
                 <span data-i18n="wizard.step7.sample.source">Current source</span>
-                <select class="setup-select">
-                  <option data-i18n="wizard.step7.sample.source1">ACS Sensor</option>
-                  <option data-i18n="wizard.step7.sample.source2">
+                <select class="setup-select" data-setup-field="currentSource">
+                  <option value="acs" data-i18n="wizard.step7.sample.source1">
+                    ACS Sensor
+                  </option>
+                  <option value="estimate" data-i18n="wizard.step7.sample.source2">
                     CSP Discharge Estimate
                   </option>
                 </select>
@@ -408,13 +469,23 @@
             <div class="setup-fields">
               <label class="setup-field">
                 <span data-i18n="wizard.step7.thermal.warn">Temp warning (&deg;C)</span>
-                <input class="setup-input" type="number" step="0.1" />
+                <input
+                  class="setup-input"
+                  type="number"
+                  step="0.1"
+                  data-setup-field="tempWarnC"
+                />
               </label>
               <label class="setup-field">
                 <span data-i18n="wizard.step7.thermal.trip">
                   Temp trip shutdown (&deg;C)
                 </span>
-                <input class="setup-input" type="number" step="0.1" />
+                <input
+                  class="setup-input"
+                  type="number"
+                  step="0.1"
+                  data-setup-field="tempTripC"
+                />
               </label>
             </div>
           </div>
@@ -427,31 +498,46 @@
             <div class="setup-fields">
               <label class="setup-field">
                 <span data-i18n="wizard.step7.model.target">Model target</span>
-                <select class="setup-select">
-                  <option>Wire 1</option>
-                  <option>Wire 2</option>
-                  <option>Wire 3</option>
-                  <option>Wire 4</option>
-                  <option>Wire 5</option>
-                  <option>Wire 6</option>
-                  <option>Wire 7</option>
-                  <option>Wire 8</option>
-                  <option>Wire 9</option>
-                  <option>Wire 10</option>
-                  <option>Floor</option>
+                <select class="setup-select" data-setup-field="modelTarget">
+                  <option value="wire1">Wire 1</option>
+                  <option value="wire2">Wire 2</option>
+                  <option value="wire3">Wire 3</option>
+                  <option value="wire4">Wire 4</option>
+                  <option value="wire5">Wire 5</option>
+                  <option value="wire6">Wire 6</option>
+                  <option value="wire7">Wire 7</option>
+                  <option value="wire8">Wire 8</option>
+                  <option value="wire9">Wire 9</option>
+                  <option value="wire10">Wire 10</option>
+                  <option value="floor">Floor</option>
                 </select>
               </label>
               <label class="setup-field">
                 <span data-i18n="wizard.step7.model.tau">Tau (s)</span>
-                <input class="setup-input" type="number" step="0.01" />
+                <input
+                  class="setup-input"
+                  type="number"
+                  step="0.01"
+                  data-setup-field="modelTau"
+                />
               </label>
               <label class="setup-field">
                 <span data-i18n="wizard.step7.model.kloss">K Loss (W/K)</span>
-                <input class="setup-input" type="number" step="0.001" />
+                <input
+                  class="setup-input"
+                  type="number"
+                  step="0.001"
+                  data-setup-field="modelK"
+                />
               </label>
               <label class="setup-field">
                 <span data-i18n="wizard.step7.model.c">Thermal C (J/K)</span>
-                <input class="setup-input" type="number" step="0.01" />
+                <input
+                  class="setup-input"
+                  type="number"
+                  step="0.01"
+                  data-setup-field="modelC"
+                />
               </label>
             </div>
           </div>
@@ -467,42 +553,72 @@
                 <span data-i18n="wizard.step7.floor.thickness">
                   Floor thickness (20-50 mm)
                 </span>
-                <input class="setup-input" type="number" min="20" max="50" step="0.1" />
+                <input
+                  class="setup-input"
+                  type="number"
+                  min="20"
+                  max="50"
+                  step="0.1"
+                  data-setup-field="floorThicknessMm"
+                />
               </label>
               <label class="setup-field">
                 <span data-i18n="wizard.step7.floor.final">
                   Nichrome final temp (&deg;C)
                 </span>
-                <input class="setup-input" type="number" step="0.1" />
+                <input
+                  class="setup-input"
+                  type="number"
+                  step="0.1"
+                  data-setup-field="nichromeFinalTempC"
+                />
               </label>
               <label class="setup-field">
                 <span data-i18n="wizard.step7.floor.channel">
                   NTC linked channel (1-10)
                 </span>
-                <input class="setup-input" type="number" min="1" max="10" step="1" />
+                <input
+                  class="setup-input"
+                  type="number"
+                  min="1"
+                  max="10"
+                  step="1"
+                  data-setup-field="ntcGateIndex"
+                />
               </label>
               <label class="setup-field">
                 <span data-i18n="wizard.step7.floor.material">Floor material</span>
-                <select class="setup-select">
-                  <option>Wood</option>
-                  <option>Epoxy</option>
-                  <option>Concrete</option>
-                  <option>Slate</option>
-                  <option>Marble</option>
-                  <option>Granite</option>
+                <select class="setup-select" data-setup-field="floorMaterial">
+                  <option value="wood">Wood</option>
+                  <option value="epoxy">Epoxy</option>
+                  <option value="concrete">Concrete</option>
+                  <option value="slate">Slate</option>
+                  <option value="marble">Marble</option>
+                  <option value="granite">Granite</option>
                 </select>
               </label>
               <label class="setup-field">
                 <span data-i18n="wizard.step7.floor.max">
                   Max floor temp (<= 35 &deg;C)
                 </span>
-                <input class="setup-input" type="number" max="35" step="0.1" />
+                <input
+                  class="setup-input"
+                  type="number"
+                  max="35"
+                  step="0.1"
+                  data-setup-field="floorMaxC"
+                />
               </label>
               <label class="setup-field">
                 <span data-i18n="wizard.step7.floor.margin">
                   Floor switch margin (&deg;C)
                 </span>
-                <input class="setup-input" type="number" step="0.1" />
+                <input
+                  class="setup-input"
+                  type="number"
+                  step="0.1"
+                  data-setup-field="floorSwitchMarginC"
+                />
               </label>
             </div>
           </div>
@@ -517,47 +633,102 @@
                 <span data-i18n="wizard.step7.nichrome.resistivity">
                   Wire resistivity (Ohm/m)
                 </span>
-                <input class="setup-input" type="number" step="0.01" />
+                <input
+                  class="setup-input"
+                  type="number"
+                  step="0.01"
+                  data-setup-field="wireOhmPerM"
+                />
               </label>
               <label class="setup-field">
                 <span>R01 (Ohm)</span>
-                <input class="setup-input" type="number" step="0.1" />
+                <input
+                  class="setup-input"
+                  type="number"
+                  step="0.1"
+                  data-setup-field="wireRes1"
+                />
               </label>
               <label class="setup-field">
                 <span>R02 (Ohm)</span>
-                <input class="setup-input" type="number" step="0.1" />
+                <input
+                  class="setup-input"
+                  type="number"
+                  step="0.1"
+                  data-setup-field="wireRes2"
+                />
               </label>
               <label class="setup-field">
                 <span>R03 (Ohm)</span>
-                <input class="setup-input" type="number" step="0.1" />
+                <input
+                  class="setup-input"
+                  type="number"
+                  step="0.1"
+                  data-setup-field="wireRes3"
+                />
               </label>
               <label class="setup-field">
                 <span>R04 (Ohm)</span>
-                <input class="setup-input" type="number" step="0.1" />
+                <input
+                  class="setup-input"
+                  type="number"
+                  step="0.1"
+                  data-setup-field="wireRes4"
+                />
               </label>
               <label class="setup-field">
                 <span>R05 (Ohm)</span>
-                <input class="setup-input" type="number" step="0.1" />
+                <input
+                  class="setup-input"
+                  type="number"
+                  step="0.1"
+                  data-setup-field="wireRes5"
+                />
               </label>
               <label class="setup-field">
                 <span>R06 (Ohm)</span>
-                <input class="setup-input" type="number" step="0.1" />
+                <input
+                  class="setup-input"
+                  type="number"
+                  step="0.1"
+                  data-setup-field="wireRes6"
+                />
               </label>
               <label class="setup-field">
                 <span>R07 (Ohm)</span>
-                <input class="setup-input" type="number" step="0.1" />
+                <input
+                  class="setup-input"
+                  type="number"
+                  step="0.1"
+                  data-setup-field="wireRes7"
+                />
               </label>
               <label class="setup-field">
                 <span>R08 (Ohm)</span>
-                <input class="setup-input" type="number" step="0.1" />
+                <input
+                  class="setup-input"
+                  type="number"
+                  step="0.1"
+                  data-setup-field="wireRes8"
+                />
               </label>
               <label class="setup-field">
                 <span>R09 (Ohm)</span>
-                <input class="setup-input" type="number" step="0.1" />
+                <input
+                  class="setup-input"
+                  type="number"
+                  step="0.1"
+                  data-setup-field="wireRes9"
+                />
               </label>
               <label class="setup-field">
                 <span>R10 (Ohm)</span>
-                <input class="setup-input" type="number" step="0.1" />
+                <input
+                  class="setup-input"
+                  type="number"
+                  step="0.1"
+                  data-setup-field="wireRes10"
+                />
               </label>
             </div>
           </div>
@@ -572,7 +743,14 @@
                 <span data-i18n="wizard.step7.energy.gauge">
                   Wire gauge (AWG 1-40)
                 </span>
-                <input class="setup-input" type="number" min="1" max="40" step="1" />
+                <input
+                  class="setup-input"
+                  type="number"
+                  min="1"
+                  max="40"
+                  step="1"
+                  data-setup-field="wireGauge"
+                />
               </label>
             </div>
           </div>
@@ -607,10 +785,16 @@
                 class="btn btn-primary"
                 type="button"
                 data-i18n="wizard.step5.sensor.cap"
+                data-setup-action="sensorCap"
               >
                 Run capacitance measurement
               </button>
-              <button class="btn" type="button" data-i18n="wizard.step5.sensor.acs">
+              <button
+                class="btn"
+                type="button"
+                data-i18n="wizard.step5.sensor.acs"
+                data-setup-action="sensorAcs"
+              >
                 Run ACS zero
               </button>
             </div>
@@ -649,22 +833,43 @@
             </div>
           </div>
           <div class="setup-fields setup-fields-2">
-            <label class="setup-field">
-              <span data-i18n="wizard.step6.beta">Beta</span>
-              <input class="setup-input" type="number" min="1" step="1" />
-            </label>
-            <label class="setup-field">
-              <span data-i18n="wizard.step6.t0">T0 (&deg;C)</span>
-              <input class="setup-input" type="number" step="0.1" />
-            </label>
-            <label class="setup-field">
-              <span data-i18n="wizard.step6.r0">R0 / R25</span>
-              <input class="setup-input" type="number" step="1" />
-            </label>
-            <label class="setup-field">
-              <span data-i18n="wizard.step6.pullup">Fixed pull-up resistor</span>
-              <input class="setup-input" type="number" step="1" />
-            </label>
+              <label class="setup-field">
+                <span data-i18n="wizard.step6.beta">Beta</span>
+                <input
+                  class="setup-input"
+                  type="number"
+                  min="1"
+                  step="1"
+                  data-setup-field="ntcBeta"
+                />
+              </label>
+              <label class="setup-field">
+                <span data-i18n="wizard.step6.t0">T0 (&deg;C)</span>
+                <input
+                  class="setup-input"
+                  type="number"
+                  step="0.1"
+                  data-setup-field="ntcT0C"
+                />
+              </label>
+              <label class="setup-field">
+                <span data-i18n="wizard.step6.r0">R0 / R25</span>
+                <input
+                  class="setup-input"
+                  type="number"
+                  step="1"
+                  data-setup-field="ntcR0"
+                />
+              </label>
+              <label class="setup-field">
+                <span data-i18n="wizard.step6.pullup">Fixed pull-up resistor</span>
+                <input
+                  class="setup-input"
+                  type="number"
+                  step="1"
+                  data-setup-field="ntcFixedRes"
+                />
+              </label>
           </div>
         </div>
       </section>
@@ -872,27 +1077,42 @@
                       </li>
                     </ul>
                   </div>
-                  <button class="btn btn-primary" type="button" data-i18n="wizard.step5.presence.run">
+                  <button
+                    class="btn btn-primary"
+                    type="button"
+                    data-cal-action="presenceProbeBtn"
+                    data-cal-scope="wizard"
+                    data-i18n="wizard.step5.presence.run"
+                  >
                     Run presence probe
                   </button>
                   <div class="setup-presence-grid">
-                    <div class="setup-presence-item">Wire 01<span>--</span></div>
-                    <div class="setup-presence-item">Wire 02<span>--</span></div>
-                    <div class="setup-presence-item">Wire 03<span>--</span></div>
-                    <div class="setup-presence-item">Wire 04<span>--</span></div>
-                    <div class="setup-presence-item">Wire 05<span>--</span></div>
-                    <div class="setup-presence-item">Wire 06<span>--</span></div>
-                    <div class="setup-presence-item">Wire 07<span>--</span></div>
-                    <div class="setup-presence-item">Wire 08<span>--</span></div>
-                    <div class="setup-presence-item">Wire 09<span>--</span></div>
-                    <div class="setup-presence-item">Wire 10<span>--</span></div>
+                    <div class="setup-presence-item" data-presence-wire="1">Wire 01<span>--</span></div>
+                    <div class="setup-presence-item" data-presence-wire="2">Wire 02<span>--</span></div>
+                    <div class="setup-presence-item" data-presence-wire="3">Wire 03<span>--</span></div>
+                    <div class="setup-presence-item" data-presence-wire="4">Wire 04<span>--</span></div>
+                    <div class="setup-presence-item" data-presence-wire="5">Wire 05<span>--</span></div>
+                    <div class="setup-presence-item" data-presence-wire="6">Wire 06<span>--</span></div>
+                    <div class="setup-presence-item" data-presence-wire="7">Wire 07<span>--</span></div>
+                    <div class="setup-presence-item" data-presence-wire="8">Wire 08<span>--</span></div>
+                    <div class="setup-presence-item" data-presence-wire="9">Wire 09<span>--</span></div>
+                    <div class="setup-presence-item" data-presence-wire="10">Wire 10<span>--</span></div>
                   </div>
                   <div class="setup-fields">
                     <label class="setup-field">
                       <span data-i18n="wizard.step7.presence.vdrop">
                         Presence current ratio (%)
                       </span>
-                      <input class="setup-input" type="number" min="0" max="100" step="0.1" />
+                      <input
+                        class="setup-input"
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.1"
+                        data-setup-field="presenceMinRatioPct"
+                        data-cal-input="wizardPresenceRatio"
+                        data-cal-scope="wizard"
+                      />
                     </label>
                   </div>
                 </div>

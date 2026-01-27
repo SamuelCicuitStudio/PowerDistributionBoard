@@ -1,5 +1,5 @@
-﻿const MOCK_USER = "admin";
-const MOCK_PASS = "admin123";
+﻿import { initI18n } from "./services/i18n.js";
+import "./services/session.js";
 
 const form = document.getElementById("loginForm");
 const usernameEl = document.getElementById("username");
@@ -8,6 +8,9 @@ const statusEl = document.querySelector("[data-login-status]");
 const infoBtn = document.querySelector("[data-login-info-btn]");
 const infoPanel = document.querySelector("[data-login-info-panel]");
 const toggleBtn = document.getElementById("togglePassword");
+
+const { t } = initI18n();
+document.title = t("login.title");
 
 function setStatus(message, state = "err") {
   if (!statusEl) return;
@@ -27,19 +30,24 @@ function goToFailed(message) {
   window.location.href = url.toString();
 }
 
-function redirectToAdmin() {
+function redirectToAdmin(token, role) {
   const base = new URLSearchParams(window.location.search).get("base");
-  const next = "admin.html" + (base ? "?base=" + encodeURIComponent(base) : "");
-  window.location.href = next;
+  const url = new URL("admin.html", window.location.href);
+  if (base) url.searchParams.set("base", base);
+  if (token) url.searchParams.set("token", token);
+  if (role) url.searchParams.set("role", role);
+  window.location.href = url.toString();
 }
 
-function mockLogin(username, password) {
-  if (username === MOCK_USER && password === MOCK_PASS) {
-    redirectToAdmin();
-    return true;
-  }
-  goToFailed("Incorrect username or password.");
-  return false;
+const alreadyConnectedMessages = new Set([
+  "Already connected",
+  "Deja connecte",
+  "Gia connesso",
+]);
+
+function isAlreadyConnectedError(message) {
+  if (!message) return false;
+  return alreadyConnectedMessages.has(message);
 }
 
 async function tryServerLogin(username, password) {
@@ -50,7 +58,8 @@ async function tryServerLogin(username, password) {
     ? window.pbEncodeCbor({ username, password })
     : JSON.stringify({ username, password });
 
-  const response = await fetch("/connect", {
+  const doFetch = window.pbFetch || fetch;
+  const response = await doFetch("/connect", {
     method: "POST",
     headers,
     body,
@@ -70,42 +79,65 @@ async function tryServerLogin(username, password) {
   return { response, payload: payload || {} };
 }
 
+async function handleLogin(username, password, allowRetry) {
+  const { response, payload } = await tryServerLogin(username, password);
+  if (!response.ok) {
+    const message = payload.error || t("login.error.failed");
+    if (allowRetry && isAlreadyConnectedError(message)) {
+      if (window.pbDisconnect) {
+        try {
+          await window.pbDisconnect();
+        } catch (error) {
+          console.warn("Disconnect failed:", error);
+        }
+      }
+      if (window.pbClearToken) window.pbClearToken();
+      return handleLogin(username, password, false);
+    }
+    if (window.pbClearToken) window.pbClearToken();
+    goToFailed(message);
+    return;
+  }
+  if (!payload.token) {
+    if (window.pbClearToken) window.pbClearToken();
+    goToFailed(t("login.error.missingToken"));
+    return;
+  }
+  if (payload.role !== "admin") {
+    if (window.pbSetToken) window.pbSetToken(payload.token);
+    if (window.pbSetRole) window.pbSetRole(payload.role);
+    if (window.pbDisconnect) {
+      try {
+        await window.pbDisconnect();
+      } catch (error) {
+        console.warn("Disconnect failed:", error);
+      }
+    }
+    if (window.pbClearToken) window.pbClearToken();
+    goToFailed(t("login.error.adminRequired"));
+    return;
+  }
+  if (window.pbSetToken) window.pbSetToken(payload.token);
+  if (window.pbSetRole) window.pbSetRole(payload.role);
+  redirectToAdmin(payload.token, payload.role);
+}
+
 async function submitLogin() {
   const username = usernameEl?.value.trim() || "";
   const password = passwordEl?.value.trim() || "";
 
   if (!username || !password) {
-    setStatus("Please enter both username and password.");
+    setStatus(t("login.error.missingFields"));
     return;
   }
 
   clearStatus();
 
   try {
-    const { response, payload } = await tryServerLogin(username, password);
-    if (!response.ok) {
-      if (response.status === 404 || response.status === 0) {
-        mockLogin(username, password);
-        return;
-      }
-      const message = payload.error || "Login failed.";
-      goToFailed(message);
-      return;
-    }
-    if (!payload.token) {
-      goToFailed("Missing session token.");
-      return;
-    }
-    if (payload.role !== "admin") {
-      if (window.pbClearToken) window.pbClearToken();
-      goToFailed("Admin credentials required.");
-      return;
-    }
-    if (window.pbSetToken) window.pbSetToken(payload.token);
-    redirectToAdmin();
+    await handleLogin(username, password, true);
   } catch (err) {
-    console.warn("Login request failed, using mock:", err);
-    mockLogin(username, password);
+    console.warn("Login request failed:", err);
+    goToFailed(t("login.error.failed"));
   }
 }
 
@@ -171,6 +203,7 @@ function bindDeviceInfo() {
 
   infoBtn.addEventListener("click", (event) => {
     event.stopPropagation();
+    populateDeviceInfo();
     togglePanel();
   });
 
@@ -184,9 +217,10 @@ function bindDeviceInfo() {
 
 async function populateDeviceInfo() {
   try {
-    const response = await fetch("/device_info", {
+    const doFetch = window.pbFetch || fetch;
+    const response = await doFetch("/device_info", {
       cache: "no-store",
-      headers: window.pbCborHeaders ? window.pbCborHeaders() : undefined,
+      headers: window.pbCborHeaders ? window.pbCborHeaders({ body: false }) : undefined,
     });
     if (!response.ok) return;
     const data = window.pbReadCbor ? await window.pbReadCbor(response) : null;
@@ -195,13 +229,13 @@ async function populateDeviceInfo() {
     const swEl = document.getElementById("infoSwVer");
     const hwEl = document.getElementById("infoHwVer");
     if (idEl && data.deviceId !== undefined) {
-      idEl.textContent = "Device ID: " + data.deviceId;
+      idEl.textContent = t("login.info.deviceId", { value: data.deviceId });
     }
     if (swEl && data.sw !== undefined) {
-      swEl.textContent = "SW Version: " + data.sw;
+      swEl.textContent = t("login.info.sw", { value: data.sw });
     }
     if (hwEl && data.hw !== undefined) {
-      hwEl.textContent = "HW Version: " + data.hw;
+      hwEl.textContent = t("login.info.hw", { value: data.hw });
     }
   } catch (e) {
     console.warn("device_info fetch failed", e);

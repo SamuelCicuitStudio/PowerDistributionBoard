@@ -35,3 +35,8 @@
   transform: scale(var(--app-scale));
   transform-origin: top left;
 }
+
+html.is-webview .ui-inner {
+  transform: none;
+  zoom: var(--app-scale);
+}
