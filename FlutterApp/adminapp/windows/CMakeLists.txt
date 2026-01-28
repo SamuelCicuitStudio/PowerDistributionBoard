@@ -94,6 +94,7 @@ if(TARGET webview_windows_plugin)
   target_compile_options(webview_windows_plugin PRIVATE
     "/FI${CMAKE_CURRENT_SOURCE_DIR}/winrt_wait_for_compat.h"
   )
+  target_compile_options(webview_windows_plugin PRIVATE /await)
 endif()
 
 

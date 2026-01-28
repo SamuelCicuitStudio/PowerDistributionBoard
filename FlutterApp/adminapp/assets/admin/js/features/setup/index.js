@@ -282,10 +282,16 @@ export function initSetupWizard(options = {}) {
         setOpen(!isOpen);
       });
 
+      toggle.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+      });
+
       menu.addEventListener("click", (event) => {
         const btn = event.target.closest("[data-setup-select-index]");
         if (!btn || btn.disabled) return;
         event.preventDefault();
+        event.stopPropagation();
         const index = Number(btn.dataset.setupSelectIndex);
         if (!Number.isNaN(index) && select.selectedIndex !== index) {
           select.selectedIndex = index;
@@ -298,6 +304,8 @@ export function initSetupWizard(options = {}) {
       select.addEventListener("change", updateCurrent);
 
       select.classList.add("setup-select-native");
+      select.tabIndex = -1;
+      select.setAttribute("aria-hidden", "true");
       select.dataset.customSelect = "true";
 
       syncOptions();
@@ -328,6 +336,90 @@ export function initSetupWizard(options = {}) {
     document.addEventListener("setup:controls-loaded", () => {
       customSelects.forEach((item) => item.updateCurrent());
     });
+  };
+
+  const installWheelFallback = () => {
+    if (!window.chrome?.webview) return;
+    if (root.dataset.wheelFallback === "true") return;
+    root.dataset.wheelFallback = "true";
+    const content = qs(".setup-content", root);
+    const steps = qs(".setup-steps", root);
+
+    const inRect = (rect, x, y) =>
+      rect && x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+
+    const normalizeDelta = (event, el) => {
+      let delta = event.deltaY || event.deltaX || 0;
+      if (!delta) return 0;
+      if (event.deltaMode === 1) {
+        delta *= 16;
+      } else if (event.deltaMode === 2) {
+        delta *= el?.clientHeight || 0;
+      }
+      return delta;
+    };
+
+    const canScroll = (el, delta) => {
+      if (!el) return false;
+      const maxScroll = el.scrollHeight - el.clientHeight;
+      if (maxScroll <= 0) return false;
+      if (delta < 0) return el.scrollTop > 0;
+      return el.scrollTop < maxScroll - 1;
+    };
+
+    const scrollElement = (el, delta) => {
+      if (!el || !delta) return false;
+      const maxScroll = el.scrollHeight - el.clientHeight;
+      if (maxScroll <= 0) return false;
+      el.scrollTop = Math.min(Math.max(el.scrollTop + delta, 0), maxScroll);
+      return true;
+    };
+
+    const onWheel = (event) => {
+      if (!root.classList.contains("is-open")) return;
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+
+      const rootRect = root.getBoundingClientRect();
+      if (!inRect(rootRect, event.clientX, event.clientY)) return;
+
+      const menu = target.closest(".setup-select-menu");
+      if (menu) {
+        const delta = normalizeDelta(event, menu);
+        if (delta) {
+          scrollElement(menu, delta);
+          event.preventDefault();
+          event.stopPropagation();
+        }
+        return;
+      }
+
+      const stepsTarget = target.closest(".setup-steps") || steps;
+      const contentTarget = target.closest(".setup-content") || content;
+
+      if (stepsTarget && inRect(stepsTarget.getBoundingClientRect(), event.clientX, event.clientY)) {
+        const delta = normalizeDelta(event, stepsTarget);
+        if (delta && (canScroll(stepsTarget, delta) || canScroll(contentTarget, delta))) {
+          if (!scrollElement(stepsTarget, delta)) {
+            scrollElement(contentTarget, delta);
+          }
+          event.preventDefault();
+          event.stopPropagation();
+        }
+        return;
+      }
+
+      if (contentTarget && inRect(contentTarget.getBoundingClientRect(), event.clientX, event.clientY)) {
+        const delta = normalizeDelta(event, contentTarget);
+        if (delta && canScroll(contentTarget, delta)) {
+          scrollElement(contentTarget, delta);
+          event.preventDefault();
+          event.stopPropagation();
+        }
+      }
+    };
+
+    document.addEventListener("wheel", onWheel, { passive: false, capture: true });
   };
 
   backBtn?.addEventListener("click", () => setStep(activeIndex - 1));
@@ -368,6 +460,7 @@ export function initSetupWizard(options = {}) {
   });
 
   initCustomSelects();
+  installWheelFallback();
   updateControls();
 
   return {

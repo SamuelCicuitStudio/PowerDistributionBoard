@@ -1,11 +1,11 @@
 import 'dart:convert';
-import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:webview_windows/webview_windows.dart';
+import 'package:webview_flutter/webview_flutter.dart';
+import 'package:webview_win_floating/webview_win_floating.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -39,10 +39,10 @@ class WebviewHost extends StatefulWidget {
 }
 
 class _WebviewHostState extends State<WebviewHost> {
-  final WebviewController _controller = WebviewController();
-  StreamSubscription<LoadingState>? _loadingSub;
-  bool _ready = false;
+  late final WebViewController _controller;
+  bool _initialized = false;
   String? _error;
+  bool _loadStarted = false;
 
   @override
   void initState() {
@@ -58,31 +58,54 @@ class _WebviewHostState extends State<WebviewHost> {
       return;
     }
 
-    final version = await WebviewController.getWebViewVersion();
-    if (version == null) {
-      if (mounted) {
-        setState(
-          () =>
-              _error =
-                  'WebView2 Runtime not installed. Install from '
-                  'https://go.microsoft.com/fwlink/p/?LinkId=2124703',
-        );
-      }
-      return;
-    }
-
     try {
-      await _controller.initialize();
-      _loadingSub = _controller.loadingState.listen((state) {
+      final params = Platform.isWindows
+          ? WindowsWebViewControllerCreationParams(
+              userDataFolder: widget.assetHost.webviewDataDir,
+            )
+          : const PlatformWebViewControllerCreationParams();
+      _controller = WebViewController.fromPlatformCreationParams(params)
+        ..setJavaScriptMode(JavaScriptMode.unrestricted)
+        ..setNavigationDelegate(
+          NavigationDelegate(
+            onWebResourceError: (error) {
+              if (error.isForMainFrame != true) return;
+              if (mounted) {
+                setState(() => _error = error.description);
+              }
+            },
+          ),
+        );
+      if (mounted) {
+        setState(() => _initialized = true);
+      }
+      WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        setState(() => _ready = state != LoadingState.loading);
+        _loadEntry();
       });
-      await _controller.setBackgroundColor(Colors.transparent);
-      await _controller.setPopupWindowPolicy(WebviewPopupWindowPolicy.deny);
-      await _controller.loadUrl(widget.assetHost.entryUrl);
     } on PlatformException catch (e) {
       if (mounted) {
         setState(() => _error = e.message ?? e.code);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _error = e.toString());
+      }
+    }
+  }
+
+  Future<void> _loadEntry() async {
+    if (_loadStarted) return;
+    _loadStarted = true;
+    try {
+      await _controller.loadRequest(Uri.parse(widget.assetHost.entryUrl));
+    } on PlatformException catch (e) {
+      if (mounted) {
+        setState(() => _error = e.message ?? e.code);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _error = e.toString());
       }
     }
   }
@@ -95,32 +118,20 @@ class _WebviewHostState extends State<WebviewHost> {
       );
     }
 
-    final isInitialized = _controller.value.isInitialized;
-
     return Scaffold(
-      body: Stack(
-        children: [
-          Positioned.fill(
-            child: isInitialized ? Webview(_controller) : const SizedBox.shrink(),
-          ),
-          if (!isInitialized || !_ready)
-            const Positioned.fill(
-              child: ColoredBox(
-                color: Colors.black,
-                child: Center(
-                  child: CircularProgressIndicator(),
-                ),
+      body: _initialized
+          ? WebViewWidget(controller: _controller)
+          : const ColoredBox(
+              color: Colors.black,
+              child: Center(
+                child: CircularProgressIndicator(),
               ),
             ),
-        ],
-      ),
     );
   }
 
   @override
   void dispose() {
-    _loadingSub?.cancel();
-    _controller.dispose();
     super.dispose();
   }
 }
@@ -130,6 +141,7 @@ class AssetHostConfig {
     required this.entryUrl,
     required this.fileUrl,
     required this.assetsDir,
+    required this.webviewDataDir,
     required this.virtualHost,
     required this.useVirtualHost,
     required this.allowFileFallback,
@@ -138,6 +150,7 @@ class AssetHostConfig {
   final String entryUrl;
   final String fileUrl;
   final String assetsDir;
+  final String webviewDataDir;
   final String virtualHost;
   final bool useVirtualHost;
   final bool allowFileFallback;
@@ -166,10 +179,16 @@ class AssetHost {
     final baseDir = Directory(
       '${supportDir.path}${Platform.pathSeparator}powerboard_admin_assets',
     );
+    final webviewDir = Directory(
+      '${supportDir.path}${Platform.pathSeparator}powerboard_admin_webview',
+    );
     if (baseDir.existsSync()) {
       baseDir.deleteSync(recursive: true);
     }
     baseDir.createSync(recursive: true);
+    if (!webviewDir.existsSync()) {
+      webviewDir.createSync(recursive: true);
+    }
 
     for (final asset in assets) {
       final relative = asset.substring('assets/'.length);
@@ -213,6 +232,7 @@ class AssetHost {
         entryUrl: entryUri.toString(),
         fileUrl: fileUrl,
         assetsDir: baseDir.path,
+        webviewDataDir: webviewDir.path,
         virtualHost: _virtualHost,
         useVirtualHost: false,
         allowFileFallback: allowFileFallback,
@@ -227,6 +247,7 @@ class AssetHost {
       entryUrl: fileUrl,
       fileUrl: fileUrl,
       assetsDir: baseDir.path,
+      webviewDataDir: webviewDir.path,
       virtualHost: _virtualHost,
       useVirtualHost: false,
       allowFileFallback: allowFileFallback,
